@@ -1,0 +1,5 @@
+# Windows-Startdateien brauchen CRLF, Shell-Skripte LF – unabhängig von core.autocrlf
+*.bat   text eol=crlf
+*.sh    text eol=lf
+*.py    text eol=lf
+*.csv   text eol=lf
