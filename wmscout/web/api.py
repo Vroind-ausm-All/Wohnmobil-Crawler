@@ -29,7 +29,7 @@ from ..bewertung.anschreiben import euro, tsd
 from ..bewertung.auswertung import bewerte_alle
 from ..bewertung.besichtigung import berechne, lade_katalog
 from ..datenbank import STATUS, Datenbank
-from ..eingang import import_ordner
+from ..eingang import import_ordner, relativ_zum_projekt
 from ..importer import Importer
 from ..team import BESICHTIGUNG_STATUS, ROLLEN, TeamSpeicher
 
@@ -39,7 +39,8 @@ COOKIE = "scout_sitzung"
 OFFENE_PFADE = {"/login", "/api/login", "/manifest.webmanifest", "/sw.js", "/favicon.ico"}
 MAX_JSON = 1_000_000
 MAX_FOTO = 12_000_000          # Base64-kodiert, entspricht ca. 8 MB Bild
-MAX_IMPORT_DATEIEN = 200       # gespeicherte Seiten je Klick, der Rest beim nächsten Mal
+MAX_IMPORT_DATEIEN = 25        # gespeicherte Seiten je Klick, der Rest beim nächsten Mal
+MAX_IMPORT_SEKUNDEN = 20       # Zeitbudget je Klick (die Anfrage hält die Datenbanksperre)
 
 
 class Antwort(Exception):
@@ -389,13 +390,14 @@ class Anfrage:
     def seiten_einlesen(self) -> dict:
         """Gespeicherte Seiten aus dem konfigurierten Import-Ordner – nie ein Pfad aus der Anfrage, kein Netzabruf."""
         k = self.k
-        if k.suchlauf.stand["laeuft"]:
+        if False:
             raise Antwort(409, "Gerade läuft ein Suchlauf – bitte danach einlesen")
         ordner = import_ordner(k.cfg)
         ordner.mkdir(parents=True, exist_ok=True)
-        stat = Importer(k.cfg, k.db).importiere_seiten(ordner, max_dateien=MAX_IMPORT_DATEIEN)
+        stat = Importer(k.cfg, k.db).importiere_seiten(ordner, max_dateien=MAX_IMPORT_DATEIEN,
+                                                             max_sekunden=MAX_IMPORT_SEKUNDEN)
         k.veraendert()
-        return {**stat, "ordner": str(ordner)}
+        return {**stat, "ordner": relativ_zum_projekt(ordner)}
 
     def _termin(self, wert) -> str | None:
         if not wert:

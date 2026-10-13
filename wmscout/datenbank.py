@@ -72,6 +72,8 @@ class Datenbank:
         else:
             # Werte aus der Detailseite nicht mit leeren Listenwerten überschreiben
             werte = {k: v for k, v in werte.items() if v not in (None, "")}
+            if a.get("gewerblich") is None:          # „unbekannt“ (z. B. Detailseite ohne Hinweis) überschreibt nichts
+                werte.pop("gewerblich", None)
             ergebnis = "bekannt"
             if a.get("preis") and alt["preis"] and a["preis"] < alt["preis"]:
                 werte["preis_vorher"] = alt["preis"]

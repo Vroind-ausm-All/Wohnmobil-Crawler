@@ -126,6 +126,18 @@ im Programmordner. Dann in der App auf **„⤓ Gespeicherte Seiten einlesen“*
 Neue Fahrzeuge erscheinen sofort in der Liste; das Programm ruft dafür nichts selbst aus dem Internet ab.
 Eingelesene Dateien wandern nach `import/eingelesen/<Datum>/`, nicht erkannte nach `import/nicht_erkannt/`.
 
+Hinweise zum Einlesen:
+- Je Klick werden höchstens 25 Dateien (bzw. etwa 20 Sekunden lang) gelesen; den Rest liest der nächste Klick.
+  Dateien über 20 MB werden nicht gelesen (sie bleiben liegen).
+- Die Fahrzeugart (z. B. Teilintegrierter) wird aus der Adresse der gespeicherten Suchseite erkannt. Speichere
+  deshalb Suchseiten mit gewählter Fahrzeugart. Anzeigen aus Suchseiten ohne erkennbare Art gelten nicht als
+  „anschreibbar“, bis ihre Anzeigenseite (Detailseite) gespeichert und eingelesen wurde.
+- **Datenschutz:** `import/eingelesen/` enthält die vollständigen gespeicherten Seiten, auch Verkäuferangaben
+  (Name, Ort, ggf. Telefonnummer). Das Programm löscht nichts automatisch – lösche die Dateien nach der Prüfung selbst.
+  Speichere Seiten möglichst nicht angemeldet, damit keine Kontodaten in der Datei landen.
+- Beim Einlesen einer alten gespeicherten Seite gilt die Anzeige als „zuletzt gesehen: heute“, auch wenn sie
+  inzwischen gelöscht oder verkauft sein kann. Lies deshalb möglichst frisch gespeicherte Seiten ein.
+
 Status (offen / kontaktiert / uninteressant / gekauft) und Notizen setzt du im Fahrzeugfenster. Unter
 „Kontaktiert“ findest du alle angeschriebenen Fahrzeuge mit dem Text, den du geschickt hast.
 

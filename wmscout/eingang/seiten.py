@@ -13,6 +13,7 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup, SoupStrainer
 
+from ..normalisierung.fahrzeug import art_schluessel
 from ..quellen.basis import Inserat
 from ..quellen.kleinanzeigen.adapter import anzeigen_id_aus_url
 from ..quellen.kleinanzeigen.parser import BASIS, parse_detailseite, parse_suchseite
@@ -23,6 +24,18 @@ BEGLEITORDNER = ("_files", "-Dateien")           # „Webseite, komplett“ legt
 PROJEKT = Path(__file__).resolve().parent.parent.parent
 # Browser vermerken beim Speichern die Herkunft, z. B. <!-- saved from url=(0071)https://… -->
 _GESPEICHERT_VON = re.compile(r"<!--\s*saved from url=\(\d+\)\s*(\S+?)\s*-->", re.I)
+MAX_DATEIGROESSE = 20_000_000                    # größere Dateien werden nicht gelesen (Speicher, Laufzeit unter Sperre)
+# Kleinanzeigen-Suchadressen: …/s-wohnwagen-mobile/teilintegrierter/… bzw. …c220+wohnwagen_mobile.art_s:teilintegrierter
+_ART_S = re.compile(r"art_s:([\w-]+)", re.I)
+_KATEGORIE = re.compile(r"/s-wohnwagen-mobile/([^/?#]+)", re.I)
+# Allgemeine Kategorietitel nennen „Wohnwagen“ und „Wohnmobile“, sagen aber nichts über die Fahrzeugart
+_ALLGEMEIN = re.compile(r"wohn(?:wagen|mobile?)\s*(?:&|und|/)\s*(?:wohn)?(?:wagen|mobile?)", re.I)
+# Merkmale, die nur eine einzelne Anzeigenseite hat (dieselben Elemente, die parse_detailseite ausliest)
+_ANZEIGEN_MERKMAL = re.compile(r"""id\s*=\s*["']?viewad-(?:title|price)\b""", re.I)
+
+
+class BegleitordnerFehler(OSError):
+    """Die Datei ist verschoben, der zugehörige Begleitordner (<name>_files) aber nicht."""
 
 
 def import_ordner(cfg: dict) -> Path:
@@ -39,13 +52,27 @@ def html_dateien(ordner: Path) -> list[Path]:
                   key=lambda p: p.name.lower())
 
 
+def relativ_zum_projekt(pfad: Path) -> str:
+    """Pfad relativ zum Projektordner, wenn er darin liegt – sonst unverändert (absolut)."""
+    try:
+        return str(pfad.relative_to(PROJEKT))
+    except ValueError:
+        return str(pfad)
+
+
 def lies_html(pfad: Path) -> str:
+    groesse = pfad.stat().st_size
+    if groesse > MAX_DATEIGROESSE:
+        raise ValueError(f"Datei zu groß ({groesse / 1_000_000:.0f} MB, erlaubt sind {MAX_DATEIGROESSE // 1_000_000} MB)")
     return pfad.read_bytes().decode("utf-8-sig", errors="replace")
 
 
 def _kopf(html: str) -> str:
-    ende = html.lower().find("</head>")
-    return html[:ende] if ende >= 0 else html[:100_000]
+    unten = html.lower()
+    for marke in ("</head>", "<body"):          # ohne Kopf nur bis zum Inhalt – Links darin gehören nicht zur Seite selbst
+        if (ende := unten.find(marke)) >= 0:
+            return html[:ende]
+    return html[:100_000]
 
 
 def _detail_kennung(html: str) -> tuple[str | None, str | None, bool]:
@@ -74,12 +101,48 @@ def _detail_inserat(html: str, ad_id: str, url: str) -> Inserat | None:
     return Inserat(quelle=QUELLE, anzeigen_id=ad_id, url=url, **d)
 
 
+def _art_aus_url(url: str) -> str | None:
+    for teil in (*_ART_S.findall(url), *_KATEGORIE.findall(url)):
+        if (art := art_schluessel(teil)) != "Sonstige":
+            return art
+    return None
+
+
+def fahrzeugart_der_suchseite(html: str) -> str | None:
+    """Fahrzeugart einer gespeicherten Suchseite (z. B. 'Teilintegrierter') oder None, wenn sie nicht erkennbar ist.
+
+    Reihenfolge: canonical-/og:url-/„saved from“-Adresse, ersatzweise der <title>. Die Zuordnung übernimmt
+    `art_schluessel`; „Sonstige“ gilt als nicht erkannt (die Rechnung braucht die echte Art)."""
+    kopf = BeautifulSoup(_kopf(html), "html.parser", parse_only=SoupStrainer(["link", "meta", "title"]))
+    urls = []
+    if el := kopf.find("link", rel="canonical"):
+        urls.append(el.get("href"))
+    if el := kopf.find("meta", attrs={"property": "og:url"}):
+        urls.append(el.get("content"))
+    if m := _GESPEICHERT_VON.search(html[:5000]):
+        urls.append(m.group(1))
+    for url in urls:
+        if url and (art := _art_aus_url(url)):
+            return art
+    if (titel := kopf.find("title")) and (text := _ALLGEMEIN.sub(" ", titel.get_text(" ", strip=True))):
+        if (art := art_schluessel(text)) != "Sonstige":
+            return art
+    return None
+
+
 def erkenne_seite(html: str) -> tuple[str, list[Inserat]]:
-    """Art der Seite ('suche', 'detail', 'unbekannt') und die erkannten Inserate (ohne Gesuche)."""
+    """Art der Seite und die erkannten Inserate (ohne Gesuche).
+
+    Art: 'suche', 'detail', 'unbekannt' oder 'detail_ohne_id' (Anzeigenseite, aber ohne ermittelbare Anzeigen-URL)."""
     ad_id, url, sicher = _detail_kennung(html)
     # Detailseiten können unten „ähnliche Anzeigen“ enthalten – eine eindeutige Inserats-URL geht deshalb vor
     if ad_id and sicher and (inserat := _detail_inserat(html, ad_id, url)):
         return "detail", [inserat]
+    if _ANZEIGEN_MERKMAL.search(html):
+        # Strukturell eine Anzeigenseite: nie als Suchseite lesen (die „ähnlichen Anzeigen“ wären sonst die Treffer)
+        if ad_id and (inserat := _detail_inserat(html, ad_id, url)):
+            return "detail", [inserat]
+        return "detail_ohne_id", []
     treffer = [Inserat(quelle=QUELLE, anzeigen_id=t.pop("id"), **t) for t in parse_suchseite(html)]
     if treffer:
         return "suche", [i for i in treffer if not i.ist_gesuch]
@@ -108,5 +171,8 @@ def verschiebe(datei: Path, ziel: Path) -> Path:
     for s in BEGLEITORDNER:
         begleiter = datei.with_name(f"{datei.stem}{s}")
         if begleiter.is_dir():
-            shutil.move(str(begleiter), str(ziel / f"{name}{s}"))
+            try:
+                shutil.move(str(begleiter), str(ziel / f"{name}{s}"))
+            except OSError as e:
+                raise BegleitordnerFehler(f"Begleitordner {begleiter.name} nicht verschoben: {e}") from e
     return neu

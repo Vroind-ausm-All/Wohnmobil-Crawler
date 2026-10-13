@@ -385,12 +385,12 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     return ok;
   }
   var toastTimer;
-  function toast(text, rueckgaengig){
+  function toast(text, rueckgaengig, dauer){
     var t = document.getElementById('toast'), b = document.getElementById('toast-zurueck');
     document.getElementById('toast-text').textContent = text;
     b.hidden = !rueckgaengig; b.onclick = function(){ rueckgaengig(); t.classList.remove('zeigen'); };
     t.classList.add('zeigen'); clearTimeout(toastTimer);
-    toastTimer = setTimeout(function(){ t.classList.remove('zeigen'); }, rueckgaengig ? 9000 : 5000);
+    toastTimer = setTimeout(function(){ t.classList.remove('zeigen'); }, rueckgaengig ? 9000 : (dauer || 5000));
   }
   var HINWEIS = '  Auf Kleinanzeigen „Nachricht schreiben“ klicken, Strg+V, senden.';
   function senden(id, text, danach){
@@ -605,12 +605,22 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
             toast('Keine gespeicherten Seiten gefunden in ' + s.ordner + ' – Seite in Kleinanzeigen mit Strg+S als „Webseite, nur HTML“ in diesen Ordner speichern.');
             return;
           }
-          var text = mehrzahl(s.dateien, 'Seite', 'Seiten') + ' eingelesen: ' + s.neu + ' neu, '
+          var gelesen = s.dateien - s.unbekannt - s.fehlerhaft;
+          var text = mehrzahl(gelesen, 'Seite', 'Seiten') + ' eingelesen: ' + s.neu + ' neu, '
                      + mehrzahl(s.preis, 'Preissenkung', 'Preissenkungen') + ', ' + s.bekannt + ' bekannt';
           if(s.details) text += ', ' + s.details + ' mit Details';
-          if(s.unbekannt) text += ' · ' + mehrzahl(s.unbekannt, 'Seite', 'Seiten') + ' nicht erkannt';
-          if(s.fehler.length > s.unbekannt) text += ' · ' + (s.fehler.length - s.unbekannt) + ' mit Fehler (Details in ausgabe/scout.log)';
+          if(s.unbekannt) text += ' · ' + mehrzahl(s.unbekannt, 'Seite', 'Seiten') + ' nicht erkannt (verschoben nach nicht_erkannt/)';
+          if(s.fehlerhaft) text += ' · ' + mehrzahl(s.fehlerhaft, 'Datei', 'Dateien') + ' nicht lesbar (bleiben liegen)';
+          if(s.fehler.length > s.unbekannt + s.fehlerhaft) text += ' · ' + (s.fehler.length - s.unbekannt - s.fehlerhaft) + ' mit Hinweis zum Verschieben';
           if(s.uebrig) text += ' · ' + s.uebrig + ' weitere beim nächsten Klick';
+          if(s.fehler.length){
+            text += ' – ' + s.fehler.slice(0, 2).join(' | ') + (s.fehler.length > 2 ? ' | … (alle in ausgabe/scout.log)' : '');
+          }
+          if(s.fehler.length){                         // Meldungen lesbar lassen: nicht automatisch neu laden
+            fertig();
+            toast(text + ' – zum Aktualisieren der Liste die Seite neu laden (F5).', null, 20000);
+            return;
+          }
           toast(text + ' – Liste wird neu geladen.');
           setTimeout(function(){ location.reload(); }, 4000);
         })

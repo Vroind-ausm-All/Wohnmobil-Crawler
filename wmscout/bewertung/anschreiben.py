@@ -7,7 +7,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from ..datenbank import STATUS
-from ..normalisierung.fahrzeug import ART_PLURAL
+from ..normalisierung.fahrzeug import ART_PLURAL, art_schluessel
 
 AMPEL_RANG = {"gruen": 0, "gelb": 1, "rot": 2, "grau": 3}
 ART_EINZAHL = {"Sonstige": "Wohnmobil"}
@@ -76,6 +76,9 @@ def sperrgrund(a: dict, cfg: dict) -> str | None:
         return "zu viele km"
     if f.get("max_entfernung_km") and (a.get("entfernung_km") or 0) > f["max_entfernung_km"]:
         return f"zu weit entfernt ({a['entfernung_km']} km)"
+    if (str(a.get("suche") or "").startswith("Import") and not a.get("detail_geladen")
+            and art_schluessel(a.get("suche"), a.get("art"), a.get("titel")) == "Sonstige"):
+        return "Fahrzeugart unbekannt – Detailseite der Anzeige speichern und einlesen"
     text = " ".join(str(a.get(k) or "") for k in ("titel", "kurzbeschreibung", "beschreibung")).lower()
     for begriff in f["sperrbegriffe"]:
         if re.search(r"(?<!\w)" + re.escape(begriff.lower()), text):

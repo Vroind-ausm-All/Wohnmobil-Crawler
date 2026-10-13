@@ -11,11 +11,13 @@ Außerdem: `importiere_seiten()` liest im Browser gespeicherte Seiten aus dem Im
 from __future__ import annotations
 
 import logging
+import time
 from datetime import date
 from pathlib import Path
 
 from .datenbank import IMPORT_SUCHE, Datenbank
-from .eingang import erkenne_seite, html_dateien, lies_html, verschiebe
+from .eingang import (BegleitordnerFehler, erkenne_seite, fahrzeugart_der_suchseite, html_dateien, lies_html,
+                      verschiebe)
 from .quellen import (STANDARD_QUELLE, Abruf, InseratNichtGefunden, NetzwerkFehler, Quelle, QuelleGesperrt,
                       QuellenFehler, Suchauftrag, erstelle_quelle)
 
@@ -109,51 +111,77 @@ class Importer:
         return len(offen)
 
     # ---------- Gespeicherte Seiten (ohne Netz) ----------
-    def importiere_seiten(self, ordner: Path, max_dateien: int | None = None) -> dict:
+    def importiere_seiten(self, ordner: Path, max_dateien: int | None = None, max_sekunden: float | None = None) -> dict:
         """Liest Such- und Detailseiten, die der Nutzer im Browser gespeichert hat, aus `ordner` (nicht rekursiv).
 
         Benutzt weder `self.abruf` noch eine Quelle – es wird nur ausgewertet, was in den Dateien steht.
         Eingelesene Dateien wandern nach <ordner>/eingelesen/<Datum>/, nicht erkannte nach <ordner>/nicht_erkannt/.
+        max_dateien / max_sekunden begrenzen einen Durchgang (mindestens eine Datei wird gelesen); der Rest wird
+        in `uebrig` gezählt und beim nächsten Durchgang gelesen. `fehlerhaft` = Dateien, die nicht gelesen werden
+        konnten (bleiben liegen).
         """
-        stat = {"dateien": 0, "suchseiten": 0, "detailseiten": 0, "unbekannt": 0, "neu": 0, "preis": 0, "bekannt": 0,
-                "details": 0, "fehler": [], "uebrig": 0}
+        stat = {"dateien": 0, "suchseiten": 0, "detailseiten": 0, "unbekannt": 0, "fehlerhaft": 0, "neu": 0,
+                "preis": 0, "bekannt": 0, "details": 0, "fehler": [], "uebrig": 0}
         dateien = html_dateien(ordner)
         if max_dateien is not None and len(dateien) > max_dateien:
             dateien, stat["uebrig"] = dateien[:max_dateien], len(dateien) - max_dateien
         eingelesen = ordner / "eingelesen" / date.today().isoformat()
-        for datei in dateien:
+        start = time.monotonic()
+
+        def melde(text: str):
+            log.warning("Gespeicherte Seite %s", text)
+            stat["fehler"].append(text)
+
+        for n, datei in enumerate(dateien):
+            if max_sekunden is not None and n and time.monotonic() - start > max_sekunden:
+                stat["uebrig"] += len(dateien) - n
+                break
             stat["dateien"] += 1
             try:
-                art, inserate = erkenne_seite(lies_html(datei))
-                if art == "unbekannt":
-                    stat["unbekannt"] += 1
+                html = lies_html(datei)
+                art, inserate = erkenne_seite(html)
+                if art in ("unbekannt", "detail_ohne_id"):
                     verschiebe(datei, ordner / "nicht_erkannt")
-                    stat["fehler"].append(f"{datei.name}: keine Kleinanzeigen-Such- oder Detailseite erkannt "
-                                          "– verschoben nach nicht_erkannt/")
+                    stat["unbekannt"] += 1
+                    melde(f"{datei.name}: " + (
+                        "Anzeigenseite ohne Adresse der Anzeige (Anzeigen-ID nicht ermittelbar) – bitte die Anzeige noch "
+                        "einmal als „Webseite, nur HTML“ speichern; Datei verschoben nach nicht_erkannt/"
+                        if art == "detail_ohne_id" else
+                        "keine Kleinanzeigen-Such- oder Detailseite erkannt – verschoben nach nicht_erkannt/"))
                     continue
-                self._speichere_seite(art, inserate, stat)
+                self._speichere_seite(art, inserate, stat, fahrzeugart_der_suchseite(html) if art == "suche" else None)
             except Exception as e:  # noqa: BLE001 – eine kaputte Datei darf die übrigen nicht aufhalten
-                log.warning("Gespeicherte Seite %s: %s", datei, e)
-                stat["fehler"].append(f"{datei.name}: nicht eingelesen ({e}) – Datei bleibt liegen")
+                stat["fehlerhaft"] += 1
+                melde(f"{datei.name}: nicht eingelesen ({e}) – Datei bleibt liegen")
                 continue
             try:
                 verschiebe(datei, eingelesen)
+            except BegleitordnerFehler as e:
+                melde(f"{datei.name}: eingelesen und verschoben, aber {e} – bitte von Hand aufräumen")
             except OSError as e:
-                stat["fehler"].append(f"{datei.name}: eingelesen, aber nicht verschoben ({e})")
-        log.info("Gespeicherte Seiten: %d Dateien (%d Suche, %d Detail, %d nicht erkannt) – %d neu, %d Preissenkungen, "
-                 "%d bekannt", stat["dateien"], stat["suchseiten"], stat["detailseiten"], stat["unbekannt"], stat["neu"],
-                 stat["preis"], stat["bekannt"])
+                melde(f"{datei.name}: eingelesen, aber nicht verschoben ({e}) – Datei liegt noch im Import-Ordner "
+                      "(wird beim nächsten Mal ohne Dubletten erneut gelesen)")
+        log.info("Gespeicherte Seiten: %d Dateien (%d Suche, %d Detail, %d nicht erkannt, %d fehlerhaft) – %d neu, "
+                 "%d Preissenkungen, %d bekannt", stat["dateien"], stat["suchseiten"], stat["detailseiten"],
+                 stat["unbekannt"], stat["fehlerhaft"], stat["neu"], stat["preis"], stat["bekannt"])
         return stat
 
-    def _speichere_seite(self, art: str, inserate: list, stat: dict):
+    def _speichere_seite(self, art: str, inserate: list, stat: dict, fahrzeugart: str | None = None):
+        """Suchseite: neue Inserate bekommen „Import <Art>“ (Art aus der Seite, damit der Rechner sie kennt)."""
         if art == "suche":
             stat["suchseiten"] += 1
         else:
             stat["detailseiten"] += 1
+        neue_suche = f"Import {fahrzeugart}" if fahrzeugart else IMPORT_SUCHE
         for inserat in inserate:
             d = inserat.als_datensatz()
-            # Bereits bekannte Inserate behalten ihre Suche (Fahrzeugart, Detailabruf des Crawlers wie bisher)
-            stat[self.db.speichere_treffer(d, self.db.suche_zu(d["id"]) or IMPORT_SUCHE)] += 1
+            # Bereits bekannte Inserate behalten ihre Suche (Detailabruf des Crawlers wie bisher) – nur ein
+            # unbestimmter Import-Eintrag darf durch eine erkannte Fahrzeugart ersetzt werden
+            alt = self.db.suche_zu(d["id"])
+            suche = alt if alt and not (alt.startswith("Import") and neue_suche != IMPORT_SUCHE) else neue_suche
+            if art == "detail" and not d.get("gewerblich"):
+                d["gewerblich"] = None            # kein Hinweis auf der Detailseite ≠ „privat“: Suchlistenwert bleibt
+            stat[self.db.speichere_treffer(d, suche)] += 1
             if art == "detail":
                 self.db.speichere_details(d["id"], d)
                 stat["details"] += 1
