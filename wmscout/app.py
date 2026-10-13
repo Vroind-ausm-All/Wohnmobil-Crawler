@@ -18,9 +18,11 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from .crawler import Crawler
-from .db import STATUS, Datenbank
-from .report import bewerte_alle, render_html, schreibe_ausgaben, sende_mail
+from .ausgabe import render_html, schreibe_ausgaben
+from .benachrichtigung import sende_mail
+from .bewertung.auswertung import bewerte_alle
+from .datenbank import STATUS, Datenbank
+from .importer import Importer
 
 log = logging.getLogger("scout")
 
@@ -55,7 +57,7 @@ class Suchlauf:
     def _lauf(self):
         try:
             db = Datenbank(self.db_pfad)
-            stat = Crawler(self.cfg, db).lauf(self.cfg["suchen"])
+            stat = Importer(self.cfg, db).lauf(self.cfg["suchen"])
             # wie „python scout.py lauf“: Report/CSV/Anschreiben-Dateien aktualisieren, ggf. Mail
             zeilen = bewerte_alle(self.cfg, db, self.basis, lauf_start=self.letzter_start)
             sende_mail(self.cfg, zeilen, schreibe_ausgaben(self.cfg, zeilen, self.basis, fehler=stat["fehler"]))

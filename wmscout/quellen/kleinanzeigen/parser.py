@@ -10,7 +10,7 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
-from .fahrzeug import ist_basismarke, marke_aus_text, normalisiere_marke
+from ...normalisierung.fahrzeug import ist_basismarke, marke_aus_text, normalisiere_marke
 
 BASIS = "https://www.kleinanzeigen.de"
 
