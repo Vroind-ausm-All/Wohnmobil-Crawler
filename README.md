@@ -7,16 +7,25 @@ Wohnmobil an und schreibst es mit einem Klick an.
 
 ## Einrichtung (einmalig, ca. 5 Minuten)
 
-1. Python 3.10+ installieren (Windows: python.org, beim Installieren den Haken bei
-   „Add python.exe to PATH“ setzen). Python selbst muss danach nicht geöffnet werden.
+1. **Python 3.13** installieren (python.org → Downloads → Windows → „Python 3.13.x“ →
+   „Windows installer (64-bit)“). 3.10–3.12 gehen auch. **Neuere Versionen wie 3.14/3.15 noch nicht**:
+   Für sie gibt es PyYAML nicht fertig für Windows, die Installation bricht dann mit
+   „Microsoft Visual C++ 14.0 or greater is required“ ab. 3.13 kann problemlos *zusätzlich* zu
+   einer anderen Version installiert sein. Python selbst muss nie geöffnet werden.
 2. Diesen Ordner entpacken (Rechtsklick auf die ZIP → „Alle extrahieren“).
 3. `config.yaml` mit dem Editor öffnen und anpassen:
    - **anschreiben**: Firma, Name, Telefon, Ort.
    - **suchen**: Suche im Browser auf kleinanzeigen.de zusammenklicken (Ort/Radius, Preis, Art,
      *Anbieter: Privat*), URL kopieren und eintragen. Seitenzahlen ergänzt das Tool selbst.
    - **rechner**: deine echten Kosten und Zielmarge eintragen.
-4. **Windows: Doppelklick auf `app.bat`.** Beim ersten Start werden die Zusatzpakete automatisch
-   installiert. Mac/Linux: einmal `python3 -m pip install -r requirements.txt`, dann `python3 scout.py app`.
+4. **Windows: Doppelklick auf `app.bat`.** Beim ersten Start richtet `installieren.bat` automatisch
+   eine eigene Python-Umgebung im Projektordner ein (`.venv`, mit Python 3.13) und installiert dort die
+   Zusatzpakete – nur als fertige Pakete, ohne Kompilieren. Globale Python-Einstellungen und andere
+   Projekte bleiben unberührt. Danach startet die App sofort. Fehlt Python 3.13, erklärt das Fenster,
+   was zu tun ist.
+   - Umgebung komplett neu aufbauen: `installieren.bat /neu` (oder den Ordner `.venv` löschen).
+   - Mac/Linux: `python3.13 -m venv .venv && .venv/bin/pip install -r requirements.txt`,
+     danach `.venv/bin/python scout.py app`.
 
    Der Browser öffnet sich mit `http://127.0.0.1:8765`. Oben rechts auf **„Neue Anzeigen suchen“**
    klicken – oder vorher einmal `python scout.py lauf` ausführen.
@@ -81,11 +90,14 @@ Der Text (`vorlagen/anschreiben.txt`, frei änderbar) wird für jedes Fahrzeug p
 
 ## Automatisch laufen lassen
 
+Am einfachsten: die App offen lassen – sie sucht alle 3 Stunden selbst (`config.yaml` → `app`).
+
 **Windows** (Aufgabenplanung): `lauf.bat` als Aufgabe anlegen, z. B. täglich 7:00, 12:00, 18:00 Uhr.
+`lauf.bat` nutzt dieselbe `.venv` wie die App.
 
 **Mac / Linux** (`crontab -e`):
 ```
-5 7,12,18 * * *  cd /pfad/zu/wohnmobil-scout && /usr/bin/python3 scout.py lauf >> ausgabe/cron.log 2>&1
+5 7,12,18 * * *  cd /pfad/zu/wohnmobil-scout && .venv/bin/python scout.py lauf >> ausgabe/cron.log 2>&1
 ```
 
 **Mail-Benachrichtigung**: In `config.yaml` unter `email` auf `aktiv: true` stellen und das
@@ -128,7 +140,10 @@ Nachrichten verschicken, und viele Verkäufer reagieren auf Massenanfragen aller
 ```
 config.yaml               alle Einstellungen (Suchen, Kosten, Marktmodell, Wertfaktoren, Anschreiben)
 scout.py                  Startpunkt
-app.bat / lauf.bat        Windows: App starten / Suchlauf
+app.bat / lauf.bat        Windows: App starten / Suchlauf (beide nutzen .venv)
+installieren.bat          richtet .venv mit Python 3.13 ein (läuft automatisch beim Start)
+requirements.txt          Zusatzpakete für .venv
+.venv/                    projekteigene Python-Umgebung (wird automatisch angelegt)
 vorlagen/anschreiben.txt  Text des Anschreibens (Jinja2, frei änderbar – Felder stehen oben in der Datei)
 vorlagen/report.html      Oberfläche von App und Report
 wmscout/rechner.py        faire Bewertung und Händler-EK
@@ -137,5 +152,6 @@ wmscout/app.py            lokale Browser-App (nur 127.0.0.1)
 wmscout/                  außerdem Crawler, Parser, Datenbank, Report
 ausgabe/                  report.html, anzeigen_bewertet.csv, anschreiben/*.txt, scout.log
 daten/anzeigen.sqlite     gesammelte Anzeigen (Grundlage für die Vergleichspreise)
-tests/test_offline.py     Selbsttest ohne Internet: python -m tests.test_offline
+tests/test_offline.py     Selbsttest ohne Internet: .venv\Scripts\python -m tests.test_offline
+wmscout/plz_de.csv        PLZ-Koordinaten für Entfernungen (GeoNames, CC BY 4.0)
 ```

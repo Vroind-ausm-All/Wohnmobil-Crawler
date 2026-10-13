@@ -263,6 +263,8 @@ def test_nachfassen(cfg, db, ad: dict):
     assert z["nachfass_betrag"] == neuer_preis
 
     # Verkäufer stellt das Fahrzeug neu ein → nicht noch einmal anschreiben
+    db.con.execute("UPDATE anzeigen SET erstmals_gesehen=? WHERE id=?", (vor_5_tagen, ad_id))
+    db.con.commit()
     kopie = {**roh, "id": "9" + ad_id, "url": roh["url"] + "-neu"}
     db.speichere_treffer(kopie, roh["suche"])
     db.speichere_details(kopie["id"], {"km": roh["km"], "ez_jahr": roh["ez_jahr"], "marke": roh["marke"],

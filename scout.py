@@ -9,9 +9,22 @@
 """
 from __future__ import annotations
 
+import sys
+from importlib.util import find_spec
+
+if not (3, 10) <= sys.version_info[:2] <= (3, 13):
+    print(f"Hinweis: Wohnmobil-Scout ist für Python 3.10–3.13 gedacht, verwendet wird {sys.version.split()[0]}.\n"
+          "Unter Windows bitte über app.bat starten – das richtet automatisch eine passende Umgebung (.venv) ein.",
+          file=sys.stderr)
+_fehlt = [paket for paket, modul in (("requests", "requests"), ("beautifulsoup4", "bs4"), ("PyYAML", "yaml"),
+                                     ("Jinja2", "jinja2")) if find_spec(modul) is None]
+if _fehlt:
+    sys.exit(f"Fehlende Python-Pakete: {', '.join(_fehlt)}\n"
+             "Windows: bitte das Programm per Doppelklick auf app.bat starten (installiert alles in .venv).\n"
+             "macOS/Linux: python3.13 -m venv .venv && .venv/bin/pip install -r requirements.txt")
+
 import argparse
 import logging
-import sys
 from datetime import datetime
 from pathlib import Path
 

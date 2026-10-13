@@ -1,4 +1,6 @@
-requests>=2.31
-beautifulsoup4>=4.12
-PyYAML>=6.0
-Jinja2>=3.1
+# Wird von installieren.bat in die projekteigene Umgebung .venv installiert.
+# Alle Pakete gibt es fertig (ohne Kompilieren) für Python 3.10 bis 3.13 unter Windows, macOS und Linux.
+requests>=2.31,<3
+beautifulsoup4>=4.12,<5
+PyYAML>=6.0.2,<7
+Jinja2>=3.1,<4
