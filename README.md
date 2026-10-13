@@ -29,6 +29,12 @@ Wohnmobil an und schreibst es mit einem Klick an.
    Der Browser öffnet sich mit `http://127.0.0.1:8765`. Oben rechts auf **„Neue Anzeigen suchen“**
    klicken – oder vorher einmal `python scout.py lauf` ausführen.
 
+## Handy-App fürs Team
+
+Unterwegs mit dem Handy anschreiben, Besichtigungen planen und zuweisen, beim Verkäufer Mängel erfassen (mit
+Fotos und live mitlaufendem Preisabzug, auch ohne Netz) und das Ankaufprotokoll unterschreiben lassen.
+Einrichtung (Nutzer anlegen, Tailscale, App auf den Startbildschirm): **[docs/HANDY-APP.md](docs/HANDY-APP.md)**.
+
 ## Befehle
 
 | Befehl | Was passiert |
@@ -38,6 +44,7 @@ Wohnmobil an und schreibst es mit einem Klick an.
 | `python scout.py report` | Report neu erzeugen, z. B. nach Änderung der Kosten in `config.yaml` (ohne Internet) |
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --titel "Knaus Sky TI 650 MEG" --anschreiben` | Einzelfahrzeug durchrechnen und Anschreiben ausgeben (auch für Anfragen außerhalb von Kleinanzeigen; `--text` mit der Beschreibung berücksichtigt Ausstattung/Mängel) |
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --marktwert 44000` | mit eigenem Marktwert (z. B. aus mobile.de oder DAT) |
+| `python scout.py nutzer anlegen Anna --rolle inhaber --telefon "+49 170 …"` | Team-Zugang für die Handy-App (auch `liste`, `passwort`, `sperren`, `entsperren`) |
 | `python scout.py status 3531797014 kontaktiert` | Status setzen: `neu`, `kontaktiert`, `uninteressant`, `gekauft` (in der App per Klick) |
 
 ## So rechnet der Einkaufspreis-Rechner (faire Bewertung)
@@ -162,7 +169,12 @@ wmscout/
                               (Dubletten, Nachfassen, Bewertung aller Inserate)
   ausgabe.py                  HTML-Report, CSV, Anschreiben-Dateien
   benachrichtigung.py         E-Mail bei neuen Treffern
-  app.py                      Browser-App (nur 127.0.0.1), Suchlauf im Hintergrund, Auto-Suche
+  app.py                      Server (nur 127.0.0.1), Suchlauf im Hintergrund, Auto-Suche
+  web/api.py                  HTTP-Schnittstelle: Desktop-Liste, Handy-App, Anmeldung, Besichtigungen, Protokoll
+  web/static/                 Handy-App (mobil.js, besichtigung.js = Offline-Rechnung, Service Worker, Icons)
+  team.py                     Nutzer, Anmeldungen, Besichtigungen, Fotos
+  bewertung/besichtigung.py   Mängelabzug (verbindliche Rechnung)
+maengel.yaml                  Mängelkatalog mit Richtwerten für Reparaturkosten
 
 tests/                        pytest, komplett ohne Internet (nachgebautes Markup, Fake-Abruf)
 .github/workflows/tests.yml   CI: Tests unter Linux und Windows, Windows-Start mit installieren.bat
@@ -195,6 +207,10 @@ Plan und Hintergründe: `docs/ARCHITEKTUR.md`.
 | **Phase 1:** Komponenten (Quellen, Import, Normalisierung, Datenbank, Bewertung, Ausgabe, Benachrichtigung) | umgesetzt | alle Tests |
 | **Phase 1:** einheitliche Quellen-Schnittstelle | umgesetzt | Vertragstest je Quelle, Test mit Beispielquelle |
 | Spalte `quelle` je Inserat (Vorstufe zu Phase 2) | umgesetzt | `test_import.py`, `test_quellen.py` |
+| Handy-App (PWA): Anmeldung, Team-Rollen, Anschreiben/Nachfassen am Handy | umgesetzt | `test_handy.py`, Klicktest im Handy-Browser |
+| Besichtigungsmodus: Pflicht-Checkliste, Messwerte, Mängelkatalog, Fotos, Live-Abzug, offline | umgesetzt | `test_besichtigung.py`, Paritätstest Python↔JavaScript (600 Fälle), Klicktest inkl. Offline |
+| Ankaufprotokoll mit Unterschriften, Termine/Zuständigkeit, Kalender (.ics), WhatsApp-Links | umgesetzt | `test_handy.py`, Klicktest |
+| WhatsApp automatisch (Cloud API von Meta) | umgesetzt, **nicht live getestet** (braucht Meta-Konto und freigegebene Vorlagen) | `test_handy.py` mit nachgebautem Server |
 | Phase 2: Datenmodell mit Quelle+ID, Fahrzeugidentität, Preis-/Beobachtungshistorie, Verfügbarkeit, Händler/Privat | **geplant** | – |
 | Phase 3: Suchprofile, Scheduler schnell/voll, Fehlerisolation je Quelle, Priorisierung, Quellenstatus, URL-/Feed-Import | **geplant** (Auto-Suche alle N Stunden existiert bereits) | – |
 | Phase 4: Adapter für mobile.de, AutoScout24, Caraworld, Händler-Feeds | **geplant** – Schnittstelle dokumentiert (`docs/QUELLEN.md`), Zugänge müssen erst geklärt werden | – |

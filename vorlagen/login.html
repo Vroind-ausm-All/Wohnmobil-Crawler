@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#24524a">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/static/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<title>Anmelden – Wohnmobil-Scout</title>
+<link rel="stylesheet" href="/static/mobil.css">
+</head>
+<body class="login">
+<main class="login-box">
+  <img src="/static/icon-192.png" alt="" width="64" height="64">
+  <h1>Wohnmobil-Scout</h1>
+  <p class="leise">{{ firma }}</p>
+  <form id="f" autocomplete="on">
+    <label>Name<input name="name" autocomplete="username" required autocapitalize="words"></label>
+    <label>Passwort<input name="passwort" type="password" autocomplete="current-password" required></label>
+    <button class="knopf primaer" type="submit">Anmelden</button>
+    <p id="fehler" class="fehler" role="alert"></p>
+  </form>
+</main>
+<script>
+document.getElementById('f').onsubmit = function(e){
+  e.preventDefault();
+  var f = e.target, fehler = document.getElementById('fehler');
+  fehler.textContent = '';
+  fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name: f.name.value, passwort: f.passwort.value})})
+    .then(function(r){ return r.json().then(function(d){ if(!r.ok) throw new Error(d.fehler); }); })
+    .then(function(){
+      var weiter = new URLSearchParams(location.search).get('weiter') || '/m';
+      location.href = weiter.charAt(0) === '/' && weiter.charAt(1) !== '/' ? weiter : '/m';
+    }, function(err){ fehler.textContent = err.message || 'Anmeldung fehlgeschlagen'; });
+};
+</script>
+</body>
+</html>

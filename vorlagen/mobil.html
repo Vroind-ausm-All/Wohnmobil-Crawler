@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#24524a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="WM-Scout">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/static/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<title>Wohnmobil-Scout</title>
+<link rel="stylesheet" href="/static/mobil.css">
+</head>
+<body>
+<header class="kopf">
+  <a href="#/heute" class="marke">Wohnmobil-Scout</a>
+  <span id="netz" class="netz" hidden>offline</span>
+  <span id="sync" class="sync" hidden></span>
+</header>
+<main id="inhalt" aria-live="polite"><p class="leise mitte">Lädt …</p></main>
+<nav class="navi">
+  <a href="#/heute" data-navi="heute"><span>◉</span>Heute</a>
+  <a href="#/liste/bereit" data-navi="liste"><span>✉</span>Anschreiben</a>
+  <a href="#/liste/arbeit" data-navi="arbeit"><span>⇄</span>In Arbeit</a>
+  <a href="#/termine" data-navi="termine"><span>▦</span>Termine</a>
+</nav>
+<div id="toast" role="status"></div>
+<script src="/static/besichtigung.js"></script>
+<script src="/static/mobil.js"></script>
+</body>
+</html>

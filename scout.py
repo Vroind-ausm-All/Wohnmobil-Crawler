@@ -5,6 +5,7 @@
   python scout.py lauf                      Crawlen + bewerten + Report (+ Mail)
   python scout.py report                    Nur Report neu erzeugen (ohne Internet)
   python scout.py rechne --preis 32900 --ez 2016 --km 98000 --titel "Knaus Sky TI 650 MEG" [--anschreiben]
+  python scout.py nutzer anlegen <Name> [--rolle inhaber]   Team-Zugang für Handy-App anlegen
   python scout.py status <ID> kontaktiert   Status setzen (neu|kontaktiert|verhandlung|besichtigung|gekauft|abgesagt|uninteressant)
 """
 from __future__ import annotations
@@ -43,6 +44,7 @@ from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import STATUS, Datenbank
 from wmscout.importer import Importer
 from wmscout.normalisierung.fahrzeug import ergaenze_fahrzeug
+from wmscout.team import ROLLEN, TeamSpeicher
 
 BASIS = Path(__file__).resolve().parent
 
@@ -116,6 +118,44 @@ def cmd_app(cfg, db, args):
     starte(cfg, db, BASIS, port=args.port, browser=not args.kein_browser)
 
 
+def foto_ordner(cfg) -> Path:
+    return (BASIS / cfg["ausgabe"]["datenbank"]).parent / "fotos"
+
+
+def _passwort_abfragen(name: str) -> str:
+    import getpass
+    while True:
+        pw = getpass.getpass(f"Passwort für {name} (mind. 8 Zeichen): ")
+        if len(pw) < 8:
+            print("Zu kurz.")
+        elif pw != getpass.getpass("Wiederholen: "):
+            print("Stimmt nicht überein.")
+        else:
+            return pw
+
+
+def cmd_nutzer(cfg, db, args):
+    team = TeamSpeicher(db, foto_ordner(cfg))
+    if args.aktion == "liste":
+        for n in team.nutzer_liste(nur_aktive=False):
+            print(f"{n['name']:<20} {ROLLEN[n['rolle']]:<12} {n['telefon'] or '':<16} {'aktiv' if n['aktiv'] else 'gesperrt'}")
+        return
+    if not args.name:
+        sys.exit("Bitte einen Namen angeben, z. B.: python scout.py nutzer anlegen Max")
+    if args.aktion == "anlegen":
+        try:
+            team.nutzer_anlegen(args.name, args.passwort or _passwort_abfragen(args.name), args.rolle, args.telefon)
+        except Exception as e:  # noqa: BLE001 – verständliche Meldung statt Traceback
+            sys.exit(f"Nicht angelegt: {e}")
+        print(f"{args.name} angelegt ({ROLLEN[args.rolle]}). Ab jetzt ist für die App eine Anmeldung nötig.")
+    elif args.aktion == "passwort":
+        ok = team.passwort_setzen(args.name, args.passwort or _passwort_abfragen(args.name))
+        print("Passwort geändert – bestehende Anmeldungen wurden beendet." if ok else f"{args.name} nicht gefunden")
+    elif args.aktion in ("sperren", "entsperren"):
+        ok = team.nutzer_aktiv_setzen(args.name, args.aktion == "entsperren")
+        print("gespeichert" if ok else f"{args.name} nicht gefunden")
+
+
 def cmd_status(cfg, db, args):
     ok = db.setze_status(args.id, args.status, args.notiz)
     print("gespeichert" if ok else f"Anzeige {args.id} nicht gefunden")
@@ -141,6 +181,12 @@ def main():
     r.add_argument("--ort", help="Standort des Fahrzeugs (für das Anschreiben)")
     r.add_argument("--marktwert", type=int, help="eigener Marktwert (z. B. aus mobile.de/DAT) statt Vergleich")
     r.add_argument("--anschreiben", action="store_true", help="passendes Anschreiben mit ausgeben")
+    n = sub.add_parser("nutzer", help="Team-Zugänge für die Handy-App verwalten")
+    n.add_argument("aktion", choices=["anlegen", "liste", "passwort", "sperren", "entsperren"])
+    n.add_argument("name", nargs="?")
+    n.add_argument("--rolle", choices=list(ROLLEN), default="mitarbeiter")
+    n.add_argument("--telefon", help="Handynummer international, z. B. +491701234567 (für WhatsApp)")
+    n.add_argument("--passwort", help=argparse.SUPPRESS)      # nur für Tests/Automatisierung
     s = sub.add_parser("status", help="Status einer Anzeige setzen")
     s.add_argument("id")
     s.add_argument("status", choices=list(STATUS))
@@ -150,7 +196,7 @@ def main():
     cfg = lade_config(args.config)
     logging_einrichten(cfg)
     db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]))
-    {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "rechne": cmd_rechne,
+    {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "rechne": cmd_rechne, "nutzer": cmd_nutzer,
      "status": cmd_status}[args.cmd](cfg, db, args)
 
 
