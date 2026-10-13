@@ -11,13 +11,13 @@ from tests.daten import BASIS, detail_html, such_html
 from tests.test_cli import _scout
 from tests.test_handy import Client
 from wmscout.app import erstelle_server
-from wmscout.datenbank import IMPORT_SUCHE
+from wmscout.datenbank import IMPORT_SUCHE, import_art, import_suche
 from wmscout.bewertung.anschreiben import sperrgrund
 from wmscout.bewertung.auswertung import bewerte_alle
 from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import Datenbank
 from wmscout.eingang import SuchseitenArt, erkenne_seite, fahrzeugart_der_suchseite
-from wmscout.normalisierung.fahrzeug import art_schluessel
+from wmscout.normalisierung.fahrzeug import art_schluessel, arten_im_text
 from wmscout.importer import Importer
 from wmscout.team import TeamSpeicher
 
@@ -114,7 +114,7 @@ def test_detailseite_bekannt_und_unbekannt(cfg, db, ads, ordner):
     assert "Kilometerstand" in z["details_json"] and z["beschreibung"] == ads[0]["lang"]
     z = zeile(db, ads[30]["id"])
     assert z is not None and z["detail_geladen"] == 1 and z["titel"] == ads[30]["titel"] and z["km"] == ads[30]["km"]
-    assert z["url"] == anzeige_url(ads[30]) and z["suche"] == "Import Teilintegrierter"     # Feld „Art“ der Anzeige
+    assert z["url"] == anzeige_url(ads[30]) and z["suche"] == "Import Teilintegrierter (bestätigt)"     # Feld „Art“ der Anzeige
     assert z["preis"] == ads[30]["preis"]
     assert (eingelesen(ordner) / "neu.HTM").is_file()
 
@@ -289,9 +289,18 @@ def test_fahrzeugart_der_suchseite(ads, kopf, davor, erwartet):
 
 
 def test_import_name_trifft_keinen_art_begriff():
+    """Die Markierungen „bestätigt“/„vorläufig“/„gespeicherte Seite“ dürfen die Art im Rechner nicht verfälschen."""
     assert art_schluessel(IMPORT_SUCHE) == "Sonstige"
     for art in ("Teilintegrierter", "Integrierter", "Alkoven", "Kastenwagen", "Wohnwagen"):
-        assert art_schluessel(f"Import {art}") == art
+        for status in ("bestaetigt", "vorlaeufig"):
+            suche = import_suche(art, status)
+            assert suche.startswith("Import ") and art_schluessel(suche) == art
+            assert import_art(suche) == (art, status)
+        assert art_schluessel(f"Import {art}") == art                      # Altbestand
+        assert import_art(f"Import {art}") == (art, "vorlaeufig")
+    assert import_art(IMPORT_SUCHE) == (None, "unbekannt") and import_art("Import Quatsch") == (None, "unbekannt")
+    assert import_art("Teilintegrierter") == (None, None) and import_art(None) == (None, None)       # Crawler
+    assert import_suche("Sonstige", "bestaetigt") == IMPORT_SUCHE and import_suche("Alkoven", None) == IMPORT_SUCHE
 
 
 def max_eks(cfg, db):
@@ -302,7 +311,7 @@ def test_suchseite_art_geht_in_die_bewertung(cfg, db, ads, ordner, tmp_path):
     eigene = ads[:12]
     (ordner / "s.html").write_text(suchseite(eigene, canonical("teilintegrierter")), encoding="utf-8")
     Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
-    assert {zeile(db, a["id"])["suche"] for a in eigene} == {"Import Teilintegrierter"}
+    assert {zeile(db, a["id"])["suche"] for a in eigene} == {"Import Teilintegrierter (bestätigt)"}   # Art-Filter
     assert db.ohne_details(100) == []                                         # weiterhin kein Detailabruf
     rechner = Rechner(cfg)
     assert {rechner.art(dict(zeile(db, a["id"]))) for a in eigene} == {"Teilintegrierter"}
@@ -323,7 +332,7 @@ def test_suchseite_art_geht_in_die_bewertung(cfg, db, ads, ordner, tmp_path):
 def test_wohnwagen_suchseite(cfg, db, ads, ordner):
     (ordner / "w.html").write_text(suchseite(ads[:3], canonical("wohnwagen")), encoding="utf-8")
     Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
-    assert zeile(db, ads[0]["id"])["suche"] == "Import Wohnwagen"
+    assert zeile(db, ads[0]["id"])["suche"] == "Import Wohnwagen (bestätigt)"
     assert Rechner(cfg).art(dict(zeile(db, ads[0]["id"]))) == "Wohnwagen"
 
 
@@ -334,32 +343,41 @@ def test_unbestimmter_import_wird_durch_erkannte_art_ersetzt_aber_nicht_zurueck(
     assert zeile(db, ads[0]["id"])["suche"] == IMPORT_SUCHE
     (ordner / "b.html").write_text(suchseite(ads[:3], canonical("alkoven")), encoding="utf-8")
     imp.importiere_seiten(ordner)
-    assert zeile(db, ads[0]["id"])["suche"] == "Import Alkoven"
+    assert zeile(db, ads[0]["id"])["suche"] == "Import Alkoven (bestätigt)"
     (ordner / "c.html").write_text(suchseite(ads[:3]), encoding="utf-8")
     imp.importiere_seiten(ordner)
-    assert zeile(db, ads[0]["id"])["suche"] == "Import Alkoven"
+    assert zeile(db, ads[0]["id"])["suche"] == "Import Alkoven (bestätigt)"
 
 
-def test_art_unbekannt_sperrt_das_anschreiben(cfg, db, ads, ordner):
-    text = "Fahrzeugart unbekannt – Detailseite der Anzeige speichern und einlesen"
+UNBEKANNT_TEXT = "Fahrzeugart unbekannt – Detailseite der Anzeige speichern und einlesen"
+VORLAEUFIG_TEXT = ("Fahrzeugart nicht bestätigt (aus Titel/Suchbegriff) – über den Art-Filter suchen oder "
+                   "Detailseite einlesen")
+
+
+def test_art_nicht_bestaetigt_sperrt_das_anschreiben(cfg, db, ads, ordner):
     a = {"preis": 30000, "ez_jahr": 2018, "suche": IMPORT_SUCHE, "titel": "Knaus Sky TI", "detail_geladen": 0}
-    assert sperrgrund(a, cfg) == text
-    assert sperrgrund({**a, "titel": "Hymer Integrierter 2018"}, cfg) is None          # Art aus dem Titel
-    assert sperrgrund({**a, "suche": "Import Alkoven"}, cfg) is None
-    assert sperrgrund({**a, "detail_geladen": 1}, cfg) is None
-    assert sperrgrund({**a, "suche": "Teilintegrierter"}, cfg) is None                  # Crawler-Suche: unverändert
+    assert sperrgrund(a, cfg) == UNBEKANNT_TEXT
+    assert sperrgrund({**a, "titel": "Hymer Integrierter 2018"}, cfg) == UNBEKANNT_TEXT      # Titel allein genügt nie
+    assert sperrgrund({**a, "detail_geladen": 1}, cfg) == UNBEKANNT_TEXT
+    assert sperrgrund({**a, "suche": "Import Quatsch"}, cfg) == UNBEKANNT_TEXT
+    assert sperrgrund({**a, "suche": "Import Alkoven (vorläufig)"}, cfg) == VORLAEUFIG_TEXT
+    assert sperrgrund({**a, "suche": "Import Alkoven"}, cfg) == VORLAEUFIG_TEXT              # Altbestand ohne Markierung
+    assert sperrgrund({**a, "suche": "Import Alkoven", "detail_geladen": 1}, cfg) == VORLAEUFIG_TEXT
+    assert sperrgrund({**a, "suche": "Import Alkoven (bestätigt)"}, cfg) is None
+    assert sperrgrund({**a, "suche": "Teilintegrierter"}, cfg) is None                       # Crawler-Suche: unverändert
     assert sperrgrund({**a, "suche": "Sonstige / Camper"}, cfg) is None
 
     (ordner / "s.html").write_text(suchseite(ads[:20]), encoding="utf-8")
     Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
     zeilen = bewerte_alle(cfg, db, BASIS)
     assert len(zeilen) == 20 and not any(z["bereit"] for z in zeilen) and all(z["brief"] is None for z in zeilen)
-    assert any(z["sperre"] == text for z in zeilen)
-    # Detailseite liefert die Art → keine Sperre wegen unbekannter Art mehr
+    assert {z["sperre"] for z in zeilen} == {UNBEKANNT_TEXT}
+    # Detailseite mit Feld „Art“ bestätigt die Art → keine Sperre wegen der Art mehr
     (ordner / "d.html").write_text(detailseite(ads[0]), encoding="utf-8")
     Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
     z = next(z for z in bewerte_alle(cfg, db, BASIS) if z["a"]["id"] == ads[0]["id"])
-    assert z["sperre"] != text and z["a"]["art"] == "Teilintegrierter"
+    assert z["a"]["art"] == "Teilintegrierter" and z["a"]["suche"] == "Import Teilintegrierter (bestätigt)"
+    assert "Fahrzeugart" not in (z["sperre"] or "")
 
 
 def test_gewerblich_bleibt_nach_detailseite(cfg, db, ads, ordner):
@@ -535,10 +553,12 @@ def test_freitextsuche_gibt_treffern_nicht_die_seitenart(cfg, db, ads, ordner, c
     for name, html in reihe if camper_zuerst else reihe[::-1]:
         (ordner / name).write_text(html, encoding="utf-8")
         Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
-    assert zeile(db, alkoven["id"])["suche"] == "Import Alkoven"
-    assert zeile(db, vollint["id"])["suche"] == "Import Integrierter"
-    assert zeile(db, camper_nur["id"])["suche"] == "Import Kastenwagen"
-    assert zeile(db, teilint_nur["id"])["suche"] == "Import Teilintegrierter"
+    # Titel mit genau einer Art und Hinweis der Seite sind nur vorläufig
+    assert zeile(db, alkoven["id"])["suche"] == "Import Alkoven (vorläufig)"
+    assert zeile(db, vollint["id"])["suche"] == "Import Integrierter (vorläufig)"
+    assert zeile(db, camper_nur["id"])["suche"] == "Import Kastenwagen (vorläufig)"
+    assert zeile(db, teilint_nur["id"])["suche"] == "Import Teilintegrierter (vorläufig)"
+    assert all(z["sperre"] == VORLAEUFIG_TEXT and not z["bereit"] for z in bewerte_alle(cfg, db, BASIS))
     assert [art_der(cfg, db, h["id"]) for h in (alkoven, vollint)] == ["Alkoven", "Integrierter"]
     # Bewertung wie bei einem Crawler-Fund unter der richtigen Art
     referenz = Datenbank(":memory:")
@@ -553,15 +573,15 @@ def test_art_filter_geht_vor_dem_titel_und_korrigiert_den_hinweis(cfg, db, ads, 
     hit = {**ads[0], "titel": "Wohnmobil gepflegt"}
     (ordner / "a.html").write_text(stichwortseite([hit], CAMPER, "Camper"), encoding="utf-8")
     imp.importiere_seiten(ordner)
-    assert zeile(db, hit["id"])["suche"] == "Import Kastenwagen"                  # nur Hinweis der Seite
+    assert zeile(db, hit["id"])["suche"] == "Import Kastenwagen (vorläufig)"      # nur Hinweis der Seite
     (ordner / "b.html").write_text(suchseite([hit], canonical("alkoven")), encoding="utf-8")
     imp.importiere_seiten(ordner)
-    assert zeile(db, hit["id"])["suche"] == "Import Alkoven"                      # Filter korrigiert
+    assert zeile(db, hit["id"])["suche"] == "Import Alkoven (bestätigt)"          # Filter korrigiert
     # Filter gilt für alle Treffer der Seite, auch gegen den Titel
     (ordner / "c.html").write_text(suchseite([{**ads[1], "titel": VOLLINT_TITEL}], canonical("kastenwagen")),
                                    encoding="utf-8")
     imp.importiere_seiten(ordner)
-    assert zeile(db, ads[1]["id"])["suche"] == "Import Kastenwagen"
+    assert zeile(db, ads[1]["id"])["suche"] == "Import Kastenwagen (bestätigt)"
 
 
 def test_titel_oder_stichwort_aendert_bestehende_art_nicht(cfg, db, ads, ordner):
@@ -572,15 +592,15 @@ def test_titel_oder_stichwort_aendert_bestehende_art_nicht(cfg, db, ads, ordner)
     (ordner / "b.html").write_text(stichwortseite([{**ads[0], "titel": VOLLINT_TITEL}, ads[1]], TEILINT, "Teilintegriert"),
                                    encoding="utf-8")
     imp.importiere_seiten(ordner)
-    assert {zeile(db, a["id"])["suche"] for a in ads[:2]} == {"Import Alkoven"}
-    # unbestimmter Import wird dagegen durch jede erkannte Art ersetzt (Titel oder Hinweis)
+    assert {zeile(db, a["id"])["suche"] for a in ads[:2]} == {"Import Alkoven (bestätigt)"}
+    # unbekannter Import nimmt dagegen eine vorläufige Art an (Titel oder Hinweis) – bleibt aber unbestätigt
     db.speichere_treffer(erkenne_seite(such_html([ads[5]]))[1][0].als_datensatz(), IMPORT_SUCHE)
     db.speichere_treffer(erkenne_seite(such_html([ads[6]]))[1][0].als_datensatz(), IMPORT_SUCHE)
     (ordner / "c.html").write_text(stichwortseite([{**ads[5], "titel": ALKOVEN_TITEL}, ads[6]], TEILINT, "Teilintegriert"),
                                    encoding="utf-8")
     imp.importiere_seiten(ordner)
-    assert zeile(db, ads[5]["id"])["suche"] == "Import Alkoven"
-    assert zeile(db, ads[6]["id"])["suche"] == "Import Teilintegrierter"
+    assert zeile(db, ads[5]["id"])["suche"] == "Import Alkoven (vorläufig)"
+    assert zeile(db, ads[6]["id"])["suche"] == "Import Teilintegrierter (vorläufig)"
 
 
 def test_crawler_suche_bleibt_bei_jedem_import(cfg, db, ads, ordner):
@@ -596,7 +616,7 @@ def test_seite_ohne_erkennbare_art_bleibt_unbestimmt_und_gesperrt(cfg, db, ads, 
                                                   "Hymer"), encoding="utf-8")
     Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
     assert {zeile(db, a["id"])["suche"] for a in ads[:3]} == {IMPORT_SUCHE}
-    assert all(z["sperre"] and "Fahrzeugart unbekannt" in z["sperre"] for z in bewerte_alle(cfg, db, BASIS))
+    assert all(z["sperre"] == UNBEKANNT_TEXT for z in bewerte_alle(cfg, db, BASIS))
 
 
 def detail_mit_art(a, art):
@@ -607,41 +627,195 @@ def test_detailseite_korrigiert_falsche_import_art(cfg, db, ads, ordner):
     imp = Importer(cfg, db, abruf=KeinNetz())
     (ordner / "s.html").write_text(stichwortseite(ads[:3], CAMPER, "Camper"), encoding="utf-8")
     imp.importiere_seiten(ordner)
-    assert {zeile(db, a["id"])["suche"] for a in ads[:3]} == {"Import Kastenwagen"}      # Hinweis der Seite
+    assert {zeile(db, a["id"])["suche"] for a in ads[:3]} == {"Import Kastenwagen (vorläufig)"}      # Hinweis der Seite
     (ordner / "d0.html").write_text(detail_mit_art(ads[0], "Alkoven"), encoding="utf-8")
     (ordner / "d1.html").write_text(detail_mit_art(ads[1], "Vollintegriert"), encoding="utf-8")
     (ordner / "d2.html").write_text(detail_mit_art(ads[2], "Andere"), encoding="utf-8")   # keine Art erkennbar: bleibt
     stat = imp.importiere_seiten(ordner)
     assert stat["fehler"] == [] and stat["details"] == 3
-    assert zeile(db, ads[0]["id"])["suche"] == "Import Alkoven"
-    assert zeile(db, ads[1]["id"])["suche"] == "Import Integrierter"
-    assert zeile(db, ads[2]["id"])["suche"] == "Import Kastenwagen"
+    assert zeile(db, ads[0]["id"])["suche"] == "Import Alkoven (bestätigt)"
+    assert zeile(db, ads[1]["id"])["suche"] == "Import Integrierter (bestätigt)"
+    assert zeile(db, ads[2]["id"])["suche"] == "Import Kastenwagen (vorläufig)"
     assert art_der(cfg, db, ads[0]["id"]) == "Alkoven" and art_der(cfg, db, ads[1]["id"]) == "Integrierter"
     # unbestimmter Import und neues Inserat bekommen die Art der Anzeigenseite ebenfalls
     db.speichere_treffer(erkenne_seite(such_html([ads[7]]))[1][0].als_datensatz(), IMPORT_SUCHE)
     (ordner / "d7.html").write_text(detail_mit_art(ads[7], "Wohnwagen"), encoding="utf-8")
     (ordner / "d8.html").write_text(detail_mit_art(ads[8], "Alkoven"), encoding="utf-8")
     imp.importiere_seiten(ordner)
-    assert zeile(db, ads[7]["id"])["suche"] == "Import Wohnwagen" and zeile(db, ads[8]["id"])["suche"] == "Import Alkoven"
+    assert zeile(db, ads[7]["id"])["suche"] == "Import Wohnwagen (bestätigt)"
+    assert zeile(db, ads[8]["id"])["suche"] == "Import Alkoven (bestätigt)"
 
 
 def test_hinweis_nur_ohne_widerspruch_der_kurzbeschreibung(cfg, db, ads, ordner):
     neutral = {**ads[0], "titel": "Wohnmobil gepflegt", "kurz": "Gepflegtes Fahrzeug, Nichtraucher, TÜV neu"}
     widerspruch = {**ads[1], "titel": "Wohnmobil gepflegt", "kurz": "Verkaufe unseren Wohnwagen, kein Wohnmobil"}
     gleich = {**ads[2], "titel": "Wohnmobil gepflegt", "kurz": "Kastenwagen mit Hubbett"}
-    titelart = {**ads[3], "titel": "Wohnmobil Alkoven", "kurz": "Verkaufe unseren Wohnwagen"}    # Titel geht vor
-    seite = stichwortseite([neutral, widerspruch, gleich, titelart], CAMPER, "Camper")
+    titelart = {**ads[3], "titel": "Wohnmobil Alkoven", "kurz": "Gepflegtes Fahrzeug"}
+    titel_widerspruch = {**ads[4], "titel": "Wohnmobil Alkoven", "kurz": "Verkaufe unseren Wohnwagen"}
+    seite = stichwortseite([neutral, widerspruch, gleich, titelart, titel_widerspruch], CAMPER, "Camper")
     assert fahrzeugart_der_suchseite(seite) == SuchseitenArt(hinweis="Kastenwagen")
     (ordner / "a.html").write_text(seite, encoding="utf-8")
     Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
-    assert zeile(db, neutral["id"])["suche"] == "Import Kastenwagen"
+    assert zeile(db, neutral["id"])["suche"] == "Import Kastenwagen (vorläufig)"
     assert zeile(db, widerspruch["id"])["suche"] == IMPORT_SUCHE                 # Art unbekannt, nicht „Wohnwagen“
-    assert zeile(db, gleich["id"])["suche"] == "Import Kastenwagen"
-    assert zeile(db, titelart["id"])["suche"] == "Import Alkoven"
+    assert zeile(db, gleich["id"])["suche"] == "Import Kastenwagen (vorläufig)"
+    assert zeile(db, titelart["id"])["suche"] == "Import Alkoven (vorläufig)"
+    assert zeile(db, titel_widerspruch["id"])["suche"] == IMPORT_SUCHE           # Titel gegen Kurzbeschreibung: unbekannt
     zeilen = {z["a"]["id"]: z for z in bewerte_alle(cfg, db, BASIS)}
-    assert "Fahrzeugart unbekannt" in zeilen[widerspruch["id"]]["sperre"] and not zeilen[widerspruch["id"]]["bereit"]
-    assert "Fahrzeugart unbekannt" not in (zeilen[neutral["id"]]["sperre"] or "")
+    assert zeilen[widerspruch["id"]]["sperre"] == UNBEKANNT_TEXT and zeilen[titel_widerspruch["id"]]["sperre"] == UNBEKANNT_TEXT
+    assert zeilen[neutral["id"]]["sperre"] == VORLAEUFIG_TEXT
+    assert not any(z["bereit"] for z in zeilen.values())
     # ein Art-Filter bleibt vorrangig, auch gegen die Kurzbeschreibung
     (ordner / "b.html").write_text(suchseite([widerspruch], canonical("kastenwagen")), encoding="utf-8")
     Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
-    assert zeile(db, widerspruch["id"])["suche"] == "Import Kastenwagen"
+    assert zeile(db, widerspruch["id"])["suche"] == "Import Kastenwagen (bestätigt)"
+
+
+# ---------- Korrekturrunde 3: bestätigte und vorläufige Art ----------
+# Bestätigt ist nur die Art aus dem Art-Filter (art_s:) einer Suchseite oder dem Feld „Art“ einer Detailseite.
+# Art aus dem eigenen Titel oder einem Suchwort ist vorläufig; solche Inserate sind nie anschreibbar.
+KASTEN = "https://www.kleinanzeigen.de/s-wohnwagen-mobile/kastenwagen/k0c220"
+DETHLEFFS = "https://www.kleinanzeigen.de/s-wohnwagen-mobile/dethleffs/k0c220"
+GUENSTIG = {"preis": 9500, "ez": 2015, "km": 80000}          # mit bestätigter Art grün und anschreibbar
+
+
+def lies_ein(cfg, db, ordner, seiten):
+    """Liest die Seiten (Name → HTML) nacheinander ein, jede in einem eigenen Durchgang."""
+    for name, html in seiten:
+        (ordner / name).write_text(html, encoding="utf-8")
+        stat = Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
+        assert stat["fehler"] == []
+
+
+def bewertet(cfg, db, ad_id):
+    return next(z for z in bewerte_alle(cfg, db, BASIS) if z["a"]["id"] == ad_id)
+
+
+@pytest.mark.parametrize("text, erwartet", [
+    ("Wohnwagen Dethleffs Camper 740 TK", {"Wohnwagen", "Kastenwagen"}),
+    ("Knaus Euro Caravaning Kastenwagen unter 6 m", {"Wohnwagen", "Kastenwagen"}),
+    ("Hymer Teilintegrierter B 544", {"Teilintegrierter"}),                    # „…integr…“ zählt nicht zusätzlich
+    ("Teil-Integriert Dethleffs Esprit", {"Teilintegrierter"}),
+    ("Rimor Seal 9 Vollintegriert", {"Integrierter"}),
+    ("Teilintegrierter und Vollintegrierter im Angebot", {"Teilintegrierter", "Integrierter"}),
+    ("Kastenwagen Camper Van Bus", {"Kastenwagen"}),                           # mehrere Wörter, dieselbe Art
+    ("Wohnmobil gepflegt", set()), ("", set()), (None, set()),
+])
+def test_arten_im_text_nennt_alle_arten(text, erwartet):
+    assert arten_im_text(text) == erwartet
+
+
+def test_titel_mit_zwei_arten_ist_nie_anschreibbar(cfg, db, ads, ordner):
+    """QA K-T: „Wohnwagen Dethleffs Camper 740 TK“ wurde (erster Treffer) zum Kastenwagen und war mit 9.500 € bereit."""
+    hit = {**ads[0], **GUENSTIG, "titel": "Wohnwagen Dethleffs Camper 740 TK", "kurz": "Familienwohnwagen"}
+    lies_ein(cfg, db, ordner, [("a.html", stichwortseite([hit], DETHLEFFS, "Dethleffs"))])
+    assert zeile(db, hit["id"])["suche"] == IMPORT_SUCHE                       # keine Art aus dem Titel, kein Hinweis
+    z = bewertet(cfg, db, hit["id"])
+    assert z["sperre"] == UNBEKANNT_TEXT and not z["bereit"] and z["brief"] is None
+    # auch auf einer Seite mit Hinweis „Kastenwagen“ (Freitext) wird daraus keine Art
+    lies_ein(cfg, db, ordner, [("b.html", stichwortseite([hit], CAMPER, "Camper"))])
+    assert zeile(db, hit["id"])["suche"] == IMPORT_SUCHE and not bewertet(cfg, db, hit["id"])["bereit"]
+
+
+@pytest.mark.parametrize("titel, kurz", [
+    ("Knaus Euro Caravaning Kastenwagen unter 6 m", "Kompakt, mit Hubbett"),     # zwei Arten im Titel
+    ("Hymer Integralkoffer Wohnwagen", "Gepflegt"),
+    ("Wohnmobil Alkoven", "Verkaufe unseren Wohnwagen"),                         # Titel gegen Kurzbeschreibung
+    ("Carado Kastenwagen", "Camper-Ausbau, eher ein Teilintegrierter"),
+])
+def test_widerspruechliche_art_im_inserat_bleibt_unbekannt(cfg, db, ads, ordner, titel, kurz):
+    hit = {**ads[0], **GUENSTIG, "titel": titel, "kurz": kurz}
+    lies_ein(cfg, db, ordner, [("a.html", stichwortseite([hit], KASTEN, "Kastenwagen"))])
+    assert zeile(db, hit["id"])["suche"] == IMPORT_SUCHE
+    z = bewertet(cfg, db, hit["id"])
+    assert z["sperre"] == UNBEKANNT_TEXT and not z["bereit"]
+
+
+@pytest.mark.parametrize("kasten_zuerst", [True, False])
+def test_stichwortseiten_mit_verschiedenem_hinweis_sind_reihenfolgeunabhaengig(cfg, db, ads, ordner, kasten_zuerst):
+    """QA R-O: derselbe Carado T 448 auf den Stichwortseiten „Kastenwagen“ und „Teilintegriert“."""
+    hit = {**ads[0], **GUENSTIG, "titel": "Carado T 448 pro+ Fiat", "kurz": "Motor Fiat Ducato 2.2, 140 PS"}
+    seiten = [("a.html", stichwortseite([hit], KASTEN, "Kastenwagen")),
+              ("b.html", stichwortseite([hit], TEILINT, "Teilintegriert"))]
+    lies_ein(cfg, db, ordner, seiten if kasten_zuerst else seiten[::-1])
+    assert zeile(db, hit["id"])["suche"] == IMPORT_SUCHE                       # Widerspruch → unbekannt, in beiden Reihenfolgen
+    z = bewertet(cfg, db, hit["id"])
+    assert z["sperre"] == UNBEKANNT_TEXT and not z["bereit"] and z["brief"] is None
+
+
+def test_gleicher_hinweis_auf_zwei_seiten_bleibt_vorlaeufig(cfg, db, ads, ordner):
+    hit = {**ads[0], **GUENSTIG, "titel": "Carado T 448 pro+ Fiat", "kurz": "Motor Fiat Ducato"}
+    lies_ein(cfg, db, ordner, [("a.html", stichwortseite([hit], KASTEN, "Kastenwagen")),
+                               ("b.html", stichwortseite([hit], CAMPER, "Camper"))])
+    assert zeile(db, hit["id"])["suche"] == "Import Kastenwagen (vorläufig)"
+    z = bewertet(cfg, db, hit["id"])
+    assert z["sperre"] == VORLAEUFIG_TEXT and not z["bereit"]
+
+
+def test_art_filter_bestaetigt_und_macht_anschreibbar(cfg, db, ads, ordner):
+    hit = {**ads[0], **GUENSTIG}
+    lies_ein(cfg, db, ordner, [("a.html", suchseite([hit], canonical("teilintegrierter")))])
+    assert zeile(db, hit["id"])["suche"] == "Import Teilintegrierter (bestätigt)"
+    z = bewertet(cfg, db, hit["id"])
+    assert z["sperre"] is None and z["bereit"] and z["b"].art == "Teilintegrierter" and z["brief"]
+    # eine widersprechende Freitextseite oder ein widersprechender Titel ändert die bestätigte Art nicht
+    lies_ein(cfg, db, ordner, [("b.html", stichwortseite([{**hit, "titel": "Hymer Kastenwagen"}], KASTEN, "Kastenwagen"))])
+    assert zeile(db, hit["id"])["suche"] == "Import Teilintegrierter (bestätigt)" and bewertet(cfg, db, hit["id"])["bereit"]
+
+
+def test_detailseite_bestaetigt_und_macht_anschreibbar(cfg, db, ads, ordner):
+    hit = {**ads[1], **GUENSTIG}      # ads[0] hat einen Sperrbegriff in der Beschreibung
+    lies_ein(cfg, db, ordner, [("a.html", suchseite([hit]))])
+    assert not bewertet(cfg, db, hit["id"])["bereit"]
+    lies_ein(cfg, db, ordner, [("d.html", detailseite(hit))])                  # Feld „Art“ = Teilintegrierter
+    assert zeile(db, hit["id"])["suche"] == "Import Teilintegrierter (bestätigt)"
+    z = bewertet(cfg, db, hit["id"])
+    assert z["sperre"] is None and z["bereit"]
+    # eine Detailseite ohne Feld „Art“ ändert nichts an einer bestätigten Art und bestätigt nichts
+    ohne_art = detailseite(hit).replace('<li class="addetailslist--detail">Art<span class="addetailslist--detail--value">'
+                                        'Teilintegrierter</span></li>', "")
+    assert "Teilintegrierter</span>" not in ohne_art
+    lies_ein(cfg, db, ordner, [("d2.html", ohne_art)])
+    assert zeile(db, hit["id"])["suche"] == "Import Teilintegrierter (bestätigt)"
+    neu = {**ads[2], **GUENSTIG, "titel": "Wohnmobil gepflegt"}
+    lies_ein(cfg, db, ordner, [("d3.html", detailseite(neu).replace("Teilintegrierter</span>", "Andere</span>"))])
+    assert zeile(db, neu["id"])["suche"] == IMPORT_SUCHE and not bewertet(cfg, db, neu["id"])["bereit"]
+
+
+def test_altbestand_import_art_gilt_als_vorlaeufig_und_wird_korrigiert(cfg, db, ads, ordner):
+    """QA M-A: „Import <Art>“ aus früheren Zweigständen (ohne Markierung) war nie von einer Detailseite korrigierbar."""
+    def altbestand(hit, suche="Import Kastenwagen"):
+        db.speichere_treffer(erkenne_seite(such_html([hit]))[1][0].als_datensatz(), suche)
+
+    hit = {**ads[0], **GUENSTIG}
+    altbestand(hit)
+    z = bewertet(cfg, db, hit["id"])
+    assert z["sperre"] == VORLAEUFIG_TEXT and not z["bereit"]                  # schon ohne erneutes Einlesen gesperrt
+    lies_ein(cfg, db, ordner, [("d.html", detail_mit_art(hit, "Alkoven"))])
+    assert zeile(db, hit["id"])["suche"] == "Import Alkoven (bestätigt)"
+    assert art_der(cfg, db, hit["id"]) == "Alkoven" and zeile(db, hit["id"])["art"] == "Alkoven"
+
+    # ein Stichwort-Hinweis bestätigt den Altbestand nicht (gleiche Art bleibt vorläufig, andere macht unbekannt)
+    gleich, anders = {**ads[1], **GUENSTIG}, {**ads[2], **GUENSTIG}
+    altbestand(gleich), altbestand(anders)
+    lies_ein(cfg, db, ordner, [("s1.html", stichwortseite([gleich], KASTEN, "Kastenwagen")),
+                               ("s2.html", stichwortseite([anders], TEILINT, "Teilintegriert"))])
+    assert zeile(db, gleich["id"])["suche"] == "Import Kastenwagen (vorläufig)"
+    assert zeile(db, anders["id"])["suche"] == IMPORT_SUCHE
+    assert not any(bewertet(cfg, db, h["id"])["bereit"] for h in (gleich, anders))
+
+    # Art-Filter bestätigt den Altbestand
+    lies_ein(cfg, db, ordner, [("s3.html", suchseite([gleich], canonical("kastenwagen")))])
+    assert zeile(db, gleich["id"])["suche"] == "Import Kastenwagen (bestätigt)"
+
+
+def test_nicht_bestaetigte_art_ist_nie_bereit_im_gesamten_bestand(cfg, db, ads, ordner):
+    """Kernaussage: egal welche Art der Rechner ableitet – ohne bestätigte Art kein Anschreiben."""
+    seiten = [("a.html", stichwortseite(ads[:30], CAMPER, "Camper")), ("b.html", stichwortseite(ads[20:50], TEILINT, "Teilintegriert")),
+              ("c.html", suchseite(ads[45:60]))]
+    lies_ein(cfg, db, ordner, seiten)
+    zeilen = bewerte_alle(cfg, db, BASIS)
+    assert len(zeilen) == 60
+    for z in zeilen:
+        if not z["a"]["suche"].endswith("(bestätigt)"):
+            assert z["sperre"] in (UNBEKANNT_TEXT, VORLAEUFIG_TEXT) and not z["bereit"] and z["brief"] is None

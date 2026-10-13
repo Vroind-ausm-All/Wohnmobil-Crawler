@@ -221,7 +221,7 @@ def parse_suchseite(html: str) -> list[dict]:
 
 # ---------- Detailseite ----------
 def ort_aus_lokalitaet(text: str) -> str | None:
-    """'72581 Baden-Württemberg - Dettingen an der Erms' -> '72581 Dettingen an der Erms' (wie in der Trefferliste)."""
+    """'71111 Baden-Württemberg - Beispielstadt' -> '71111 Beispielstadt' (wie in der Trefferliste)."""
     text = " ".join(text.split())
     for land in _BUNDESLAENDER:
         text = re.sub(rf"^(\d{{5}})\s+{re.escape(land)}\s+-\s+", r"\1 ", text)

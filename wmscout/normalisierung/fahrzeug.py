@@ -215,6 +215,19 @@ def art_schluessel(*quellen: str | None) -> str:
     return "Sonstige"
 
 
+_TEILINT_WORT = re.compile(r"\w*teil(?:int|[\s-]*integr)\w*", re.I)
+
+
+def arten_im_text(text: str | None) -> set[str]:
+    """ALLE Fahrzeugarten, die ein Text nennt (anders als `art_schluessel`, wo der erste Treffer gewinnt).
+
+    Gleiche Suchbegriffe wie `ART_SCHLUESSEL` (auch Wortteile: „Caravaning“, „Integralkoffer“ – im Zweifel lieber eine
+    Art zu viel, dann ist der Text mehrdeutig). „Teilintegrierter“ zählt nur als Teilintegrierter, nicht zusätzlich
+    als Integrierter. Dient dazu, Arten aus Titeln nur zu übernehmen, wenn der Titel genau eine nennt."""
+    ql = _TEILINT_WORT.sub(" teilint ", (text or "").lower())
+    return {schluessel for begriff, schluessel in ART_SCHLUESSEL if begriff in ql}
+
+
 def fahrzeug_bezeichnung(marke: str | None, modell: str | None) -> str:
     """Für Sätze wie „Ihr Inserat zum …“: 'Knaus Sky TI 650 MEG', 'Knaus-Wohnmobil' oder 'Wohnmobil'."""
     if marke and modell:

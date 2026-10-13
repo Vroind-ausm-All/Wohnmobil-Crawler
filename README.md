@@ -129,11 +129,12 @@ Eingelesene Dateien wandern nach `import/eingelesen/<Datum>/`, nicht erkannte na
 Hinweise zum Einlesen:
 - Je Klick werden höchstens 25 Dateien (bzw. etwa 20 Sekunden lang) gelesen; den Rest liest der nächste Klick.
   Dateien über 20 MB werden nicht gelesen (sie bleiben liegen).
-- Die Fahrzeugart (z. B. Teilintegrierter) bestimmt das Programm je Anzeige: zuerst aus einem Art-Filter der
-  gespeicherten Suchseite (`art_s:…` in der Adresse), sonst aus dem Titel der Anzeige selbst, sonst aus dem
-  Suchwort der Seite (z. B. „Camper“ – nur ein Hinweis, die Suche liefert auch andere Arten). Eine Anzeigenseite
-  (Detailseite) nennt die Art selbst und korrigiert eine frühere Zuordnung. Anzeigen ohne erkennbare Art gelten
-  nicht als „anschreibbar“, bis ihre Anzeigenseite gespeichert und eingelesen wurde.
+- Die Fahrzeugart (z. B. Teilintegrierter) bestimmt, wie der Scout den Wert rechnet. Damit der Scout ein Anschreiben
+  vorbereitet, muss die Fahrzeugart sicher sein: Suche über den Art-Filter von Kleinanzeigen (linke Spalte) oder
+  Detailseite der Anzeige mit einlesen. Eine Art, die nur aus dem Titel oder einem Suchwort (z. B. „Camper“) geraten
+  wurde, gilt als vorläufig: Die Anzeige erscheint in der Liste, ist aber nicht „anschreibbar“ (Grund: „Fahrzeugart nicht
+  bestätigt“ bzw. „unbekannt“). Widersprechen sich zwei Hinweise, wird die Art unbekannt. Eine später eingelesene
+  Detailseite oder ein Art-Filter bestätigt bzw. korrigiert die Art.
 - **Datenschutz:** `import/eingelesen/` enthält die vollständigen gespeicherten Seiten, auch Verkäuferangaben
   (Name, Ort, ggf. Telefonnummer). Das Programm löscht nichts automatisch – lösche die Dateien nach der Prüfung selbst.
   Speichere Seiten möglichst nicht angemeldet, damit keine Kontodaten in der Datei landen.

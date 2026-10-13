@@ -11,15 +11,14 @@ Außerdem: `importiere_seiten()` liest im Browser gespeicherte Seiten aus dem Im
 from __future__ import annotations
 
 import logging
-import re
 import time
 from datetime import date
 from pathlib import Path
 
-from .datenbank import IMPORT_SUCHE, Datenbank
+from .datenbank import BESTAETIGT, IMPORT_SUCHE, VORLAEUFIG, Datenbank, import_art, import_suche
 from .eingang import (BegleitordnerFehler, SuchseitenArt, erkenne_seite, fahrzeugart_der_suchseite, html_dateien,
                       lies_html, verschiebe)
-from .normalisierung.fahrzeug import ART_PLURAL, art_schluessel
+from .normalisierung.fahrzeug import art_schluessel
 from .quellen import (STANDARD_QUELLE, Abruf, InseratNichtGefunden, NetzwerkFehler, Quelle, QuelleGesperrt,
                       QuellenFehler, Suchauftrag, erstelle_quelle)
 
@@ -30,27 +29,33 @@ LAYOUT_HINWEIS = ("{quelle}-Seite geladen, aber keine Anzeigen erkannt – vermu
                   "(wmscout/quellen/{kennung}/parser.py).")
 
 
-_IMPORT_ART = re.compile(r"^Import (?:%s)$" % "|".join(k for k in ART_PLURAL if k != "Sonstige"))
-
-
 def _art(text: str | None) -> str | None:
     art = art_schluessel(text)
     return None if art == "Sonstige" else art
 
 
-def _neue_suche(alt: str | None, art: str | None, belastbar: bool) -> str:
-    """Suche, unter der ein importiertes Inserat gespeichert wird.
+def _neue_suche(alt: str | None, art: str | None, herkunft: str | None) -> str:
+    """Suche, unter der ein importiertes Inserat gespeichert wird (Herkunft der Art in `suche` kodiert).
 
-    alt: bisherige Suche (None = neu). art: erkannte Fahrzeugart oder None. belastbar: Art stammt aus einem
-    Art-Filter der Suchseite oder aus der Anzeigenseite selbst – nur sie darf eine bestehende „Import <Art>“
-    korrigieren (Titel/Stichwort einer anderen Suchseite nicht: sonst hinge die Art von der Reihenfolge ab).
-    Crawler-Suchen bleiben unberührt; unbestimmter Import (`IMPORT_SUCHE`) wird durch jede erkannte Art ersetzt."""
-    neu = f"Import {art}" if art else IMPORT_SUCHE
-    if alt is None or alt == IMPORT_SUCHE:
-        return neu
-    if _IMPORT_ART.match(alt):
-        return neu if art and belastbar else alt
-    return alt
+    alt: bisherige Suche (None = neu). art/herkunft: Art und ihre Herkunft („bestaetigt“ = Art-Filter der Suchseite
+    oder Feld „Art“ der Detailseite, „vorlaeufig“ = Titel/Suchwort, None = keine Art erkannt).
+    Rangfolge bestätigt > vorläufig > unbekannt:
+    * bestätigt wird nur durch eine neue bestätigte Art geändert;
+    * eine vorläufige Art nimmt nur an, wer noch unbekannt ist; ein abweichender vorläufiger Wert macht das
+      Inserat unbekannt (Widerspruch – das Ergebnis hängt so nicht von der Reihenfolge der Seiten ab);
+    * „Import <Art>“ ohne Markierung (Altbestand) gilt als vorläufig; Crawler-Suchen bleiben unberührt."""
+    alt_art, alt_herkunft = import_art(alt)
+    if alt is not None and alt_herkunft is None:
+        return alt                                           # Crawler-Suche
+    if art and herkunft == BESTAETIGT:
+        return import_suche(art, BESTAETIGT)
+    if alt_herkunft == BESTAETIGT:
+        return alt
+    if art and herkunft == VORLAEUFIG:
+        if alt_herkunft == VORLAEUFIG:
+            return import_suche(art, VORLAEUFIG) if art == alt_art else IMPORT_SUCHE
+        return import_suche(art, VORLAEUFIG)                 # bisher unbekannt oder neu
+    return import_suche(alt_art, alt_herkunft) if alt_herkunft == VORLAEUFIG else IMPORT_SUCHE
 
 
 class Importer:
@@ -194,9 +199,10 @@ class Importer:
     def _speichere_seite(self, art: str, inserate: list, stat: dict, seitenart: SuchseitenArt | None = None):
         """Speichert die Inserate einer Such- oder Detailseite.
 
-        Neue Inserate bekommen die Suche „Import <Art>“ (damit der Rechner die Art kennt), sonst `IMPORT_SUCHE`.
-        Die Art bestimmt je Treffer `SuchseitenArt.fuer_treffer`: Art-Filter der Seite, sonst eigener Titel, sonst
-        Suchwort-Hinweis der Seite (nur ohne Widerspruch der Kurzbeschreibung). Bei Detailseiten gilt das Feld „Art“ der Anzeige."""
+        Importierte Inserate bekommen die Suche „Import <Art> (bestätigt|vorläufig)“ bzw. `IMPORT_SUCHE` (Art unbekannt).
+        Bestätigt ist nur die Art aus dem Art-Filter der Suchseite (`SuchseitenArt.filter`) oder dem Feld „Art“ einer
+        Detailseite; Art aus dem eigenen Titel oder einem Suchwort ist vorläufig (`SuchseitenArt.fuer_treffer`) –
+        solche Inserate sind nie anschreibbar (`sperrgrund`). Siehe `_neue_suche` für das Überschreiben."""
         if art == "suche":
             stat["suchseiten"] += 1
         else:
@@ -205,10 +211,13 @@ class Importer:
         for inserat in inserate:
             d = inserat.als_datensatz()
             if art == "detail":
-                neue_art, belastbar = _art(d.get("art")), True
+                if neue_art := _art(d.get("art")):
+                    herkunft = BESTAETIGT                       # Feld „Art“ der Anzeige selbst
+                else:
+                    neue_art, herkunft = seitenart.fuer_treffer(d.get("titel"), d.get("kurzbeschreibung"))
             else:
-                neue_art, belastbar = seitenart.fuer_treffer(d.get("titel"), d.get("kurzbeschreibung")), bool(seitenart.filter)
-            suche = _neue_suche(self.db.suche_zu(d["id"]), neue_art, belastbar)
+                neue_art, herkunft = seitenart.fuer_treffer(d.get("titel"), d.get("kurzbeschreibung"))
+            suche = _neue_suche(self.db.suche_zu(d["id"]), neue_art, herkunft)
             if art == "detail" and not d.get("gewerblich"):
                 d["gewerblich"] = None            # kein Hinweis auf der Detailseite ≠ „privat“: Suchlistenwert bleibt
             stat[self.db.speichere_treffer(d, suche)] += 1

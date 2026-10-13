@@ -14,7 +14,7 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup, SoupStrainer
 
-from ..normalisierung.fahrzeug import art_schluessel
+from ..normalisierung.fahrzeug import art_schluessel, arten_im_text
 from ..quellen.basis import Inserat
 from ..quellen.kleinanzeigen.adapter import anzeigen_id_aus_url
 from ..quellen.kleinanzeigen.parser import BASIS, parse_detailseite, parse_suchseite
@@ -114,21 +114,25 @@ class SuchseitenArt(NamedTuple):
 
     filter: Art aus einem echten Art-Filter der Suchadresse (`art_s:<wert>`) – alle Treffer haben diese Art.
     hinweis: Art aus dem Suchwort im Pfad bzw. aus dem Seitentitel – eine Freitextsuche (`…/camper/k0c220`), die
-             auch andere Fahrzeugarten liefert; gilt nur für Treffer, deren eigener Titel keine Art nennt."""
+             auch andere Fahrzeugarten liefert; gilt nur vorläufig und nur für Treffer ohne widersprechende Art."""
     filter: str | None = None
     hinweis: str | None = None
 
-    def fuer_treffer(self, titel: str | None, kurzbeschreibung: str | None = None) -> str | None:
-        """Endgültige Art eines Treffers: (1) Filter, (2) Art aus dem eigenen Titel, (3) Hinweis der Seite – aber nur,
-        wenn die Kurzbeschreibung ihm nicht widerspricht (nennt sie eine andere Art, ist die Art unbekannt: sie wird
-        nicht übernommen, weil zu unsicher, z. B. „kein Wohnwagen“). Sonst None."""
+    def fuer_treffer(self, titel: str | None, kurzbeschreibung: str | None = None) -> tuple[str | None, str | None]:
+        """(Art, Herkunft) eines Treffers; Herkunft „bestaetigt“, „vorlaeufig“ oder – ohne Art – (None, None).
+
+        bestätigt nur durch den Art-Filter der Seite. Vorläufig (nie anschreibbar): (1) die Art aus dem eigenen Titel,
+        wenn der Titel GENAU EINE Art nennt (alle Suchbegriffe geprüft, nicht nur der erste Treffer) und die
+        Kurzbeschreibung keine andere nennt; (2) sonst der Hinweis der Seite, wenn weder Titel noch Kurzbeschreibung
+        eine andere Art nennen. Alles andere (mehrere Arten, Widerspruch) bleibt unbekannt."""
         if self.filter:
-            return self.filter
-        if (art := art_schluessel(titel)) != "Sonstige":
-            return art
-        if self.hinweis and art_schluessel(kurzbeschreibung) in ("Sonstige", self.hinweis):
-            return self.hinweis
-        return None
+            return self.filter, "bestaetigt"
+        im_titel, in_kurz = arten_im_text(titel), arten_im_text(kurzbeschreibung)
+        if len(im_titel) == 1 and in_kurz <= im_titel:
+            return next(iter(im_titel)), "vorlaeufig"
+        if self.hinweis and (im_titel | in_kurz) <= {self.hinweis}:
+            return self.hinweis, "vorlaeufig"
+        return None, None
 
 
 def _art(text: str) -> str | None:

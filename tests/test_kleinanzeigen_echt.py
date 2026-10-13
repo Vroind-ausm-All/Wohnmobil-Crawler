@@ -137,15 +137,15 @@ def test_ez_aus_text_formen():
 # ---------- Anzeigenseite ----------
 def test_detailseite_felder(detail):
     d = parse_detailseite(detail)
-    assert d["titel"] == "Sunlight Cliff 640 Adventure Edition | Klima | Bikegarage | 1. Hd"
-    assert (d["preis"], d["vb"]) == (49590, True)
-    assert (d["km"], d["ez_jahr"], d["marke"], d["art"]) == (30750, 2021, "Sunlight", "Kastenwagen")
+    assert d["titel"] == "Sunlight Cliff 640 Testfahrzeug | Klima | Fahrradträger | 1. Hd"
+    assert (d["preis"], d["vb"]) == (47300, True)
+    assert (d["km"], d["ez_jahr"], d["marke"], d["art"]) == (41200, 2021, "Sunlight", "Kastenwagen")
     assert d["anzeigen_id"] == DETAIL_ID
     assert d["gewerblich"] is False                         # „Privater Nutzer“; PRO-Links gibt es nur bei ähnlichen Anzeigen
-    assert d["ort"] == "72581 Dettingen an der Erms"        # ohne Bundesland, wie in der Trefferliste
-    assert d["details"] == {"Art": "Kastenwagen", "Marke": "Sunlight", "Kilometerstand": "30.750 km",
+    assert d["ort"] == "71111 Beispielstadt am Test"        # ohne Bundesland, wie in der Trefferliste
+    assert d["details"] == {"Art": "Kastenwagen", "Marke": "Sunlight", "Kilometerstand": "41.200 km",
                             "Erstzulassung": "Juli 2021"}
-    assert "Bikeenthusiasten" in d["beschreibung"]
+    assert "Testbeschreibung" in d["beschreibung"]
 
 
 def test_detailseite_gewerblich_nur_aus_verkaeuferbereich(detail):
@@ -171,7 +171,7 @@ def test_basismarke_mit_leerzeichen_und_bindestrich():
 
 def test_detailseite_hymer_mobil_auf_mercedes_benz_fahrgestell(detail):
     """Echter Fall: Feld „Marke“ = „Mercedes Benz“ (Fahrgestell), der Titel nennt den Aufbauhersteller Hymer."""
-    html = detail.replace("Sunlight Cliff 640 Adventure Edition | Klima | Bikegarage | 1. Hd", HYMER_TITEL)
+    html = detail.replace("Sunlight Cliff 640 Testfahrzeug | Klima | Fahrradträger | 1. Hd", HYMER_TITEL)
     html = html.replace('itemprop="brand">Sunlight<', 'itemprop="brand">Mercedes Benz<')
     assert parse_detailseite(html)["marke"] == "Hymer"
     kein_hersteller = html.replace(HYMER_TITEL, "Wohnmobil Bj 1981 H-Kennzeichen").replace("Sunlight", "Aufbau").replace("Fiat Ducato", "Diesel")
@@ -206,7 +206,7 @@ def test_erkennung_detailseite_nur_die_eigene_anzeige(detail):
     i = inserate[0]
     assert i.url == ("https://www.kleinanzeigen.de/s-anzeige/sunlight-cliff-640-beispiel/"
                      f"{DETAIL_ID}-220-1010")
-    assert (i.preis, i.km, i.ez_jahr, i.marke, i.art, i.gewerblich) == (49590, 30750, 2021, "Sunlight", "Kastenwagen", False)
+    assert (i.preis, i.km, i.ez_jahr, i.marke, i.art, i.gewerblich) == (47300, 41200, 2021, "Sunlight", "Kastenwagen", False)
 
 
 def test_detailseite_ohne_canonical_nutzt_anzeigen_id_kasten(detail):
@@ -232,7 +232,7 @@ def test_adapter_details_mit_neuem_feld(cfg, detail):
 
     q = KleinanzeigenQuelle(cfg, Abruf())
     i = q.details(f"https://www.kleinanzeigen.de/s-anzeige/x/{DETAIL_ID}-220-1010")
-    assert i.anzeigen_id == DETAIL_ID and i.km == 30750 and i.ez_jahr == 2021
+    assert i.anzeigen_id == DETAIL_ID and i.km == 41200 and i.ez_jahr == 2021
     assert q.details("https://www.kleinanzeigen.de/s-anzeige/x").anzeigen_id == DETAIL_ID   # URL ohne ID → Kasten
     # steht eine ID in der abgerufenen URL, hat sie Vorrang vor der ID auf der Seite
     i = q.details("https://www.kleinanzeigen.de/s-anzeige/x/3900000099-220-1")
@@ -298,12 +298,12 @@ def test_import_beider_seiten(cfg, db: Datenbank, ordner):
     assert not set(AEHNLICH) & set(zeilen)                   # „ähnliche Anzeigen“ der Detailseite werden nicht importiert
     for ad_id, z in zeilen.items():
         if ad_id != DETAIL_ID:
-            assert z["suche"] == "Import Teilintegrierter" and z["detail_geladen"] == 0 and z["bild"] == TEST_BILD
+            assert z["suche"] == "Import Teilintegrierter (vorläufig)" and z["detail_geladen"] == 0 and z["bild"] == TEST_BILD
     assert zeilen["3900000001"]["gewerblich"] == 1 and zeilen["3900000002"]["gewerblich"] == 0
     d = zeilen[DETAIL_ID]
-    assert d["detail_geladen"] == 1 and d["suche"] == "Import Kastenwagen"       # Art aus der Anzeigenseite selbst
-    assert (d["preis"], d["km"], d["ez_jahr"], d["marke"], d["art"]) == (49590, 30750, 2021, "Sunlight", "Kastenwagen")
-    assert d["ort"] == "72581 Dettingen an der Erms" and d["vb"] == 1
+    assert d["detail_geladen"] == 1 and d["suche"] == "Import Kastenwagen (bestätigt)"       # Art aus der Anzeigenseite selbst
+    assert (d["preis"], d["km"], d["ez_jahr"], d["marke"], d["art"]) == (47300, 41200, 2021, "Sunlight", "Kastenwagen")
+    assert d["ort"] == "71111 Beispielstadt am Test" and d["vb"] == 1
 
 
 def test_import_detailseite_ergaenzt_bekanntes_inserat(cfg, db: Datenbank, ordner, such, detail):
@@ -316,5 +316,5 @@ def test_import_detailseite_ergaenzt_bekanntes_inserat(cfg, db: Datenbank, ordne
     assert (stat["detailseiten"], stat["neu"], stat["bekannt"]) == (1, 0, 1)
     z = db.con.execute("SELECT * FROM anzeigen WHERE id=?", (DETAIL_ID,)).fetchone()
     # die Anzeigenseite nennt die Art selbst (Kastenwagen) und korrigiert den Seitenhinweis „Teilintegriert“
-    assert z["suche"] == "Import Kastenwagen" and z["detail_geladen"] == 1 and z["km"] == 30750
+    assert z["suche"] == "Import Kastenwagen (bestätigt)" and z["detail_geladen"] == 1 and z["km"] == 41200
     assert db.con.execute("SELECT COUNT(*) FROM anzeigen").fetchone()[0] == 6

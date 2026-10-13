@@ -38,6 +38,37 @@ STATUS = {"neu": "offen", "kontaktiert": "kontaktiert", "verhandlung": "in Verha
 # `suche` von Inseraten aus gespeicherten Seiten: werden nie per Detailabruf nachgeladen (ADR-010)
 IMPORT_SUCHE = "Import (gespeicherte Seite)"
 
+# Herkunft der Fahrzeugart eines importierten Inserats, in `suche` kodiert (keine Schemaänderung):
+#   „Import <Art> (bestätigt)“  Art stammt aus dem Art-Filter (art_s:) der Suchseite oder dem Feld „Art“ der Detailseite
+#   „Import <Art> (vorläufig)“  Art nur aus dem eigenen Titel bzw. einem Suchwort der Seite – nie anschreibbar
+#   IMPORT_SUCHE                Art unbekannt (oder widersprüchlich) – nie anschreibbar
+#   „Import <Art>“              Altbestand früherer Zweigstände: gilt wie „vorläufig“
+# Crawler-Suchen (nicht „Import…“) bleiben unberührt.
+IMPORT_ARTEN = ("Teilintegrierter", "Integrierter", "Alkoven", "Kastenwagen", "Wohnwagen")
+BESTAETIGT, VORLAEUFIG, UNBEKANNT = "bestaetigt", "vorlaeufig", "unbekannt"
+_MARKE = {BESTAETIGT: " (bestätigt)", VORLAEUFIG: " (vorläufig)"}
+
+
+def import_suche(art: str | None = None, status: str | None = None) -> str:
+    """`suche`-Wert für ein importiertes Inserat; ohne Art oder Status `IMPORT_SUCHE` (unbekannt)."""
+    if art not in IMPORT_ARTEN or status not in _MARKE:
+        return IMPORT_SUCHE
+    return f"Import {art}{_MARKE[status]}"
+
+
+def import_art(suche: str | None) -> tuple[str | None, str | None]:
+    """(Art, Herkunft) aus `suche`. Herkunft: BESTAETIGT, VORLAEUFIG, UNBEKANNT – oder None, wenn `suche` keine
+    Import-Suche ist (Crawler). Unlesbare „Import…“-Werte gelten als UNBEKANNT (also gesperrt)."""
+    if not suche or not suche.startswith("Import"):
+        return None, None
+    rest = suche[len("Import"):].strip()
+    for status, marke in _MARKE.items():
+        if rest.endswith(marke.strip()) and (art := rest[:-len(marke.strip())].strip()) in IMPORT_ARTEN:
+            return art, status
+    if rest in IMPORT_ARTEN:
+        return rest, VORLAEUFIG                  # Altbestand ohne Markierung
+    return None, UNBEKANNT
+
 FELDER_UPDATE = ["url", "suche", "titel", "preis", "vb", "ort", "km", "ez_jahr", "marke",
                  "kurzbeschreibung", "gewerblich", "bild", "quelle"]
 
