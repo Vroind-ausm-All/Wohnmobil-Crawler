@@ -7,20 +7,17 @@ Wohnmobil an und schreibst es mit einem Klick an.
 
 ## Einrichtung (einmalig, ca. 5 Minuten)
 
-1. Python 3.10+ installieren (Windows: python.org, Haken bei „Add to PATH“).
-2. Im Ordner dieses Projekts:
-   ```
-   pip install -r requirements.txt
-   ```
-3. `config.yaml` öffnen und anpassen:
+1. Python 3.10+ installieren (Windows: python.org, beim Installieren den Haken bei
+   „Add python.exe to PATH“ setzen). Python selbst muss danach nicht geöffnet werden.
+2. Diesen Ordner entpacken (Rechtsklick auf die ZIP → „Alle extrahieren“).
+3. `config.yaml` mit dem Editor öffnen und anpassen:
+   - **anschreiben**: Firma, Name, Telefon, Ort.
    - **suchen**: Suche im Browser auf kleinanzeigen.de zusammenklicken (Ort/Radius, Preis, Art,
      *Anbieter: Privat*), URL kopieren und eintragen. Seitenzahlen ergänzt das Tool selbst.
    - **rechner**: deine echten Kosten und Zielmarge eintragen.
-   - **anschreiben**: Firma, Name, Telefon.
-4. App starten (Windows: Doppelklick auf `app.bat`):
-   ```
-   python scout.py app
-   ```
+4. **Windows: Doppelklick auf `app.bat`.** Beim ersten Start werden die Zusatzpakete automatisch
+   installiert. Mac/Linux: einmal `python3 -m pip install -r requirements.txt`, dann `python3 scout.py app`.
+
    Der Browser öffnet sich mit `http://127.0.0.1:8765`. Oben rechts auf **„Neue Anzeigen suchen“**
    klicken – oder vorher einmal `python scout.py lauf` ausführen.
 
