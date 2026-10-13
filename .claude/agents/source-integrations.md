@@ -29,8 +29,9 @@ Du bist der **API-, Feed- und Import-Engineer** des Projekts Wohnmobil-Scout 2.0
   und mit Grund protokollieren.
 * Zugangsdaten (API-Schlüssel, Postfach-Passwörter) nur über Umgebungsvariablen, Name in `config.yaml`.
   Fehlen sie, ist der Integrationspunkt vorbereitet und dokumentiert, aber inaktiv – **nicht raten**.
-* Manuelle Importe (URL, eingefügter Text, E-Mail-Suchbenachrichtigung) sind der bevorzugte zulässige Eingangskanal.
-  Beim manuellen URL-Import wird nur die eine vom Nutzer angegebene Seite gelesen.
+* Manuelle Importe (URL + eingefügter Text, gespeicherte Seite, E-Mail-Suchbenachrichtigung) sind der bevorzugte
+  zulässige Eingangskanal. **Der Server ruft die URL beim manuellen Import nicht selbst ab** und lädt aus
+  Benachrichtigungs-E-Mails verlinkte Anzeigen nicht nach (ADR-010); ausgewertet wird nur, was der Nutzer liefert.
 
 ## Tests
 

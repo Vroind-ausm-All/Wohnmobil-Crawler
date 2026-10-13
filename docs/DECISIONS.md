@@ -87,3 +87,16 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   vorher Backup über die SQLite-Backup-API mit `PRAGMA integrity_check`; Test mit Datenbanken jeder Vorversion;
   Kompatibilitäts-View `anzeigen` während des Umbaus.
 * **Folgen:** Kein Schemawechsel ohne Rückweg; die bestehenden `ALTER TABLE`-Ergänzungen werden Migration 1–2.
+
+## ADR-010 – Manueller Import ohne Serverabruf · vorgeschlagen (Umsetzung Phase 2)
+
+* **Kontext:** Die Nutzungsbedingungen von Kleinanzeigen (§ 5) und AutoScout24 (Ziff. 8.2) untersagen
+  automatisierte Abfragen. Auch ein einzelner, vom Programm ausgelöster Abruf einer Inseratsseite ist damit heikel
+  (`docs/SOURCES.md`).
+* **Entscheidung:** Beim manuellen Import liefert der Nutzer URL **und** Inhalt (eingefügter Text oder im Browser
+  gespeicherte Seite); der Server ruft die URL nicht ab. Aus Suchbenachrichtigungs-E-Mails wird nur der E-Mail-Inhalt
+  ausgewertet, verlinkte Anzeigen werden nicht nachgeladen. Ein Serverabruf ist nur für Quellen mit Status **OK** und
+  `freigegeben = True` erlaubt.
+* **Alternativen:** Einzelabruf der URL durch den Server (bequemer, aber für die großen Börsen nicht freigegeben).
+* **Folgen:** Etwas mehr Handarbeit beim Import; Datenqualität hängt vom eingefügten Text ab. Parser müssen mit
+  unvollständigen Daten umgehen und fehlende Felder als „unvollständig“ markieren.
