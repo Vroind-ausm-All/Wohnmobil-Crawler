@@ -109,8 +109,10 @@ schema_version     (version, angewendet_am)
    * `preis_vorher` + `preis` → zwei Einträge in `preis_historie`
    * `status='gelöscht'` → `verfuegbarkeit='offline'`; Ankaufsstatus → Tabelle `ankauf`
    * `gewerblich` → `anbieter_typ` (`1` → `haendler`, `0` → `privat` nur bei geprüften Detailseiten, sonst `unbekannt`)
-5. Eine **Kompatibilitäts-View** `anzeigen` hält Bewertung und Oberfläche während des Umbaus lauffähig.
-6. Tests mit Beispiel-Datenbanken jeder Vorversion stellen sicher, dass nichts verloren geht.
+5. Bereits in Phase 1 umgesetzt: Spalte `quelle` je Inserat (`NULL` = Kleinanzeigen, Altdaten), damit der
+   Importer Detailabrufe der richtigen Quelle zuordnet.
+6. Eine **Kompatibilitäts-View** `anzeigen` hält Bewertung und Oberfläche während des Umbaus lauffähig.
+7. Tests mit Beispiel-Datenbanken jeder Vorversion stellen sicher, dass nichts verloren geht.
 
 ---
 

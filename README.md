@@ -24,8 +24,7 @@ Wohnmobil an und schreibst es mit einem Klick an.
    Projekte bleiben unberührt. Danach startet die App sofort. Fehlt Python 3.13, erklärt das Fenster,
    was zu tun ist.
    - Umgebung komplett neu aufbauen: `installieren.bat /neu` (oder den Ordner `.venv` löschen).
-   - Mac/Linux: `python3.13 -m venv .venv && .venv/bin/pip install -r requirements.txt`,
-     danach `.venv/bin/python scout.py app`.
+   - Mac/Linux: `./start.sh` (richtet `.venv` über `installieren.sh` genauso automatisch ein).
 
    Der Browser öffnet sich mit `http://127.0.0.1:8765`. Oben rechts auf **„Neue Anzeigen suchen“**
    klicken – oder vorher einmal `python scout.py lauf` ausführen.
@@ -78,7 +77,7 @@ Die steuerliche Vereinfachung (§25a) bitte einmal mit dem Steuerberater abgleic
 Der Text (`vorlagen/anschreiben.txt`, frei änderbar) wird für jedes Fahrzeug passend erzeugt:
 
 - **Modell**: Marke + erkannte Modellreihe + Grundriss, z. B. „Knaus Sky TI 650 MEG“ (Aufbauhersteller
-  vor Basisfahrzeug: „Fiat Ducato Knaus …“ → Knaus). Die Modellliste steht in `wmscout/fahrzeug.py`.
+  vor Basisfahrzeug: „Fiat Ducato Knaus …“ → Knaus). Die Modellliste steht in `wmscout/normalisierung/fahrzeug.py`.
 - **Baujahr**: EZ und km im ersten Satz, dazu je nach Alter die richtigen Prüfpunkte und Foto-Wünsche
   (jung: Dichtigkeitsprüfungen/Garantie · 4–9 J.: Wartung, Zahnriemen · 10–15 J.: Aufbau, Reifenalter,
   Gasprüfung · älter: zusätzlich Rahmen/Unterboden).
@@ -133,25 +132,69 @@ Nachrichten verschicken, und viele Verkäufer reagieren auf Massenanfragen aller
 - **Datenschutz**: Gespeichert werden nur Anzeigendaten, keine Kontaktdaten der Verkäufer. Die App ist
   nur auf dem eigenen Rechner erreichbar (127.0.0.1).
 - **Wenn plötzlich 0 Anzeigen gefunden werden**, hat Kleinanzeigen vermutlich das Seitenlayout
-  geändert. Alle Selektoren liegen in `wmscout/parser.py`.
+  geändert. Die App meldet das als „Seitenlayout geändert“ und legt
+  die Seite als `ausgabe/diagnose_suchseite.html` ab. Alle Selektoren liegen in
+  `wmscout/quellen/kleinanzeigen/parser.py`.
 
-## Dateien
+## Aufbau (für Entwickler)
 
 ```
-config.yaml               alle Einstellungen (Suchen, Kosten, Marktmodell, Wertfaktoren, Anschreiben)
-scout.py                  Startpunkt
-app.bat / lauf.bat        Windows: App starten / Suchlauf (beide nutzen .venv)
-installieren.bat          richtet .venv mit Python 3.13 ein (läuft automatisch beim Start)
-requirements.txt          Zusatzpakete für .venv
-.venv/                    projekteigene Python-Umgebung (wird automatisch angelegt)
-vorlagen/anschreiben.txt  Text des Anschreibens (Jinja2, frei änderbar – Felder stehen oben in der Datei)
-vorlagen/report.html      Oberfläche von App und Report
-wmscout/rechner.py        faire Bewertung und Händler-EK
-wmscout/fahrzeug.py       Marken, Modellreihen, Modellerkennung
-wmscout/app.py            lokale Browser-App (nur 127.0.0.1)
-wmscout/                  außerdem Crawler, Parser, Datenbank, Report
-ausgabe/                  report.html, anzeigen_bewertet.csv, anschreiben/*.txt, scout.log
-daten/anzeigen.sqlite     gesammelte Anzeigen (Grundlage für die Vergleichspreise)
-tests/test_offline.py     Selbsttest ohne Internet: .venv\Scripts\python -m tests.test_offline
-wmscout/plz_de.csv        PLZ-Koordinaten für Entfernungen (GeoNames, CC BY 4.0)
+scout.py                      Kommandozeile (app, lauf, report, rechne, status)
+config.yaml                   alle Einstellungen
+app.bat / lauf.bat            Windows-Start (App / Suchlauf), beide über .venv
+installieren.bat / .sh        richtet .venv mit Python 3.13 ein (läuft automatisch beim Start)
+start.sh                      macOS/Linux-Start der App
+pyproject.toml                Projekt, Abhängigkeiten (Bereiche), Test- und Lint-Einstellungen
+requirements.txt              gesperrte Laufzeit-Abhängigkeiten (feste Versionen + Prüfsummen)
+requirements-dev.txt          dazu pytest und ruff
+vorlagen/                     anschreiben.txt, nachfassen.txt (Texte, frei änderbar), report.html (Oberfläche)
+docs/ARCHITEKTUR.md           Architektur- und Migrationsplan (Phasen 1–4)
+docs/QUELLEN.md               Anleitung: neue Datenquelle anbinden
+
+wmscout/
+  quellen/                    Datenquellen – einheitliche Schnittstelle (basis.py) + Adapter
+    kleinanzeigen/            Adapter und HTML-Parser für Kleinanzeigen
+  netz.py                     höflicher HTTP-Abruf (Pausen, Sperrerkennung)
+  importer.py                 Suchlauf: Quellen → Datenbank, Detailabrufe, Layout-Diagnose
+  normalisierung/             Marke/Modell/Art (fahrzeug.py), PLZ/Entfernung (geo.py, plz_de.csv)
+  datenbank.py                SQLite, Status, automatische Spalten-Migration
+  bewertung/                  rechner.py (Marktwert, Händler-EK), anschreiben.py, auswertung.py
+                              (Dubletten, Nachfassen, Bewertung aller Inserate)
+  ausgabe.py                  HTML-Report, CSV, Anschreiben-Dateien
+  benachrichtigung.py         E-Mail bei neuen Treffern
+  app.py                      Browser-App (nur 127.0.0.1), Suchlauf im Hintergrund, Auto-Suche
+
+tests/                        pytest, komplett ohne Internet (nachgebautes Markup, Fake-Abruf)
+.github/workflows/tests.yml   CI: Tests unter Linux und Windows, Windows-Start mit installieren.bat
+
+ausgabe/                      report.html, anzeigen_bewertet.csv, anschreiben/*.txt, scout.log
+daten/anzeigen.sqlite         gesammelte Anzeigen (Grundlage für die Vergleichspreise)
 ```
+
+**Tests ausführen:** einmalig `.venv\Scripts\python -m pip install -r requirements-dev.txt` (macOS/Linux:
+`.venv/bin/python -m pip …`), dann `.venv\Scripts\python -m pytest` und `.venv\Scripts\python -m ruff check .`
+
+**Abhängigkeiten ändern:** Bereich in `pyproject.toml` anpassen, dann die beiden Lock-Dateien mit den Befehlen
+aus `pyproject.toml` neu erzeugen (`uv pip compile …`). `installieren.bat` installiert sie beim nächsten Start
+automatisch nach.
+
+PLZ-Koordinaten: GeoNames (www.geonames.org), Lizenz CC BY 4.0.
+
+## Umsetzungsstand
+
+Plan und Hintergründe: `docs/ARCHITEKTUR.md`.
+
+| Bereich | Stand | Geprüft durch |
+|---|---|---|
+| Faire Bewertung, Händler-EK, Fair-Check | umgesetzt | `tests/test_bewertung.py` |
+| Anschreiben (Modell, Baujahr, vorbehaltliches Angebot), Nachfassen, Verhandlungs-Assistent | umgesetzt | `test_bewertung.py`, `test_auswertung.py`; Assistent: Browsertest manuell |
+| Statusverwaltung, Browser-App, CSV/HTML | umgesetzt | `test_app.py`, `test_import.py` |
+| **Phase 1:** Python 3.13 + `.venv`, Start per Doppelklick | umgesetzt | CI-Job „Windows-Start“ führt `installieren.bat` aus; `installieren.sh` in CI |
+| **Phase 1:** gesperrte Abhängigkeiten (Versionen + Prüfsummen) | umgesetzt | CI installiert ausschließlich aus den Lock-Dateien |
+| **Phase 1:** pytest-Suite + GitHub Actions (Linux, Windows) | umgesetzt | 54 Tests, Ruff |
+| **Phase 1:** Komponenten (Quellen, Import, Normalisierung, Datenbank, Bewertung, Ausgabe, Benachrichtigung) | umgesetzt | alle Tests |
+| **Phase 1:** einheitliche Quellen-Schnittstelle | umgesetzt | Vertragstest je Quelle, Test mit Beispielquelle |
+| Spalte `quelle` je Inserat (Vorstufe zu Phase 2) | umgesetzt | `test_import.py`, `test_quellen.py` |
+| Phase 2: Datenmodell mit Quelle+ID, Fahrzeugidentität, Preis-/Beobachtungshistorie, Verfügbarkeit, Händler/Privat | **geplant** | – |
+| Phase 3: Suchprofile, Scheduler schnell/voll, Fehlerisolation je Quelle, Priorisierung, Quellenstatus, URL-/Feed-Import | **geplant** (Auto-Suche alle N Stunden existiert bereits) | – |
+| Phase 4: Adapter für mobile.de, AutoScout24, Caraworld, Händler-Feeds | **geplant** – Schnittstelle dokumentiert (`docs/QUELLEN.md`), Zugänge müssen erst geklärt werden | – |
