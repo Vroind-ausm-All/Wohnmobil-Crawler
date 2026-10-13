@@ -36,7 +36,7 @@ Architekt und QA unabhängig geprüft.
 | P0-02 | Acht Agenten in `.claude/agents/`, `CLAUDE.md`, Skill `scout-cycle`, `.claude/loop.md`, Test `test_projekt.py` | Orchestrator | DONE |
 | P0-03 | Architektur- und Risikoüberblick (`ARCHITECTURE.md`, `DECISIONS.md`) | scout-architect | DONE |
 | P0-04 | Quellenrecherche (`SOURCES.md`) | source-researcher | DONE (mit Einschränkung: Originale nicht direkt abrufbar → P2-01) |
-| P0-05 | Fehlersammlung, Testabdeckung, Sicherheitslage (`TEST-REPORT.md`) | qa-security-reviewer | siehe WORKLOG |
+| P0-05 | Fehlersammlung, Testabdeckung, Sicherheitslage (`TEST-REPORT.md`) | qa-security-reviewer | DONE |
 | P0-06 | Roadmap, Backlog, Kennzahlen, WORKLOG | Orchestrator | DONE |
 | P0-07 | Unabhängige Prüfung der Planung durch Architekt und QA; Korrekturen | scout-architect, qa-security-reviewer | siehe WORKLOG |
 
@@ -63,7 +63,11 @@ Quellen/Netz/Importer/Normalisierung/Datenbank/Bewertung/Ausgabe/Benachrichtigun
 | P1-08 | P3 | **Bewertung von DB entkoppeln** (R15, ADR-015): Status in Domänenmodul, `bewerte_alle` bekommt Listen | acquisition-analyst | – | Bewertungstests ohne Datenbank; alle Regressionstests grün | TODO |
 | P1-09 | P3 | **Lokale Konfiguration** (R16): `config.local.yaml` (ignoriert) überlagert `config.yaml`; Passwort nicht als CLI-Argument empfehlen | windows-bootstrap | – | Test: Überlagerung greift; `git status` sauber nach Betreiber-Einstellungen | TODO |
 | P1-10 | P3 | **Python-Versionen** (R18): nur 3.13 oder 3.12/3.13 in CI-Matrix | windows-bootstrap | Betreiberfrage F9 | CI grün für alle zugelassenen Versionen | TODO |
-| P1-11 | – | Befunde der QA-Bestandsaufnahme (`TEST-REPORT.md`), soweit KRITISCH/HOCH | je nach Befund | – | je Befund | TODO |
+| P1-11 | P2 | **Fehlende Tests** laut QA: `netz.py` (403/429/5xx, 27 % Abdeckung), Auto-Suche/Suchlauf-Thread, Mailversand mit gemocktem SMTP | windows-bootstrap (netz) / source-integrations | – | Abdeckung `netz.py` ≥ 85 %, `app.py` ≥ 75 %; Tests prüfen Verhalten, nicht nur Aufrufe | TODO |
+| P1-12 | P1 | **Rechner ohne EZ** (Q1): kein Max-EK/Erstangebot aus dem Angebotspreis; CSV leer; Besichtigung nur mit manuellem Marktwert | acquisition-analyst | – | Test: Inserat ohne EZ → keine Beträge in CSV, API und Besichtigungsbasis; Invariante Erstangebot ≤ Max-EK ≤ VK | TODO |
+| P1-13 | P1 | **Web-Härtung** (Q2, Q6, Q7, Q8, Q13, Q14, Q15): Content-Length prüfen (negativ/ungültig → 400), sichere Weiterleitung nach Login, „lokal“ nie hinter Proxy-Headern, Fehlversuchszähler + scrypt außerhalb des Locks + Dummy-Hash, 400 statt 500, `Secure` bei https-`oeffentliche_url`, ICS-`\r` | scout-ui-engineer | – | Negativtests je Befund (HTTP); bestehende Tests grün | TODO |
+| P1-14 | P1 | **Datenschutz** (Q3, Q9, Q11): Lösch-/Anonymisierungsbefehl für Verkäuferdaten, Unterschriften, Fotos mit Frist; Service Worker cacht keine Protokolle/Fotos/`/api/ich`, Cache-Leerung bei 401; Log-Rotation, Nummern maskieren | scout-data-engineer, scout-ui-engineer | Betreiberfrage F10 (Fristen) | Tests: Löschung entfernt Daten und Dateien; Protokoll danach anonymisiert; SW-Regeln geprüft | TODO |
+| P1-15 | P2 | **Rechte** (Q4, Q5): Lesen nur für Zuständige/Inhaber; Rollenmatrix (z. B. „gekauft“, Suchlauf, Zuweisung nur Inhaber) | scout-ui-engineer | Betreiberfrage F11 (Rollen) | HTTP-Tests je Rolle | TODO |
 
 ---
 
@@ -183,4 +187,5 @@ Optimiert wird auf **relevante, verfügbare Ankaufsgelegenheiten**, nicht auf ab
 | F7 | Alte „kontaktiert“-Einträge als bestätigte Kontakte übernehmen? | P1-06/P3-06 |
 | F8 | Läuft `lauf.bat` per Aufgabenplanung parallel zur App? | P1-04 |
 | F9 | Nur Python 3.13 unterstützen oder auch 3.12? | P1-10 |
-| F10 | Aufbewahrungsfristen für Verkäuferdaten, Fotos, Unterschriften (DSGVO); juristische Prüfung von Protokoll und E-Mail-Auswertung | P3, Handy-App |
+| F10 | Aufbewahrungsfristen für Verkäuferdaten, Fotos, Unterschriften (DSGVO); juristische Prüfung von Protokoll und E-Mail-Auswertung | P1-14 |
+| F11 | Rollenrechte: Was dürfen Mitarbeiter (Status „gekauft“, Suchläufe starten, Besichtigungen anderer sehen/zuweisen)? | P1-15 |

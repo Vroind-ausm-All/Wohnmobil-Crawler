@@ -100,7 +100,23 @@ Aufträge über die echten Projekt-Agenten.
   - `robots.txt`: nicht geprüft.
   - Das Gegenlesen der Originale ist Paket P2-01 (BLOCKED, braucht einen Menschen mit Browser).
 
-### P0-05 – QA-Bestandsaufnahme · Status: IN_PROGRESS
+### P0-05 – QA-Bestandsaufnahme · Status: DONE
 
-- Erster Versuch abgebrochen (Nutzungslimit der Sitzung erreicht, kein Ergebnis). Zweiter Versuch mit dem
-  Projekt-Agenten `qa-security-reviewer` läuft.
+- Verantwortlicher Agent: qa-security-reviewer (Projekt-Agent). Der erste Versuch brach am Nutzungslimit der Sitzung
+  ohne Ergebnis ab; der zweite Versuch lief vollständig.
+- Tests: `pytest -q -p no:cacheprovider`, `ruff check .`, Coverage außerhalb der `.venv`, Missbrauchsskripte im
+  Scratchpad mit Temp-DB.
+- Testergebnis:
+  - `91 passed in 17.16s`
+  - ruff: „All checks passed!“
+  - Abdeckung 88 %. Schwach abgedeckt sind `netz.py` (27 %), `app.py` (52 %) und `benachrichtigung.py` (55 %).
+- Review-Ergebnis: **FREIGABE MIT AUFLAGEN**
+  - Kein KRITISCH-Befund im Anwendungscode.
+  - Fünf HOCH-Befunde: Q1 Max-EK aus Angebotspreis ohne EZ, Q2 negativer Content-Length, Q3 keine Löschfunktion für
+    Verkäuferdaten, dazu R1 und R5.
+  - Zehn MITTEL- und fünf NIEDRIG-Befunde.
+  - Keine XSS-Lücke und keine Geheimnisse im Repository gefunden.
+- Übernahme: Alle Befunde stehen in `docs/TEST-REPORT.md` und sind in der Roadmap Paketen zugeordnet
+  (neu: P1-11 bis P1-15).
+- Hinweis der QA: Sie meldete Änderungen im Arbeitsbaum, die nicht von ihr stammten. Das waren die parallel vom
+  Orchestrator geschriebenen Doku-Dateien (ROADMAP, WORKLOG, ARCHITECTURE). Die QA hat nur unter `/tmp` geschrieben.
