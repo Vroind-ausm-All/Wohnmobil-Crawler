@@ -6,6 +6,81 @@ Wert „–“.
 
 ---
 
+## Phase 2 (vorgezogen) – Gespeicherte Seiten einlesen (13.10.2026)
+
+### P2-05 (Teil) – Gespeicherte Kleinanzeigen-Seiten einlesen · Status: BLOCKED
+
+- **Phase:** 2, vorgezogen. Der Betreiber hat das Paket am 13.10.2026 freigegeben, nachdem der Kleinanzeigen-Webabruf
+  0 Treffer lieferte (neues Seitenlayout).
+- **Verantwortlicher Agent:**
+  - `source-integrations`: Umsetzung; die erste Fassung lief als eingebauter Agent nach Definition, danach als
+    Projekt-Agent.
+  - `qa-security-reviewer`: vier Prüfungen.
+- **Zweig/Commits:** `claude/phase2-seitenimport`: 796eda6 (Umsetzung), 8c212c2 (Runde 1), 981398e (echte Seiten),
+  fd9c580 (Runde 2), 9b2396d (Runde 3). Die Zwischenstände 6df53c1/a83fe4f sind als „ungeprüft“ markiert.
+  Kein PR, weil BLOCKED.
+- **Geänderte Dateien:**
+  - `wmscout/eingang/` (neu)
+  - `wmscout/importer.py`
+  - `wmscout/datenbank.py` (`ohne_details`-Filter, Import-Suchwerte; keine Schemaänderung)
+  - `wmscout/quellen/kleinanzeigen/parser.py` (neues Layout, Detailliste, Anzeigen-ID)
+  - `wmscout/quellen/kleinanzeigen/adapter.py`
+  - `wmscout/normalisierung/fahrzeug.py` (Basismarken-Normalisierung, `arten_im_text`)
+  - `wmscout/bewertung/anschreiben.py` (Sperrgrund Fahrzeugart)
+  - `wmscout/web/api.py` (`POST /api/import`)
+  - `vorlagen/report.html` (Knopf, Meldungen)
+  - `scout.py` (`import`)
+  - `config.yaml` (`import.ordner`)
+  - `.gitignore`, `README.md`
+  - Tests: `tests/test_seitenimport.py`, `tests/test_kleinanzeigen_echt.py`, `tests/seiten/kleinanzeigen/*.html`
+    (anonymisiert, IDs/Orte verfremdet)
+- **Implementierte Funktionen:**
+  - Im Browser gespeicherte Such- und Detailseiten aus `import/` einlesen. Das geht per Knopf, per
+    `scout.py import` und über die API.
+  - Kein Netzabruf, auch später kein automatisches Nachladen von Detailseiten (ADR-010).
+  - Dateien wandern nach `eingelesen/<Datum>/` bzw. `nicht_erkannt/`.
+  - Grenzen: 25 Dateien bzw. 20 s je Klick, 20 MB je Datei.
+  - Fahrzeugart nur aus Art-Filter oder Detailseite gilt als bestätigt und ist anschreibbar. Titel und Suchbegriff
+    gelten als vorläufig und werden gesperrt (ADR-020).
+- **Tests:**
+  - `.venv/bin/python -m pytest -q`
+  - `.venv/bin/python -m ruff check .`
+  - Klicktest (Chromium headless)
+  - Lauf mit den 18 echten, vom Betreiber gespeicherten Seiten (Temp-DB, Netz gesperrt)
+  - Mutationsproben (QA)
+- **Testergebnis:**
+  - `194 passed`, ruff „All checks passed!“.
+  - Klicktest: Knopf, Meldung und Neuladen funktionieren, keine JS-Fehler (Stand 796eda6).
+  - 18 echte Seiten: 16 Such- und 2 Detailseiten, 0 nicht erkannt, 352 neu, 42 bekannt.
+  - Arten: bestätigt 2, vorläufig 186, unbekannt 164; bereit 0; „nicht bestätigt und bereit“ 0.
+  - Reihenfolge vorwärts/rückwärts: 0 Abweichungen.
+  - Windows: nicht geprüft (CI läuft beim Push; noch nicht ausgewertet).
+- **Review-Ergebnis:** Vier QA-Prüfungen, alle ABLEHNUNG. Die Befunde der jeweils vorigen Runde waren jedes Mal behoben.
+  1. K1 (Fahrzeugart ging verloren), H1, M1–M4 → behoben in Runde 1.
+  2. K1-R (Stichwort der Suchseite galt als Fahrzeugart), K1-D, M6, M7 → behoben in Runde 2.
+  3. K-T (Titel mit mehreren Arten) und R-O (Reihenfolge) → behoben in Runde 3 mit der Regel „nur bestätigte Art“.
+  4. **K-A (KRITISCH, offen):** Der Art-Filter einer Suchseite würde auch die Anzeigen im Block „Weitere Ergebnisse
+     in anderen Orten“ (`#srchrslt-adtable-altads`) bestätigen. Diese Anzeigen ignorieren Filter und Kategorie.
+     Belegt mit einem echten Original und eingesetztem Filter: „Citroen Campster“ wäre als Teilintegrierter
+     anschreibbar, mit einem Max-EK von 37.300 € statt 31.100 €.
+  - Weitere offene Befunde: H-T (fehlender Test für die Garantie „Detailseite ohne Art bestätigt nicht“), M-W (zwei
+    bestätigte Quellen widersprechen sich), N-1 bis N-3.
+- **Bekannte Risiken:**
+  - Nicht belegt ist, ob echte, mit Art-Filter gespeicherte Seiten `art_s:` in canonical/og:url tragen. Unter den
+    18 Originalen ist keine Filterseite. Fehlt `art_s:`, ist nur über Detailseiten etwas anschreibbar.
+  - Der Betreiber nutzt die Vorabversion bereits. Ältere Zweigstände konnten falsche Arten erzeugen; erneutes Einlesen
+    mit dem aktuellen Stand sperrt sie (M-A).
+- **Grund für BLOCKED:** Laut Skill `scout-cycle` sind höchstens 3 Korrekturrunden je Paket erlaubt; nach der dritten
+  ist ein KRITISCH-Befund offen.
+- **Nötige Entscheidung des Betreibers:**
+  - (a) Eine 4. Runde ausnahmsweise erlauben, nur für K-A, H-T und M-W. Vorschlag: Der Filter bestätigt nur Anzeigen
+    aus der Haupttabelle `#srchrslt-adtable`, und eine echte Filterseite wird geliefert.
+  - (b) Übergangsweise nur Detailseiten als Bestätigung zulassen. Dann ist K-A ausgeschlossen, braucht aber ebenfalls
+    eine kleine Runde.
+  - (c) Den Stand ohne PR liegen lassen.
+- **Nächster sinnvoller Schritt:** Entscheidung des Betreibers sowie eine mit Art-Filter gespeicherte Ergebnisseite als
+  Testdatum.
+
 ## Phase 0 – Bestandsaufnahme (13.10.2026)
 
 Zweig `claude/phase0-agentensystem` (Basis `claude/gifted-heisenberg-d1cjlr`, Commit 3f75f67).

@@ -177,3 +177,16 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Folgen:** Restrisiko, dass QA per Shell schreibt. `git status` allein erkennt weder Commits noch Schreibzugriffe
   in ignorierten Pfaden (`daten/`, `ausgabe/`, `.venv/`). Deshalb vergleicht der Orchestrator vor und nach jedem
   QA-Lauf `git rev-parse HEAD`, `git status --short --ignored` und `git stash list`.
+
+## ADR-020 – Fahrzeugart beim Seitenimport nur „bestätigt“ aus Art-Filter oder Detailseite · gilt (13.10.2026)
+
+* **Kontext:** Bei gespeicherten Suchseiten ist die Fahrzeugart oft nur aus dem Suchbegriff oder dem Anzeigentitel zu
+  erraten. Drei QA-Runden haben mit echten Seiten gezeigt, dass jedes Raten Fälle mit falscher Art erzeugt, zum
+  Beispiel „Wohnwagen Dethleffs Camper“ → Kastenwagen. Daraus entstehen falsche Max-EK und Anschreiben.
+* **Entscheidung:** Als **bestätigt** gilt eine Art nur aus dem Art-Filter (`art_s:`) der Suchseite oder dem Feld
+  „Art“ einer Detailseite. Eine Art aus Titel oder Suchbegriff ist **vorläufig**. Vorläufige und unbekannte Arten sind
+  nie anschreibbar (Sperrgrund mit Handlungshinweis). Die Herkunft steht in `suche`
+  („Import <Art> (bestätigt|vorläufig)“, „Import (gespeicherte Seite)“); das Schema bleibt unverändert.
+* **Folgen:** Weniger Fahrzeuge sind sofort anschreibbar, dafür keine falschen Angebote. Der Betreiber sucht über den
+  Art-Filter oder liest Detailseiten ein. Offen (K-A): Der Filter darf nur die Haupttreffer bestätigen, nicht den Block
+  „Weitere Ergebnisse in anderen Orten“.

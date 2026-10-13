@@ -4,6 +4,22 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P2-05 (Teil) – Gespeicherte Seiten einlesen (13.10.2026) · BLOCKED
+
+| Prüfung | Ergebnis |
+|---|---|
+| `.venv/bin/python -m pytest -q` (Stand 9b2396d) | **194 passed** |
+| `.venv/bin/python -m ruff check .` | All checks passed! |
+| 18 echte gespeicherte Seiten (Temp-DB, Netz gesperrt) | 16 Such- und 2 Detailseiten erkannt, 0 nicht erkannt; 352 neu, 42 bekannt. Arten: bestätigt 2, vorläufig 186, unbekannt 164. Bereit 0, nicht bestätigt und bereit 0. Reihenfolge vorwärts/rückwärts: 0 Abweichungen |
+| Stichproben gegen Originale (Preis, Ort, EZ, km, PRO, Gesuche) | übereinstimmend (Orchestrator und QA) |
+| Klicktest Desktop-Knopf (Chromium headless, Stand 796eda6) | Knopf, Meldung und Neuladen funktionieren, keine JS-Fehler |
+| QA-Mutationsproben | Runde 2: 20 von 20 erkannt, Runde 3: 13 von 13, Runde 4: 17 von 18 (H-T unentdeckt) |
+| QA-Urteil nach Runde 3 | **ABLEHNUNG**: K-A KRITISCH (Art-Filter bestätigt auch „Weitere Ergebnisse in anderen Orten“); H-T, M-W, N-1 bis N-3 offen |
+| Windows | nicht geprüft |
+| Echte Seite mit Kleinanzeigen-Art-Filter | **nicht geprüft** (liegt nicht vor) |
+
+---
+
 ## Phase 0 – Bestandsaufnahme (13.10.2026)
 
 Prüfer: Orchestrator und Agent `qa-security-reviewer` (unabhängig; ohne Edit/Write, `Bash` nur per Prompt auf
