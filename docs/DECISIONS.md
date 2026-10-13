@@ -45,12 +45,16 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 
 * **Kontext:** Die Nutzungsbedingungen von Kleinanzeigen untersagen automatisiertes Auslesen (Beleg: `docs/SOURCES.md`).
   Der bestehende Suchlauf liest Kleinanzeigen-Suchseiten per HTML.
-* **Entscheidung:** Adapter bleibt mit `freigegeben = False` gekennzeichnet. Neue Projektregel: unzulässige
-  Direkt-Crawler **nicht standardmäßig aktiv**. Umsetzung (Abschaltung per Voreinstellung, Ersatz durch zulässige
-  Eingangskanäle) ist Backlog-Paket in Phase 2 und braucht die Zustimmung des Betreibers, weil sie den heutigen
-  Arbeitsablauf ändert.
-* **Folgen:** Bis zur Entscheidung läuft der bestehende Abruf nur, wenn der Betreiber ihn startet; das Protokoll weist
-  bei jedem Lauf darauf hin.
+* **Ist-Zustand (Phase 0 geprüft):** Der Adapter ist mit `freigegeben = False` gekennzeichnet, läuft aber trotzdem
+  **standardmäßig**: Die Suchaufträge in `config.yaml` zeigen auf Kleinanzeigen, und die Auto-Suche startet bei
+  geöffneter App alle 3 Stunden (`app.auto_suche_stunden: 3`). Der Importer protokolliert nur eine Warnung. Das
+  verstößt gegen die Projektregeln 11/12 (Risiko R1, KRITISCH).
+* **Entscheidung:** Unzulässige Direkt-Crawler sind **nicht standardmäßig aktiv**. Der Importer erzwingt die Freigabe:
+  Eine nicht freigegebene Quelle läuft nur, wenn der Betreiber sie in einer lokalen, nicht versionierten Einstellung
+  ausdrücklich auf eigene Verantwortung zulässt; Auto-Suche standardmäßig aus. Ersatz durch zulässige Eingangskanäle
+  (manueller Import, E-Mail-Suchbenachrichtigungen) in Phase 2. → Umsetzung als **P1-01**, erstes Paket der Phase 1.
+* **Folgen:** Nach der Umstellung findet die App ohne Betreiberentscheidung keine neuen Kleinanzeigen-Inserate mehr,
+  bis die zulässigen Kanäle aus Phase 2 bereitstehen. Deshalb braucht P1-01 die ausdrückliche Zustimmung des Betreibers.
 
 ## ADR-006 – Handy-App als PWA, Server rechnet verbindlich · gilt
 
@@ -100,3 +104,40 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Alternativen:** Einzelabruf der URL durch den Server (bequemer, aber für die großen Börsen nicht freigegeben).
 * **Folgen:** Etwas mehr Handarbeit beim Import; Datenqualität hängt vom eingefügten Text ab. Parser müssen mit
   unvollständigen Daten umgehen und fehlende Felder als „unvollständig“ markieren.
+
+## ADR-011 – Fahrzeug, Inserat und Ankauf trennen · vorgeschlagen (Phasen 2–3)
+
+* **Kontext:** Heute ist die Anzeigen-ID der Primärschlüssel; Ankaufsstatus, Verfügbarkeit und Preis hängen am Inserat.
+  Ein neu eingestelltes oder auf zwei Plattformen inseriertes Fahrzeug wird mehrfach geführt und ggf. erneut angeschrieben.
+* **Entscheidung:** `inserate` mit `UNIQUE(quelle, anzeigen_id)` (vor der zweiten Quelle, M2); `fahrzeuge` als eigene
+  Identität (FIN, sonst Fingerabdruck mit Konfidenz); **Ankaufsstatus am Fahrzeug, Verfügbarkeit am Inserat, Kontakte
+  als Ereignisse** (`kontakte`). Zusammenführungen unsicherer Treffer nur als Vorschlag mit Bestätigung.
+* **Alternativen:** Status weiter am Inserat und Dubletten nur anzeigen (einfacher, aber Doppelansprache bleibt möglich).
+* **Folgen:** Größte Schemaänderung des Projekts; nur mit Migrationsrahmen (ADR-009) und Kompatibilitäts-View.
+
+## ADR-012 – Kontakt gilt erst nach Bestätigung · vorgeschlagen (UI Phase 1, Datenmodell Phase 3)
+
+* **Kontext:** Desktop (`report.html`) und Handy (`mobil.js`) setzen „kontaktiert“ beim Kopieren des Textes.
+* **Entscheidung:** Kopieren/Öffnen setzt nur „vorbereitet“; „kontaktiert“ erst nach ausdrücklicher Bestätigung
+  „gesendet“ durch den Nutzer. Nachfassen setzt einen abgesagten Vorgang nicht zurück auf „kontaktiert“.
+* **Folgen:** Ein zusätzlicher Klick je Kontakt; Kennzahl „kontaktierte Verkäufer“ wird verlässlich.
+  Offen: Gelten alte „kontaktiert“-Einträge als bestätigt? (Betreiberfrage)
+
+## ADR-013 – Nebenläufigkeit und Laufsperre · vorgeschlagen (Phase 1)
+
+* **Kontext:** Ein globaler Lock im Webserver umschließt auch Bewertung, Antwortversand und WhatsApp-HTTP; mehrere
+  SQLite-Verbindungen ohne WAL/`busy_timeout`; App-Auto-Suche und `lauf.bat` können parallel laufen.
+* **Entscheidung:** WAL, `busy_timeout`, eine Verbindung je Thread, Lock nur um DB-Zugriffe, externe Aufrufe außerhalb
+  bzw. asynchron, Laufsperre über die Datenbank.
+* **Folgen:** Mehrere Nutzer blockieren sich nicht mehr gegenseitig; Tests für parallele Zugriffe nötig.
+
+## ADR-014 – Fehlerisolation je Quelle · vorgeschlagen (Phase 2)
+
+* **Entscheidung:** Ein Fehler betrifft nur den eigenen Suchauftrag bzw. die eigene Quelle; eine Sperre setzt
+  `gesperrt_bis` nur für diese Quelle. Unparsebare Datensätze werden gezählt und protokolliert, nie still verworfen.
+
+## ADR-015 – Bewertung bleibt rein und versioniert · vorgeschlagen (Phasen 1/5)
+
+* **Entscheidung:** `wmscout/bewertung/` greift nicht auf Datenbank oder Netz zu und enthält keine quellenspezifische
+  Logik; Statuskonstanten wandern in ein Domänenmodul. Gespeicherte Bewertungen tragen eine `modell_version`, damit
+  Änderungen am Rechner nachvollziehbar bleiben.
