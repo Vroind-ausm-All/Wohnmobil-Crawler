@@ -623,3 +623,25 @@ def test_detailseite_korrigiert_falsche_import_art(cfg, db, ads, ordner):
     (ordner / "d8.html").write_text(detail_mit_art(ads[8], "Alkoven"), encoding="utf-8")
     imp.importiere_seiten(ordner)
     assert zeile(db, ads[7]["id"])["suche"] == "Import Wohnwagen" and zeile(db, ads[8]["id"])["suche"] == "Import Alkoven"
+
+
+def test_hinweis_nur_ohne_widerspruch_der_kurzbeschreibung(cfg, db, ads, ordner):
+    neutral = {**ads[0], "titel": "Wohnmobil gepflegt", "kurz": "Gepflegtes Fahrzeug, Nichtraucher, TÜV neu"}
+    widerspruch = {**ads[1], "titel": "Wohnmobil gepflegt", "kurz": "Verkaufe unseren Wohnwagen, kein Wohnmobil"}
+    gleich = {**ads[2], "titel": "Wohnmobil gepflegt", "kurz": "Kastenwagen mit Hubbett"}
+    titelart = {**ads[3], "titel": "Wohnmobil Alkoven", "kurz": "Verkaufe unseren Wohnwagen"}    # Titel geht vor
+    seite = stichwortseite([neutral, widerspruch, gleich, titelart], CAMPER, "Camper")
+    assert fahrzeugart_der_suchseite(seite) == SuchseitenArt(hinweis="Kastenwagen")
+    (ordner / "a.html").write_text(seite, encoding="utf-8")
+    Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
+    assert zeile(db, neutral["id"])["suche"] == "Import Kastenwagen"
+    assert zeile(db, widerspruch["id"])["suche"] == IMPORT_SUCHE                 # Art unbekannt, nicht „Wohnwagen“
+    assert zeile(db, gleich["id"])["suche"] == "Import Kastenwagen"
+    assert zeile(db, titelart["id"])["suche"] == "Import Alkoven"
+    zeilen = {z["a"]["id"]: z for z in bewerte_alle(cfg, db, BASIS)}
+    assert "Fahrzeugart unbekannt" in zeilen[widerspruch["id"]]["sperre"] and not zeilen[widerspruch["id"]]["bereit"]
+    assert "Fahrzeugart unbekannt" not in (zeilen[neutral["id"]]["sperre"] or "")
+    # ein Art-Filter bleibt vorrangig, auch gegen die Kurzbeschreibung
+    (ordner / "b.html").write_text(suchseite([widerspruch], canonical("kastenwagen")), encoding="utf-8")
+    Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
+    assert zeile(db, widerspruch["id"])["suche"] == "Import Kastenwagen"
