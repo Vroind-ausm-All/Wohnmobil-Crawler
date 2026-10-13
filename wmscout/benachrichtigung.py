@@ -1,10 +1,14 @@
-"""Benachrichtigungen über neue Treffer (derzeit E-Mail; weitere Kanäle folgen hier)."""
+"""Benachrichtigungen: E-Mail bei neuen Treffern, WhatsApp (Links zum Teilen und offizielle Cloud API)."""
 from __future__ import annotations
 
 import logging
 import os
+import re
 import smtplib
 from email.message import EmailMessage
+from urllib.parse import quote
+
+import requests
 
 from .bewertung.anschreiben import euro
 
@@ -39,3 +43,72 @@ def sende_mail(cfg: dict, zeilen: list[dict], ergebnis: dict):
         s.login(m["benutzer"], passwort)
         s.send_message(msg)
     log.info("Mail an %s gesendet.", m["empfaenger"])
+
+
+# ---------------------------------------------------------------- WhatsApp
+def whatsapp_nummer(telefon: str | None) -> str | None:
+    """„+49 170 1234567“ / „0170-1234567“ → „491701234567“ (internationales Format ohne +)."""
+    ziffern = re.sub(r"\D", "", telefon or "")
+    if not ziffern:
+        return None
+    if ziffern.startswith("00"):
+        ziffern = ziffern[2:]
+    elif ziffern.startswith("0"):
+        ziffern = "49" + ziffern[1:]          # deutsche Nummer ohne Ländervorwahl
+    return ziffern if 8 <= len(ziffern) <= 15 else None
+
+
+def whatsapp_link(text: str, telefon: str | None = None) -> str:
+    """Link, der WhatsApp mit fertigem Text öffnet – ohne Nummer wählt man den Empfänger selbst."""
+    nummer = whatsapp_nummer(telefon)
+    return f"https://wa.me/{nummer or ''}?text={quote(text)}"
+
+
+class WhatsAppCloud:
+    """Versand über die offizielle WhatsApp Business Platform (Cloud API) mit freigegebenen Vorlagen.
+
+    Fehler werden protokolliert und nie weitergereicht – eine Benachrichtigung darf keinen Ablauf stoppen."""
+
+    def __init__(self, cfg: dict, sitzung: requests.Session | None = None):
+        self.cfg = cfg.get("whatsapp") or {}
+        self.sitzung = sitzung or requests.Session()
+
+    @property
+    def bereit(self) -> bool:
+        return bool(self.cfg.get("aktiv") and self.cfg.get("phone_number_id")
+                    and os.environ.get(self.cfg.get("token_env", "SCOUT_WHATSAPP_TOKEN")))
+
+    def nachricht(self, an: str, vorlage: str, parameter: list[str]) -> dict:
+        return {
+            "messaging_product": "whatsapp", "to": whatsapp_nummer(an), "type": "template",
+            "template": {"name": vorlage, "language": {"code": self.cfg.get("sprache", "de")},
+                         "components": [{"type": "body", "parameters": [
+                             {"type": "text", "text": str(p)[:1000]} for p in parameter]}]},
+        }
+
+    def sende(self, an: str | None, vorlage: str | None, parameter: list[str]) -> bool:
+        if not self.bereit or not vorlage or not whatsapp_nummer(an):
+            return False
+        url = (f"https://graph.facebook.com/{self.cfg.get('api_version', 'v23.0')}/"
+               f"{self.cfg['phone_number_id']}/messages")
+        token = os.environ[self.cfg.get("token_env", "SCOUT_WHATSAPP_TOKEN")]
+        try:
+            r = self.sitzung.post(url, json=self.nachricht(an, vorlage, parameter), timeout=20,
+                                  headers={"Authorization": f"Bearer {token}"})
+            if r.status_code >= 400:
+                log.warning("WhatsApp an %s fehlgeschlagen: HTTP %s %s", an, r.status_code, r.text[:300])
+                return False
+            return True
+        except requests.RequestException as e:
+            log.warning("WhatsApp an %s fehlgeschlagen: %s", an, e)
+            return False
+
+    def neue_treffer(self, zeilen: list[dict]) -> int:
+        """Nach einem Suchlauf: bei neuen Treffern mit fertigem Anschreiben alle Empfänger informieren."""
+        treffer = sorted((z for z in zeilen if z["neu"] and z["bereit"]), key=lambda z: z["b"].verhaeltnis or 99)
+        if not treffer:
+            return 0
+        bestes = treffer[0]
+        text = f"{bestes['a']['fahrzeug']} · {euro(bestes['a']['preis'])} (Erstangebot {euro(bestes['b'].erstangebot)})"
+        return sum(self.sende(n, self.cfg.get("vorlage_neue_treffer"), [str(len(treffer)), text])
+                   for n in self.cfg.get("empfaenger_treffer") or [])

@@ -1,0 +1,104 @@
+# ============================================================
+#  Mängelkatalog für den Besichtigungsmodus der Handy-App
+#
+#  Beträge = Reparaturkosten für euch als Händler, NETTO, in Euro.
+#  Es sind Richtwerte zum Start – bitte mit euren echten Werkstattkosten
+#  abgleichen. Änderungen wirken sofort (App neu laden genügt).
+#
+#  So wird gerechnet (wmscout/bewertung/besichtigung.py):
+#    Summe Mängel  = Messungen (Feuchtigkeit, Reifen, km) + erfasste Mängel
+#    Netto-Abzug   = Summe Mängel − angerechnete Reparaturrisiko-Pauschale
+#                    (die Kalkulation enthält schon eine Pauschale für "übliche" Mängel)
+#    Abzug vom EK  = Netto-Abzug × 1,19 bei Differenzbesteuerung (§25a), sonst × 1,0
+#                    → so bleibt eure Marge gleich
+#    Vorschlag     = vorbehaltliches Angebot − Abzug vom EK (höchstens neuer Max-EK)
+# ============================================================
+
+grundsaetze:
+  risiko_anrechnung: 0.5      # 50 % der Reparaturrisiko-Pauschale werden gegen gefundene Mängel angerechnet
+  rundung_vorschlag: 50        # Endpreis-Vorschlag auf volle 50 € abrunden
+
+messungen:
+  feuchtigkeit:
+    name: Feuchtigkeitsmessung
+    mindest_messpunkte: 8      # Pflicht: so viele Messpunkte (Ecken, Fenster, Dachluken, Heck, Bad …)
+    # Messgerät in % (übliche Wohnmobil-Messgeräte). Gewertet wird der höchste Wert je Bereich.
+    stufen:
+      - {bis: 15, stufe: ok}
+      - {bis: 20, stufe: leicht}
+      - {bis: 30, stufe: mittel}
+      - {bis: 100, stufe: schwer}
+    kosten_je_bereich: {leicht: 400, mittel: 1800, schwer: 5000}
+  reifen:
+    name: Reifenalter (DOT)
+    mindest_reifen: 4
+    max_alter_jahre: 6         # Wohnmobil-Reifen: Wechsel spätestens nach 6 Jahren empfohlen
+    kosten_je_reifen: 190
+  km:
+    name: km-Stand weicht von der Anzeige ab
+    toleranz_km: 3000          # so viel Mehr-km sind normal (Zeit seit Inserat)
+    prozent_je_10000_km: 0.015 # Wertminderung je 10.000 km mehr (vom Marktwert privat)
+
+pruefpunkte:
+  - {key: fin, name: "FIN mit Zulassungsbescheinigung abgeglichen", pflicht: true}
+  - {key: papiere, name: "Zulassungsbescheinigung Teil I und II im Original vorhanden", pflicht: true}
+  - {key: probefahrt, name: "Probefahrt durchgeführt (Bremsen, Lenkung, Getriebe, Geräusche)", pflicht: true}
+  - {key: feuchtigkeit, name: "Feuchtigkeitsmessung durchgeführt", pflicht: true, messung: feuchtigkeit}
+  - {key: reifen, name: "Reifen-DOT aller Reifen notiert", pflicht: true, messung: reifen}
+  - {key: heizung, name: "Heizung und Warmwasser getestet", pflicht: true}
+  - {key: gas, name: "Gasprüfung (G 607) gültig – Datum notiert", pflicht: false}
+  - {key: kuehlschrank, name: "Kühlschrank auf Gas und 230 V getestet", pflicht: false}
+  - {key: wasser, name: "Wasseranlage dicht, Pumpe läuft", pflicht: false}
+  - {key: elektrik, name: "Aufbaubatterie, Ladegerät und 230-V-Anschluss geprüft", pflicht: false}
+  - {key: unterboden, name: "Unterboden und Rahmen angesehen", pflicht: false}
+
+# stufen: Kosten je Schweregrad · betrag: fester Betrag · prozent: Anteil vom Marktwert privat
+# ko: true → "Ankauf nicht empfohlen" (bei ko_ab: schwer nur in dieser Stufe)
+kategorien:
+  - name: Aufbau und Dichtigkeit
+    maengel:
+      - {key: delamination, name: "Delamination an Wand oder Dach", stufen: {leicht: 1500, mittel: 4000, schwer: 9000}, ko_ab: schwer}
+      - {key: undicht, name: "Fenster, Dachluke oder Klappe undicht", stufen: {leicht: 250, mittel: 700, schwer: 1500}}
+      - {key: boden_weich, name: "Boden weich oder aufgequollen", stufen: {leicht: 800, mittel: 2500, schwer: 6000}}
+      - {key: dach, name: "Risse oder Schäden an Dach/Alkoven", stufen: {leicht: 400, mittel: 1500, schwer: 4000}}
+      - {key: faeulnis, name: "Fäulnis im Holz (Wasserschaden)", betrag: 8000, ko: true}
+  - name: Fahrgestell und Technik
+    maengel:
+      - {key: bremsen, name: "Bremsen verschlissen", stufen: {leicht: 300, mittel: 700, schwer: 1400}}
+      - {key: kupplung, name: "Kupplung rutscht / Getriebe auffällig", stufen: {leicht: 600, mittel: 1500, schwer: 3000}}
+      - {key: zahnriemen, name: "Zahnriemen fällig bzw. ohne Nachweis", betrag: 900}
+      - {key: rost, name: "Rost an Rahmen oder Unterboden", stufen: {leicht: 300, mittel: 1200, schwer: 4000}, ko_ab: schwer}
+      - {key: oel, name: "Ölverlust", stufen: {leicht: 200, mittel: 700, schwer: 1800}}
+      - {key: motor, name: "Motor unrund / Warnleuchte", stufen: {leicht: 400, mittel: 1500, schwer: 5000}}
+      - {key: fahrwerk, name: "Fahrwerk, Achse oder Stoßdämpfer", stufen: {leicht: 300, mittel: 900, schwer: 2500}}
+      - {key: klima_fahrerhaus, name: "Klimaanlage Fahrerhaus ohne Funktion", betrag: 450}
+  - name: Gas, Wasser, Elektrik
+    maengel:
+      - {key: heizung, name: "Heizung/Boiler defekt", stufen: {leicht: 300, mittel: 900, schwer: 2200}}
+      - {key: kuehlschrank, name: "Kühlschrank defekt", stufen: {leicht: 250, mittel: 700, schwer: 1300}}
+      - {key: gasanlage, name: "Gasanlage undicht / Prüfung nicht bestanden", stufen: {leicht: 200, mittel: 600, schwer: 1500}}
+      - {key: wasser, name: "Wasserpumpe/Leitungen/Tank defekt", stufen: {leicht: 150, mittel: 450, schwer: 1100}}
+      - {key: batterie, name: "Aufbaubatterie verbraucht", betrag: 250}
+      - {key: elektrik, name: "Elektrik/Ladegerät/Solar defekt", stufen: {leicht: 150, mittel: 500, schwer: 1300}}
+  - name: Innenraum
+    maengel:
+      - {key: polster, name: "Polster/Matratzen verschlissen oder fleckig", stufen: {leicht: 150, mittel: 500, schwer: 1200}}
+      - {key: moebel, name: "Möbel, Klappen oder Scharniere beschädigt", stufen: {leicht: 100, mittel: 400, schwer: 1000}}
+      - {key: geruch, name: "Geruch (Rauch, Tier, Schimmel)", stufen: {leicht: 200, mittel: 600, schwer: 1500}}
+      - {key: rollos, name: "Rollos/Verdunkelung defekt", stufen: {leicht: 80, mittel: 250, schwer: 600}}
+  - name: Außen
+    maengel:
+      - {key: lack, name: "Lackschäden, Kratzer, kleine Dellen", stufen: {leicht: 150, mittel: 600, schwer: 1800}}
+      - {key: hagel, name: "Hagelschaden", stufen: {leicht: 800, mittel: 2500, schwer: 6000}}
+      - {key: markise, name: "Markise defekt", stufen: {leicht: 150, mittel: 500, schwer: 1100}}
+      - {key: scheiben, name: "Frontscheibe/Fenster beschädigt", stufen: {leicht: 100, mittel: 600, schwer: 1300}}
+  - name: Papiere und Zubehör
+    maengel:
+      - {key: serviceheft, name: "Serviceheft/Wartungsnachweise fehlen", prozent: 0.02}
+      - {key: dichtigkeit_nachweis, name: "Nachweise Dichtigkeitsprüfung fehlen", prozent: 0.01}
+      - {key: schluessel, name: "Zweitschlüssel fehlt", betrag: 300}
+      - {key: gas_abgelaufen, name: "Gasprüfung abgelaufen", betrag: 150}
+  - name: Abweichung zur Anzeige
+    maengel:
+      - {key: ausstattung_fehlt, name: "Ausstattung laut Anzeige fehlt", frei: true}
+      - {key: sonstiges, name: "Sonstiger Mangel", frei: true}

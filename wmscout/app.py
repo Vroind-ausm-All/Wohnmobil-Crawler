@@ -7,22 +7,21 @@ Der Server lauscht nur auf 127.0.0.1 – er ist von anderen Rechnern aus nicht e
 """
 from __future__ import annotations
 
-import json
 import logging
 import secrets
 import threading
 import time
 import webbrowser
 from datetime import datetime, timedelta
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
 
-from .ausgabe import render_html, schreibe_ausgaben
+from .ausgabe import schreibe_ausgaben
 from .benachrichtigung import sende_mail
 from .bewertung.auswertung import bewerte_alle
-from .datenbank import STATUS, Datenbank
+from .datenbank import Datenbank
 from .importer import Importer
+from .web.api import Kontext, bearbeite
 
 log = logging.getLogger("scout")
 
@@ -34,6 +33,7 @@ class Suchlauf:
         self.cfg, self.db_pfad, self.basis = cfg, db_pfad, basis
         self.thread: threading.Thread | None = None
         self.letzter_start: str | None = None
+        self.bei_ende: list = []           # Rückrufe mit den bewerteten Zeilen (Cache leeren, WhatsApp …)
         self.stand = {"laeuft": False, "meldung": "", "fehler": None, "ende": None, "neue_treffer": 0,
                       "nachfassen": 0, "naechste_auto": None}
         stand = self.stand
@@ -61,6 +61,11 @@ class Suchlauf:
             # wie „python scout.py lauf“: Report/CSV/Anschreiben-Dateien aktualisieren, ggf. Mail
             zeilen = bewerte_alle(self.cfg, db, self.basis, lauf_start=self.letzter_start)
             sende_mail(self.cfg, zeilen, schreibe_ausgaben(self.cfg, zeilen, self.basis, fehler=stat["fehler"]))
+            for rueckruf in self.bei_ende:
+                try:
+                    rueckruf(zeilen)
+                except Exception:  # noqa: BLE001 – Benachrichtigungen dürfen den Lauf nicht stören
+                    log.exception("Nachbearbeitung nach Suchlauf fehlgeschlagen")
             neue = sum(1 for z in zeilen if z["neu"] and z["bereit"])
             self.stand.update(fehler=stat["fehler"], neue_treffer=neue,
                               nachfassen=sum(1 for z in zeilen if z["nachfassen"]), meldung=(
@@ -108,75 +113,31 @@ class AutoSuche:
             time.sleep(60)
 
 
-def baue_handler(cfg: dict, db: Datenbank, basis: Path, token: str, suchlauf: Suchlauf):
+def baue_handler(k: Kontext):
     class Handler(BaseHTTPRequestHandler):
         server_version = "WohnmobilScout"
 
         def log_message(self, fmt, *args):
             log.debug("app: " + fmt, *args)
 
-        def _antwort(self, code: int, body: bytes, typ: str):
-            self.send_response(code)
-            self.send_header("Content-Type", typ)
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            self.wfile.write(body)
-
-        def _json(self, code: int, obj):
-            self._antwort(code, json.dumps(obj, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
-
-        def _host_ok(self) -> bool:
-            # Schutz gegen DNS-Rebinding: nur Aufrufe über die lokale Adresse
-            port = self.server.server_address[1]
-            return self.headers.get("Host") in (f"127.0.0.1:{port}", f"localhost:{port}")
-
         def do_GET(self):
-            if not self._host_ok():
-                return self._json(403, {"fehler": "nur lokal erreichbar"})
-            pfad = urlparse(self.path).path
-            if pfad in ("/", "/index.html"):
-                seit = suchlauf.letzter_start or (datetime.now() - timedelta(hours=24)).isoformat(timespec="seconds")
-                zeilen = bewerte_alle(cfg, db, basis, lauf_start=seit)
-                html, _ = render_html(cfg, zeilen, basis, fehler=suchlauf.stand["fehler"], app={"token": token})
-                return self._antwort(200, html.encode("utf-8"), "text/html; charset=utf-8")
-            if pfad == "/api/suchlauf":
-                return self._json(200, suchlauf.stand)
-            return self._json(404, {"fehler": "nicht gefunden"})
+            bearbeite(self, k, "GET")
 
         def do_POST(self):
-            if not self._host_ok() or self.headers.get("X-Scout-Token") != token:
-                return self._json(403, {"fehler": "Zugriff verweigert – Seite bitte neu laden"})
-            try:
-                laenge = int(self.headers.get("Content-Length") or 0)
-                daten = json.loads(self.rfile.read(laenge)) if laenge else {}
-            except ValueError:
-                return self._json(400, {"fehler": "ungültige Anfrage"})
-            pfad = urlparse(self.path).path
-            text = str(daten["text"])[:5000] if daten.get("text") else None
-            betrag = daten.get("betrag") if isinstance(daten.get("betrag"), int) else None
-            if pfad == "/api/status":
-                if daten.get("status") not in STATUS:
-                    return self._json(400, {"fehler": "unbekannter Status"})
-                ok = db.setze_status(str(daten.get("id")), daten["status"], text=text, betrag=betrag)
-                return self._json(200 if ok else 404, {"ok": ok})
-            if pfad == "/api/nachgefasst":
-                ok = bool(text) and db.nachgefasst(str(daten.get("id")), text, betrag)
-                return self._json(200 if ok else 400, {"ok": ok})
-            if pfad == "/api/notiz":
-                ok = db.setze_notiz(str(daten.get("id")), str(daten.get("notiz") or "")[:2000])
-                return self._json(200 if ok else 404, {"ok": ok})
-            if pfad == "/api/suchlauf":
-                return self._json(200, {"gestartet": suchlauf.starte(), **suchlauf.stand})
-            return self._json(404, {"fehler": "nicht gefunden"})
+            bearbeite(self, k, "POST")
 
     return Handler
 
 
 def erstelle_server(cfg: dict, db: Datenbank, basis: Path, port: int = 8765) -> tuple[HTTPServer, str, Suchlauf]:
+    """Lauscht nur auf 127.0.0.1. Handys erreichen die App über `tailscale serve` (HTTPS), siehe docs/HANDY-APP.md."""
     token = secrets.token_urlsafe(18)
-    suchlauf = Suchlauf(cfg, str(basis / cfg["ausgabe"]["datenbank"]), basis)
-    server = HTTPServer(("127.0.0.1", port), baue_handler(cfg, db, basis, token, suchlauf))
+    db_pfad = basis / cfg["ausgabe"]["datenbank"]
+    suchlauf = Suchlauf(cfg, str(db_pfad), basis)
+    k = Kontext(cfg, db, basis, token, suchlauf, db_pfad.parent / "fotos")
+    suchlauf.bei_ende.append(lambda zeilen: (k.veraendert(), k.whatsapp.neue_treffer(zeilen)))
+    server = ThreadingHTTPServer(("127.0.0.1", port), baue_handler(k))
+    server.daemon_threads = True
     return server, token, suchlauf
 
 
@@ -189,6 +150,9 @@ def starte(cfg: dict, db: Datenbank, basis: Path, port: int | None = None, brows
         return
     url = f"http://127.0.0.1:{port}/"
     print(f"Wohnmobil-Scout läuft auf {url}   (Beenden: Strg+C)")
+    oeffentlich = (cfg.get("app") or {}).get("oeffentliche_url")
+    if oeffentlich:
+        print(f"Handy-App fürs Team: {oeffentlich.rstrip('/')}/m")
     auto = AutoSuche(cfg, suchlauf)
     if auto.stunden > 0:
         print(f"Automatische Suche alle {auto.stunden:g} Stunden zwischen {auto.von} und {auto.bis} Uhr.")
