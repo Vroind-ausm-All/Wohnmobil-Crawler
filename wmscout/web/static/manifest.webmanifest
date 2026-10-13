@@ -1,0 +1,17 @@
+{
+  "name": "Wohnmobil-Scout",
+  "short_name": "WM-Scout",
+  "description": "Wohnmobile finden, bewerten, anschreiben und besichtigen",
+  "start_url": "/m#/heute",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f5f1",
+  "theme_color": "#24524a",
+  "lang": "de",
+  "icons": [
+    {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

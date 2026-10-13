@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ankaufprotokoll {{ b.basis.fahrzeug }} – {{ firma.firma }}</title>
+<style>
+  body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;color:#111;background:#fff;margin:0}
+  .seite{max-width:820px;margin:0 auto;padding:24px 20px 40px}
+  h1{font-size:22px;margin:0} h2{font-size:15px;margin:22px 0 6px;padding-bottom:4px;border-bottom:2px solid #24524a;color:#24524a}
+  .kopf{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:8px}
+  .leise{color:#555;font-size:12.5px}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  td,th{padding:5px 6px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top} td.b,th.b{text-align:right;white-space:nowrap}
+  tr.summe td{font-weight:700;border-top:2px solid #111;border-bottom:0}
+  .raster{display:grid;grid-template-columns:1fr 1fr;gap:4px 24px}
+  .fotos{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px} .fotos img{width:110px;height:82px;object-fit:cover;border:1px solid #ccc}
+  .warn{background:#f8e1de;color:#a8322a;padding:8px 10px;border-radius:6px}
+  .unterschriften{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px}
+  .unterschriften div{border-top:1px solid #111;padding-top:4px;font-size:12px}
+  .unterschriften img{height:80px;display:block;margin-bottom:4px}
+  .muster{border:1px dashed #999;padding:8px 10px;font-size:12px;color:#444;margin-top:14px}
+  .drucken{position:fixed;right:16px;bottom:16px;background:#24524a;color:#fff;border:0;border-radius:10px;padding:12px 18px;font:inherit;font-weight:600}
+  .zurueck{left:16px;right:auto;background:#fff;color:#24524a;border:1px solid #24524a;text-decoration:none}
+  @media print{.drucken{display:none}.seite{padding:0}h2{break-after:avoid}tr,.fotos{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="seite">
+  <div class="kopf">
+    <div><h1>Ankaufprotokoll und Zustandsbericht</h1>
+      <p class="leise">Besichtigung Nr. {{ b.id }} · {{ (p.abgeschlossen_am or b.geaendert_am or '')|replace('T', ' ') }}
+        · durchgeführt von {{ p.abgeschlossen_von or (b.zustaendig.name if b.zustaendig else '') }}</p></div>
+    <div style="text-align:right"><b>{{ firma.firma }}</b><br>{{ firma.ansprechpartner }}<br>{{ firma.telefon }}<br>{{ firma.ort }}</div>
+  </div>
+
+  <h2>Fahrzeug</h2>
+  <div class="raster">
+    <div>Fahrzeug: <b>{{ b.basis.fahrzeug }}</b></div><div>Art: {{ b.basis.art }}</div>
+    <div>FIN: {{ d.fahrzeug.fin if d.fahrzeug else '' }}</div><div>Kennzeichen: {{ d.fahrzeug.kennzeichen if d.fahrzeug else '' }}</div>
+    <div>Erstzulassung: {{ b.basis.ez_jahr or '–' }}</div><div>km-Stand abgelesen: {{ d.km_abgelesen|tsd if d.km_abgelesen else '–' }} (Anzeige: {{ b.basis.km_anzeige|tsd if b.basis.km_anzeige else '–' }})</div>
+    <div>HU bis: {{ d.fahrzeug.hu_bis if d.fahrzeug else '' }}</div><div>Gasprüfung bis: {{ d.fahrzeug.gas_bis if d.fahrzeug else '' }}</div>
+    <div>Schlüssel: {{ d.fahrzeug.schluessel if d.fahrzeug else '' }}</div><div>Inserat: <span class="leise">{{ b.basis.url }}</span></div>
+  </div>
+
+  <h2>Prüfpunkte</h2>
+  <table>{% for pp in katalog.pruefpunkte if not pp.messung %}
+    <tr><td>{{ pp.name }}</td><td class="b">{{ '✓' if (d.pruefpunkte or {}).get(pp.key) else '—' }}</td></tr>{% endfor %}
+  </table>
+
+  <h2>Messwerte</h2>
+  <table><tr><th>Feuchtigkeit (Bereich)</th><th class="b">%</th></tr>
+    {% for m in (d.messungen or {}).get('feuchtigkeit', []) if m.wert not in (None, '') %}<tr><td>{{ m.bereich or '–' }}</td><td class="b">{{ m.wert }}</td></tr>{% endfor %}
+  </table>
+  <table style="margin-top:8px"><tr><th>Reifen</th><th class="b">DOT</th></tr>
+    {% for r in (d.messungen or {}).get('reifen', []) if r.dot %}<tr><td>{{ r.position }}</td><td class="b">{{ r.dot }}</td></tr>{% endfor %}
+  </table>
+
+  <h2>Festgestellte Mängel und Bewertung</h2>
+  {% if e.ko %}<p class="warn">Schwerwiegend: {{ e.ko|join(', ') }}</p>{% endif %}
+  <table>
+    {% for po in e.posten %}<tr><td>{{ po.name }}{% if po.stufe %} ({{ po.stufe }}){% endif %}{% if po.notiz %}<br><span class="leise">{{ po.notiz }}</span>{% endif %}
+      {% set bilder = fotos|selectattr('mangel_key', 'equalto', po.key)|list if po.key else [] %}
+      {% if bilder %}<div class="fotos">{% for f in bilder %}<img src="/fotos/{{ b.id }}/{{ f.datei }}" alt="">{% endfor %}</div>{% endif %}</td>
+      <td class="b">{{ po.betrag|euro }}</td></tr>{% else %}<tr><td colspan="2">Keine Mängel festgestellt.</td></tr>{% endfor %}
+    <tr><td>Summe Mängel</td><td class="b">{{ e.summe_maengel|euro }}</td></tr>
+    <tr><td>abzüglich bereits einkalkuliertes Reparaturrisiko</td><td class="b">{{ e.risiko_gutschrift|euro }}</td></tr>
+    {% if e.anpassung %}<tr><td>Anpassung{% if d.anpassung and d.anpassung.grund %} ({{ d.anpassung.grund }}){% endif %}</td><td class="b">{{ e.anpassung|euro }}</td></tr>{% endif %}
+    <tr><td>Abzug vom Kaufpreis{% if e.ek_faktor > 1 %} (inkl. Steueranteil §25a){% endif %}</td><td class="b">{{ e.ek_abzug|euro }}</td></tr>
+    <tr><td>Vorbehaltliches Angebot vor Besichtigung</td><td class="b">{{ e.angebot|euro }}</td></tr>
+    <tr><td>Rechnerischer Preis nach Besichtigung</td><td class="b">{{ e.vorschlag|euro }}</td></tr>
+    {% if p.endpreis %}<tr class="summe"><td>Vereinbarter Kaufpreis</td><td class="b">{{ p.endpreis|euro }}</td></tr>{% endif %}
+  </table>
+  {% set allgemein = fotos|selectattr('mangel_key', 'none')|list %}
+  {% if allgemein %}<h2>Weitere Fotos</h2><div class="fotos">{% for f in allgemein %}<img src="/fotos/{{ b.id }}/{{ f.datei }}" alt="">{% endfor %}</div>{% endif %}
+
+  {% if p.entscheidung %}
+  <h2>Ergebnis</h2>
+  <p>{{ {'gekauft': 'Das Fahrzeug wird zum oben genannten Kaufpreis angekauft.', 'offen': 'Noch keine Einigung – Bedenkzeit.',
+        'abgelehnt': 'Kein Ankauf.', 'abgebrochen': 'Besichtigung abgebrochen.'}[p.entscheidung] }}</p>
+  {% if p.begruendung_unvollstaendig %}<p class="leise">Nicht alle Pflichtpunkte geprüft – Begründung: {{ p.begruendung_unvollstaendig }}</p>{% endif %}
+  {% if p.verkaeufer %}
+  <div class="raster">
+    <div>Verkäufer: <b>{{ p.verkaeufer.name }}</b></div><div>Telefon: {{ p.verkaeufer.telefon }}</div>
+    <div>Anschrift: {{ p.verkaeufer.anschrift }}</div><div>Unfallschäden: {{ p.verkaeufer.unfall }}</div>
+  </div>
+  {% if p.verkaeufer.eigentum_frei %}<p>Der Verkäufer erklärt, Eigentümer des Fahrzeugs zu sein und dass das Fahrzeug frei von Rechten Dritter ist.</p>{% endif %}
+  {% endif %}
+  {% if p.bemerkung %}<p>Bemerkung: {{ p.bemerkung }}</p>{% endif %}
+  <p>Der Zustand wurde gemeinsam festgestellt und mit Fotos dokumentiert. Die oben aufgeführten Mängel sind im
+     vereinbarten Kaufpreis berücksichtigt.</p>
+  <div class="unterschriften">
+    <div>{% if p.unterschrift_verkaeufer %}<img src="{{ p.unterschrift_verkaeufer }}" alt="Unterschrift Verkäufer">{% endif %}Verkäufer{% if p.verkaeufer %}: {{ p.verkaeufer.name }}{% endif %}</div>
+    <div>{% if p.unterschrift_ankaeufer %}<img src="{{ p.unterschrift_ankaeufer }}" alt="Unterschrift Ankäufer">{% endif %}Ankäufer: {{ firma.firma }}</div>
+  </div>
+  {% endif %}
+  <p class="muster">Muster-Protokoll. Ersetzt keinen Kaufvertrag. Inhalt und Formulierungen vor dem ersten Einsatz rechtlich prüfen lassen.
+     Erstellt am {{ jetzt.strftime('%d.%m.%Y %H:%M') }}.</p>
+</div>
+<a class="drucken zurueck" href="/m#/besichtigung/{{ b.id }}">← Zur App</a>
+<button class="drucken" onclick="window.print()">Drucken / als PDF speichern</button>
+</body>
+</html>
