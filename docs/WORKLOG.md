@@ -116,7 +116,7 @@ Projekt-Agenten.
     - **K3:** PR-Nummer siehe unten.
   - Tests nach Runde 2: `97 passed`, ruff grün.
   - Runde 2 betraf nur MITTEL- und NIEDRIG-Befunde in der Doku. Die QA hat sie **nicht erneut geprüft**.
-- **Commit/PR:** 7a99f82 (Runde 1), Runde-2-Commit, PR siehe nächste Zeile
+- **Commit/PR:** 7a99f82 (Runde 1), a8a7b89 (Runde 2); PR https://github.com/Vroind-ausm-All/Wohnmobil-Crawler/pull/3 (gegen den Integrationszweig, nicht gemergt)
 - **Nächster sinnvoller Schritt:** PR gegen den Integrationszweig; Freigabe von Phase 1 und Antworten auf F1, F12
   einholen
 

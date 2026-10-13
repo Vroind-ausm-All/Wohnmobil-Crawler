@@ -7,7 +7,7 @@ besten Ankaufsgelegenheiten zuverlässig identifizieren.
 
 | Phase | Titel | Status | Freigabe |
 |---|---|---|---|
-| 0 | Bestandsaufnahme | **REVIEW** | freigegeben (13.10.2026) |
+| 0 | Bestandsaufnahme | **REVIEW** (PR #3) | freigegeben (13.10.2026) |
 | 1 | Stabile Grundlage | TODO (Teile bereits DONE, siehe unten) | **offen** |
 | 2 | Multi-Quellen-System | TODO | offen |
 | 3 | Datenbank und Marktbeobachtung | TODO | offen |
