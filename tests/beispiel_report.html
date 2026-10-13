@@ -1,0 +1,2926 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wohnmobil-Scout 13.10.2026 12:55</title>
+<style>
+:root{
+  --bg:#f6f5f1; --card:#fff; --ink:#1d1f1c; --mute:#6b6f68; --line:#e2e0d8;
+  --gruen:#1f7a4d; --gruen-bg:#e3f2e9; --gelb:#9a6b00; --gelb-bg:#fbf0d4; --rot:#a8322a; --rot-bg:#f8e1de;
+  --akzent:#24524a;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#141613; --card:#1d201c; --ink:#e9e8e2; --mute:#9a9e96; --line:#30342f;
+  --gruen:#6fd19c; --gruen-bg:#183326; --gelb:#e9bf5a; --gelb-bg:#33290f; --rot:#f08c82; --rot-bg:#3a1c19; --akzent:#8fc9bd;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:22px;margin:0 0 4px;letter-spacing:-.01em}
+.sub{color:var(--mute);margin:0 0 20px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.kpi b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.kpi span{color:var(--mute);font-size:13px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.bar button,.bar input,.bar select{font:inherit;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.bar button.an{background:var(--akzent);color:var(--bg);border-color:var(--akzent)}
+.bar input{cursor:text;flex:1;min-width:180px}
+.liste{display:flex;flex-direction:column;gap:10px}
+.ad{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.ad.erledigt{opacity:.45}
+.kopf{display:grid;grid-template-columns:8px 1fr auto;gap:14px;padding:14px 16px 14px 0;cursor:pointer}
+.streif{border-radius:0 4px 4px 0}
+.gruen .streif{background:var(--gruen)} .gelb .streif{background:var(--gelb)} .rot .streif{background:var(--rot)} .grau .streif{background:var(--line)}
+.titel{font-weight:600}
+.meta{color:var(--mute);font-size:13px}
+.zahlen{display:flex;gap:18px;text-align:right;font-variant-numeric:tabular-nums}
+.zahlen div span{display:block;color:var(--mute);font-size:12px}
+.zahlen b{font-size:16px}
+.badge{display:inline-block;font-size:12px;padding:1px 8px;border-radius:99px;margin-left:6px;vertical-align:1px}
+.gruen .badge{background:var(--gruen-bg);color:var(--gruen)} .gelb .badge{background:var(--gelb-bg);color:var(--gelb)} .rot .badge{background:var(--rot-bg);color:var(--rot)} .grau .badge{background:var(--line);color:var(--mute)}
+.neu-tag{background:var(--akzent);color:var(--bg)}
+.detail{display:none;border-top:1px solid var(--line);padding:16px;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:20px}
+.ad.offen .detail{display:grid}
+table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+td{padding:4px 0;border-bottom:1px dashed var(--line)} td:last-child{text-align:right}
+tr.summe td{font-weight:700;border-bottom:none;padding-top:8px}
+textarea{width:100%;min-height:290px;font:14px/1.5 system-ui,sans-serif;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);resize:vertical}
+.aktionen{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.aktionen a,.aktionen button{font:inherit;font-size:14px;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);text-decoration:none;cursor:pointer}
+.aktionen .primaer{background:var(--akzent);color:var(--bg);border-color:var(--akzent)}
+.hinweis{color:var(--mute);font-size:13px;margin-top:6px}
+.sperre{color:var(--rot);font-size:13px}
+@media (max-width:760px){
+  .kopf{grid-template-columns:6px 1fr} .zahlen{grid-column:2;justify-content:flex-start;text-align:left}
+  .ad.offen .detail{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Wohnmobil-Scout</h1>
+  <p class="sub">Stand 13.10.2026 12:55 · 60 aktive Privatanzeigen ausgewertet</p>
+
+  <div class="kpis">
+    <div class="kpi"><b>2</b><span>Grün – Angebot nah am Max-EK</span></div>
+    <div class="kpi"><b>6</b><span>Gelb – mit Verhandlung möglich</span></div>
+    <div class="kpi"><b>60</b><span>Neu seit letztem Lauf</span></div>
+    <div class="kpi"><b>7</b><span>Anschreiben bereit</span></div>
+  </div>
+
+  <div class="bar">
+    <button data-f="anschreiben" class="an">Anschreiben bereit</button>
+    <button data-f="gruen">Grün</button>
+    <button data-f="gelb">Gelb</button>
+    <button data-f="neu">Neu</button>
+    <button data-f="alle">Alle</button>
+    <select id="sort">
+      <option value="verh">Sortierung: beste Chance</option>
+      <option value="pot">Gewinnpotenzial</option>
+      <option value="neu">Neueste zuerst</option>
+      <option value="preis">Preis aufsteigend</option>
+    </select>
+    <input id="q" placeholder="Suchen: Marke, Ort, Titel …">
+  </div>
+
+  <div class="liste" id="liste">
+  
+    <div class="ad rot" data-id="3500000000" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.903" data-pot="-8750"
+         data-preis="27600" data-zeit="2026-10-13T12:55:08"
+         data-text="hymer teilintegrierter t0 hymer 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Hymer Teilintegrierter T0<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Hymer · EZ 2012 · 46.000 km · Teilintegrierter</div>
+          <div class="sperre">Kein Anschreiben: Sperrbegriff „keine händler“</div>
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>27.600 €</b></div>
+          <div><span>Max-EK</span><b>14.500 €</b></div>
+          <div><span>Erstangebot</span><b>13.300 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (9 St.)</td><td>23.300 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>21.650 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>23.800 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>600 €</td></tr><tr><td>− Reparaturrisiko (14 J.)</td><td>2.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.850 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.480 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>14.500 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-8.750 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Sperrbegriff „keine händler“).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-0/3500000000-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000000 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000001" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.468" data-pot="-2000"
+         data-preis="18200" data-zeit="2026-10-13T12:55:08"
+         data-text="bürstner teilintegrierter t1 bürstner 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Bürstner Teilintegrierter T1<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Bürstner · EZ 2010 · 43.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>18.200 €</b></div>
+          <div><span>Max-EK</span><b>12.400 €</b></div>
+          <div><span>Erstangebot</span><b>11.400 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (9 St.)</td><td>23.000 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>21.400 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>23.500 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>590 €</td></tr><tr><td>− Reparaturrisiko (16 J.)</td><td>4.000 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.800 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.770 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>12.400 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-2.000 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-1/3500000001-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000001 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000002" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.546" data-pot="-7400"
+         data-preis="36800" data-zeit="2026-10-13T12:55:08"
+         data-text="bürstner teilintegrierter t2 bürstner 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Bürstner Teilintegrierter T2<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Bürstner · EZ 2016 · 94.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>36.800 €</b></div>
+          <div><span>Max-EK</span><b>23.800 €</b></div>
+          <div><span>Erstangebot</span><b>21.900 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (12 St.)</td><td>32.900 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>30.600 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>33.700 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>840 €</td></tr><tr><td>− Reparaturrisiko (10 J.)</td><td>1.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>4.050 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.580 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>23.800 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-7.400 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-2/3500000002-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000002 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000003" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="3.267" data-pot="-6050"
+         data-preis="14700" data-zeit="2026-10-13T12:55:08"
+         data-text="knaus teilintegrierter t3 knaus 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Knaus Teilintegrierter T3<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Knaus · EZ 2011 · 153.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>14.700 €</b></div>
+          <div><span>Max-EK</span><b>4.500 €</b></div>
+          <div><span>Erstangebot</span><b>4.100 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (6 St.)</td><td>14.400 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>13.400 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>14.700 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>370 €</td></tr><tr><td>− Reparaturrisiko (15 J.)</td><td>2.500 €</td></tr><tr><td>− km-Zuschlag</td><td>1.320 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.630 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>4.500 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-6.050 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-3/3500000003-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000003 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000004" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.698" data-pot="-16350"
+         data-preis="57900" data-zeit="2026-10-13T12:55:08"
+         data-text="dethleffs teilintegrierter t4 dethleffs 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Dethleffs Teilintegrierter T4<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Dethleffs · EZ 2020 · 64.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>57.900 €</b></div>
+          <div><span>Max-EK</span><b>34.100 €</b></div>
+          <div><span>Erstangebot</span><b>31.400 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (10 St.)</td><td>45.050 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>41.900 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>46.100 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.150 €</td></tr><tr><td>− Reparaturrisiko (6 J.)</td><td>1.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>5.550 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.920 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>34.100 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-16.350 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-4/3500000004-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000004 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000005" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.924" data-pot="-9000"
+         data-preis="27700" data-zeit="2026-10-13T12:55:08"
+         data-text="dethleffs teilintegrierter t5 dethleffs 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Dethleffs Teilintegrierter T5<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Dethleffs · EZ 2011 · 26.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>27.700 €</b></div>
+          <div><span>Max-EK</span><b>14.400 €</b></div>
+          <div><span>Erstangebot</span><b>13.200 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (8 St.)</td><td>23.150 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>21.550 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>23.700 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>590 €</td></tr><tr><td>− Reparaturrisiko (15 J.)</td><td>2.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.850 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.480 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>14.400 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-9.000 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-5/3500000005-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000005 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000006" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.345" data-pot="-4300"
+         data-preis="44800" data-zeit="2026-10-13T12:55:08"
+         data-text="dethleffs teilintegrierter t6 dethleffs 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Dethleffs Teilintegrierter T6<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Dethleffs · EZ 2020 · 89.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>44.800 €</b></div>
+          <div><span>Max-EK</span><b>33.300 €</b></div>
+          <div><span>Erstangebot</span><b>30.600 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (8 St.)</td><td>44.100 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>41.000 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>45.100 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.130 €</td></tr><tr><td>− Reparaturrisiko (6 J.)</td><td>1.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>5.400 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.880 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>33.300 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-4.300 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-6/3500000006-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000006 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000007" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="2.845" data-pot="-6500"
+         data-preis="16500" data-zeit="2026-10-13T12:55:08"
+         data-text="dethleffs teilintegrierter t7 dethleffs 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Dethleffs Teilintegrierter T7<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Dethleffs · EZ 2012 · 180.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>16.500 €</b></div>
+          <div><span>Max-EK</span><b>5.800 €</b></div>
+          <div><span>Erstangebot</span><b>5.300 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (0 St.)</td><td>16.500 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>15.350 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>16.900 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>420 €</td></tr><tr><td>− Reparaturrisiko (14 J.)</td><td>2.500 €</td></tr><tr><td>− km-Zuschlag</td><td>2.000 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.770 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>5.800 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-6.500 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: zu wenig Vergleiche – Angebotspreis als Basis</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-7/3500000007-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000007 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad grau" data-id="3500000008" data-ampel="grau" data-neu="1"
+         data-brief="0" data-verh="99" data-pot="-999999"
+         data-preis="8100" data-zeit="2026-10-13T12:55:08"
+         data-text="dethleffs teilintegrierter t8 dethleffs 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Dethleffs Teilintegrierter T8<span class="badge">–</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Dethleffs · EZ 2009 · 175.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>8.100 €</b></div>
+          <div><span>Max-EK</span><b>0 €</b></div>
+          <div><span>Erstangebot</span><b>0 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (0 St.)</td><td>8.100 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>7.550 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>8.300 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>210 €</td></tr><tr><td>− Reparaturrisiko (17 J.)</td><td>4.000 €</td></tr><tr><td>− km-Zuschlag</td><td>1.880 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.330 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>0 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>–</td></tr>
+          </table>
+          <p class="hinweis">Basis: zu wenig Vergleiche – Angebotspreis als Basis</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-8/3500000008-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000008 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad gelb" data-id="3500000009" data-ampel="gelb" data-neu="1"
+         data-brief="0" data-verh="1.201" data-pot="-50"
+         data-preis="30500" data-zeit="2026-10-13T12:55:08"
+         data-text="bürstner teilintegrierter t9 bürstner 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Bürstner Teilintegrierter T9<span class="badge">Gelb</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Bürstner · EZ 2016 · 83.000 km · Teilintegrierter</div>
+          <div class="sperre">Kein Anschreiben: Sperrbegriff „keine händler“</div>
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>30.500 €</b></div>
+          <div><span>Max-EK</span><b>25.400 €</b></div>
+          <div><span>Erstangebot</span><b>23.300 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (10 St.)</td><td>34.750 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>32.300 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>35.500 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>890 €</td></tr><tr><td>− Reparaturrisiko (10 J.)</td><td>1.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>4.250 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.610 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>25.400 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-50 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Sperrbegriff „keine händler“).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-9/3500000009-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000009 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000010" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="2.062" data-pot="-11050"
+         data-preis="29900" data-zeit="2026-10-13T12:55:08"
+         data-text="bürstner teilintegrierter t10 bürstner 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Bürstner Teilintegrierter T10<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Bürstner · EZ 2012 · 42.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>29.900 €</b></div>
+          <div><span>Max-EK</span><b>14.500 €</b></div>
+          <div><span>Erstangebot</span><b>13.300 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (9 St.)</td><td>23.300 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>21.650 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>23.800 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>600 €</td></tr><tr><td>− Reparaturrisiko (14 J.)</td><td>2.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.850 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.480 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>14.500 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-11.050 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-10/3500000010-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000010 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad gruen" data-id="3500000011" data-ampel="gruen" data-neu="1"
+         data-brief="1" data-verh="1.013" data-pot="6400"
+         data-preis="45300" data-zeit="2026-10-13T12:55:08"
+         data-text="pössl teilintegrierter t11 pössl 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Pössl Teilintegrierter T11<span class="badge">Grün</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Pössl · EZ 2021 · 96.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>45.300 €</b></div>
+          <div><span>Max-EK</span><b>44.700 €</b></div>
+          <div><span>Erstangebot</span><b>41.100 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (7 St.)</td><td>56.200 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>52.250 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>57.500 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.440 €</td></tr><tr><td>− Reparaturrisiko (5 J.)</td><td>500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>6.900 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>2.040 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>44.700 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>6.400 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <textarea id="t3500000011">Hallo,
+
+ich habe Ihr Inserat „Pössl Teilintegrierter T11“ gesehen und interessiere mich für das Fahrzeug. Damit Sie gleich Bescheid wissen: Ich schreibe Ihnen als gewerblicher Ankäufer (Muster Reisemobile GmbH, Stuttgart).
+
+Ihr Fahrzeug passt gut in unseren Bestand. Vorbehaltlich einer kurzen Besichtigung könnte ich Ihnen 41.100 € anbieten – Zahlung sofort per Überweisung oder bar, Abholung durch uns, Abmeldung und Papierkram übernehmen wir.
+
+Falls das für Sie infrage kommt: Wann wäre eine Besichtigung in Stuttgart möglich? Ein paar Fotos von Aufbau (Feuchtigkeit), Fahrzeugschein und Serviceheft vorab wären super.
+
+Und falls nicht – kein Problem, dann viel Erfolg beim Verkauf!
+
+Viele Grüße
+Max Mustermann
+Muster Reisemobile GmbH · 0711 123456</textarea>
+          
+          <div class="aktionen">
+            <button class="primaer" data-copy="t3500000011">Text kopieren &amp; Anzeige öffnen</button>
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-11/3500000011-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000011 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000012" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.573" data-pot="-8850"
+         data-preis="40900" data-zeit="2026-10-13T12:55:08"
+         data-text="dethleffs teilintegrierter t12 dethleffs 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Dethleffs Teilintegrierter T12<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Dethleffs · EZ 2017 · 99.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>40.900 €</b></div>
+          <div><span>Max-EK</span><b>26.000 €</b></div>
+          <div><span>Erstangebot</span><b>24.000 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (10 St.)</td><td>35.550 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>33.050 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>36.400 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>910 €</td></tr><tr><td>− Reparaturrisiko (9 J.)</td><td>1.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>4.350 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.660 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>26.000 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-8.850 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-12/3500000012-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000012 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000013" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.708" data-pot="-3200"
+         data-preis="16400" data-zeit="2026-10-13T12:55:08"
+         data-text="pössl teilintegrierter t13 pössl 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Pössl Teilintegrierter T13<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Pössl · EZ 2011 · 125.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>16.400 €</b></div>
+          <div><span>Max-EK</span><b>9.600 €</b></div>
+          <div><span>Erstangebot</span><b>8.800 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (5 St.)</td><td>18.700 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>17.400 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>19.100 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>480 €</td></tr><tr><td>− Reparaturrisiko (15 J.)</td><td>2.500 €</td></tr><tr><td>− km-Zuschlag</td><td>620 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.520 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>9.600 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-3.200 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Marke, Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-13/3500000013-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000013 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000014" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.533" data-pot="-3200"
+         data-preis="21000" data-zeit="2026-10-13T12:55:08"
+         data-text="dethleffs teilintegrierter t14 dethleffs 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Dethleffs Teilintegrierter T14<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Dethleffs · EZ 2014 · 135.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>21.000 €</b></div>
+          <div><span>Max-EK</span><b>13.700 €</b></div>
+          <div><span>Erstangebot</span><b>12.600 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (8 St.)</td><td>23.650 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>22.000 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>24.200 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>600 €</td></tr><tr><td>− Reparaturrisiko (12 J.)</td><td>2.500 €</td></tr><tr><td>− km-Zuschlag</td><td>880 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.900 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.680 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>13.700 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-3.200 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-14/3500000014-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000014 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000015" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.411" data-pot="-2500"
+         data-preis="23000" data-zeit="2026-10-13T12:55:08"
+         data-text="dethleffs teilintegrierter t15 dethleffs 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Dethleffs Teilintegrierter T15<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Dethleffs · EZ 2012 · 31.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>23.000 €</b></div>
+          <div><span>Max-EK</span><b>16.300 €</b></div>
+          <div><span>Erstangebot</span><b>15.000 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (8 St.)</td><td>25.450 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>23.650 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>26.000 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>650 €</td></tr><tr><td>− Reparaturrisiko (14 J.)</td><td>2.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>3.100 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.550 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>16.300 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-2.500 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-15/3500000015-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000015 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000016" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.433" data-pot="-5950"
+         data-preis="41400" data-zeit="2026-10-13T12:55:08"
+         data-text="bürstner teilintegrierter t16 bürstner 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Bürstner Teilintegrierter T16<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Bürstner · EZ 2018 · 91.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>41.400 €</b></div>
+          <div><span>Max-EK</span><b>28.900 €</b></div>
+          <div><span>Erstangebot</span><b>26.600 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (8 St.)</td><td>38.950 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>36.200 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>39.800 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.000 €</td></tr><tr><td>− Reparaturrisiko (8 J.)</td><td>1.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>4.800 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.740 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>28.900 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-5.950 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-16/3500000016-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000016 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad gelb" data-id="3500000017" data-ampel="gelb" data-neu="1"
+         data-brief="1" data-verh="1.197" data-pot="400"
+         data-preis="25500" data-zeit="2026-10-13T12:55:08"
+         data-text="weinsberg teilintegrierter t17 weinsberg 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Weinsberg Teilintegrierter T17<span class="badge">Gelb</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Weinsberg · EZ 2015 · 107.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>25.500 €</b></div>
+          <div><span>Max-EK</span><b>21.300 €</b></div>
+          <div><span>Erstangebot</span><b>19.600 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (10 St.)</td><td>31.650 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>29.450 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>32.400 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>810 €</td></tr><tr><td>− Reparaturrisiko (11 J.)</td><td>2.500 €</td></tr><tr><td>− km-Zuschlag</td><td>180 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>3.900 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.770 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>21.300 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>400 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <textarea id="t3500000017">Hallo,
+
+ich habe Ihr Inserat „Weinsberg Teilintegrierter T17“ gesehen und interessiere mich für das Fahrzeug. Damit Sie gleich Bescheid wissen: Ich schreibe Ihnen als gewerblicher Ankäufer (Muster Reisemobile GmbH, Stuttgart).
+
+Bei Ihrem Wunschpreis von 25.500 € kommen wir als Händler leider nicht ganz mit, weil bei uns noch Aufbereitung, Gasprüfung und Gewährleistung dazukommen. Realistisch könnte ich Ihnen nach Besichtigung um die 19.600 € anbieten. Dafür ist der Verkauf für Sie unkompliziert: sofortige Zahlung, Abholung durch uns, keine Probefahrten mit Fremden, keine Haftung nach dem Verkauf.
+
+Falls das für Sie infrage kommt: Wann wäre eine Besichtigung in Stuttgart möglich? Ein paar Fotos von Aufbau (Feuchtigkeit), Fahrzeugschein und Serviceheft vorab wären super.
+
+Und falls nicht – kein Problem, dann viel Erfolg beim Verkauf!
+
+Viele Grüße
+Max Mustermann
+Muster Reisemobile GmbH · 0711 123456</textarea>
+          
+          <div class="aktionen">
+            <button class="primaer" data-copy="t3500000017">Text kopieren &amp; Anzeige öffnen</button>
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-17/3500000017-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000017 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000018" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.438" data-pot="-2900"
+         data-preis="23300" data-zeit="2026-10-13T12:55:08"
+         data-text="weinsberg teilintegrierter t18 weinsberg 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Weinsberg Teilintegrierter T18<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Weinsberg · EZ 2011 · 37.000 km · Teilintegrierter</div>
+          <div class="sperre">Kein Anschreiben: Sperrbegriff „keine händler“</div>
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>23.300 €</b></div>
+          <div><span>Max-EK</span><b>16.200 €</b></div>
+          <div><span>Erstangebot</span><b>14.900 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (8 St.)</td><td>25.300 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>23.550 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>25.900 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>650 €</td></tr><tr><td>− Reparaturrisiko (15 J.)</td><td>2.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>3.100 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.550 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>16.200 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-2.900 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Sperrbegriff „keine händler“).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-18/3500000018-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000018 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000019" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.426" data-pot="-4450"
+         data-preis="34800" data-zeit="2026-10-13T12:55:08"
+         data-text="hymer teilintegrierter t19 hymer 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Hymer Teilintegrierter T19<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Hymer · EZ 2018 · 132.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>34.800 €</b></div>
+          <div><span>Max-EK</span><b>24.400 €</b></div>
+          <div><span>Erstangebot</span><b>22.500 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (0 St.)</td><td>34.800 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>32.350 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>35.600 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>890 €</td></tr><tr><td>− Reparaturrisiko (8 J.)</td><td>1.500 €</td></tr><tr><td>− km-Zuschlag</td><td>800 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>4.250 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.790 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>24.400 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-4.450 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: zu wenig Vergleiche – Angebotspreis als Basis</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-19/3500000019-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000019 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000020" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="3.611" data-pot="-9850"
+         data-preis="19500" data-zeit="2026-10-13T12:55:08"
+         data-text="dethleffs teilintegrierter t20 dethleffs 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Dethleffs Teilintegrierter T20<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Dethleffs · EZ 2014 · 170.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>19.500 €</b></div>
+          <div><span>Max-EK</span><b>5.400 €</b></div>
+          <div><span>Erstangebot</span><b>5.000 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (6 St.)</td><td>15.850 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>14.750 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>16.200 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>410 €</td></tr><tr><td>− Reparaturrisiko (12 J.)</td><td>2.500 €</td></tr><tr><td>− km-Zuschlag</td><td>1.750 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.720 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>5.400 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-9.850 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-20/3500000020-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000020 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000021" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.563" data-pot="-2400"
+         data-preis="16100" data-zeit="2026-10-13T12:55:08"
+         data-text="pössl teilintegrierter t21 pössl 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Pössl Teilintegrierter T21<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Pössl · EZ 2011 · 102.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>16.100 €</b></div>
+          <div><span>Max-EK</span><b>10.300 €</b></div>
+          <div><span>Erstangebot</span><b>9.500 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (6 St.)</td><td>18.700 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>17.400 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>19.100 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>480 €</td></tr><tr><td>− Reparaturrisiko (15 J.)</td><td>2.500 €</td></tr><tr><td>− km-Zuschlag</td><td>50 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.410 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>10.300 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-2.400 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Marke, Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-21/3500000021-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000021 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000022" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.265" data-pot="-2100"
+         data-preis="42900" data-zeit="2026-10-13T12:55:08"
+         data-text="knaus teilintegrierter t22 knaus 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Knaus Teilintegrierter T22<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Knaus · EZ 2019 · 78.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>42.900 €</b></div>
+          <div><span>Max-EK</span><b>33.900 €</b></div>
+          <div><span>Erstangebot</span><b>31.200 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (11 St.)</td><td>44.800 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>41.650 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>45.800 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.150 €</td></tr><tr><td>− Reparaturrisiko (7 J.)</td><td>1.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>5.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.900 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>33.900 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-2.100 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-22/3500000022-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000022 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad gelb" data-id="3500000023" data-ampel="gelb" data-neu="1"
+         data-brief="1" data-verh="1.149" data-pot="1150"
+         data-preis="33200" data-zeit="2026-10-13T12:55:08"
+         data-text="pössl teilintegrierter t23 pössl 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Pössl Teilintegrierter T23<span class="badge">Gelb</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Pössl · EZ 2017 · 80.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>33.200 €</b></div>
+          <div><span>Max-EK</span><b>28.900 €</b></div>
+          <div><span>Erstangebot</span><b>26.600 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (10 St.)</td><td>38.950 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>36.200 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>39.800 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.000 €</td></tr><tr><td>− Reparaturrisiko (9 J.)</td><td>1.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>4.800 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.740 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>28.900 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>1.150 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <textarea id="t3500000023">Hallo,
+
+ich habe Ihr Inserat „Pössl Teilintegrierter T23“ gesehen und interessiere mich für das Fahrzeug. Damit Sie gleich Bescheid wissen: Ich schreibe Ihnen als gewerblicher Ankäufer (Muster Reisemobile GmbH, Stuttgart).
+
+Bei Ihrem Wunschpreis von 33.200 € kommen wir als Händler leider nicht ganz mit, weil bei uns noch Aufbereitung, Gasprüfung und Gewährleistung dazukommen. Realistisch könnte ich Ihnen nach Besichtigung um die 26.600 € anbieten. Dafür ist der Verkauf für Sie unkompliziert: sofortige Zahlung, Abholung durch uns, keine Probefahrten mit Fremden, keine Haftung nach dem Verkauf.
+
+Falls das für Sie infrage kommt: Wann wäre eine Besichtigung in Stuttgart möglich? Ein paar Fotos von Aufbau (Feuchtigkeit), Fahrzeugschein und Serviceheft vorab wären super.
+
+Und falls nicht – kein Problem, dann viel Erfolg beim Verkauf!
+
+Viele Grüße
+Max Mustermann
+Muster Reisemobile GmbH · 0711 123456</textarea>
+          
+          <div class="aktionen">
+            <button class="primaer" data-copy="t3500000023">Text kopieren &amp; Anzeige öffnen</button>
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-23/3500000023-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000023 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000024" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="2.054" data-pot="-4100"
+         data-preis="15200" data-zeit="2026-10-13T12:55:08"
+         data-text="hymer teilintegrierter t24 hymer 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Hymer Teilintegrierter T24<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Hymer · EZ 2012 · 137.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>15.200 €</b></div>
+          <div><span>Max-EK</span><b>7.400 €</b></div>
+          <div><span>Erstangebot</span><b>6.800 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (9 St.)</td><td>16.800 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>15.600 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>17.200 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>430 €</td></tr><tr><td>− Reparaturrisiko (14 J.)</td><td>2.500 €</td></tr><tr><td>− km-Zuschlag</td><td>920 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.560 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>7.400 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-4.100 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-24/3500000024-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000024 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000025" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.737" data-pot="-16700"
+         data-preis="56100" data-zeit="2026-10-13T12:55:08"
+         data-text="dethleffs teilintegrierter t25 dethleffs 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Dethleffs Teilintegrierter T25<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Dethleffs · EZ 2019 · 41.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>56.100 €</b></div>
+          <div><span>Max-EK</span><b>32.300 €</b></div>
+          <div><span>Erstangebot</span><b>29.700 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (9 St.)</td><td>42.900 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>39.900 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>43.900 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.100 €</td></tr><tr><td>− Reparaturrisiko (7 J.)</td><td>1.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>5.250 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.850 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>32.300 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-16.700 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-25/3500000025-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000025 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad gelb" data-id="3500000026" data-ampel="gelb" data-neu="1"
+         data-brief="1" data-verh="1.182" data-pot="350"
+         data-preis="37000" data-zeit="2026-10-13T12:55:08"
+         data-text="dethleffs teilintegrierter t26 dethleffs 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Dethleffs Teilintegrierter T26<span class="badge">Gelb</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Dethleffs · EZ 2019 · 103.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>37.000 €</b></div>
+          <div><span>Max-EK</span><b>31.300 €</b></div>
+          <div><span>Erstangebot</span><b>28.800 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (10 St.)</td><td>41.900 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>38.950 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>42.900 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.070 €</td></tr><tr><td>− Reparaturrisiko (7 J.)</td><td>1.500 €</td></tr><tr><td>− km-Zuschlag</td><td>80 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>5.150 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.850 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>31.300 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>350 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <textarea id="t3500000026">Hallo,
+
+ich habe Ihr Inserat „Dethleffs Teilintegrierter T26“ gesehen und interessiere mich für das Fahrzeug. Damit Sie gleich Bescheid wissen: Ich schreibe Ihnen als gewerblicher Ankäufer (Muster Reisemobile GmbH, Stuttgart).
+
+Bei Ihrem Wunschpreis von 37.000 € kommen wir als Händler leider nicht ganz mit, weil bei uns noch Aufbereitung, Gasprüfung und Gewährleistung dazukommen. Realistisch könnte ich Ihnen nach Besichtigung um die 28.800 € anbieten. Dafür ist der Verkauf für Sie unkompliziert: sofortige Zahlung, Abholung durch uns, keine Probefahrten mit Fremden, keine Haftung nach dem Verkauf.
+
+Falls das für Sie infrage kommt: Wann wäre eine Besichtigung in Stuttgart möglich? Ein paar Fotos von Aufbau (Feuchtigkeit), Fahrzeugschein und Serviceheft vorab wären super.
+
+Und falls nicht – kein Problem, dann viel Erfolg beim Verkauf!
+
+Viele Grüße
+Max Mustermann
+Muster Reisemobile GmbH · 0711 123456</textarea>
+          
+          <div class="aktionen">
+            <button class="primaer" data-copy="t3500000026">Text kopieren &amp; Anzeige öffnen</button>
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-26/3500000026-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000026 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000027" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.954" data-pot="-10000"
+         data-preis="29700" data-zeit="2026-10-13T12:55:08"
+         data-text="dethleffs teilintegrierter t27 dethleffs 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Dethleffs Teilintegrierter T27<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Dethleffs · EZ 2013 · 59.000 km · Teilintegrierter</div>
+          <div class="sperre">Kein Anschreiben: Sperrbegriff „keine händler“</div>
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>29.700 €</b></div>
+          <div><span>Max-EK</span><b>15.200 €</b></div>
+          <div><span>Erstangebot</span><b>14.000 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (10 St.)</td><td>24.150 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>22.450 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>24.700 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>620 €</td></tr><tr><td>− Reparaturrisiko (13 J.)</td><td>2.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.950 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.520 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>15.200 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-10.000 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Sperrbegriff „keine händler“).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-27/3500000027-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000027 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000028" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.345" data-pot="-4700"
+         data-preis="50700" data-zeit="2026-10-13T12:55:08"
+         data-text="bürstner teilintegrierter t28 bürstner 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Bürstner Teilintegrierter T28<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Bürstner · EZ 2021 · 178.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>50.700 €</b></div>
+          <div><span>Max-EK</span><b>37.700 €</b></div>
+          <div><span>Erstangebot</span><b>34.700 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (0 St.)</td><td>50.700 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>47.150 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>51.900 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.300 €</td></tr><tr><td>− Reparaturrisiko (5 J.)</td><td>500 €</td></tr><tr><td>− km-Zuschlag</td><td>1.950 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>6.200 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>2.270 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>37.700 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-4.700 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: zu wenig Vergleiche – Angebotspreis als Basis</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-28/3500000028-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000028 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000029" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="4.926" data-pot="-6450"
+         data-preis="13300" data-zeit="2026-10-13T12:55:08"
+         data-text="knaus teilintegrierter t29 knaus 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Knaus Teilintegrierter T29<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Knaus · EZ 2012 · 178.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>13.300 €</b></div>
+          <div><span>Max-EK</span><b>2.700 €</b></div>
+          <div><span>Erstangebot</span><b>2.400 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (0 St.)</td><td>13.300 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>12.350 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>13.600 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>340 €</td></tr><tr><td>− Reparaturrisiko (14 J.)</td><td>2.500 €</td></tr><tr><td>− km-Zuschlag</td><td>1.950 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.740 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>2.700 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-6.450 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: zu wenig Vergleiche – Angebotspreis als Basis</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-29/3500000029-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000029 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000030" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.579" data-pot="-4200"
+         data-preis="22900" data-zeit="2026-10-13T12:55:08"
+         data-text="bürstner teilintegrierter t30 bürstner 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Bürstner Teilintegrierter T30<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Bürstner · EZ 2012 · 54.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>22.900 €</b></div>
+          <div><span>Max-EK</span><b>14.500 €</b></div>
+          <div><span>Erstangebot</span><b>13.300 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (11 St.)</td><td>23.300 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>21.650 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>23.800 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>600 €</td></tr><tr><td>− Reparaturrisiko (14 J.)</td><td>2.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.850 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.480 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>14.500 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-4.200 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-30/3500000030-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000030 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000031" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="2.0" data-pot="-4550"
+         data-preis="16800" data-zeit="2026-10-13T12:55:08"
+         data-text="pössl teilintegrierter t31 pössl 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Pössl Teilintegrierter T31<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Pössl · EZ 2010 · 104.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>16.800 €</b></div>
+          <div><span>Max-EK</span><b>8.400 €</b></div>
+          <div><span>Erstangebot</span><b>7.800 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (6 St.)</td><td>18.700 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>17.400 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>19.100 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>480 €</td></tr><tr><td>− Reparaturrisiko (16 J.)</td><td>4.000 €</td></tr><tr><td>− km-Zuschlag</td><td>100 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.710 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>8.400 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-4.550 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Marke, Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-31/3500000031-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000031 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad grau" data-id="3500000032" data-ampel="grau" data-neu="1"
+         data-brief="0" data-verh="99" data-pot="-999999"
+         data-preis="8800" data-zeit="2026-10-13T12:55:08"
+         data-text="dethleffs teilintegrierter t32 dethleffs 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Dethleffs Teilintegrierter T32<span class="badge">–</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Dethleffs · EZ 2008 · 136.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>8.800 €</b></div>
+          <div><span>Max-EK</span><b>0 €</b></div>
+          <div><span>Erstangebot</span><b>0 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (0 St.)</td><td>8.800 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>8.200 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>9.000 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>230 €</td></tr><tr><td>− Reparaturrisiko (18 J.)</td><td>4.000 €</td></tr><tr><td>− km-Zuschlag</td><td>900 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.440 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>0 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>–</td></tr>
+          </table>
+          <p class="hinweis">Basis: zu wenig Vergleiche – Angebotspreis als Basis</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-32/3500000032-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000032 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000033" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="2.194" data-pot="-3700"
+         data-preis="13600" data-zeit="2026-10-13T12:55:08"
+         data-text="dethleffs teilintegrierter t33 dethleffs 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Dethleffs Teilintegrierter T33<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Dethleffs · EZ 2012 · 166.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>13.600 €</b></div>
+          <div><span>Max-EK</span><b>6.200 €</b></div>
+          <div><span>Erstangebot</span><b>5.700 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (7 St.)</td><td>16.500 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>15.350 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>16.900 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>420 €</td></tr><tr><td>− Reparaturrisiko (14 J.)</td><td>2.500 €</td></tr><tr><td>− km-Zuschlag</td><td>1.650 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.710 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>6.200 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-3.700 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-33/3500000033-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000033 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad gelb" data-id="3500000034" data-ampel="gelb" data-neu="1"
+         data-brief="1" data-verh="1.232" data-pot="-250"
+         data-preis="25000" data-zeit="2026-10-13T12:55:08"
+         data-text="hymer teilintegrierter t34 hymer 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Hymer Teilintegrierter T34<span class="badge">Gelb</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Hymer · EZ 2014 · 73.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>25.000 €</b></div>
+          <div><span>Max-EK</span><b>20.300 €</b></div>
+          <div><span>Erstangebot</span><b>18.700 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (8 St.)</td><td>30.200 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>28.100 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>30.900 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>770 €</td></tr><tr><td>− Reparaturrisiko (12 J.)</td><td>2.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>3.700 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.690 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>20.300 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-250 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <textarea id="t3500000034">Hallo,
+
+ich habe Ihr Inserat „Hymer Teilintegrierter T34“ gesehen und interessiere mich für das Fahrzeug. Damit Sie gleich Bescheid wissen: Ich schreibe Ihnen als gewerblicher Ankäufer (Muster Reisemobile GmbH, Stuttgart).
+
+Bei Ihrem Wunschpreis von 25.000 € kommen wir als Händler leider nicht ganz mit, weil bei uns noch Aufbereitung, Gasprüfung und Gewährleistung dazukommen. Realistisch könnte ich Ihnen nach Besichtigung um die 18.700 € anbieten. Dafür ist der Verkauf für Sie unkompliziert: sofortige Zahlung, Abholung durch uns, keine Probefahrten mit Fremden, keine Haftung nach dem Verkauf.
+
+Falls das für Sie infrage kommt: Wann wäre eine Besichtigung in Stuttgart möglich? Ein paar Fotos von Aufbau (Feuchtigkeit), Fahrzeugschein und Serviceheft vorab wären super.
+
+Und falls nicht – kein Problem, dann viel Erfolg beim Verkauf!
+
+Viele Grüße
+Max Mustermann
+Muster Reisemobile GmbH · 0711 123456</textarea>
+          
+          <div class="aktionen">
+            <button class="primaer" data-copy="t3500000034">Text kopieren &amp; Anzeige öffnen</button>
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-34/3500000034-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000034 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000035" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="2.603" data-pot="-6000"
+         data-preis="16400" data-zeit="2026-10-13T12:55:08"
+         data-text="knaus teilintegrierter t35 knaus 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Knaus Teilintegrierter T35<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Knaus · EZ 2008 · 63.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>16.400 €</b></div>
+          <div><span>Max-EK</span><b>6.300 €</b></div>
+          <div><span>Erstangebot</span><b>5.800 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (0 St.)</td><td>16.400 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>15.250 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>16.800 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>420 €</td></tr><tr><td>− Reparaturrisiko (18 J.)</td><td>4.000 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.680 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>6.300 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-6.000 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: zu wenig Vergleiche – Angebotspreis als Basis</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-35/3500000035-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000035 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000036" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.328" data-pot="-3700"
+         data-preis="42900" data-zeit="2026-10-13T12:55:08"
+         data-text="hymer teilintegrierter t36 hymer 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Hymer Teilintegrierter T36<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Hymer · EZ 2017 · 30.000 km · Teilintegrierter</div>
+          <div class="sperre">Kein Anschreiben: Sperrbegriff „keine händler“</div>
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>42.900 €</b></div>
+          <div><span>Max-EK</span><b>32.300 €</b></div>
+          <div><span>Erstangebot</span><b>29.700 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (0 St.)</td><td>42.900 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>39.900 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>43.900 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.100 €</td></tr><tr><td>− Reparaturrisiko (9 J.)</td><td>1.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>5.250 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.850 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>32.300 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-3.700 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: zu wenig Vergleiche – Angebotspreis als Basis</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Sperrbegriff „keine händler“).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-36/3500000036-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000036 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000037" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="2.355" data-pot="-8650"
+         data-preis="21900" data-zeit="2026-10-13T12:55:08"
+         data-text="pössl teilintegrierter t37 pössl 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Pössl Teilintegrierter T37<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Pössl · EZ 2011 · 102.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>21.900 €</b></div>
+          <div><span>Max-EK</span><b>9.300 €</b></div>
+          <div><span>Erstangebot</span><b>8.600 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (6 St.)</td><td>17.750 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>16.500 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>18.200 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>450 €</td></tr><tr><td>− Reparaturrisiko (15 J.)</td><td>2.500 €</td></tr><tr><td>− km-Zuschlag</td><td>50 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.420 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>9.300 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-8.650 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Marke, Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-37/3500000037-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000037 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000038" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.336" data-pot="-4100"
+         data-preis="46100" data-zeit="2026-10-13T12:55:08"
+         data-text="knaus teilintegrierter t38 knaus 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Knaus Teilintegrierter T38<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Knaus · EZ 2021 · 155.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>46.100 €</b></div>
+          <div><span>Max-EK</span><b>34.500 €</b></div>
+          <div><span>Erstangebot</span><b>31.800 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (0 St.)</td><td>46.100 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>42.850 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>47.200 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.180 €</td></tr><tr><td>− Reparaturrisiko (5 J.)</td><td>500 €</td></tr><tr><td>− km-Zuschlag</td><td>1.380 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>5.650 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>2.030 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>34.500 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-4.100 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: zu wenig Vergleiche – Angebotspreis als Basis</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-38/3500000038-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000038 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000039" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.377" data-pot="-4750"
+         data-preis="42400" data-zeit="2026-10-13T12:55:08"
+         data-text="bürstner teilintegrierter t39 bürstner 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Bürstner Teilintegrierter T39<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Bürstner · EZ 2018 · 71.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>42.400 €</b></div>
+          <div><span>Max-EK</span><b>30.800 €</b></div>
+          <div><span>Erstangebot</span><b>28.300 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (10 St.)</td><td>41.150 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>38.250 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>42.100 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.050 €</td></tr><tr><td>− Reparaturrisiko (8 J.)</td><td>1.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>5.050 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.800 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>30.800 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-4.750 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-39/3500000039-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000039 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000040" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.382" data-pot="-2600"
+         data-preis="27500" data-zeit="2026-10-13T12:55:08"
+         data-text="hymer teilintegrierter t40 hymer 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Hymer Teilintegrierter T40<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Hymer · EZ 2015 · 125.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>27.500 €</b></div>
+          <div><span>Max-EK</span><b>19.900 €</b></div>
+          <div><span>Erstangebot</span><b>18.300 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (8 St.)</td><td>30.600 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>28.450 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>31.300 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>780 €</td></tr><tr><td>− Reparaturrisiko (11 J.)</td><td>2.500 €</td></tr><tr><td>− km-Zuschlag</td><td>620 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>3.750 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.820 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>19.900 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-2.600 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-40/3500000040-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000040 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000041" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.416" data-pot="-2300"
+         data-preis="21800" data-zeit="2026-10-13T12:55:08"
+         data-text="hymer teilintegrierter t41 hymer 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Hymer Teilintegrierter T41<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Hymer · EZ 2014 · 133.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>21.800 €</b></div>
+          <div><span>Max-EK</span><b>15.400 €</b></div>
+          <div><span>Erstangebot</span><b>14.100 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (9 St.)</td><td>25.500 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>23.700 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>26.100 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>650 €</td></tr><tr><td>− Reparaturrisiko (12 J.)</td><td>2.500 €</td></tr><tr><td>− km-Zuschlag</td><td>820 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>3.150 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.710 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>15.400 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-2.300 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-41/3500000041-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000041 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000042" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.405" data-pot="-8050"
+         data-preis="56200" data-zeit="2026-10-13T12:55:08"
+         data-text="bürstner teilintegrierter t42 bürstner 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Bürstner Teilintegrierter T42<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Bürstner · EZ 2021 · 75.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>56.200 €</b></div>
+          <div><span>Max-EK</span><b>40.000 €</b></div>
+          <div><span>Erstangebot</span><b>36.800 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (8 St.)</td><td>50.700 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>47.150 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>51.900 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.300 €</td></tr><tr><td>− Reparaturrisiko (5 J.)</td><td>500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>6.200 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.900 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>40.000 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-8.050 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-42/3500000042-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000042 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000043" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="4.607" data-pot="-6000"
+         data-preis="12900" data-zeit="2026-10-13T12:55:08"
+         data-text="knaus teilintegrierter t43 knaus 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Knaus Teilintegrierter T43<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Knaus · EZ 2008 · 85.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>12.900 €</b></div>
+          <div><span>Max-EK</span><b>2.800 €</b></div>
+          <div><span>Erstangebot</span><b>2.600 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (0 St.)</td><td>12.900 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>12.000 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>13.200 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>330 €</td></tr><tr><td>− Reparaturrisiko (18 J.)</td><td>4.000 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.660 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>2.800 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-6.000 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: zu wenig Vergleiche – Angebotspreis als Basis</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-43/3500000043-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000043 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000044" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.942" data-pot="-5750"
+         data-preis="20000" data-zeit="2026-10-13T12:55:08"
+         data-text="pössl teilintegrierter t44 pössl 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Pössl Teilintegrierter T44<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Pössl · EZ 2011 · 79.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>20.000 €</b></div>
+          <div><span>Max-EK</span><b>10.300 €</b></div>
+          <div><span>Erstangebot</span><b>9.500 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (5 St.)</td><td>18.700 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>17.400 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>19.100 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>480 €</td></tr><tr><td>− Reparaturrisiko (15 J.)</td><td>2.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.410 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>10.300 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-5.750 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Marke, Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-44/3500000044-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000044 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000045" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="2.242" data-pot="-4000"
+         data-preis="13900" data-zeit="2026-10-13T12:55:08"
+         data-text="dethleffs teilintegrierter t45 dethleffs 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Dethleffs Teilintegrierter T45<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Dethleffs · EZ 2010 · 103.000 km · Teilintegrierter</div>
+          <div class="sperre">Kein Anschreiben: Sperrbegriff „keine händler“</div>
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>13.900 €</b></div>
+          <div><span>Max-EK</span><b>6.200 €</b></div>
+          <div><span>Erstangebot</span><b>5.700 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (9 St.)</td><td>16.400 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>15.250 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>16.800 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>420 €</td></tr><tr><td>− Reparaturrisiko (16 J.)</td><td>4.000 €</td></tr><tr><td>− km-Zuschlag</td><td>80 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.690 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>6.200 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-4.000 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Sperrbegriff „keine händler“).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-45/3500000045-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000045 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000046" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.568" data-pot="-10400"
+         data-preis="47500" data-zeit="2026-10-13T12:55:08"
+         data-text="dethleffs teilintegrierter t46 dethleffs 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Dethleffs Teilintegrierter T46<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Dethleffs · EZ 2017 · 49.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>47.500 €</b></div>
+          <div><span>Max-EK</span><b>30.300 €</b></div>
+          <div><span>Erstangebot</span><b>27.900 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (8 St.)</td><td>40.600 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>37.750 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>41.500 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.040 €</td></tr><tr><td>− Reparaturrisiko (9 J.)</td><td>1.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>5.000 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.790 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>30.300 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-10.400 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-46/3500000046-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000046 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad gelb" data-id="3500000047" data-ampel="gelb" data-neu="1"
+         data-brief="1" data-verh="1.247" data-pot="-2800"
+         data-preis="65200" data-zeit="2026-10-13T12:55:08"
+         data-text="bürstner teilintegrierter t47 bürstner 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Bürstner Teilintegrierter T47<span class="badge">Gelb</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Bürstner · EZ 2022 · 30.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>65.200 €</b></div>
+          <div><span>Max-EK</span><b>52.300 €</b></div>
+          <div><span>Erstangebot</span><b>48.100 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (0 St.)</td><td>65.200 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>60.650 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>66.700 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.670 €</td></tr><tr><td>− Reparaturrisiko (4 J.)</td><td>500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>8.000 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>2.300 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>52.300 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-2.800 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: zu wenig Vergleiche – Angebotspreis als Basis</p>
+        </div>
+        <div>
+          
+          <textarea id="t3500000047">Hallo,
+
+ich habe Ihr Inserat „Bürstner Teilintegrierter T47“ gesehen und interessiere mich für das Fahrzeug. Damit Sie gleich Bescheid wissen: Ich schreibe Ihnen als gewerblicher Ankäufer (Muster Reisemobile GmbH, Stuttgart).
+
+Bei Ihrem Wunschpreis von 65.200 € kommen wir als Händler leider nicht ganz mit, weil bei uns noch Aufbereitung, Gasprüfung und Gewährleistung dazukommen. Realistisch könnte ich Ihnen nach Besichtigung um die 48.100 € anbieten. Dafür ist der Verkauf für Sie unkompliziert: sofortige Zahlung, Abholung durch uns, keine Probefahrten mit Fremden, keine Haftung nach dem Verkauf.
+
+Falls das für Sie infrage kommt: Wann wäre eine Besichtigung in Stuttgart möglich? Ein paar Fotos von Aufbau (Feuchtigkeit), Fahrzeugschein und Serviceheft vorab wären super.
+
+Und falls nicht – kein Problem, dann viel Erfolg beim Verkauf!
+
+Viele Grüße
+Max Mustermann
+Muster Reisemobile GmbH · 0711 123456</textarea>
+          
+          <div class="aktionen">
+            <button class="primaer" data-copy="t3500000047">Text kopieren &amp; Anzeige öffnen</button>
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-47/3500000047-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000047 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000048" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.65" data-pot="-7700"
+         data-preis="33000" data-zeit="2026-10-13T12:55:08"
+         data-text="knaus teilintegrierter t48 knaus 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Knaus Teilintegrierter T48<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Knaus · EZ 2014 · 73.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>33.000 €</b></div>
+          <div><span>Max-EK</span><b>20.000 €</b></div>
+          <div><span>Erstangebot</span><b>18.400 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (8 St.)</td><td>29.800 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>27.700 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>30.500 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>760 €</td></tr><tr><td>− Reparaturrisiko (12 J.)</td><td>2.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>3.650 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.680 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>20.000 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-7.700 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-48/3500000048-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000048 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000049" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.304" data-pot="-4700"
+         data-preis="59200" data-zeit="2026-10-13T12:55:08"
+         data-text="pössl teilintegrierter t49 pössl 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Pössl Teilintegrierter T49<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Pössl · EZ 2022 · 62.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>59.200 €</b></div>
+          <div><span>Max-EK</span><b>45.400 €</b></div>
+          <div><span>Erstangebot</span><b>41.800 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (6 St.)</td><td>57.050 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>53.050 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>58.400 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.460 €</td></tr><tr><td>− Reparaturrisiko (4 J.)</td><td>500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>7.000 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>2.080 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>45.400 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-4.700 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-49/3500000049-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000049 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000050" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.665" data-pot="-7850"
+         data-preis="32800" data-zeit="2026-10-13T12:55:08"
+         data-text="weinsberg teilintegrierter t50 weinsberg 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Weinsberg Teilintegrierter T50<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Weinsberg · EZ 2015 · 100.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>32.800 €</b></div>
+          <div><span>Max-EK</span><b>19.700 €</b></div>
+          <div><span>Erstangebot</span><b>18.100 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (10 St.)</td><td>29.450 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>27.400 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>30.100 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>750 €</td></tr><tr><td>− Reparaturrisiko (11 J.)</td><td>2.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>3.600 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.660 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>19.700 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-7.850 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-50/3500000050-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000050 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000051" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.989" data-pot="-5400"
+         data-preis="18700" data-zeit="2026-10-13T12:55:08"
+         data-text="pössl teilintegrierter t51 pössl 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Pössl Teilintegrierter T51<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Pössl · EZ 2011 · 88.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>18.700 €</b></div>
+          <div><span>Max-EK</span><b>9.400 €</b></div>
+          <div><span>Erstangebot</span><b>8.600 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (6 St.)</td><td>17.750 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>16.500 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>18.200 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>450 €</td></tr><tr><td>− Reparaturrisiko (15 J.)</td><td>2.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.410 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>9.400 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-5.400 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Marke, Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-51/3500000051-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000051 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000052" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.709" data-pot="-10300"
+         data-preis="38800" data-zeit="2026-10-13T12:55:08"
+         data-text="bürstner teilintegrierter t52 bürstner 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Bürstner Teilintegrierter T52<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Bürstner · EZ 2015 · 39.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>38.800 €</b></div>
+          <div><span>Max-EK</span><b>22.700 €</b></div>
+          <div><span>Erstangebot</span><b>20.900 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (5 St.)</td><td>33.000 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>30.700 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>33.800 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>840 €</td></tr><tr><td>− Reparaturrisiko (11 J.)</td><td>2.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>4.050 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.770 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>22.700 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-10.300 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-52/3500000052-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000052 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad gruen" data-id="3500000053" data-ampel="gruen" data-neu="1"
+         data-brief="1" data-verh="1.037" data-pot="4600"
+         data-preis="36300" data-zeit="2026-10-13T12:55:08"
+         data-text="dethleffs teilintegrierter t53 dethleffs 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Dethleffs Teilintegrierter T53<span class="badge">Grün</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Dethleffs · EZ 2018 · 68.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>36.300 €</b></div>
+          <div><span>Max-EK</span><b>35.000 €</b></div>
+          <div><span>Erstangebot</span><b>32.200 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (6 St.)</td><td>46.150 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>42.900 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>47.200 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.180 €</td></tr><tr><td>− Reparaturrisiko (8 J.)</td><td>1.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>5.650 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.950 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>35.000 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>4.600 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Marke, Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <textarea id="t3500000053">Hallo,
+
+ich habe Ihr Inserat „Dethleffs Teilintegrierter T53“ gesehen und interessiere mich für das Fahrzeug. Damit Sie gleich Bescheid wissen: Ich schreibe Ihnen als gewerblicher Ankäufer (Muster Reisemobile GmbH, Stuttgart).
+
+Ihr Fahrzeug passt gut in unseren Bestand. Vorbehaltlich einer kurzen Besichtigung könnte ich Ihnen 32.200 € anbieten – Zahlung sofort per Überweisung oder bar, Abholung durch uns, Abmeldung und Papierkram übernehmen wir.
+
+Falls das für Sie infrage kommt: Wann wäre eine Besichtigung in Stuttgart möglich? Ein paar Fotos von Aufbau (Feuchtigkeit), Fahrzeugschein und Serviceheft vorab wären super.
+
+Und falls nicht – kein Problem, dann viel Erfolg beim Verkauf!
+
+Viele Grüße
+Max Mustermann
+Muster Reisemobile GmbH · 0711 123456</textarea>
+          
+          <div class="aktionen">
+            <button class="primaer" data-copy="t3500000053">Text kopieren &amp; Anzeige öffnen</button>
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-53/3500000053-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000053 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000054" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="2.461" data-pot="-6900"
+         data-preis="18700" data-zeit="2026-10-13T12:55:08"
+         data-text="pössl teilintegrierter t54 pössl 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Pössl Teilintegrierter T54<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Pössl · EZ 2010 · 88.000 km · Teilintegrierter</div>
+          <div class="sperre">Kein Anschreiben: Sperrbegriff „keine händler“</div>
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>18.700 €</b></div>
+          <div><span>Max-EK</span><b>7.600 €</b></div>
+          <div><span>Erstangebot</span><b>7.000 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (6 St.)</td><td>17.750 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>16.500 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>18.200 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>450 €</td></tr><tr><td>− Reparaturrisiko (16 J.)</td><td>4.000 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.690 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>7.600 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-6.900 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Marke, Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Sperrbegriff „keine händler“).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-54/3500000054-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000054 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000055" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.365" data-pot="-7400"
+         data-preis="61000" data-zeit="2026-10-13T12:55:08"
+         data-text="knaus teilintegrierter t55 knaus 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Knaus Teilintegrierter T55<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Knaus · EZ 2021 · 62.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>61.000 €</b></div>
+          <div><span>Max-EK</span><b>44.700 €</b></div>
+          <div><span>Erstangebot</span><b>41.100 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (8 St.)</td><td>56.150 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>52.200 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>57.400 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>1.440 €</td></tr><tr><td>− Reparaturrisiko (5 J.)</td><td>500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>6.900 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>2.030 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>44.700 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-7.400 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-55/3500000055-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000055 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000056" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.6" data-pot="-7700"
+         data-preis="36000" data-zeit="2026-10-13T12:55:08"
+         data-text="bürstner teilintegrierter t56 bürstner 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Bürstner Teilintegrierter T56<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Bürstner · EZ 2017 · 140.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>36.000 €</b></div>
+          <div><span>Max-EK</span><b>22.500 €</b></div>
+          <div><span>Erstangebot</span><b>20.700 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (5 St.)</td><td>32.800 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>30.500 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>33.600 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>840 €</td></tr><tr><td>− Reparaturrisiko (9 J.)</td><td>1.500 €</td></tr><tr><td>− km-Zuschlag</td><td>1.000 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>4.050 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.770 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>22.500 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-7.700 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-56/3500000056-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000056 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000057" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.405" data-pot="-2450"
+         data-preis="22900" data-zeit="2026-10-13T12:55:08"
+         data-text="bürstner teilintegrierter t57 bürstner 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Bürstner Teilintegrierter T57<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Bürstner · EZ 2011 · 20.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>22.900 €</b></div>
+          <div><span>Max-EK</span><b>16.300 €</b></div>
+          <div><span>Erstangebot</span><b>15.000 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (8 St.)</td><td>25.450 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>23.650 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>26.000 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>650 €</td></tr><tr><td>− Reparaturrisiko (15 J.)</td><td>2.500 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>3.100 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.550 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>16.300 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-2.450 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-57/3500000057-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000057 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad grau" data-id="3500000058" data-ampel="grau" data-neu="1"
+         data-brief="0" data-verh="99" data-pot="-999999"
+         data-preis="7500" data-zeit="2026-10-13T12:55:08"
+         data-text="hymer teilintegrierter t58 hymer 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Hymer Teilintegrierter T58<span class="badge">–</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Hymer · EZ 2008 · 176.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>7.500 €</b></div>
+          <div><span>Max-EK</span><b>0 €</b></div>
+          <div><span>Erstangebot</span><b>0 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (0 St.)</td><td>7.500 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>6.950 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>7.700 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>190 €</td></tr><tr><td>− Reparaturrisiko (18 J.)</td><td>4.000 €</td></tr><tr><td>− km-Zuschlag</td><td>1.900 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>2.500 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.230 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>0 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>–</td></tr>
+          </table>
+          <p class="hinweis">Basis: zu wenig Vergleiche – Angebotspreis als Basis</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-58/3500000058-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000058 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+    <div class="ad rot" data-id="3500000059" data-ampel="rot" data-neu="1"
+         data-brief="0" data-verh="1.701" data-pot="-6800"
+         data-preis="28400" data-zeit="2026-10-13T12:55:08"
+         data-text="knaus teilintegrierter t59 knaus 70173 stuttgart">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">Knaus Teilintegrierter T59<span class="badge">Rot</span><span class="badge neu-tag">neu</span></div>
+          <div class="meta">70173 Stuttgart · Knaus · EZ 2014 · 117.000 km · Teilintegrierter</div>
+          
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>28.400 €</b></div>
+          <div><span>Max-EK</span><b>16.700 €</b></div>
+          <div><span>Erstangebot</span><b>15.300 €</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote (8 St.)</td><td>26.500 €</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>24.650 €</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>27.100 €</b></td></tr>
+            <tr><td>− Aufbereitung</td><td>900 €</td></tr><tr><td>− HU / Gasprüfung</td><td>350 €</td></tr><tr><td>− Transport</td><td>300 €</td></tr><tr><td>− Standkosten</td><td>360 €</td></tr><tr><td>− Gewährleistungsrücklage</td><td>680 €</td></tr><tr><td>− Reparaturrisiko (12 J.)</td><td>2.500 €</td></tr><tr><td>− km-Zuschlag</td><td>420 €</td></tr>
+            <tr><td>− Ziel-Marge (netto)</td><td>3.250 €</td></tr>
+            <tr><td>− USt auf Marge (§25a, 19/119)</td><td>1.660 €</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>16.700 €</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>-6.800 €</td></tr>
+          </table>
+          <p class="hinweis">Basis: gleiche Art, EZ ± 2 J.</p>
+        </div>
+        <div>
+          
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt (Ampel unter Schwelle).</p>
+          
+          <div class="aktionen">
+            
+            <a href="https://www.kleinanzeigen.de/s-anzeige/wohnmobil-59/3500000059-220-1234" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status 3500000059 kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  
+  </div>
+</div>
+<script>
+(function(){
+  var liste=document.getElementById('liste'), karten=[].slice.call(liste.children), filter='anschreiben';
+  function lade(){try{return JSON.parse(localStorage.getItem('scout-erledigt')||'{}')}catch(e){return {}}}
+  function sichere(o){try{localStorage.setItem('scout-erledigt',JSON.stringify(o))}catch(e){}}
+  var erledigt=lade();
+  karten.forEach(function(k){ if(erledigt[k.dataset.id]) k.classList.add('erledigt'); });
+  function zeige(){
+    var q=document.getElementById('q').value.toLowerCase();
+    karten.forEach(function(k){
+      var ok = filter==='alle' || (filter==='anschreiben'&&k.dataset.brief==='1') || (filter==='neu'&&k.dataset.neu==='1') || k.dataset.ampel===filter;
+      if(q && k.dataset.text.indexOf(q)<0) ok=false;
+      k.style.display = ok?'':'none';
+    });
+  }
+  function sortiere(){
+    var s=document.getElementById('sort').value;
+    karten.sort(function(a,b){
+      if(s==='verh') return a.dataset.verh-b.dataset.verh;
+      if(s==='pot') return b.dataset.pot-a.dataset.pot;
+      if(s==='preis') return a.dataset.preis-b.dataset.preis;
+      return a.dataset.zeit<b.dataset.zeit?1:-1;
+    }).forEach(function(k){liste.appendChild(k)});
+  }
+  document.querySelectorAll('.bar button').forEach(function(b){
+    b.onclick=function(){document.querySelectorAll('.bar button').forEach(function(x){x.classList.remove('an')});b.classList.add('an');filter=b.dataset.f;zeige();};
+  });
+  document.getElementById('q').oninput=zeige;
+  document.getElementById('sort').onchange=sortiere;
+  liste.addEventListener('click',function(e){
+    var karte=e.target.closest('.ad'); if(!karte) return;
+    if(e.target.closest('.kopf')){karte.classList.toggle('offen');return;}
+    var c=e.target.closest('[data-copy]');
+    if(c){
+      var t=document.getElementById(c.dataset.copy);
+      var fertig=function(){c.textContent='Kopiert ✓';setTimeout(function(){c.textContent='Text kopieren & Anzeige öffnen'},2000)};
+      if(navigator.clipboard){navigator.clipboard.writeText(t.value).then(fertig,function(){t.select();document.execCommand('copy');fertig()})}
+      else{t.select();document.execCommand('copy');fertig()}
+      window.open(karte.querySelector('a').href,'_blank','noopener');
+    }
+    if(e.target.closest('[data-done]')){
+      karte.classList.toggle('erledigt');
+      if(karte.classList.contains('erledigt')) erledigt[karte.dataset.id]=1; else delete erledigt[karte.dataset.id];
+      sichere(erledigt);
+    }
+  });
+  sortiere(); zeige();
+})();
+</script>
+</body>
+</html>

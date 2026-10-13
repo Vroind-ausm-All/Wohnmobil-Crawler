@@ -1,0 +1,121 @@
+# ============================================================
+#  Wohnmobil-Scout – Konfiguration
+#  Alle Beträge in Euro. Nach Änderungen einfach neu starten.
+# ============================================================
+
+# --- 1. Suchen ------------------------------------------------
+# Tipp: Suche im Browser auf kleinanzeigen.de zusammenklicken
+# (Ort, Radius, Preis, Art, "Privat"), dann die URL hier einfügen.
+# Die Seiten-Nummer (seite:2, seite:3 ...) setzt das Tool selbst ein.
+suchen:
+  - name: Alkoven
+    url: https://www.kleinanzeigen.de/s-wohnwagen-mobile/alkoven/anbieter:privat/anzeige:angebote/c220+wohnwagen_mobile.art_s:alkoven
+  - name: Integrierter
+    url: https://www.kleinanzeigen.de/s-wohnwagen-mobile/integrierter/anbieter:privat/anzeige:angebote/c220+wohnwagen_mobile.art_s:integrierter
+  - name: Teilintegrierter
+    url: https://www.kleinanzeigen.de/s-wohnwagen-mobile/teilintegrierter/anbieter:privat/anzeige:angebote/c220+wohnwagen_mobile.art_s:teilintegrierter
+  - name: Kastenwagen
+    url: https://www.kleinanzeigen.de/s-wohnwagen-mobile/kastenwagen/anbieter:privat/anzeige:angebote/c220+wohnwagen_mobile.art_s:kastenwagen
+  - name: Sonstige / Camper
+    url: https://www.kleinanzeigen.de/s-wohnwagen-mobile/andere/anbieter:privat/anzeige:angebote/c220+wohnwagen_mobile.art_s:andere
+  # Wohnwagen bei Bedarf einkommentieren:
+  # - name: Wohnwagen
+  #   url: https://www.kleinanzeigen.de/s-wohnwagen-mobile/wohnwagen/anbieter:privat/anzeige:angebote/c220+wohnwagen_mobile.art_s:wohnwagen
+
+# --- 2. Crawler-Verhalten -------------------------------------
+crawler:
+  max_seiten_pro_suche: 5        # 25 Anzeigen pro Seite
+  detailseiten_pro_lauf: 60      # Detailseiten liefern km, EZ, Marke, Beschreibung
+  pause_min_sek: 4               # zufällige Pause zwischen Abrufen
+  pause_max_sek: 9
+  timeout_sek: 25
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36"
+
+# --- 3. Filter ------------------------------------------------
+filter:
+  preis_min: 5000
+  preis_max: 120000
+  ez_ab_jahr: 2000               # Erstzulassung ab
+  km_max: 250000
+  # Anzeigen mit diesen Begriffen werden NICHT angeschrieben
+  sperrbegriffe:
+    - keine händler
+    - kein händler
+    - händler zwecklos
+    - händleranfragen zwecklos
+    - keine händleranfragen
+    - ohne händler
+    - nur privat
+    - keine gewerblichen
+    - händler bitte nicht
+    - vermiete
+    - vermietung
+    - zu vermieten
+    - tausche
+    - motorschaden
+    - unfallschaden
+    - export
+
+# --- 4. Einkaufspreis-Rechner ---------------------------------
+rechner:
+  # Marktwert = Median vergleichbarer Angebote (gleiche Art + Marke,
+  # EZ ± jahre_toleranz, km ± km_toleranz). Ohne genug Vergleiche
+  # wird der Angebotspreis der Anzeige selbst genommen.
+  vergleich_min_anzahl: 5
+  vergleich_jahre_toleranz: 2
+  vergleich_km_toleranz: 40000
+  # Privat-Angebotspreise liegen über dem, was am Ende gezahlt wird
+  abschlag_angebot_auf_privatwert: 0.07
+  # Händler-Verkaufspreis liegt über Privatwert (Gewährleistung, Aufbereitung, Finanzierung)
+  aufschlag_haendler_vk: 0.10
+
+  kosten:
+    aufbereitung: 900
+    hu_gasprüfung: 350
+    standkosten_pro_monat: 120
+    standzeit_monate: 3
+    transport_pauschal: 300
+    gewährleistung_rücklage_prozent: 0.025   # vom Händler-VK
+    # Reparaturrisiko nach Fahrzeugalter (Jahre bis)
+    reparatur_risiko:
+      - {bis_jahre: 5,  betrag: 500}
+      - {bis_jahre: 10, betrag: 1500}
+      - {bis_jahre: 15, betrag: 2500}
+      - {bis_jahre: 99, betrag: 4000}
+    km_zuschlag_ab: 100000            # ab diesem km-Stand ...
+    km_zuschlag_pro_10000: 250        # ... je weitere 10.000 km
+
+  ziel_marge_prozent: 0.12          # Netto-Gewinn vom Händler-VK
+  ziel_marge_min: 2500
+  # Differenzbesteuerung §25a UStG: USt nur auf die Marge (19/119)
+  differenzbesteuerung: true
+  # Erstes Angebot an den Verkäufer = Max-EK × Faktor (Verhandlungsspielraum)
+  erstangebot_faktor: 0.92
+  # Bewertung: Angebotspreis / Max-EK
+  ampel:
+    gruen_bis: 1.10    # Verkäufer will max. 10 % mehr als wir zahlen können
+    gelb_bis: 1.25
+
+# --- 5. Anschreiben -------------------------------------------
+anschreiben:
+  vorlage: vorlagen/anschreiben.txt
+  firma: "Muster Reisemobile GmbH"
+  ansprechpartner: "Max Mustermann"
+  telefon: "0711 123456"
+  ort: "Stuttgart"
+  # Nur Anzeigen mit dieser Ampel oder besser bekommen ein Anschreiben
+  ab_ampel: gelb
+
+# --- 6. Ausgabe & Benachrichtigung -----------------------------
+ausgabe:
+  ordner: ausgabe
+  datenbank: daten/anzeigen.sqlite
+
+email:
+  aktiv: false
+  smtp_server: smtp.gmail.com
+  smtp_port: 587
+  benutzer: "dein.name@example.de"
+  passwort_env: SCOUT_SMTP_PASSWORT     # Passwort als Umgebungsvariable, nicht hier
+  empfaenger: "dein.name@example.de"
+  nur_bei_neuen_treffern: true

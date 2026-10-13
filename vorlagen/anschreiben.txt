@@ -1,0 +1,20 @@
+{# Jinja2-Vorlage. Verfügbare Felder: titel, marke, ez_jahr, km, preis, ort, erstangebot,
+   max_ek, ampel, ort_kurz, firma, ansprechpartner, telefon, firmen_ort.
+   Dieser Kommentarblock erscheint nicht im Anschreiben. -#}
+Hallo,
+
+ich habe Ihr Inserat „{{ titel }}“ gesehen und interessiere mich für das Fahrzeug. Damit Sie gleich Bescheid wissen: Ich schreibe Ihnen als gewerblicher Ankäufer ({{ firma }}, {{ firmen_ort }}).
+
+{% if ampel == "gruen" %}
+Ihr Fahrzeug passt gut in unseren Bestand. Vorbehaltlich einer kurzen Besichtigung könnte ich Ihnen {{ erstangebot | euro }} anbieten – Zahlung sofort per Überweisung oder bar, Abholung durch uns, Abmeldung und Papierkram übernehmen wir.
+{% else %}
+Bei Ihrem Wunschpreis von {{ preis | euro }} kommen wir als Händler leider nicht ganz mit, weil bei uns noch Aufbereitung, Gasprüfung und Gewährleistung dazukommen. Realistisch könnte ich Ihnen nach Besichtigung um die {{ erstangebot | euro }} anbieten. Dafür ist der Verkauf für Sie unkompliziert: sofortige Zahlung, Abholung durch uns, keine Probefahrten mit Fremden, keine Haftung nach dem Verkauf.
+{% endif %}
+
+Falls das für Sie infrage kommt: Wann wäre eine Besichtigung in {{ ort_kurz }} möglich? Ein paar Fotos von Aufbau (Feuchtigkeit), Fahrzeugschein und Serviceheft vorab wären super.
+
+Und falls nicht – kein Problem, dann viel Erfolg beim Verkauf!
+
+Viele Grüße
+{{ ansprechpartner }}
+{{ firma }} · {{ telefon }}

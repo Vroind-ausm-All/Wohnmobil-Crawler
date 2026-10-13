@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wohnmobil-Scout {{ stand }}</title>
+<style>
+:root{
+  --bg:#f6f5f1; --card:#fff; --ink:#1d1f1c; --mute:#6b6f68; --line:#e2e0d8;
+  --gruen:#1f7a4d; --gruen-bg:#e3f2e9; --gelb:#9a6b00; --gelb-bg:#fbf0d4; --rot:#a8322a; --rot-bg:#f8e1de;
+  --akzent:#24524a;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#141613; --card:#1d201c; --ink:#e9e8e2; --mute:#9a9e96; --line:#30342f;
+  --gruen:#6fd19c; --gruen-bg:#183326; --gelb:#e9bf5a; --gelb-bg:#33290f; --rot:#f08c82; --rot-bg:#3a1c19; --akzent:#8fc9bd;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:22px;margin:0 0 4px;letter-spacing:-.01em}
+.sub{color:var(--mute);margin:0 0 20px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.kpi b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.kpi span{color:var(--mute);font-size:13px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.bar button,.bar input,.bar select{font:inherit;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.bar button.an{background:var(--akzent);color:var(--bg);border-color:var(--akzent)}
+.bar input{cursor:text;flex:1;min-width:180px}
+.liste{display:flex;flex-direction:column;gap:10px}
+.ad{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.ad.erledigt{opacity:.45}
+.kopf{display:grid;grid-template-columns:8px 1fr auto;gap:14px;padding:14px 16px 14px 0;cursor:pointer}
+.streif{border-radius:0 4px 4px 0}
+.gruen .streif{background:var(--gruen)} .gelb .streif{background:var(--gelb)} .rot .streif{background:var(--rot)} .grau .streif{background:var(--line)}
+.titel{font-weight:600}
+.meta{color:var(--mute);font-size:13px}
+.zahlen{display:flex;gap:18px;text-align:right;font-variant-numeric:tabular-nums}
+.zahlen div span{display:block;color:var(--mute);font-size:12px}
+.zahlen b{font-size:16px}
+.badge{display:inline-block;font-size:12px;padding:1px 8px;border-radius:99px;margin-left:6px;vertical-align:1px}
+.gruen .badge{background:var(--gruen-bg);color:var(--gruen)} .gelb .badge{background:var(--gelb-bg);color:var(--gelb)} .rot .badge{background:var(--rot-bg);color:var(--rot)} .grau .badge{background:var(--line);color:var(--mute)}
+.neu-tag{background:var(--akzent);color:var(--bg)}
+.detail{display:none;border-top:1px solid var(--line);padding:16px;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:20px}
+.ad.offen .detail{display:grid}
+table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+td{padding:4px 0;border-bottom:1px dashed var(--line)} td:last-child{text-align:right}
+tr.summe td{font-weight:700;border-bottom:none;padding-top:8px}
+textarea{width:100%;min-height:290px;font:14px/1.5 system-ui,sans-serif;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);resize:vertical}
+.aktionen{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.aktionen a,.aktionen button{font:inherit;font-size:14px;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);text-decoration:none;cursor:pointer}
+.aktionen .primaer{background:var(--akzent);color:var(--bg);border-color:var(--akzent)}
+.hinweis{color:var(--mute);font-size:13px;margin-top:6px}
+.sperre{color:var(--rot);font-size:13px}
+@media (max-width:760px){
+  .kopf{grid-template-columns:6px 1fr} .zahlen{grid-column:2;justify-content:flex-start;text-align:left}
+  .ad.offen .detail{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Wohnmobil-Scout</h1>
+  <p class="sub">Stand {{ stand }} · {{ anzahl }} aktive Privatanzeigen ausgewertet{% if fehler %} · <span class="sperre">Letzter Lauf: {{ fehler }}</span>{% endif %}</p>
+
+  <div class="kpis">
+    <div class="kpi"><b>{{ zaehl.gruen }}</b><span>Grün – Angebot nah am Max-EK</span></div>
+    <div class="kpi"><b>{{ zaehl.gelb }}</b><span>Gelb – mit Verhandlung möglich</span></div>
+    <div class="kpi"><b>{{ zaehl.neu }}</b><span>Neu seit letztem Lauf</span></div>
+    <div class="kpi"><b>{{ zaehl.anschreiben }}</b><span>Anschreiben bereit</span></div>
+  </div>
+
+  <div class="bar">
+    <button data-f="anschreiben" class="an">Anschreiben bereit</button>
+    <button data-f="gruen">Grün</button>
+    <button data-f="gelb">Gelb</button>
+    <button data-f="neu">Neu</button>
+    <button data-f="alle">Alle</button>
+    <select id="sort">
+      <option value="verh">Sortierung: beste Chance</option>
+      <option value="pot">Gewinnpotenzial</option>
+      <option value="neu">Neueste zuerst</option>
+      <option value="preis">Preis aufsteigend</option>
+    </select>
+    <input id="q" placeholder="Suchen: Marke, Ort, Titel …">
+  </div>
+
+  <div class="liste" id="liste">
+  {% for z in zeilen %}
+    <div class="ad {{ z.b.ampel }}" data-id="{{ z.a.id }}" data-ampel="{{ z.b.ampel }}" data-neu="{{ 1 if z.neu else 0 }}"
+         data-brief="{{ 1 if z.brief else 0 }}" data-verh="{{ z.b.verhaeltnis or 99 }}" data-pot="{{ z.b.potenzial or -999999 }}"
+         data-preis="{{ z.a.preis or 0 }}" data-zeit="{{ z.a.erstmals_gesehen }}"
+         data-text="{{ (z.a.titel ~ ' ' ~ (z.a.marke or '') ~ ' ' ~ (z.a.ort or '')) | lower }}">
+      <div class="kopf">
+        <div class="streif"></div>
+        <div>
+          <div class="titel">{{ z.a.titel }}<span class="badge">{{ {'gruen':'Grün','gelb':'Gelb','rot':'Rot','grau':'–'}[z.b.ampel] }}</span>{% if z.neu %}<span class="badge neu-tag">neu</span>{% endif %}{% if z.a.preis_vorher %}<span class="badge">Preis gesenkt von {{ z.a.preis_vorher | euro }}</span>{% endif %}</div>
+          <div class="meta">{{ z.a.ort }} · {{ z.a.marke or 'Marke ?' }} · EZ {{ z.a.ez_jahr or '?' }} · {{ (z.a.km | tsd ~ ' km') if z.a.km else 'km ?' }} · {{ z.a.suche }}</div>
+          {% if z.sperre %}<div class="sperre">Kein Anschreiben: {{ z.sperre }}</div>{% endif %}
+        </div>
+        <div class="zahlen">
+          <div><span>Angebot</span><b>{{ z.a.preis | euro }}</b></div>
+          <div><span>Max-EK</span><b>{{ z.b.max_ek | euro }}</b></div>
+          <div><span>Erstangebot</span><b>{{ z.b.erstangebot | euro }}</b></div>
+        </div>
+      </div>
+      <div class="detail">
+        <div>
+          <table>
+            <tr><td>Vergleichspreis Angebote ({{ z.b.vergleich_anzahl }} St.)</td><td>{{ z.b.marktwert_angebote | euro }}</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>{{ z.b.marktwert_privat | euro }}</td></tr>
+            <tr><td><b>Händler-VK (Ziel)</b></td><td><b>{{ z.b.haendler_vk | euro }}</b></td></tr>
+            {% for name, wert in z.b.kosten_posten.items() %}<tr><td>− {{ name }}</td><td>{{ wert | euro }}</td></tr>{% endfor %}
+            <tr><td>− Ziel-Marge (netto)</td><td>{{ z.b.ziel_marge | euro }}</td></tr>
+            <tr><td>− {{ ust_label }}</td><td>{{ z.ust | euro }}</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>{{ z.b.max_ek | euro }}</td></tr>
+            <tr><td>Gewinn bei Kauf zum Angebotspreis</td><td>{{ z.b.potenzial | euro }}</td></tr>
+          </table>
+          <p class="hinweis">Basis: {{ z.b.vergleich_basis }}</p>
+        </div>
+        <div>
+          {% if z.brief %}
+          <textarea id="t{{ z.a.id }}">{{ z.brief }}</textarea>
+          {% else %}
+          <p class="hinweis">Für diese Anzeige wurde kein Anschreiben erzeugt{% if z.sperre %} ({{ z.sperre }}){% else %} (Ampel unter Schwelle){% endif %}.</p>
+          {% endif %}
+          <div class="aktionen">
+            {% if z.brief %}<button class="primaer" data-copy="t{{ z.a.id }}">Text kopieren &amp; Anzeige öffnen</button>{% endif %}
+            <a href="{{ z.a.url }}" target="_blank" rel="noopener">Anzeige öffnen</a>
+            <button data-done>Als kontaktiert markieren</button>
+          </div>
+          <p class="hinweis">Dauerhaft speichern: <code>python scout.py status {{ z.a.id }} kontaktiert</code></p>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+  </div>
+</div>
+<script>
+(function(){
+  var liste=document.getElementById('liste'), karten=[].slice.call(liste.children), filter='anschreiben';
+  function lade(){try{return JSON.parse(localStorage.getItem('scout-erledigt')||'{}')}catch(e){return {}}}
+  function sichere(o){try{localStorage.setItem('scout-erledigt',JSON.stringify(o))}catch(e){}}
+  var erledigt=lade();
+  karten.forEach(function(k){ if(erledigt[k.dataset.id]) k.classList.add('erledigt'); });
+  function zeige(){
+    var q=document.getElementById('q').value.toLowerCase();
+    karten.forEach(function(k){
+      var ok = filter==='alle' || (filter==='anschreiben'&&k.dataset.brief==='1') || (filter==='neu'&&k.dataset.neu==='1') || k.dataset.ampel===filter;
+      if(q && k.dataset.text.indexOf(q)<0) ok=false;
+      k.style.display = ok?'':'none';
+    });
+  }
+  function sortiere(){
+    var s=document.getElementById('sort').value;
+    karten.sort(function(a,b){
+      if(s==='verh') return a.dataset.verh-b.dataset.verh;
+      if(s==='pot') return b.dataset.pot-a.dataset.pot;
+      if(s==='preis') return a.dataset.preis-b.dataset.preis;
+      return a.dataset.zeit<b.dataset.zeit?1:-1;
+    }).forEach(function(k){liste.appendChild(k)});
+  }
+  document.querySelectorAll('.bar button').forEach(function(b){
+    b.onclick=function(){document.querySelectorAll('.bar button').forEach(function(x){x.classList.remove('an')});b.classList.add('an');filter=b.dataset.f;zeige();};
+  });
+  document.getElementById('q').oninput=zeige;
+  document.getElementById('sort').onchange=sortiere;
+  liste.addEventListener('click',function(e){
+    var karte=e.target.closest('.ad'); if(!karte) return;
+    if(e.target.closest('.kopf')){karte.classList.toggle('offen');return;}
+    var c=e.target.closest('[data-copy]');
+    if(c){
+      var t=document.getElementById(c.dataset.copy);
+      var fertig=function(){c.textContent='Kopiert ✓';setTimeout(function(){c.textContent='Text kopieren & Anzeige öffnen'},2000)};
+      if(navigator.clipboard){navigator.clipboard.writeText(t.value).then(fertig,function(){t.select();document.execCommand('copy');fertig()})}
+      else{t.select();document.execCommand('copy');fertig()}
+      window.open(karte.querySelector('a').href,'_blank','noopener');
+    }
+    if(e.target.closest('[data-done]')){
+      karte.classList.toggle('erledigt');
+      if(karte.classList.contains('erledigt')) erledigt[karte.dataset.id]=1; else delete erledigt[karte.dataset.id];
+      sichere(erledigt);
+    }
+  });
+  sortiere(); zeige();
+})();
+</script>
+</body>
+</html>
