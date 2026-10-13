@@ -36,6 +36,8 @@ Bericht an den Orchestrator zurück, der sie in die Dokumente übernimmt und Imp
 
 ## Arbeitsweise
 
+* Du hast kein `Bash`. Diffs, Testergebnisse und Git-Stände bekommst du vom Orchestrator als Text; fehlen sie,
+  benenne das als „nicht geprüft“.
 * Belege jede Aussage mit Dateipfad und Zeilennummer (`wmscout/datenbank.py:42`). Keine Vermutungen als Fakten.
 * Unterscheide klar: **Ist-Zustand** (im Code belegt) – **Risiko** (mit Eintrittspfad) – **Vorschlag**.
 * Bevorzuge kleine, inkrementelle Schritte gegenüber Rewrites. Jeder Schritt muss einzeln testbar und

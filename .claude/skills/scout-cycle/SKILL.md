@@ -23,6 +23,11 @@ Verbindlich: `CLAUDE.md`. Maßgeblicher Planungsstand: `docs/ROADMAP.md` (Backlo
 | Gleichzeitige Subagenten | höchstens **3**, nur für unabhängige Arbeit, nie dieselben Dateien |
 | Neue Hauptphase | **nur nach Freigabe** des Betreibers |
 | Merge nach `main` | **niemals** |
+| Parallele Pakete | je in einem **eigenen `git worktree`** mit eigenem Zweig vom Integrationszweig |
+| Abhängigkeit erfüllt | erst wenn der Vorgänger **im Integrationszweig gemergt** ist (keine gestapelten PRs, ADR-008) |
+| Planungsdokumente | `docs/ROADMAP.md`, `WORKLOG.md`, `TEST-REPORT.md` ändert **nur der Orchestrator** (Schritt G) |
+| Commits, Push, PR | nur der Orchestrator; Implementierungsagenten ändern Dateien, committen aber nicht |
+| Wartungsauftrag `.claude/loop.md` | läuft **nicht parallel** zu einem Durchgang dieses Skills |
 
 Sofort anhalten und berichten bei: kritischem, ungeklärtem Fehler; drohendem Datenverlust; unklaren Nutzungsrechten
 einer Quelle (Quelle → `BLOCKED`, zulässige Alternative vorbereiten); fehlenden Zugangsdaten (Integrationspunkt
@@ -79,6 +84,8 @@ vorbereiten, nicht raten); Bedarf an kostenpflichtigen Diensten, Dauerprozessen 
 
 `qa-security-reviewer` mit Diff (`git diff origin/claude/gifted-heisenberg-d1cjlr...HEAD`), Akzeptanzkriterien und
 Testergebnissen beauftragen. Bei Schema-/Architekturänderungen zusätzlich `scout-architect`.
+Dem Architekten (ohne `Bash`) Diff bzw. Dateiliste als Text mitgeben. Nach jedem QA-Lauf `git status` prüfen
+(ADR-018: QA darf nichts im Repository ändern).
 Befunde nach KRITISCH / HOCH / MITTEL / NIEDRIG erfassen. Paket auf `REVIEW` setzen.
 
 ## Schritt F – FIX (höchstens 3 Runden)

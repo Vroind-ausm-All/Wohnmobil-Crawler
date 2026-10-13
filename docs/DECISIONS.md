@@ -49,12 +49,13 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   **standardmäßig**: Die Suchaufträge in `config.yaml` zeigen auf Kleinanzeigen, und die Auto-Suche startet bei
   geöffneter App alle 3 Stunden (`app.auto_suche_stunden: 3`). Der Importer protokolliert nur eine Warnung. Das
   verstößt gegen die Projektregeln 11/12 (Risiko R1, KRITISCH).
-* **Entscheidung:** Unzulässige Direkt-Crawler sind **nicht standardmäßig aktiv**. Der Importer erzwingt die Freigabe:
-  Eine nicht freigegebene Quelle läuft nur, wenn der Betreiber sie in einer lokalen, nicht versionierten Einstellung
-  ausdrücklich auf eigene Verantwortung zulässt; Auto-Suche standardmäßig aus. Ersatz durch zulässige Eingangskanäle
-  (manueller Import, E-Mail-Suchbenachrichtigungen) in Phase 2. → Umsetzung als **P1-01**, erstes Paket der Phase 1.
-* **Folgen:** Nach der Umstellung findet die App ohne Betreiberentscheidung keine neuen Kleinanzeigen-Inserate mehr,
-  bis die zulässigen Kanäle aus Phase 2 bereitstehen. Deshalb braucht P1-01 die ausdrückliche Zustimmung des Betreibers.
+* **Entscheidung:** Der Importer verweigert Suche **und** Detailabruf für Quellen mit `freigegeben = False`;
+  Auto-Suche standardmäßig aus; ehrlicher User-Agent (P1-01a, ohne Abhängigkeit). Eine lokale Ausnahme „auf eigene
+  Verantwortung“ widerspräche Projektregel 12 und wird **nicht** auf Vorrat gebaut. Sie käme nur in Frage, wenn der
+  Betreiber Regel 12 in `CLAUDE.md` selbst ändert (P1-01b, BLOCKED, Frage F1). Ersatz durch zulässige Eingangskanäle
+  (manueller Import, E-Mail-Suchbenachrichtigungen) in Phase 2.
+* **Folgen:** Nach P1-01a findet die App keine neuen Kleinanzeigen-Inserate mehr per Abruf, bis die Kanäle aus Phase 2
+  bereitstehen. Der Betreiber wird vor dem Merge ausdrücklich darauf hingewiesen.
 
 ## ADR-006 – Handy-App als PWA, Server rechnet verbindlich · gilt
 
@@ -81,7 +82,12 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Entscheidung:** `claude/gifted-heisenberg-d1cjlr` ist der **Integrationszweig**. Jedes Arbeitspaket bekommt einen
   Zweig `claude/<phase>-<thema>` vom Integrationszweig und einen PR **gegen den Integrationszweig**; keine gestapelten
   PRs. `main` wird nur auf ausdrücklichen Wunsch des Betreibers per PR aktualisiert, nie automatisch.
-* **Folgen:** Pakete, die aufeinander aufbauen, werden nacheinander gemergt.
+* **Ergänzung nach Architekturprüfung (P0-07):** Parallele Pakete laufen je in einem eigenen `git worktree`. Eine
+  Abhängigkeit gilt erst als erfüllt, wenn der Vorgänger im Integrationszweig gemergt ist. `docs/ROADMAP.md`,
+  `WORKLOG.md` und `TEST-REPORT.md` ändert nur der Orchestrator. Ob eng gekoppelte Pakete desselben Agenten in einem
+  PR gebündelt werden dürfen, entscheidet der Betreiber (Frage F12).
+* **Folgen:** Pakete, die aufeinander aufbauen, werden nacheinander gemergt; die Merge-Geschwindigkeit des Betreibers
+  bestimmt, wie viele Pakete ein Durchgang schafft.
 
 ## ADR-009 – Versionierte Migrationen mit Backup · vorgeschlagen (Umsetzung Phase 1)
 
@@ -89,8 +95,10 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   ohne Backup. Die Phasen 2–3 brauchen tiefgreifende Schemaänderungen (Fahrzeuge/Inserate getrennt, Historie).
 * **Entscheidung:** Tabelle `schema_version`; nummerierte, idempotente Migrationsschritte in je einer Transaktion;
   vorher Backup über die SQLite-Backup-API mit `PRAGMA integrity_check`; Test mit Datenbanken jeder Vorversion;
-  Kompatibilitäts-View `anzeigen` während des Umbaus.
-* **Folgen:** Kein Schemawechsel ohne Rückweg; die bestehenden `ALTER TABLE`-Ergänzungen werden Migration 1–2.
+  Kompatibilitäts-View `anzeigen` während des Umbaus. Eine Versionszählung für alles: 1 = ZIP-Stand, 2 = heute,
+  3 = Phase 1, 4 = Phase 2, 5 = Phase 3, 6 = `bewertungen` (`docs/ARCHITECTURE.md` §8). Start bricht ab, wenn die
+  Datenbank neuer ist als der Code; ohne erfolgreiches Backup keine Migration.
+* **Folgen:** Kein Schemawechsel ohne Rückweg; die heutigen `ALTER TABLE`-Ergänzungen definieren Version 2.
 
 ## ADR-010 – Manueller Import ohne Serverabruf · vorgeschlagen (Umsetzung Phase 2)
 
@@ -109,7 +117,7 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 
 * **Kontext:** Heute ist die Anzeigen-ID der Primärschlüssel; Ankaufsstatus, Verfügbarkeit und Preis hängen am Inserat.
   Ein neu eingestelltes oder auf zwei Plattformen inseriertes Fahrzeug wird mehrfach geführt und ggf. erneut angeschrieben.
-* **Entscheidung:** `inserate` mit `UNIQUE(quelle, anzeigen_id)` (vor der zweiten Quelle, M2); `fahrzeuge` als eigene
+* **Entscheidung:** `inserate` mit `UNIQUE(plattform, anzeigen_id)` (vor der zweiten Quelle, Schema v4, ADR-016); `fahrzeuge` als eigene
   Identität (FIN, sonst Fingerabdruck mit Konfidenz); **Ankaufsstatus am Fahrzeug, Verfügbarkeit am Inserat, Kontakte
   als Ereignisse** (`kontakte`). Zusammenführungen unsicherer Treffer nur als Vorschlag mit Bestätigung.
 * **Alternativen:** Status weiter am Inserat und Dubletten nur anzeigen (einfacher, aber Doppelansprache bleibt möglich).
@@ -141,3 +149,29 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Entscheidung:** `wmscout/bewertung/` greift nicht auf Datenbank oder Netz zu und enthält keine quellenspezifische
   Logik; Statuskonstanten wandern in ein Domänenmodul. Gespeicherte Bewertungen tragen eine `modell_version`, damit
   Änderungen am Rechner nachvollziehbar bleiben.
+
+## ADR-016 – Plattform und Eingangskanal trennen · vorgeschlagen (vor Phase 2, Paket P2-00)
+
+* **Kontext:** Phase 2 bringt Push-Kanäle (E-Mail-Suchbenachrichtigungen, manueller Import), die Inserate derselben
+  Plattformen liefern wie ein Abruf. Heute ist die „Quelle“ zugleich Plattform und Zugriffsweg.
+* **Entscheidung:** `inserate` trägt `plattform` (kleinanzeigen, mobile_de, autoscout24, …) und ist über
+  `UNIQUE(plattform, anzeigen_id)` eindeutig. Der Eingangskanal (suche, api, email, manuell, detail) steht in
+  `beobachtungen.kanal`. Detailabruf nur, wenn die Plattform freigegeben ist und eine pull-fähige Quelle hat.
+* **Folgen:** Dasselbe Inserat aus E-Mail und manuellem Import ergibt einen Datensatz mit zwei Beobachtungen.
+
+## ADR-017 – Push-Eingänge über eine eigene Schnittstelle · vorgeschlagen (Paket P2-00)
+
+* **Entscheidung:** Push-Kanäle implementieren `Eingang.lese(roh: bytes, meta) -> Iterable[Inserat]`.
+  `Importer.importiere(inserate, kanal)` ist der einzige Schreibweg für Pull- und Push-Daten; Vertrags- und
+  Isolationstests gelten für beide Arten.
+* **Folgen:** `Quelle` (Pull) bleibt unverändert; neue Kanäle brauchen keinen Abruf.
+
+## ADR-018 – Prüfagent mit `Bash` · gilt
+
+* **Kontext:** Der Betreiber verlangt für Prüfagenten nur lesende Werkzeuge; `qa-security-reviewer` muss aber Tests
+  ausführen (`pytest`, `ruff`, `coverage`), wofür Claude Code nur `Bash` anbietet.
+* **Entscheidung:** QA erhält `Read, Grep, Glob, Bash`, kein `Edit`/`Write`. Schreibverbot im Repository über den
+  System-Prompt; der Orchestrator prüft nach jedem QA-Lauf `git status`. `scout-architect` und `source-researcher` haben
+  kein `Bash`. Eine technische Sperre über Deny-Regeln in `.claude/settings.json` (z. B. für `git commit`/`git push`)
+  wäre möglich, ist eine Änderung der Berechtigungen und bleibt dem Betreiber vorbehalten (Frage F13).
+* **Folgen:** Restrisiko, dass QA per Shell schreibt; wird durch `git status`-Kontrolle erkannt.

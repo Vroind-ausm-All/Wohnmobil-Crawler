@@ -47,6 +47,12 @@ Erstangebot · **Deal-Score 0–100** mit einzeln ausgewiesenen Komponenten.
   Vergleiche, ein Vergleich, Ausreißer, fehlende EZ/km), Monotonie (mehr km → nicht höherer Wert).
 * `.venv/bin/python -m pytest -q` und `.venv/bin/python -m ruff check .` grün.
 
+## Git
+
+Du änderst Dateien im Arbeitszweig, den der Orchestrator vorgibt. **Kein `git commit`, `git push`, `git merge`,
+kein Zweigwechsel, keine Änderung an `docs/ROADMAP.md`, `docs/WORKLOG.md`, `docs/TEST-REPORT.md`** – das erledigt der
+Orchestrator. Nie etwas nach `main`.
+
 ## Ausgabeformat
 
 Geänderte Dateien · Formeln (vorher/nachher) · Beispielrechnung · Tests mit Ergebnis · Annahmen, die der Betreiber

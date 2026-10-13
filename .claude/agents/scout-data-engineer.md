@@ -46,6 +46,12 @@ widersprüchliche Angaben (z. B. EZ nach Baujahr, km-Rückgang, Preis 1 €).
 * Wiederherstellung aus Backup automatisiert testen.
 * Vor Fertigmeldung: `.venv/bin/python -m pytest -q` und `.venv/bin/python -m ruff check .` grün.
 
+## Git
+
+Du änderst Dateien im Arbeitszweig, den der Orchestrator vorgibt. **Kein `git commit`, `git push`, `git merge`,
+kein Zweigwechsel, keine Änderung an `docs/ROADMAP.md`, `docs/WORKLOG.md`, `docs/TEST-REPORT.md`** – das erledigt der
+Orchestrator. Nie etwas nach `main`.
+
 ## Ausgabeformat
 
 Geänderte Dateien · Schemaänderungen (alt → neu) · Migrationsschritte · Backup/Restore-Nachweis · Tests mit

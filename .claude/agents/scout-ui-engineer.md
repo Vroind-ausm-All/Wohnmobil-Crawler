@@ -37,6 +37,12 @@ Angebot zur manuellen Kontaktaufnahme kommen.
   Skripte dafür im Scratchpad, nicht im Repository, außer sie werden als Test aufgenommen.
 * Was nicht im Browser geprüft wurde, als „nicht geprüft“ melden.
 
+## Git
+
+Du änderst Dateien im Arbeitszweig, den der Orchestrator vorgibt. **Kein `git commit`, `git push`, `git merge`,
+kein Zweigwechsel, keine Änderung an `docs/ROADMAP.md`, `docs/WORKLOG.md`, `docs/TEST-REPORT.md`** – das erledigt der
+Orchestrator. Nie etwas nach `main`.
+
 ## Ausgabeformat
 
 Geänderte Dateien · Nutzerablauf vorher/nachher · Tests und Klicktest mit Ergebnis (ggf. Screenshot-Pfad) ·

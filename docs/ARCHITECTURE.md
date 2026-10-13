@@ -73,14 +73,14 @@ config.yaml (suchen) → Suchauftrag → KleinanzeigenQuelle.suche → Hoefliche
 
 | ID | Risiko | Beleg | Schwere | Maßnahme | Paket |
 |---|---|---|---|---|---|
-| R1 | Nicht freigegebene Quelle (Kleinanzeigen-HTML) läuft standardmäßig, per Auto-Suche alle 3 h | `config.yaml:10-20,196`; `importer.py:187-188` nur Warnung | **KRITISCH** (Regel 11/12) | Freigabe im Importer erzwingen, Quelle und Auto-Suche standardmäßig aus; Betreiber entscheidet über lokale Ausnahme | P1-01 |
+| R1 | Nicht freigegebene Quelle (Kleinanzeigen-HTML) läuft standardmäßig, per Auto-Suche alle 3 h | `config.yaml:10-20,196`; `importer.py:39-40` nur Warnung | **KRITISCH** (Regel 11/12) | Importer verweigert Suche **und** Detailabruf für nicht freigegebene Quellen; Auto-Suche standardmäßig aus | P1-01a |
 | R3 | Keine Backups, keine Schema-Version; `ALTER TABLE` bei jedem Öffnen | `datenbank.py:49-53` | **KRITISCH** (blockiert alle Migrationen) | `scout.py sichern`/`wiederherstellen` über SQLite-Backup-API inkl. Fotos, `integrity_check`, `schema_version` | P1-02, P1-03 |
-| R2 | User-Agent gibt sich als Chrome aus | `config.yaml:32`, `netz.py` | HOCH | ehrlicher User-Agent mit Projektname | P1-01 |
+| R2 | User-Agent gibt sich als Chrome aus | `config.yaml:32`, `netz.py` | HOCH | ehrlicher User-Agent mit Projektname (Regel 11: keine gefälschten Browser-Fingerabdrücke) | P1-01a |
 | R4 | Schlüssel ohne Quelle | `datenbank.py:11,58`; `basis.py:103`; `rechner.py:176` | HOCH | `UNIQUE(quelle, anzeigen_id)` **vor** der zweiten Quelle | P2-02 |
-| R5 | „kontaktiert“ schon beim Kopieren; Nachfassen macht aus „abgesagt“ wieder „kontaktiert“ | `report.html:406`, `mobil.js:483`, `datenbank.py:139` | HOCH | Vorstatus „vorbereitet“, Knopf „gesendet bestätigen“; später Kontakte als Ereignisse | P1-06, P3-06 |
-| R6 | Globaler Lock umfasst Bewertung, Antwortversand und WhatsApp-HTTP (Timeout 20 s) | `api.py:57,495-497` | HOCH | Lock nur um DB-Zugriffe; Versand außerhalb; WhatsApp asynchron | P1-05 |
-| R7 | Mehrere SQLite-Verbindungen ohne WAL/`busy_timeout`; keine Laufsperre (App + `lauf.bat` parallel) | `app.py:285,328`; `datenbank.py:46` | HOCH | WAL, `busy_timeout`, Laufsperre | P1-04 |
-| R8 | Keine Fehlerisolation je Quelle/Suchauftrag | `importer.py:247-248,259-272` | HOCH | `try` je Auftrag und Quelle, Status je Quelle | P2-03 |
+| R5 | „kontaktiert“ schon beim Kopieren; Nachfassen macht aus „abgesagt“ wieder „kontaktiert“ | `report.html:406`, `mobil.js:483`, `datenbank.py:139` | HOCH | Statuswert „vorbereitet“, Knopf „gesendet bestätigen“; später Kontakte als Ereignisse | P1-06, P3-06 |
+| R6 | Globaler Lock umfasst Bewertung, Antwortversand und WhatsApp-HTTP (Timeout 20 s) | `api.py:57,495-497` | HOCH | Lock nur um DB-Zugriffe, Verbindung je Thread; Versand außerhalb; WhatsApp asynchron | P1-05 |
+| R7 | Mehrere SQLite-Verbindungen ohne WAL (nur Python-Standard-Wartezeit 5 s); alle HTTP-Threads teilen eine Verbindung; keine Laufsperre (App + `lauf.bat` parallel) | `app.py:59,102`; `scout.py:198`; `api.py:54`; `datenbank.py:46` | HOCH | WAL, `busy_timeout`, Laufsperre (Lease in `suchlaeufe`, Schema v3) | P1-04 |
+| R8 | Keine Fehlerisolation je Quelle/Suchauftrag | `importer.py:108-125` | HOCH | `try` je Auftrag und Quelle, Status je Quelle | P2-03 |
 | R9 | Verfügbarkeit nur geschätzt; Inserate nach 21 Tagen in der App nicht mehr bearbeitbar | `datenbank.py:99`; `api.py:74-78` | MITTEL | Spalte `verfuegbarkeit` + `zuletzt_bestaetigt` | P3-04 |
 | R10 | Preisverlauf geht verloren | `datenbank.py:73-76` | MITTEL | `preis_historie` (nur anhängen) | P2-02 (Start), P3-03 |
 | R11 | Dubletten flüchtig/lückenhaft; Ankaufsstatus am Inserat | `auswertung.py:24,74-83` | MITTEL | `fahrzeuge` mit Fingerabdruck, Zusammenführung nur als Vorschlag | P3-02 |
@@ -89,10 +89,14 @@ config.yaml (suchen) → Suchauftrag → KleinanzeigenQuelle.suche → Hoefliche
 | R14 | Besichtigung: letzter Schreiber gewinnt, Konflikt wird nur gemeldet | `api.py:434-437` | MITTEL | `UPDATE … WHERE version=?`, sonst 409 | P1-07 |
 | R15 | Bewertung hängt an der Datenbank | `auswertung.py:8,65`; `anschreiben.py:9` | MITTEL | `STATUS` in Domänenmodul; `bewerte_alle` bekommt Listen | P1-08 |
 | R16 | Firmen-/Mail-Daten in versionierter `config.yaml`; Passwort als CLI-Argument | `config.yaml:175-181,218-224`; `scout.py:189` | NIEDRIG | `config.local.yaml` (ignoriert) als Überlagerung | P1-09 |
-| R17 | Login-Bremse nur 1 s, Sitzungen 30 Tage | `api.py:352,500`; `team.py:21` | NIEDRIG | Sperre nach Fehlversuchen | P6 |
-| R18 | Python 3.10–3.12 zugelassen, CI testet nur 3.13 | `pyproject.toml:5`, `scout.py:21` | NIEDRIG | festlegen oder mittesten | P1-10 |
+| R17 | Login-Bremse nur 1 s, Sitzungen 30 Tage | `api.py:352,500`; `team.py:21` | NIEDRIG | Sperre nach Fehlversuchen | P1-13 |
+| R18 | Python 3.10–3.12 zugelassen, CI testet nur 3.13 | `pyproject.toml:6`, `scout.py:21` | NIEDRIG | festlegen oder mittesten | P1-10 |
+| R19 | Detailabruf ohne Freigabeprüfung; Inserate ohne `quelle` fallen auf Kleinanzeigen zurück – auch künftig manuell importierte Inserate würden nachgeladen (verletzt ADR-010) | `importer.py:78-100` | HOCH | Freigabeprüfung auch in `details()`; nur pull-fähige, freigegebene Plattformen | P1-01a |
+| R20 | Quellen kennen nur den Pull-Weg `suche()`; Plattform und Eingangskanal nicht getrennt – dasselbe Inserat per E-Mail und manuell ergäbe zwei Datensätze | `basis.py:111-135` | HOCH | ADR-016 (Plattform ≠ Kanal), ADR-017 (Push-Eingang) | P2-00 |
 
-Weitere Befunde der QA-Bestandsaufnahme: `docs/TEST-REPORT.md`.
+Weitere Befunde der QA-Bestandsaufnahme: `docs/TEST-REPORT.md`. R19/R20 stammen aus der Architekturprüfung der
+Planung (P0-07). Belege (Datei:Zeile) beziehen sich auf Commit 3f75f67 und werden von `tests/test_projekt.py` auf
+Existenz der Zeilen geprüft.
 
 ---
 
@@ -100,10 +104,13 @@ Weitere Befunde der QA-Bestandsaufnahme: `docs/TEST-REPORT.md`.
 
 ```
                        ┌──────────────────────────── wmscout ────────────────────────────┐
- Suchprofile (DB) ───▶ │ quellen/      Adapter je Quelle: manuell, email_*, mobile_de_api,│
- Benachrichtigungs-    │               kleinanzeigen (BLOCKED, standardmäßig aus)        │
- E-Mails (.eml/IMAP) ▶ │ netz.py       Abruf nur für freigegebene Quellen               │
- Nutzer-Import ──────▶ │ importer.py   Lauf je Quelle isoliert, Laufsperre, Kennzahlen    │
+ Suchprofile (DB) ───▶ │ quellen/      Pull-Quellen (suche/details): mobile_de_api, …;   │
+                       │               kleinanzeigen (BLOCKED, standardmäßig aus)        │
+ Benachrichtigungs-    │ eingang/      Push-Kanäle: Eingang.lese(roh, meta) → Inserate   │
+ E-Mails (.eml/IMAP) ▶ │               email_kleinanzeigen, email_autoscout, manuell     │
+ Nutzer-Import ──────▶ │ netz.py       Abruf nur für freigegebene Plattformen            │
+                       │ importer.py   importiere(inserate, kanal): einziger Schreibweg;  │
+                       │               Lauf je Quelle isoliert, Laufsperre, Kennzahlen    │
                        │ normalisierung/  Fahrzeug, Geo, Datenqualitäts-Markierungen      │
                        │ datenbank/    Schema, Migrationen, Backup, Fassade (Repository) │
                        │ domaene/      Status, Kontaktzustände (ohne I/O)                │
@@ -115,7 +122,10 @@ Weitere Befunde der QA-Bestandsaufnahme: `docs/TEST-REPORT.md`.
 
 ## 7. Ziel-Datenmodell
 
-Tabellennamen deutsch (ADR-007). Pflicht: `UNIQUE(quelle, anzeigen_id)`; Inserats-ID ist keine Fahrzeugidentität.
+Tabellennamen deutsch (ADR-007). Inserats-ID ist keine Fahrzeugidentität. **Plattform ≠ Eingangskanal** (ADR-016):
+`inserate` ist eindeutig über `UNIQUE(plattform, anzeigen_id)` (z. B. `kleinanzeigen`/123); auf welchem Weg ein
+Inserat ankam (Suche, API, E-Mail, manuell), steht in `beobachtungen.kanal`. So ergibt dasselbe Inserat aus E-Mail und
+manuellem Import nur einen Datensatz. In Tabellen und Texten unten steht „quelle“ für die Plattform.
 
 | Entität | Tabelle | Kernfelder | Herkunft |
 |---|---|---|---|
@@ -125,7 +135,7 @@ Tabellennamen deutsch (ADR-007). Pflicht: `UNIQUE(quelle, anzeigen_id)`; Inserat
 | vehicles | `fahrzeuge` | id, fingerabdruck, fin NULL, marke, serie, modell, art, ez_jahr, km_letzter, plz, ankauf_status, status_am, notiz, zusammengefuehrt_in | Normalisierung, Status aus `anzeigen` |
 | listings | `inserate` | id INTEGER PK, quelle, anzeigen_id, UNIQUE(quelle, anzeigen_id), fahrzeug_id →, oeffentliche_id, url, titel, Texte, preis, vb, anbieter_typ, verfuegbarkeit, zuletzt_bestaetigt, erstmals/zuletzt_gesehen, detail_geladen, details_json, qualitaet_json | `anzeigen` |
 | price_history | `preis_historie` | inserat_id, zeitpunkt, preis, vb, suchlauf_id, herkunft | `preis_vorher` + `preis` |
-| observations | `beobachtungen` | inserat_id, suchlauf_id, zeitpunkt, art (suche/detail/import/mail), preis, inhalt_hash | neu |
+| observations | `beobachtungen` | inserat_id, suchlauf_id, zeitpunkt, kanal (suche/api/email/manuell/detail), preis, inhalt_hash | neu |
 | valuations | `bewertungen` | inserat_id, zeitpunkt, modell_version, marktwert, spanne_von, spanne_bis, max_ek, erstangebot, sicherheit, n_vergleich, deal_score, komponenten_json | heute nur flüchtig |
 | contacts | `kontakte` | fahrzeug_id, inserat_id, nutzer_id, art (anschreiben/nachfassen/antwort), kanal, text, betrag, vorbereitet_am, bestaetigt_am | `kontaktiert_am`, `anschreiben_text` |
 
@@ -135,14 +145,20 @@ Indizes für SQLite tragbar; alternativ nur Änderungen speichern (Entscheidung 
 ## 8. Migrationsstrategie
 
 Jeder Schritt: **Backup vorher** (SQLite-Backup-API, `PRAGMA integrity_check`), eine Transaktion, idempotent,
-Eintrag in `schema_version`, Test gegen Fixtures jeder Vorversion (Ur-Schema aus dem ZIP-Stand = v1, heutiges
-Schema = v2). Rückweg: Backup zurückspielen; alte Tabellen werden umbenannt, nicht gelöscht.
+Eintrag in `schema_version`, Test gegen Fixtures jeder Vorversion. Rückweg: Backup zurückspielen; alte Tabellen werden
+umbenannt, nicht gelöscht.
 
-| Schritt | Phase | Inhalt |
+**Schemaversionen (eine Zählung für alles):** 1 = ZIP-Stand · 2 = heute (ALTER-TABLE-Ergänzungen) · 3 = Phase 1
+(`schema_version`, minimale `suchlaeufe` mit Lease) · 4 = Phase 2 · 5 = Phase 3 · 6 = `bewertungen` (Phase 5).
+**Schutzregeln:** Ist die Schemaversion der Datenbank höher als die dem Code bekannte, bricht der Start mit
+verständlicher Meldung ab (kein Schreiben mit altem Code). Ohne erfolgreiches Backup keine Migration. Wiederherstellung
+wird verweigert, solange ein Lauf oder die App aktiv ist.
+
+| Version | Phase | Inhalt |
 |---|---|---|
-| M1 | 1 | `schema_version` anlegen, Altbestände als v1/v2 erkennen; WAL, `busy_timeout`; Indizes auf `status`, `quelle`, `detail_geladen` |
-| M2 | 2 | `quellen`, `suchprofile`, `suchlaeufe`; `inserate` aus `anzeigen` (`quelle = COALESCE(quelle, 'kleinanzeigen')`); `oeffentliche_id` = alte ID bei Kleinanzeigen, sonst `<quelle>_<id>` (passt zu Routen `\w+` und `besichtigungen.anzeige_id`); `preis_historie` mit Herkunft „migration“ |
-| M3 | 3 | je Inserat ein Fahrzeug; Ankaufsstatus → `fahrzeuge`; „gelöscht“ → `verfuegbarkeit = offline`; `gewerblich` → `anbieter_typ` (Altdaten-Regel: Betreiberfrage); `kontakte` aus `anschreiben_text`; `besichtigungen.fahrzeug_id`; Dubletten nur als bestätigte Vorschläge |
+| v3 | 1 | `schema_version` anlegen, Altbestände als v1/v2 erkennen; minimale `suchlaeufe` (id, quelle, start, ende, laeuft_bis, ergebnis) als Laufsperre; WAL, `busy_timeout`; Indizes nur nach `EXPLAIN QUERY PLAN` |
+| v4 | 2 | `quellen`, `suchprofile`, `suchlaeufe` vollständig; `inserate` aus `anzeigen` (`plattform = COALESCE(quelle, 'kleinanzeigen')`), `beobachtungen` mit `kanal`; `oeffentliche_id` = alte ID bei Kleinanzeigen, sonst `<quelle>_<id>` (passt zu Routen `\w+` und `besichtigungen.anzeige_id`); `preis_historie` mit Herkunft „migration“ |
+| v5 | 3 | je Inserat ein Fahrzeug; Ankaufsstatus → `fahrzeuge`; „gelöscht“ → `verfuegbarkeit = offline`; `gewerblich` → `anbieter_typ` (Altdaten-Regel: Betreiberfrage); `kontakte` aus `anschreiben_text`; `besichtigungen.fahrzeug_id`; Dubletten nur als bestätigte Vorschläge |
 
 **Kompatibilitätsschicht:** Die Klasse `Datenbank` bleibt Fassade mit den bisherigen Methoden und Zeilen-Dicts.
 Die alte Tabelle wird zu `anzeigen_alt_v2` umbenannt; eine lesende View `anzeigen` mit den bisherigen Spalten hält

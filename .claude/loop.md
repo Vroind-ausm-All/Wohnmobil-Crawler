@@ -5,7 +5,9 @@ Verwendung in Claude Code: `/loop 4h Führe den Wartungsauftrag aus .claude/loop
 was innerhalb der aktuellen Freigabe liegt, und meldet alles andere.
 
 Die eigentliche Implementierungsarbeit erledigt der Skill `scout-cycle`. Dieser Wartungsauftrag startet **keine**
-neuen Arbeitspakete, sondern hält bestehende Arbeit grün und meldet Entscheidungsbedarf.
+neuen Arbeitspakete, sondern hält bestehende Arbeit grün und meldet Entscheidungsbedarf. Er läuft **nicht parallel** zu
+einem Durchgang von `scout-cycle`; läuft gerade ein Durchgang (Paket `IN_PROGRESS` mit offenem Arbeitsbaum), nur
+berichten.
 
 ## Bei jedem Durchlauf
 

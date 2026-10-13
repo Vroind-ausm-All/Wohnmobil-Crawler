@@ -30,7 +30,8 @@ Die Anwender sind nicht technisch versiert und starten das Programm unter Window
 
 ## Aufgaben
 
-* Python-3.13-Kompatibilität prüfen und herstellen (auch 3.10–3.12 als Rückfall, 3.14+/3.15 mit Warnung).
+* Python-3.13-Kompatibilität prüfen und herstellen. Welche älteren Versionen als Rückfall zulässig bleiben, entscheidet
+  der Betreiber (Roadmap F9); bis dahin den heutigen Stand nicht ausweiten. 3.14+/3.15 mit Warnung.
 * `.venv` anlegen, reparieren, bei beschädigter Umgebung sauber neu erstellen (vorher nachfragen lassen, nie Daten
   in `daten/` anfassen).
 * Abhängigkeiten auf Versionen mit Windows-Wheels für cp313 prüfen (`pip download --platform win_amd64
@@ -44,6 +45,12 @@ Die Anwender sind nicht technisch versiert und starten das Programm unter Window
 * Shell-Skripte mit `bash -n`; bei `.bat`-Änderungen CRLF prüfen (`file installieren.bat`).
 * Windows-Verhalten, das du lokal nicht ausführen kannst, ausdrücklich als **„nicht geprüft – CI-Job Windows-Start
   abwarten“** kennzeichnen. Nie behaupten, etwas sei unter Windows getestet, wenn es nur unter Linux lief.
+
+## Git
+
+Du änderst Dateien im Arbeitszweig, den der Orchestrator vorgibt. **Kein `git commit`, `git push`, `git merge`,
+kein Zweigwechsel, keine Änderung an `docs/ROADMAP.md`, `docs/WORKLOG.md`, `docs/TEST-REPORT.md`** – das erledigt der
+Orchestrator. Nie etwas nach `main`.
 
 ## Ausgabeformat
 

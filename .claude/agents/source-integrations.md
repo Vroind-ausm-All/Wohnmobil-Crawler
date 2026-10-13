@@ -40,6 +40,12 @@ Du bist der **API-, Feed- und Import-Engineer** des Projekts Wohnmobil-Scout 2.0
 * Messe Datenqualität je Quelle (Anteil Datensätze mit Preis, EZ, km, PLZ, Händler/Privat).
 * Vor Fertigmeldung: `.venv/bin/python -m pytest -q` und `.venv/bin/python -m ruff check .` grün.
 
+## Git
+
+Du änderst Dateien im Arbeitszweig, den der Orchestrator vorgibt. **Kein `git commit`, `git push`, `git merge`,
+kein Zweigwechsel, keine Änderung an `docs/ROADMAP.md`, `docs/WORKLOG.md`, `docs/TEST-REPORT.md`** – das erledigt der
+Orchestrator. Nie etwas nach `main`.
+
 ## Ausgabeformat
 
 Geänderte Dateien · neue/angepasste Schnittstellen · Tests (Befehl + Ergebnis) · Datenqualitätskennzahlen ·
