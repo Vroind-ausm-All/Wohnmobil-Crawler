@@ -58,12 +58,79 @@ filter:
 
 # --- 4. Einkaufspreis-Rechner ---------------------------------
 rechner:
-  # Marktwert = Median vergleichbarer Angebote (gleiche Art + Marke,
-  # EZ ± jahre_toleranz, km ± km_toleranz). Ohne genug Vergleiche
-  # wird der Angebotspreis der Anzeige selbst genommen.
-  vergleich_min_anzahl: 5
-  vergleich_jahre_toleranz: 2
-  vergleich_km_toleranz: 40000
+  # Vergleichsangebote: gleiche Art, EZ ± jahre_toleranz, km ± km_toleranz.
+  # Jeder Vergleich wird auf Alter, km und Ausstattung DIESES Fahrzeugs umgerechnet;
+  # gleiche Marke zählt doppelt, nähere Baujahre/km-Stände mehr.
+  vergleich_min_anzahl: 5          # ab so vielen Vergleichen gilt die Schätzung als "mittel" sicher
+  vergleich_jahre_toleranz: 3
+  vergleich_km_toleranz: 50000
+  # Wenige Vergleiche werden zum Referenzmodell hin gemittelt:
+  # Gewicht Markt = n / (n + k)  → bei k = 4: 4 Vergleiche 50 %, 12 Vergleiche 75 %, 36 Vergleiche 90 %
+  vergleich_gewicht_k: 4
+
+  # Referenzmodell: Neupreis heute × Restwert nach Alter × km-Faktor × Wertfaktoren.
+  # Es ist der Startwert, solange die Datenbank noch wenige Vergleiche hat –
+  # danach kalibrieren die echten Angebote das Modell automatisch.
+  marktmodell:
+    neupreis_art:                  # typischer Neupreis heute inkl. üblicher Ausstattung
+      Kastenwagen: 62000
+      Teilintegrierter: 82000
+      Alkoven: 76000
+      Integrierter: 118000
+      Wohnwagen: 30000
+      Sonstige: 65000
+    markenklassen:                 # nicht genannte Marken: Faktor 1,0
+      - {name: Premium,  faktor: 1.35, marken: [Carthago, Concorde, Morelo, Niesmann, Frankia]}
+      - {name: Gehoben,  faktor: 1.12, marken: [Hymer, Rapido, Malibu, Eura Mobil, Laika, Westfalia, Volkswagen, Bimobil, Kabe]}
+      - {name: Einstieg, faktor: 0.90, marken: [Sunlight, Carado, McLouis, Rimor, Roller Team, Elnagh, Benimar, Sun Living, Etrusco, Ahorn, Weinsberg]}
+    restwert:                      # Anteil vom heutigen Neupreis nach Alter in Jahren (dazwischen linear)
+      0: 0.88
+      1: 0.83
+      2: 0.78
+      3: 0.74
+      5: 0.67
+      7: 0.61
+      10: 0.52
+      12: 0.46
+      15: 0.38
+      20: 0.27
+      25: 0.19
+      30: 0.14
+    km_pro_jahr_ueblich: 10000     # Laufleistung, die für das Alter "normal" ist
+    km_abschlag_pro_10000: 0.015   # je 10.000 km darüber −1,5 %
+    km_zuschlag_pro_10000: 0.010   # je 10.000 km darunter +1,0 %
+    km_korrektur_max: 0.12         # höchstens ± 12 %
+    unsicherheit_ohne_vergleich: 0.15
+
+  # Ausstattung (+) und genannte Mängel (−) aus Titel und Beschreibung.
+  # Verneinte Nennungen ("keine Feuchtigkeit", "rostfrei") zählen nicht.
+  # muster = regulärer Ausdruck, passt ab Wortanfang, Groß-/Kleinschreibung egal.
+  wertfaktoren:
+    max_plus: 0.06
+    max_minus: 0.15
+    liste:
+      - {name: Automatik,            wert: 0.030, muster: "automatik|comfort-?matic|tronic\\b|wandler"}
+      - {name: Solaranlage,          wert: 0.010, muster: "solar"}
+      - {name: Lithium-Batterie,     wert: 0.010, muster: "lithium|lifepo"}
+      - {name: Luftfederung,         wert: 0.010, muster: "(zusatz)?luftfederung"}
+      - {name: Aufbau-Klimaanlage,   wert: 0.010, muster: "dachklima|aufbauklima|klimaanlage (im|für den) (aufbau|wohnraum)"}
+      - {name: Sat-Anlage,           wert: 0.005, muster: "sat-?anlage|satanlage|sat-?schüssel|oyster|teleco|kathrein"}
+      - {name: Markise,              wert: 0.005, muster: "markise"}
+      - {name: Rückfahrkamera,       wert: 0.005, muster: "rückfahrkamera|rueckfahrkamera"}
+      - {name: Scheckheft,           wert: 0.010, muster: "scheckheft|lückenlos(e)? (wartung|service)"}
+      - {name: Dichtigkeitsprüfung,  wert: 0.010, muster: "dichtigkeitsprüfung|dichtheitsprüfung|dichtigkeitsprotokoll"}
+      - {name: Garagen-/Hallenplatz, wert: 0.010, muster: "garagengepflegt|garagenfahrzeug|hallenstellplatz|in (der |einer )?halle (gestanden|untergestellt)|unterstellplatz"}
+      - {name: Nichtraucher,         wert: 0.005, muster: "nichtraucher"}
+      - {name: Feuchtigkeit,         wert: -0.060, muster: "feuchtigkeit(?!s(messung|prüfung|test|check|frei))|feuchte stellen|feuchtigkeitsschaden"}
+      - {name: Wasserschaden,        wert: -0.080, muster: "wasserschaden|wassereintritt"}
+      - {name: Undichtigkeit,        wert: -0.050, muster: "undicht"}
+      - {name: Delamination,         wert: -0.080, muster: "delamin"}
+      - {name: Rost,                 wert: -0.030, muster: "rost(?!schutz|frei)|durchgerostet|angerostet"}
+      - {name: Hagelschaden,         wert: -0.050, muster: "hagel-?schaden|hagelschäden|hageldellen"}
+      - {name: HU abgelaufen,        wert: -0.030, muster: "(tüv|hu) (ist )?abgelaufen|ohne (tüv|hu)\\b|kein (tüv|hu)\\b"}
+      - {name: Defekt genannt,       wert: -0.040, muster: "defekt"}
+      - {name: Reparaturbedarf,      wert: -0.060, muster: "reparaturbedürftig|an bastler|für bastler|bastlerfahrzeug"}
+
   # Privat-Angebotspreise liegen über dem, was am Ende gezahlt wird
   abschlag_angebot_auf_privatwert: 0.07
   # Händler-Verkaufspreis liegt über Privatwert (Gewährleistung, Aufbereitung, Finanzierung)
@@ -89,8 +156,11 @@ rechner:
   ziel_marge_min: 2500
   # Differenzbesteuerung §25a UStG: USt nur auf die Marge (19/119)
   differenzbesteuerung: true
-  # Erstes Angebot an den Verkäufer = Max-EK × Faktor (Verhandlungsspielraum)
+  # Erstes Angebot an den Verkäufer = Max-EK × Faktor (Verhandlungsspielraum) ...
   erstangebot_faktor: 0.92
+  # ... aber nie unter diesem Anteil vom Marktwert privat (kein Lockangebot).
+  # Liegt sogar der Max-EK darunter, wird der Max-EK angeboten. 0 = aus.
+  fair_untergrenze_privatwert: 0.75
   # Bewertung: Angebotspreis / Max-EK
   ampel:
     gruen_bis: 1.10    # Verkäufer will max. 10 % mehr als wir zahlen können

@@ -1,17 +1,43 @@
-{# Jinja2-Vorlage. Verfügbare Felder: titel, marke, ez_jahr, km, preis, ort, erstangebot,
-   max_ek, ampel, ort_kurz, firma, ansprechpartner, telefon, firmen_ort.
-   Dieser Kommentarblock erscheint nicht im Anschreiben. -#}
+{# Jinja2-Vorlage für das Anschreiben. Dieser Kommentarblock erscheint nicht im Text.
+   Verfügbare Felder:
+     fahrzeug      „Knaus Sky TI 650 MEG“ bzw. „Knaus-Wohnmobil“ (Marke + erkanntes Modell)
+     marke, modell, titel (Anzeigentitel), art („Teilintegrierter“), art_plural („Teilintegrierte“)
+     ez_jahr, alter, alters_stufe (jung | mittel | aelter | alt | unbekannt), km, km_text („rund 85.000 km“)
+     preis (Wunschpreis), vb (True/False), ort_kurz
+     mit_angebot   False, wenn keine Bewertung möglich war (z. B. EZ fehlt) → Text ohne Betrag
+     erstangebot, max_ek, ampel (gruen | gelb | rot), preisbasis („an vergleichbaren Angeboten …“)
+     pruefpunkte   Satz, worauf es bei diesem Baujahr ankommt
+     unterlagen    gewünschte Fotos/Unterlagen passend zum Alter
+     ausstattung   erkannte Ausstattung („Markise, Solaranlage und Rückfahrkamera“) – kann leer sein
+     gepflegt      erkannte Pflegenachweise („Scheckheft und Dichtigkeitsprüfung“) – kann leer sein
+     firma, ansprechpartner, telefon, firmen_ort
+-#}
 Hallo,
 
-ich habe Ihr Inserat „{{ titel }}“ gesehen und interessiere mich für das Fahrzeug. Damit Sie gleich Bescheid wissen: Ich schreibe Ihnen als gewerblicher Ankäufer ({{ firma }}, {{ firmen_ort }}).
+ich habe Ihr Inserat zum {{ fahrzeug }}{% if ez_jahr %} (EZ {{ ez_jahr }}{% if km_text %}, {{ km_text }}{% endif %}){% endif %} gesehen und habe ernsthaftes Interesse. Damit Sie gleich Bescheid wissen: Ich schreibe Ihnen als gewerblicher Ankäufer ({{ firma }}, {{ firmen_ort }}).
 
-{% if ampel == "gruen" %}
-Ihr Fahrzeug passt gut in unseren Bestand. Vorbehaltlich einer kurzen Besichtigung könnte ich Ihnen {{ erstangebot | euro }} anbieten – Zahlung sofort per Überweisung oder bar, Abholung durch uns, Abmeldung und Papierkram übernehmen wir.
-{% else %}
-Bei Ihrem Wunschpreis von {{ preis | euro }} kommen wir als Händler leider nicht ganz mit, weil bei uns noch Aufbereitung, Gasprüfung und Gewährleistung dazukommen. Realistisch könnte ich Ihnen nach Besichtigung um die {{ erstangebot | euro }} anbieten. Dafür ist der Verkauf für Sie unkompliziert: sofortige Zahlung, Abholung durch uns, keine Probefahrten mit Fremden, keine Haftung nach dem Verkauf.
+{% if ez_jahr %}
+{% if modell %}Ein {{ fahrzeug }} aus {{ ez_jahr }}{% elif marke %}Ein {{ art }} von {{ marke }} aus {{ ez_jahr }}{% else %}Ein {{ art }} aus {{ ez_jahr }}{% endif %} passt gut zu dem, was unsere Kunden suchen.{% if ausstattung %} Die Ausstattung mit {{ ausstattung }} ist für uns ein klares Plus.{% endif %}{% if gepflegt %} Schön, dass Sie {{ gepflegt }} erwähnen – das spricht für ein gepflegtes Fahrzeug.{% endif %}
+
+
+{{ pruefpunkte }}
 {% endif %}
 
-Falls das für Sie infrage kommt: Wann wäre eine Besichtigung in {{ ort_kurz }} möglich? Ein paar Fotos von Aufbau (Feuchtigkeit), Fahrzeugschein und Serviceheft vorab wären super.
+{% if mit_angebot %}
+{% if ampel == "gruen" %}
+Vorbehaltlich einer Besichtigung mit kurzer Probefahrt und Feuchtigkeitsmessung – und vorausgesetzt, der Zustand entspricht Ihrer Beschreibung – biete ich Ihnen für Ihr Fahrzeug {{ erstangebot | euro }} an.
+{% else %}
+Ihren Wunschpreis von {{ preis | euro }} kann ich als Händler leider nicht ganz erreichen, weil bei uns noch Aufbereitung, Gasprüfung, Gewährleistung und Standzeit dazukommen.{% if not vb %} Mir ist klar, dass Sie keinen Verhandlungsspielraum angegeben haben – trotzdem möchte ich Ihnen ein ehrliches Angebot machen.{% endif %} Vorbehaltlich einer Besichtigung mit kurzer Probefahrt und Feuchtigkeitsmessung – und vorausgesetzt, der Zustand entspricht Ihrer Beschreibung – biete ich Ihnen für Ihr Fahrzeug {{ erstangebot | euro }} an.
+{% endif %}
+
+Der Betrag orientiert sich {{ preisbasis }} und berücksichtigt Alter, Laufleistung und Ausstattung. Das Angebot ist unverbindlich und steht unter dem Vorbehalt der Besichtigung; den endgültigen Kaufpreis legen wir gemeinsam vor Ort fest.
+
+Für Sie bedeutet das: Zahlung sofort per Überweisung oder bar, Abholung durch uns, die Abmeldung übernehmen wir – und keine Probefahrten mit Fremden.
+{% else %}
+Damit ich Ihnen ein konkretes Angebot machen kann, bräuchte ich noch {% if not ez_jahr %}die Erstzulassung{% if not km %} und {% endif %}{% endif %}{% if not km %}den Kilometerstand{% endif %}{% if ez_jahr and km %}ein paar Angaben zum Zustand{% endif %}. Ein Angebot mache ich Ihnen dann gern – vorbehaltlich einer Besichtigung.
+{% endif %}
+
+Wenn das für Sie infrage kommt: Wann würde Ihnen eine Besichtigung in {{ ort_kurz }} passen? Vorab wären ein paar Fotos hilfreich: {{ unterlagen }}.
 
 Und falls nicht – kein Problem, dann viel Erfolg beim Verkauf!
 

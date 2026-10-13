@@ -16,22 +16,31 @@ CREATE TABLE IF NOT EXISTS anzeigen (
     detail_geladen INTEGER DEFAULT 0,
     erstmals_gesehen TEXT, zuletzt_gesehen TEXT,
     preis_vorher INTEGER,
-    status TEXT DEFAULT 'neu',      -- neu | kontaktiert | uninteressant | gekauft
-    notiz TEXT
+    status TEXT DEFAULT 'neu',      -- neu | kontaktiert | uninteressant | gekauft | gelöscht
+    notiz TEXT,
+    bild TEXT, kontaktiert_am TEXT, anschreiben_text TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_zuletzt ON anzeigen(zuletzt_gesehen);
 """
+# Spalten, die nach Version 1 dazugekommen sind (ältere Datenbanken werden beim Start ergänzt)
+NEUE_SPALTEN = {"bild": "TEXT", "kontaktiert_am": "TEXT", "anschreiben_text": "TEXT"}
 
 FELDER_UPDATE = ["url", "suche", "titel", "preis", "vb", "ort", "km", "ez_jahr", "marke",
-                 "kurzbeschreibung", "gewerblich"]
+                 "kurzbeschreibung", "gewerblich", "bild"]
 
 
 class Datenbank:
     def __init__(self, pfad: str):
         Path(pfad).parent.mkdir(parents=True, exist_ok=True)
-        self.con = sqlite3.connect(pfad)
+        # check_same_thread=False: die App bedient Anfragen nacheinander in einem Server-Thread
+        self.con = sqlite3.connect(pfad, check_same_thread=False)
         self.con.row_factory = sqlite3.Row
         self.con.executescript(SCHEMA)
+        vorhanden = {r["name"] for r in self.con.execute("PRAGMA table_info(anzeigen)")}
+        for spalte, typ in NEUE_SPALTEN.items():
+            if spalte not in vorhanden:
+                self.con.execute(f"ALTER TABLE anzeigen ADD COLUMN {spalte} {typ}")
+        self.con.commit()
 
     def speichere_treffer(self, a: dict, suche: str) -> str:
         """Fügt ein oder aktualisiert. Rückgabe: 'neu', 'preis' (Preis gesenkt) oder 'bekannt'."""
@@ -83,8 +92,22 @@ class Datenbank:
     def alle_mit_preis(self) -> list[sqlite3.Row]:
         return self.con.execute("SELECT * FROM anzeigen WHERE preis IS NOT NULL").fetchall()
 
-    def setze_status(self, ad_id: str, status: str, notiz: str | None = None) -> bool:
-        cur = self.con.execute("UPDATE anzeigen SET status=?, notiz=COALESCE(?, notiz) WHERE id=?",
-                               (status, notiz, ad_id))
+    def setze_status(self, ad_id: str, status: str, notiz: str | None = None, text: str | None = None) -> bool:
+        """Bei 'kontaktiert' werden Zeitpunkt und gesendeter Text gespeichert, bei 'neu' zurückgesetzt."""
+        jetzt = datetime.now().isoformat(timespec="seconds")
+        if status == "kontaktiert":
+            sql, werte = ("UPDATE anzeigen SET status=?, notiz=COALESCE(?, notiz), kontaktiert_am=?, "
+                          "anschreiben_text=COALESCE(?, anschreiben_text) WHERE id=?", (status, notiz, jetzt, text, ad_id))
+        elif status == "neu":
+            sql, werte = ("UPDATE anzeigen SET status=?, notiz=COALESCE(?, notiz), kontaktiert_am=NULL WHERE id=?",
+                          (status, notiz, ad_id))
+        else:
+            sql, werte = "UPDATE anzeigen SET status=?, notiz=COALESCE(?, notiz) WHERE id=?", (status, notiz, ad_id)
+        cur = self.con.execute(sql, werte)
+        self.con.commit()
+        return cur.rowcount > 0
+
+    def setze_notiz(self, ad_id: str, notiz: str) -> bool:
+        cur = self.con.execute("UPDATE anzeigen SET notiz=? WHERE id=?", (notiz, ad_id))
         self.con.commit()
         return cur.rowcount > 0

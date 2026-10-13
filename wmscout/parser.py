@@ -10,17 +10,9 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
+from .fahrzeug import ist_basismarke, marke_aus_text, normalisiere_marke
+
 BASIS = "https://www.kleinanzeigen.de"
-
-MARKEN = [
-    "Adria", "Bürstner", "Carado", "Carthago", "Chausson", "Challenger", "Concorde",
-    "Dethleffs", "Eura Mobil", "Fendt", "Fiat", "Ford", "Frankia", "Globecar",
-    "Hobby", "Hymer", "Knaus", "Laika", "LMC", "Malibu", "McLouis", "Mercedes",
-    "Morelo", "Niesmann", "Pilote", "Pössl", "Rapido", "Rimor", "Roller Team",
-    "Sunlight", "Tabbert", "TEC", "Volkswagen", "VW", "Weinsberg", "Westfalia",
-    "Clever", "Vantourer", "Sun Living", "Benimar", "Itineo", "Elnagh", "Etrusco",
-]
-
 
 def _text(el) -> str:
     return " ".join(el.get_text(" ", strip=True).split()) if el else ""
@@ -48,11 +40,15 @@ def ez_aus_text(text: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def marke_aus_text(text: str) -> str | None:
-    t = text.lower()
-    for marke in MARKEN:
-        if re.search(r"\b" + re.escape(marke.lower()) + r"\b", t):
-            return "Volkswagen" if marke == "VW" else marke
+def bild_url(el) -> str | None:
+    """Vorschaubild einer Trefferliste (Kleinanzeigen lädt Bilder teils erst per data-imgsrc)."""
+    if not el:
+        return None
+    for kandidat in [el, *el.select("[data-imgsrc], img")]:
+        for attr in ("data-imgsrc", "data-src", "src"):
+            url = kandidat.get(attr)
+            if url and url.startswith("http") and "placeholder" not in url:
+                return url
     return None
 
 
@@ -92,6 +88,7 @@ def parse_suchseite(html: str) -> list[dict]:
             "km": km_aus_text(alles),
             "ez_jahr": ez_aus_text(alles),
             "marke": marke_aus_text(titel + " " + beschreibung),
+            "bild": bild_url(art.select_one(".aditem-image, .imagebox")),
             "gewerblich": gewerblich,
             "ist_gesuch": "Gesuch" in _text(art),
         })
@@ -125,9 +122,10 @@ def parse_detailseite(html: str) -> dict:
     alles = " ".join([titel, beschreibung] + [f"{k} {v}" for k, v in details.items()])
     km = km_aus_text(detail("Kilometerstand")) or km_aus_text(alles)
     ez = ez_aus_text("Erstzulassung " + detail("Erstzulassung")) or ez_aus_text(alles)
-    marke = detail("Marke") or marke_aus_text(titel + " " + beschreibung)
-    if marke and marke.lower() in ("weitere marken", "andere"):
-        marke = marke_aus_text(titel + " " + beschreibung)
+    # Aufbauhersteller aus dem Text schlägt Basisfahrzeug/„Weitere Marken“ aus dem Feld
+    marke = normalisiere_marke(detail("Marke"))
+    if not marke or ist_basismarke(marke) or marke.lower() in ("weitere marken", "andere", "sonstige"):
+        marke = marke_aus_text(titel) or marke_aus_text(beschreibung) or (marke if ist_basismarke(marke) else None)
 
     return {
         "titel": titel or None,

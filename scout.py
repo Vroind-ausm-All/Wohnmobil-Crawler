@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Wohnmobil-Scout – Kleinanzeigen-Crawler, Händler-EK-Rechner und Anschreiben.
 
+  python scout.py app                       Browser-App: Wohnmobile anklicken und anschreiben
   python scout.py lauf                      Crawlen + bewerten + Report (+ Mail)
   python scout.py report                    Nur Report neu erzeugen (ohne Internet)
-  python scout.py rechne --preis 32900 --ez 2016 --km 98000 [--marktwert 34000]
+  python scout.py rechne --preis 32900 --ez 2016 --km 98000 --titel "Knaus Sky TI 650 MEG" [--anschreiben]
   python scout.py status <ID> kontaktiert   Status setzen (neu|kontaktiert|uninteressant|gekauft)
 """
 from __future__ import annotations
@@ -16,9 +17,10 @@ from pathlib import Path
 
 import yaml
 
-from wmscout.anschreiben import euro
+from wmscout.anschreiben import Anschreiber, euro
 from wmscout.crawler import Crawler
 from wmscout.db import Datenbank
+from wmscout.fahrzeug import ergaenze_fahrzeug
 from wmscout.rechner import Rechner
 from wmscout.report import bewerte_alle, schreibe_ausgaben, sende_mail
 
@@ -56,11 +58,20 @@ def cmd_report(cfg, db, args):
 
 
 def cmd_rechne(cfg, db, args):
-    a = {"id": "manuell", "preis": args.preis, "ez_jahr": args.ez, "km": args.km, "marke": args.marke,
-         "suche": args.art}
-    vergleich = [dict(r) for r in db.alle_mit_preis()]
+    a = ergaenze_fahrzeug({"id": "manuell", "preis": args.preis, "ez_jahr": args.ez, "km": args.km,
+                           "marke": args.marke, "titel": args.titel or args.marke or "", "beschreibung": args.text,
+                           "suche": args.art, "ort": args.ort, "vb": True})
+    vergleich = [ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()]
     b = Rechner(cfg).bewerte(a, vergleich, marktwert_manuell=args.marktwert)
-    print(f"\nVergleichspreis Angebote : {euro(b.marktwert_angebote)}   ({b.vergleich_basis}, n={b.vergleich_anzahl})")
+    print(f"\nFahrzeug                 : {a['fahrzeug']} ({b.art}, EZ {a['ez_jahr'] or '?'}, "
+          f"{a['km'] or '?'} km)")
+    if b.modellwert:
+        print(f"Referenzwert (Modell)    : {euro(b.modellwert)}   (km-Korrektur {b.km_korrektur:+.1%})")
+    for n, w in b.wertfaktoren.items():
+        print(f"  {n:<23}: {w:+.1%}")
+    print(f"Marktniveau Angebote     : {euro(b.marktwert_angebote)}   Sicherheit {b.sicherheit}"
+          + (f", plausibel {euro(b.spanne_von)} – {euro(b.spanne_bis)}" if b.spanne_von else ""))
+    print(f"  Basis: {b.vergleich_basis}")
     print(f"Marktwert privat         : {euro(b.marktwert_privat)}")
     print(f"Händler-VK (Ziel)        : {euro(b.haendler_vk)}")
     for n, w in b.kosten_posten.items():
@@ -69,9 +80,20 @@ def cmd_rechne(cfg, db, args):
     print("-" * 46)
     print(f"MAX. EINKAUFSPREIS       : {euro(b.max_ek)}")
     print(f"Erstangebot              : {euro(b.erstangebot)}")
-    if b.angebotspreis:
+    if b.fair_anteil:
+        print(f"Fair-Check               : Erstangebot {b.fair_anteil:.0%}, Max-EK {b.max_anteil:.0%} vom Marktwert privat")
+    if b.fair_hinweis:
+        print(f"  Hinweis: {b.fair_hinweis}")
+    if b.angebotspreis and b.verhaeltnis:
         print(f"Angebot / Max-EK         : {b.verhaeltnis:.0%}  → Ampel {b.ampel.upper()}")
         print(f"Gewinn bei Angebotspreis : {euro(b.potenzial)}")
+    if args.anschreiben:
+        print("\n--- Anschreiben ---\n" + Anschreiber(cfg, BASIS).text(a, b))
+
+
+def cmd_app(cfg, db, args):
+    from wmscout.app import starte
+    starte(cfg, db, BASIS, port=args.port, browser=not args.kein_browser)
 
 
 def cmd_status(cfg, db, args):
@@ -83,6 +105,9 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--config", default="config.yaml")
     sub = p.add_subparsers(dest="cmd", required=True)
+    a = sub.add_parser("app", help="Browser-App starten: anklicken, anschreiben, Status speichern")
+    a.add_argument("--port", type=int, default=8765)
+    a.add_argument("--kein-browser", action="store_true", help="Browser nicht automatisch öffnen")
     sub.add_parser("lauf", help="crawlen, bewerten, Report erzeugen")
     sub.add_parser("report", help="Report aus vorhandenen Daten neu erzeugen")
     r = sub.add_parser("rechne", help="Einzelfahrzeug durchrechnen")
@@ -90,8 +115,12 @@ def main():
     r.add_argument("--ez", type=int, help="Erstzulassungsjahr")
     r.add_argument("--km", type=int)
     r.add_argument("--marke")
-    r.add_argument("--art", default="Teilintegrierter", help="Name einer Suche aus config.yaml")
+    r.add_argument("--titel", help='Anzeigentitel/Modell, z. B. "Knaus Sky TI 650 MEG" (erkennt Marke + Modell)')
+    r.add_argument("--text", help="Beschreibung (Ausstattung/Mängel fließen in die Bewertung ein)")
+    r.add_argument("--art", default="Teilintegrierter", help="Kastenwagen, Teilintegrierter, Alkoven, Integrierter …")
+    r.add_argument("--ort", help="Standort des Fahrzeugs (für das Anschreiben)")
     r.add_argument("--marktwert", type=int, help="eigener Marktwert (z. B. aus mobile.de/DAT) statt Vergleich")
+    r.add_argument("--anschreiben", action="store_true", help="passendes Anschreiben mit ausgeben")
     s = sub.add_parser("status", help="Status einer Anzeige setzen")
     s.add_argument("id")
     s.add_argument("status", choices=["neu", "kontaktiert", "uninteressant", "gekauft"])
@@ -101,7 +130,8 @@ def main():
     cfg = lade_config(args.config)
     logging_einrichten(cfg)
     db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]))
-    {"lauf": cmd_lauf, "report": cmd_report, "rechne": cmd_rechne, "status": cmd_status}[args.cmd](cfg, db, args)
+    {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "rechne": cmd_rechne,
+     "status": cmd_status}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":
