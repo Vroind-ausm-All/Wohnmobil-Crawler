@@ -136,6 +136,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <div class="suchlauf">
       <span id="suchstatus" class="hinweis" aria-live="polite"></span>
       <button id="glocke" class="btn" title="Browser-Hinweis bei neuen Treffern" hidden>🔔 Hinweise an</button>
+      <button id="einlesen" class="btn" title="Im Browser gespeicherte Kleinanzeigen-Seiten (Strg+S) einlesen – ohne Internetabruf">⤓ Gespeicherte Seiten einlesen</button>
       <button id="suchen" class="btn">↻ Neue Anzeigen suchen</button>
     </div>
     {% endif %}
@@ -589,6 +590,31 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     knopf.onclick = function(){
       post('/api/suchlauf', {}).then(function(){ manuell = true; knopf.disabled = true; knopf.textContent = 'Suche läuft …'; plane(1000); },
                                     function(){ toast('Suchlauf konnte nicht gestartet werden'); });
+    };
+    // Gespeicherte Seiten (Strg+S) aus dem Import-Ordner einlesen – der Server ruft dabei nichts aus dem Internet ab
+    var einlesen = document.getElementById('einlesen');
+    var mehrzahl = function(n, eins, viele){ return n + ' ' + (n === 1 ? eins : viele); };
+    einlesen.onclick = function(){
+      einlesen.disabled = true; einlesen.textContent = 'Wird eingelesen …';
+      var fertig = function(){ einlesen.disabled = false; einlesen.textContent = '⤓ Gespeicherte Seiten einlesen'; };
+      fetch('/api/import', {method:'POST', headers:{'Content-Type':'application/json','X-Scout-Token':APP.token}, body:'{}'})
+        .then(function(r){ return r.json().then(function(d){ if(!r.ok) throw new Error(d.fehler || r.status); return d; }); })
+        .then(function(s){
+          if(!s.dateien){
+            fertig();
+            toast('Keine gespeicherten Seiten gefunden in ' + s.ordner + ' – Seite in Kleinanzeigen mit Strg+S als „Webseite, nur HTML“ in diesen Ordner speichern.');
+            return;
+          }
+          var text = mehrzahl(s.dateien, 'Seite', 'Seiten') + ' eingelesen: ' + s.neu + ' neu, '
+                     + mehrzahl(s.preis, 'Preissenkung', 'Preissenkungen') + ', ' + s.bekannt + ' bekannt';
+          if(s.details) text += ', ' + s.details + ' mit Details';
+          if(s.unbekannt) text += ' · ' + mehrzahl(s.unbekannt, 'Seite', 'Seiten') + ' nicht erkannt';
+          if(s.fehler.length > s.unbekannt) text += ' · ' + (s.fehler.length - s.unbekannt) + ' mit Fehler (Details in ausgabe/scout.log)';
+          if(s.uebrig) text += ' · ' + s.uebrig + ' weitere beim nächsten Klick';
+          toast(text + ' – Liste wird neu geladen.');
+          setTimeout(function(){ location.reload(); }, 4000);
+        })
+        .catch(function(e){ fertig(); toast('Einlesen fehlgeschlagen: ' + e.message); });
     };
     if('Notification' in window && Notification.permission === 'default'){
       glocke.hidden = false;

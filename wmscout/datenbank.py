@@ -35,6 +35,9 @@ STATUS = {"neu": "offen", "kontaktiert": "kontaktiert", "verhandlung": "in Verha
           "besichtigung": "Besichtigung", "gekauft": "gekauft", "abgesagt": "abgesagt",
           "uninteressant": "uninteressant"}
 
+# `suche` von Inseraten aus gespeicherten Seiten: werden nie per Detailabruf nachgeladen (ADR-010)
+IMPORT_SUCHE = "Import (gespeicherte Seite)"
+
 FELDER_UPDATE = ["url", "suche", "titel", "preis", "vb", "ort", "km", "ez_jahr", "marke",
                  "kurzbeschreibung", "gewerblich", "bild", "quelle"]
 
@@ -92,9 +95,14 @@ class Datenbank:
         self.con.commit()
 
     def ohne_details(self, limit: int) -> list[sqlite3.Row]:
+        """Inserate für den Detailabruf – ohne solche aus gespeicherten Seiten (kein Netzabruf, ADR-010)."""
         return self.con.execute(
-            "SELECT * FROM anzeigen WHERE detail_geladen=0 ORDER BY erstmals_gesehen DESC LIMIT ?",
-            (limit,)).fetchall()
+            "SELECT * FROM anzeigen WHERE detail_geladen=0 AND COALESCE(suche, '') NOT LIKE 'Import%' "
+            "ORDER BY erstmals_gesehen DESC LIMIT ?", (limit,)).fetchall()
+
+    def suche_zu(self, ad_id: str) -> str | None:
+        zeile = self.con.execute("SELECT suche FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+        return zeile["suche"] if zeile else None
 
     def aktive(self, tage: int = 21) -> list[sqlite3.Row]:
         grenze = (datetime.now() - timedelta(days=tage)).isoformat(timespec="seconds")

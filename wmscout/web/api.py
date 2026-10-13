@@ -29,6 +29,8 @@ from ..bewertung.anschreiben import euro, tsd
 from ..bewertung.auswertung import bewerte_alle
 from ..bewertung.besichtigung import berechne, lade_katalog
 from ..datenbank import STATUS, Datenbank
+from ..eingang import import_ordner
+from ..importer import Importer
 from ..team import BESICHTIGUNG_STATUS, ROLLEN, TeamSpeicher
 
 log = logging.getLogger("scout")
@@ -37,6 +39,7 @@ COOKIE = "scout_sitzung"
 OFFENE_PFADE = {"/login", "/api/login", "/manifest.webmanifest", "/sw.js", "/favicon.ico"}
 MAX_JSON = 1_000_000
 MAX_FOTO = 12_000_000          # Base64-kodiert, entspricht ca. 8 MB Bild
+MAX_IMPORT_DATEIEN = 200       # gespeicherte Seiten je Klick, der Rest beim nächsten Mal
 
 
 class Antwort(Exception):
@@ -374,12 +377,25 @@ class Anfrage:
             return self.json(200 if ok else 404, {"ok": ok})
         if p == "/api/suchlauf":
             return self.json(200, {"gestartet": k.suchlauf.starte(), **k.suchlauf.stand})
+        if p == "/api/import":
+            return self.json(200, self.seiten_einlesen())
         if p == "/api/besichtigung":
             return self.json(200, self.besichtigung_anlegen(daten))
         if m := re.fullmatch(r"/api/besichtigung/(\d+)/(planen|speichern|foto|abschluss)", p):
             b = self.besichtigung(m.group(1), schreiben=True)
             return self.json(200, getattr(self, f"b_{m.group(2)}")(b, daten))
         raise Antwort(404, "nicht gefunden")
+
+    def seiten_einlesen(self) -> dict:
+        """Gespeicherte Seiten aus dem konfigurierten Import-Ordner – nie ein Pfad aus der Anfrage, kein Netzabruf."""
+        k = self.k
+        if k.suchlauf.stand["laeuft"]:
+            raise Antwort(409, "Gerade läuft ein Suchlauf – bitte danach einlesen")
+        ordner = import_ordner(k.cfg)
+        ordner.mkdir(parents=True, exist_ok=True)
+        stat = Importer(k.cfg, k.db).importiere_seiten(ordner, max_dateien=MAX_IMPORT_DATEIEN)
+        k.veraendert()
+        return {**stat, "ordner": str(ordner)}
 
     def _termin(self, wert) -> str | None:
         if not wert:

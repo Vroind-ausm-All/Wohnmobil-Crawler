@@ -4,6 +4,7 @@
   python scout.py app                       Browser-App: Wohnmobile anklicken und anschreiben
   python scout.py lauf                      Crawlen + bewerten + Report (+ Mail)
   python scout.py report                    Nur Report neu erzeugen (ohne Internet)
+  python scout.py import [--ordner PFAD]    Im Browser gespeicherte Kleinanzeigen-Seiten einlesen (ohne Internet)
   python scout.py rechne --preis 32900 --ez 2016 --km 98000 --titel "Knaus Sky TI 650 MEG" [--anschreiben]
   python scout.py nutzer anlegen <Name> [--rolle inhaber]   Team-Zugang für Handy-App anlegen
   python scout.py status <ID> kontaktiert   Status setzen (neu|kontaktiert|verhandlung|besichtigung|gekauft|abgesagt|uninteressant)
@@ -42,6 +43,7 @@ from wmscout.bewertung.anschreiben import Anschreiber, euro
 from wmscout.bewertung.auswertung import bewerte_alle
 from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import STATUS, Datenbank
+from wmscout.eingang import import_ordner
 from wmscout.importer import Importer
 from wmscout.normalisierung.fahrzeug import ergaenze_fahrzeug
 from wmscout.team import ROLLEN, TeamSpeicher
@@ -71,6 +73,37 @@ def cmd_lauf(cfg, db, args):
     erg = schreibe_ausgaben(cfg, zeilen, BASIS, fehler=stat["fehler"])
     logging.info("Report: %s  (%s)", erg["html"], erg["zaehl"])
     sende_mail(cfg, zeilen, erg)
+
+
+def _anzahl(n: int, einzahl: str, mehrzahl: str) -> str:
+    return f"{n} {einzahl if n == 1 else mehrzahl}"
+
+
+def cmd_import(cfg, db, args):
+    ordner = Path(args.ordner).expanduser().resolve() if args.ordner else import_ordner(cfg)
+    if not ordner.is_dir():
+        ordner.mkdir(parents=True, exist_ok=True)
+        print(f"Import-Ordner angelegt: {ordner}")
+    print(f"Gespeicherte Seiten einlesen aus: {ordner}")
+    start = datetime.now().isoformat(timespec="seconds")
+    stat = Importer(cfg, db).importiere_seiten(ordner)
+    if not stat["dateien"]:
+        print("Keine gespeicherten Seiten gefunden (.html/.htm).\n"
+              "So geht's: Suchergebnis- oder Anzeigenseite in Kleinanzeigen öffnen, Strg+S drücken und als "
+              "„Webseite, nur HTML“ in diesen Ordner speichern. Danach diesen Befehl erneut ausführen.")
+        return
+    print(f"{_anzahl(stat['dateien'], 'Datei', 'Dateien')} gelesen: {_anzahl(stat['suchseiten'], 'Suchseite', 'Suchseiten')}, "
+          f"{_anzahl(stat['detailseiten'], 'Detailseite', 'Detailseiten')}, {stat['unbekannt']} nicht erkannt")
+    print(f"Ergebnis: {_anzahl(stat['neu'], 'neue Anzeige', 'neue Anzeigen')}, "
+          f"{_anzahl(stat['preis'], 'Preissenkung', 'Preissenkungen')}, {stat['bekannt']} schon bekannt, "
+          f"{stat['details']} mit Details")
+    if stat["dateien"] > stat["unbekannt"]:
+        print(f"Eingelesene Dateien liegen jetzt in: {ordner / 'eingelesen'}")
+    if stat["fehler"]:
+        print("Bitte prüfen:\n" + "\n".join(f"  - {f}" for f in stat["fehler"]))
+    zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
+    erg = schreibe_ausgaben(cfg, zeilen, BASIS)
+    print(f"Report: {erg['html']}  ({erg['zaehl']})")
 
 
 def cmd_report(cfg, db, args):
@@ -170,6 +203,8 @@ def main():
     a.add_argument("--kein-browser", action="store_true", help="Browser nicht automatisch öffnen")
     sub.add_parser("lauf", help="crawlen, bewerten, Report erzeugen")
     sub.add_parser("report", help="Report aus vorhandenen Daten neu erzeugen")
+    im = sub.add_parser("import", help="im Browser gespeicherte Kleinanzeigen-Seiten einlesen (ohne Internet)")
+    im.add_argument("--ordner", help="Ordner mit den gespeicherten Seiten (Standard: config.yaml → import → ordner)")
     r = sub.add_parser("rechne", help="Einzelfahrzeug durchrechnen")
     r.add_argument("--preis", type=int, help="Angebotspreis des Verkäufers")
     r.add_argument("--ez", type=int, help="Erstzulassungsjahr")
@@ -196,8 +231,8 @@ def main():
     cfg = lade_config(args.config)
     logging_einrichten(cfg)
     db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]))
-    {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "rechne": cmd_rechne, "nutzer": cmd_nutzer,
-     "status": cmd_status}[args.cmd](cfg, db, args)
+    {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "rechne": cmd_rechne,
+     "nutzer": cmd_nutzer, "status": cmd_status}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":

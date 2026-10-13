@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 ausgabe/
 daten/
+import/
 .venv/
 .pytest_cache/
 .ruff_cache/

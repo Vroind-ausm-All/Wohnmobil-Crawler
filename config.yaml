@@ -215,7 +215,14 @@ whatsapp:
   vorlage_zuweisung: besichtigung_zugewiesen     # Vorlage mit 3 Platzhaltern: Fahrzeug, Termin, Adresse
   empfaenger_treffer: []              # Nummern für neue Treffer, z. B. ["+491701234567"]
 
-# --- 9. Ausgabe & Benachrichtigung -----------------------------
+# --- 9. Gespeicherte Seiten einlesen ---------------------------
+# Kleinanzeigen-Seiten selbst im Browser öffnen und mit Strg+S („Webseite, nur HTML“)
+# in diesen Ordner speichern. "python scout.py import" bzw. der Knopf in der App liest sie ein –
+# ohne Internetabruf. Eingelesene Dateien landen danach in import/eingelesen/<Datum>/.
+import:
+  ordner: import                   # relativ zum Projektordner (oder vollständiger Pfad)
+
+# --- 10. Ausgabe & Benachrichtigung ----------------------------
 ausgabe:
   ordner: ausgabe
   datenbank: daten/anzeigen.sqlite

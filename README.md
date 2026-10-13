@@ -41,6 +41,7 @@ Einrichtung (Nutzer anlegen, Tailscale, App auf den Startbildschirm): **[docs/HA
 |---|---|
 | `python scout.py app` | Browser-App: Wohnmobile anklicken, anschreiben, Status und Notizen speichern, Suchlauf starten |
 | `python scout.py lauf` | Crawlen → bewerten → Report, CSV, Anschreiben (+ Mail, falls aktiv) |
+| `python scout.py import` | Im Browser gespeicherte Kleinanzeigen-Seiten aus dem Ordner `import/` einlesen, bewerten, Report erzeugen (ohne Internet; anderer Ordner: `--ordner PFAD`) |
 | `python scout.py report` | Report neu erzeugen, z. B. nach Änderung der Kosten in `config.yaml` (ohne Internet) |
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --titel "Knaus Sky TI 650 MEG" --anschreiben` | Einzelfahrzeug durchrechnen und Anschreiben ausgeben (auch für Anfragen außerhalb von Kleinanzeigen; `--text` mit der Beschreibung berücksichtigt Ausstattung/Mängel) |
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --marktwert 44000` | mit eigenem Marktwert (z. B. aus mobile.de oder DAT) |
@@ -118,6 +119,12 @@ Du bekommst dann nur eine Mail, wenn neue Treffer mit Anschreiben dabei sind.
    öffnet sich in einem neuen Tab und das Fahrzeug wird als „kontaktiert“ gespeichert (inkl. gesendetem
    Text; „Rückgängig“ im Hinweis unten).
 4. Auf Kleinanzeigen **„Nachricht schreiben“** → `Strg`+`V` → Senden.
+
+**Gespeicherte Seiten einlesen:** Öffne eine Suchergebnisseite oder eine einzelne Anzeige auf Kleinanzeigen
+ganz normal im Browser, drücke `Strg`+`S` und speichere sie als „Webseite, nur HTML“ in den Ordner `import`
+im Programmordner. Dann in der App auf **„⤓ Gespeicherte Seiten einlesen“** klicken (oder `python scout.py import`).
+Neue Fahrzeuge erscheinen sofort in der Liste; das Programm ruft dafür nichts selbst aus dem Internet ab.
+Eingelesene Dateien wandern nach `import/eingelesen/<Datum>/`, nicht erkannte nach `import/nicht_erkannt/`.
 
 Status (offen / kontaktiert / uninteressant / gekauft) und Notizen setzt du im Fahrzeugfenster. Unter
 „Kontaktiert“ findest du alle angeschriebenen Fahrzeuge mit dem Text, den du geschickt hast.
