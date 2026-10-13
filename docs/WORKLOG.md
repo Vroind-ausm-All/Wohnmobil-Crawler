@@ -86,7 +86,7 @@ Projekt-Agenten.
     - Skill-Grenze „5“ entfernt
     - `permissionMode` ergänzt
     - Punkt 9 aus `loop.md` entfernt
-  - Gesamtsuite und ruff: siehe Abschluss unten
+  - Gesamtsuite nach der Korrektur: `96 passed`; ruff „All checks passed!“
 - **Review-Ergebnis:**
   - Architekt: **FREIGABE MIT AUFLAGEN**
     - vor Phase 1: A1, A2, A3, A12, alle umgesetzt
@@ -103,7 +103,7 @@ Projekt-Agenten.
     Berechtigungsänderung; die entscheidet der Betreiber (F13). Bis dahin prüft der Orchestrator nach jedem QA-Lauf
     `git status`.
   - Die Zitate in `SOURCES.md` sind nicht am Original geprüft (P2-01).
-- **Commit/PR:** Korrektur-Commit und PR siehe Abschluss
+- **Commit/PR:** 7a99f82 (Korrekturrunde 1); PR gegen den Integrationszweig
 - **Nächster sinnvoller Schritt:** PR gegen den Integrationszweig; Freigabe von Phase 1 und Antworten auf F1, F12
   einholen
 
