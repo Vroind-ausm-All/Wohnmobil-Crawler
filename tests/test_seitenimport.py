@@ -1,6 +1,6 @@
 """Import gespeicherter Kleinanzeigen-Seiten (P2-05, ADR-010): erkennen, speichern, verschieben – ohne Netzabruf.
 
-Grenze: Die Seiten sind nachgebautes Markup aus tests/daten.py; echte, im Browser gespeicherte Seiten liegen noch nicht vor.
+Grenze: Die Seiten sind nachgebautes Markup aus tests/daten.py; echte Seiten: tests/test_kleinanzeigen_echt.py.
 """
 import threading
 from datetime import date

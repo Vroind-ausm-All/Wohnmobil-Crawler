@@ -79,7 +79,7 @@ def _detail_kennung(html: str) -> tuple[str | None, str | None, bool]:
     """(Anzeigen-ID, URL, sicher). Sicher = aus canonical/og:url/Speichervermerk, sonst aus einem Link im Kopf."""
     kopf = BeautifulSoup(_kopf(html), "html.parser", parse_only=SoupStrainer(["link", "meta", "a"]))
     kandidaten = []
-    if el := kopf.find("link", rel="canonical"):
+    if el := kopf.find(["link", "meta"], rel="canonical"):      # Kleinanzeigen schreibt es teils als <meta rel=…>
         kandidaten.append(el.get("href"))
     if el := kopf.find("meta", attrs={"property": "og:url"}):
         kandidaten.append(el.get("content"))
@@ -93,12 +93,19 @@ def _detail_kennung(html: str) -> tuple[str | None, str | None, bool]:
     return None, None, False
 
 
-def _detail_inserat(html: str, ad_id: str, url: str) -> Inserat | None:
-    d = parse_detailseite(html)
-    d.pop("verkaeufer_name", None)                # Personendaten nicht speichern (wie beim Abruf)
+def _detail_inserat(ad_id: str, url: str, d: dict) -> Inserat | None:
+    d = {k: v for k, v in d.items() if k not in ("verkaeufer_name", "anzeigen_id")}   # keine Personendaten speichern
     if not d.get("titel") and not d.get("details"):
         return None
     return Inserat(quelle=QUELLE, anzeigen_id=ad_id, url=url, **d)
+
+
+def _url_zur_id(html: str, ad_id: str) -> str:
+    """Adresse der eigenen Anzeige: ein Link im Seitentext mit genau dieser ID (Teilen-, Melde-, Login-Links),
+    sonst die kurze Form …/s-anzeige/<id>."""
+    if m := re.search(rf"/s-anzeige/[\w-]+/{re.escape(ad_id)}-\d+-\d+", html):
+        return urljoin(BASIS, m.group(0))
+    return f"{BASIS}/s-anzeige/{ad_id}"
 
 
 def _art_aus_url(url: str) -> str | None:
@@ -115,7 +122,7 @@ def fahrzeugart_der_suchseite(html: str) -> str | None:
     `art_schluessel`; „Sonstige“ gilt als nicht erkannt (die Rechnung braucht die echte Art)."""
     kopf = BeautifulSoup(_kopf(html), "html.parser", parse_only=SoupStrainer(["link", "meta", "title"]))
     urls = []
-    if el := kopf.find("link", rel="canonical"):
+    if el := kopf.find(["link", "meta"], rel="canonical"):
         urls.append(el.get("href"))
     if el := kopf.find("meta", attrs={"property": "og:url"}):
         urls.append(el.get("content"))
@@ -133,20 +140,24 @@ def fahrzeugart_der_suchseite(html: str) -> str | None:
 def erkenne_seite(html: str) -> tuple[str, list[Inserat]]:
     """Art der Seite und die erkannten Inserate (ohne Gesuche).
 
-    Art: 'suche', 'detail', 'unbekannt' oder 'detail_ohne_id' (Anzeigenseite, aber ohne ermittelbare Anzeigen-URL)."""
+    Art: 'suche', 'detail', 'unbekannt' oder 'detail_ohne_id' (Anzeigenseite, aber ohne ermittelbare Anzeigen-ID)."""
     ad_id, url, sicher = _detail_kennung(html)
     # Detailseiten können unten „ähnliche Anzeigen“ enthalten – eine eindeutige Inserats-URL geht deshalb vor
-    if ad_id and sicher and (inserat := _detail_inserat(html, ad_id, url)):
+    if ad_id and sicher and (inserat := _detail_inserat(ad_id, url, parse_detailseite(html))):
         return "detail", [inserat]
     if _ANZEIGEN_MERKMAL.search(html):
         # Strukturell eine Anzeigenseite: nie als Suchseite lesen (die „ähnlichen Anzeigen“ wären sonst die Treffer)
-        if ad_id and (inserat := _detail_inserat(html, ad_id, url)):
+        d = parse_detailseite(html)
+        if box_id := d.get("anzeigen_id"):               # Kasten „Anzeigen-ID“ der Seite selbst
+            if box_id != ad_id:
+                ad_id, url = box_id, _url_zur_id(html, box_id)
+        if ad_id and (inserat := _detail_inserat(ad_id, url, d)):
             return "detail", [inserat]
         return "detail_ohne_id", []
     treffer = [Inserat(quelle=QUELLE, anzeigen_id=t.pop("id"), **t) for t in parse_suchseite(html)]
     if treffer:
         return "suche", [i for i in treffer if not i.ist_gesuch]
-    if ad_id and (inserat := _detail_inserat(html, ad_id, url)):
+    if ad_id and (inserat := _detail_inserat(ad_id, url, parse_detailseite(html))):
         return "detail", [inserat]
     return "unbekannt", []
 
