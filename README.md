@@ -155,8 +155,16 @@ pyproject.toml                Projekt, Abhängigkeiten (Bereiche), Test- und Lin
 requirements.txt              gesperrte Laufzeit-Abhängigkeiten (feste Versionen + Prüfsummen)
 requirements-dev.txt          dazu pytest und ruff
 vorlagen/                     anschreiben.txt, nachfassen.txt (Texte, frei änderbar), report.html (Oberfläche)
-docs/ARCHITEKTUR.md           Architektur- und Migrationsplan (Phasen 1–4)
+CLAUDE.md                     Projektregeln für Claude Code (Agenten, Branches, Definition of Done)
+.claude/                      Agenten-Team, Skill scout-cycle (Entwicklungsablauf), loop.md (Wartung)
+docs/ROADMAP.md               Phasen 0–6 und Backlog mit Status
+docs/WORKLOG.md               Arbeitsprotokoll je Arbeitspaket
+docs/ARCHITECTURE.md          Architektur, Risiken, Ziel-Datenmodell, Migrationsstrategie
+docs/DECISIONS.md             Architekturentscheidungen (ADR)
+docs/SOURCES.md               Datenquellen: Zulässigkeit, Bewertung, Reihenfolge
+docs/TEST-REPORT.md           tatsächliche Testergebnisse und Testabdeckung
 docs/QUELLEN.md               Anleitung: neue Datenquelle anbinden
+docs/HANDY-APP.md             Handy-App: Einrichtung und Nutzung
 
 wmscout/
   quellen/                    Datenquellen – einheitliche Schnittstelle (basis.py) + Adapter
@@ -194,7 +202,8 @@ PLZ-Koordinaten: GeoNames (www.geonames.org), Lizenz CC BY 4.0.
 
 ## Umsetzungsstand
 
-Plan und Hintergründe: `docs/ARCHITEKTUR.md`.
+Phasen, Backlog und offene Entscheidungen: `docs/ROADMAP.md`; Architektur und Risiken: `docs/ARCHITECTURE.md`.
+Die Zeilen „Phase 1“ unten beziehen sich auf den früheren Phasenplan; die neue Zählung (Phasen 0–6) steht in der Roadmap.
 
 | Bereich | Stand | Geprüft durch |
 |---|---|---|
@@ -203,7 +212,7 @@ Plan und Hintergründe: `docs/ARCHITEKTUR.md`.
 | Statusverwaltung, Browser-App, CSV/HTML | umgesetzt | `test_app.py`, `test_import.py` |
 | **Phase 1:** Python 3.13 + `.venv`, Start per Doppelklick | umgesetzt | CI-Job „Windows-Start“ führt `installieren.bat` aus; `installieren.sh` in CI |
 | **Phase 1:** gesperrte Abhängigkeiten (Versionen + Prüfsummen) | umgesetzt | CI installiert ausschließlich aus den Lock-Dateien |
-| **Phase 1:** pytest-Suite + GitHub Actions (Linux, Windows) | umgesetzt | 54 Tests, Ruff |
+| **Phase 1:** pytest-Suite + GitHub Actions (Linux, Windows) | umgesetzt | Tests und Ruff in CI, aktuelle Zahlen in `docs/TEST-REPORT.md` |
 | **Phase 1:** Komponenten (Quellen, Import, Normalisierung, Datenbank, Bewertung, Ausgabe, Benachrichtigung) | umgesetzt | alle Tests |
 | **Phase 1:** einheitliche Quellen-Schnittstelle | umgesetzt | Vertragstest je Quelle, Test mit Beispielquelle |
 | Spalte `quelle` je Inserat (Vorstufe zu Phase 2) | umgesetzt | `test_import.py`, `test_quellen.py` |
@@ -211,6 +220,4 @@ Plan und Hintergründe: `docs/ARCHITEKTUR.md`.
 | Besichtigungsmodus: Pflicht-Checkliste, Messwerte, Mängelkatalog, Fotos, Live-Abzug, offline | umgesetzt | `test_besichtigung.py`, Paritätstest Python↔JavaScript (600 Fälle), Klicktest inkl. Offline |
 | Ankaufprotokoll mit Unterschriften, Termine/Zuständigkeit, Kalender (.ics), WhatsApp-Links | umgesetzt | `test_handy.py`, Klicktest |
 | WhatsApp automatisch (Cloud API von Meta) | umgesetzt, **nicht live getestet** (braucht Meta-Konto und freigegebene Vorlagen) | `test_handy.py` mit nachgebautem Server |
-| Phase 2: Datenmodell mit Quelle+ID, Fahrzeugidentität, Preis-/Beobachtungshistorie, Verfügbarkeit, Händler/Privat | **geplant** | – |
-| Phase 3: Suchprofile, Scheduler schnell/voll, Fehlerisolation je Quelle, Priorisierung, Quellenstatus, URL-/Feed-Import | **geplant** (Auto-Suche alle N Stunden existiert bereits) | – |
-| Phase 4: Adapter für mobile.de, AutoScout24, Caraworld, Händler-Feeds | **geplant** – Schnittstelle dokumentiert (`docs/QUELLEN.md`), Zugänge müssen erst geklärt werden | – |
+| Mehrere Quellen, Datenmodell/Historie, Suchprofile, Deal-Score, Ankaufs-Dashboard | **geplant** – Phasen 2–6 in `docs/ROADMAP.md` | – |
