@@ -84,8 +84,8 @@ vorbereiten, nicht raten); Bedarf an kostenpflichtigen Diensten, Dauerprozessen 
 
 `qa-security-reviewer` mit Diff (`git diff origin/claude/gifted-heisenberg-d1cjlr...HEAD`), Akzeptanzkriterien und
 Testergebnissen beauftragen. Bei Schema-/Architekturänderungen zusätzlich `scout-architect`.
-Dem Architekten (ohne `Bash`) Diff bzw. Dateiliste als Text mitgeben. Nach jedem QA-Lauf `git status` prüfen
-(ADR-018: QA darf nichts im Repository ändern).
+Dem Architekten (ohne `Bash`) Diff bzw. Dateiliste als Text mitgeben. Vor und nach jedem QA-Lauf `git rev-parse HEAD`,
+`git status --short --ignored` und `git stash list` vergleichen (ADR-018: QA darf nichts ändern).
 Befunde nach KRITISCH / HOCH / MITTEL / NIEDRIG erfassen. Paket auf `REVIEW` setzen.
 
 ## Schritt F – FIX (höchstens 3 Runden)

@@ -152,7 +152,7 @@ umbenannt, nicht gelöscht.
 (`schema_version`, minimale `suchlaeufe` mit Lease) · 4 = Phase 2 · 5 = Phase 3 · 6 = `bewertungen` (Phase 5).
 **Schutzregeln:** Ist die Schemaversion der Datenbank höher als die dem Code bekannte, bricht der Start mit
 verständlicher Meldung ab (kein Schreiben mit altem Code). Ohne erfolgreiches Backup keine Migration. Wiederherstellung
-wird verweigert, solange ein Lauf oder die App aktiv ist.
+nur nach ausdrücklicher Bestätigung (P1-02) und, sobald die Laufsperre existiert (P1-04), nicht während eines Laufs.
 
 | Version | Phase | Inhalt |
 |---|---|---|

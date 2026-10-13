@@ -174,4 +174,6 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   System-Prompt; der Orchestrator prüft nach jedem QA-Lauf `git status`. `scout-architect` und `source-researcher` haben
   kein `Bash`. Eine technische Sperre über Deny-Regeln in `.claude/settings.json` (z. B. für `git commit`/`git push`)
   wäre möglich, ist eine Änderung der Berechtigungen und bleibt dem Betreiber vorbehalten (Frage F13).
-* **Folgen:** Restrisiko, dass QA per Shell schreibt; wird durch `git status`-Kontrolle erkannt.
+* **Folgen:** Restrisiko, dass QA per Shell schreibt. `git status` allein erkennt weder Commits noch Schreibzugriffe
+  in ignorierten Pfaden (`daten/`, `ausgabe/`, `.venv/`). Deshalb vergleicht der Orchestrator vor und nach jedem
+  QA-Lauf `git rev-parse HEAD`, `git status --short --ignored` und `git stash list`.

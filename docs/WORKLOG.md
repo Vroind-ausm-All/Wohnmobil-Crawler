@@ -100,10 +100,23 @@ Projekt-Agenten.
   - Bestätigt von der QA: Testzahlen (81 → 91), Coverage-Werte und CI grün für aadfd67 (alle vier Jobs).
 - **Bekannte Risiken:**
   - Die QA kann über `Bash` technisch schreiben. Eine technische Sperre über `.claude/settings.json` ist eine
-    Berechtigungsänderung; die entscheidet der Betreiber (F13). Bis dahin prüft der Orchestrator nach jedem QA-Lauf
-    `git status`.
+    Berechtigungsänderung; die entscheidet der Betreiber (F13). Bis dahin vergleicht der Orchestrator vor und nach jedem
+    QA-Lauf `git rev-parse HEAD`, `git status --short --ignored` und `git stash list`.
   - Die Zitate in `SOURCES.md` sind nicht am Original geprüft (P2-01).
-- **Commit/PR:** 7a99f82 (Korrekturrunde 1); PR gegen den Integrationszweig
+- **Korrekturrunde 2:** Nachprüfung der QA nach Runde 1
+  - Urteil: **FREIGABE MIT AUFLAGEN**. B1–B3, M1, M2, N1 und N3 sind behoben; 14 von 14 Mutationen werden erkannt;
+    `96 passed`.
+  - Neue Befunde: K1–K5. Kein KRITISCH- oder HOCH-Befund.
+  - Behoben in Runde 2:
+    - **K1:** P1-02 verlangt jetzt eine ausdrückliche Bestätigung vor der Wiederherstellung. Die technische Sperre
+      während eines Laufs kommt mit P1-04.
+    - **K2:** ADR-018 und Skill vergleichen jetzt `rev-parse HEAD`, `status --ignored` und `stash list`.
+    - **K4:** Die Grenze der Belegprüfung steht im Test; `WORKLOG.md` wird mitgeprüft.
+    - **K5:** Die Dateilisten für P1-01a und P1-12 sind ergänzt.
+    - **K3:** PR-Nummer siehe unten.
+  - Tests nach Runde 2: `97 passed`, ruff grün.
+  - Runde 2 betraf nur MITTEL- und NIEDRIG-Befunde in der Doku. Die QA hat sie **nicht erneut geprüft**.
+- **Commit/PR:** 7a99f82 (Runde 1), Runde-2-Commit, PR siehe nächste Zeile
 - **Nächster sinnvoller Schritt:** PR gegen den Integrationszweig; Freigabe von Phase 1 und Antworten auf F1, F12
   einholen
 

@@ -2,7 +2,8 @@
 
 Prüft: Agenten und Skill haben gültiges Frontmatter, Prüfagenten nur Lesewerkzeuge, die Grenzen des
 Entwicklungsablaufs stehen im Skill, der Wartungsauftrag hat seine zehn Punkte, und jeder Beleg `datei:zeile` in den
-Projektdokumenten zeigt auf eine existierende Zeile.
+Projektdokumenten zeigt auf eine existierende Zeile. Grenze: Ob die Zeile inhaltlich noch passt, prüft der Test nicht;
+erfasst werden nur Belege in Backticks.
 """
 import re
 import subprocess
@@ -24,7 +25,7 @@ ERLAUBTE_WERKZEUGE = {                                       # Prüfagenten: nur
     "qa-security-reviewer": LESEWERKZEUGE | {"Bash"},
 }
 SCHREIBWERKZEUGE = {"Read", "Grep", "Glob", "Edit", "Write", "Bash"}
-DOKUMENTE = ["docs/ARCHITECTURE.md", "docs/TEST-REPORT.md", "docs/ROADMAP.md", "docs/DECISIONS.md"]
+DOKUMENTE = ["docs/ARCHITECTURE.md", "docs/TEST-REPORT.md", "docs/ROADMAP.md", "docs/DECISIONS.md", "docs/WORKLOG.md"]
 
 
 def frontmatter(pfad):
