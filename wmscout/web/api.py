@@ -390,7 +390,7 @@ class Anfrage:
     def seiten_einlesen(self) -> dict:
         """Gespeicherte Seiten aus dem konfigurierten Import-Ordner – nie ein Pfad aus der Anfrage, kein Netzabruf."""
         k = self.k
-        if False:
+        if k.suchlauf.stand["laeuft"]:
             raise Antwort(409, "Gerade läuft ein Suchlauf – bitte danach einlesen")
         ordner = import_ordner(k.cfg)
         ordner.mkdir(parents=True, exist_ok=True)
