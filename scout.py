@@ -5,7 +5,7 @@
   python scout.py lauf                      Crawlen + bewerten + Report (+ Mail)
   python scout.py report                    Nur Report neu erzeugen (ohne Internet)
   python scout.py rechne --preis 32900 --ez 2016 --km 98000 --titel "Knaus Sky TI 650 MEG" [--anschreiben]
-  python scout.py status <ID> kontaktiert   Status setzen (neu|kontaktiert|uninteressant|gekauft)
+  python scout.py status <ID> kontaktiert   Status setzen (neu|kontaktiert|verhandlung|besichtigung|gekauft|abgesagt|uninteressant)
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ import yaml
 
 from wmscout.anschreiben import Anschreiber, euro
 from wmscout.crawler import Crawler
-from wmscout.db import Datenbank
+from wmscout.db import STATUS, Datenbank
 from wmscout.fahrzeug import ergaenze_fahrzeug
 from wmscout.rechner import Rechner
 from wmscout.report import bewerte_alle, schreibe_ausgaben, sende_mail
@@ -106,7 +106,7 @@ def main():
     p.add_argument("--config", default="config.yaml")
     sub = p.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("app", help="Browser-App starten: anklicken, anschreiben, Status speichern")
-    a.add_argument("--port", type=int, default=8765)
+    a.add_argument("--port", type=int, help="Standard: config.yaml → app → port (8765)")
     a.add_argument("--kein-browser", action="store_true", help="Browser nicht automatisch öffnen")
     sub.add_parser("lauf", help="crawlen, bewerten, Report erzeugen")
     sub.add_parser("report", help="Report aus vorhandenen Daten neu erzeugen")
@@ -123,7 +123,7 @@ def main():
     r.add_argument("--anschreiben", action="store_true", help="passendes Anschreiben mit ausgeben")
     s = sub.add_parser("status", help="Status einer Anzeige setzen")
     s.add_argument("id")
-    s.add_argument("status", choices=["neu", "kontaktiert", "uninteressant", "gekauft"])
+    s.add_argument("status", choices=list(STATUS))
     s.add_argument("--notiz")
     args = p.parse_args()
 

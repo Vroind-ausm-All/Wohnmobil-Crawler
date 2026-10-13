@@ -194,7 +194,7 @@ class Rechner:
     def vergleiche(self, a: dict, alle: list[dict]) -> list[tuple[float, float, bool]]:
         """[(Preis ÷ Referenzwert, Gewicht, gleiche Marke)] für vergleichbare Angebote."""
         jt, kt = self.c["vergleich_jahre_toleranz"], self.c["vergleich_km_toleranz"]
-        art, marke = self.art(a), (a.get("marke") or "").lower()
+        art, marke, serie = self.art(a), (a.get("marke") or "").lower(), (a.get("serie") or "").lower()
         alt_grenze = (datetime.now() - timedelta(days=180)).isoformat(timespec="seconds")
         erg = []
         for b in alle:
@@ -210,6 +210,8 @@ class Rechner:
                 continue
             gleich = bool(marke) and (b.get("marke") or "").lower() == marke
             g = (1.0 if gleich else 0.5) / (1 + 0.5 * abs(b["ez_jahr"] - a["ez_jahr"]))
+            if gleich and serie and (b.get("serie") or "").lower() == serie:
+                g *= 1.5                     # gleiche Modellreihe (z. B. „Sky TI“) ist der beste Vergleich
             if dkm is not None:
                 g /= 1 + dkm / kt
             if (b.get("zuletzt_gesehen") or "9") < alt_grenze:
@@ -223,12 +225,21 @@ class Rechner:
         return erg
 
     # ---------- Kosten ----------
+    def transport(self, a: dict) -> float:
+        """Abholung nach Entfernung (Grundpauschale + €/km), ohne bekannte Entfernung die Pauschale."""
+        k = self.c["kosten"]
+        km = a.get("entfernung_km")
+        if km is None or "transport_pro_km" not in k:
+            return k["transport_pauschal"]
+        return k.get("transport_grundpauschale", 0) + km * k["transport_pro_km"]
+
     def kosten(self, a: dict, vk: float) -> dict:
         k = self.c["kosten"]
         posten = {
             "Aufbereitung": k["aufbereitung"],
             "HU / Gasprüfung": k["hu_gasprüfung"],
-            "Transport": k["transport_pauschal"],
+            (f"Abholung ({a['entfernung_km']} km)" if a.get("entfernung_km") is not None else "Transport"):
+                self.transport(a),
             "Standkosten": k["standkosten_pro_monat"] * k["standzeit_monate"],
             "Gewährleistungsrücklage": vk * k["gewährleistung_rücklage_prozent"],
         }

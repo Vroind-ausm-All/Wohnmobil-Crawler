@@ -16,14 +16,23 @@ CREATE TABLE IF NOT EXISTS anzeigen (
     detail_geladen INTEGER DEFAULT 0,
     erstmals_gesehen TEXT, zuletzt_gesehen TEXT,
     preis_vorher INTEGER,
-    status TEXT DEFAULT 'neu',      -- neu | kontaktiert | uninteressant | gekauft | gelöscht
+    status TEXT DEFAULT 'neu',      -- siehe STATUS, außerdem 'gelöscht' (Anzeige offline)
     notiz TEXT,
-    bild TEXT, kontaktiert_am TEXT, anschreiben_text TEXT
+    bild TEXT, kontaktiert_am TEXT, anschreiben_text TEXT,
+    preis_geaendert_am TEXT, nachgefasst_am TEXT, nachfass_anzahl INTEGER DEFAULT 0,
+    angebot_betrag INTEGER, status_am TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_zuletzt ON anzeigen(zuletzt_gesehen);
 """
 # Spalten, die nach Version 1 dazugekommen sind (ältere Datenbanken werden beim Start ergänzt)
-NEUE_SPALTEN = {"bild": "TEXT", "kontaktiert_am": "TEXT", "anschreiben_text": "TEXT"}
+NEUE_SPALTEN = {"bild": "TEXT", "kontaktiert_am": "TEXT", "anschreiben_text": "TEXT", "preis_geaendert_am": "TEXT",
+                "nachgefasst_am": "TEXT", "nachfass_anzahl": "INTEGER DEFAULT 0", "angebot_betrag": "INTEGER",
+                "status_am": "TEXT"}
+
+# Ablauf eines Ankaufs (Schlüssel → Anzeige in der App)
+STATUS = {"neu": "offen", "kontaktiert": "kontaktiert", "verhandlung": "in Verhandlung",
+          "besichtigung": "Besichtigung", "gekauft": "gekauft", "abgesagt": "abgesagt",
+          "uninteressant": "uninteressant"}
 
 FELDER_UPDATE = ["url", "suche", "titel", "preis", "vb", "ort", "km", "ez_jahr", "marke",
                  "kurzbeschreibung", "gewerblich", "bild"]
@@ -62,6 +71,7 @@ class Datenbank:
             ergebnis = "bekannt"
             if a.get("preis") and alt["preis"] and a["preis"] < alt["preis"]:
                 werte["preis_vorher"] = alt["preis"]
+                werte["preis_geaendert_am"] = jetzt
                 ergebnis = "preis"
             sets = ", ".join(f"{k}=?" for k in werte) + ", zuletzt_gesehen=?"
             self.con.execute(f"UPDATE anzeigen SET {sets} WHERE id=?", [*werte.values(), jetzt, a["id"]])
@@ -92,18 +102,42 @@ class Datenbank:
     def alle_mit_preis(self) -> list[sqlite3.Row]:
         return self.con.execute("SELECT * FROM anzeigen WHERE preis IS NOT NULL").fetchall()
 
-    def setze_status(self, ad_id: str, status: str, notiz: str | None = None, text: str | None = None) -> bool:
-        """Bei 'kontaktiert' werden Zeitpunkt und gesendeter Text gespeichert, bei 'neu' zurückgesetzt."""
+    def letzter_lauf(self) -> datetime | None:
+        """Zeitpunkt, zu dem zuletzt Anzeigen gesehen wurden (≈ letzter Suchlauf)."""
+        wert = self.con.execute("SELECT MAX(zuletzt_gesehen) FROM anzeigen").fetchone()[0]
+        return datetime.fromisoformat(wert) if wert else None
+
+    def setze_status(self, ad_id: str, status: str, notiz: str | None = None, text: str | None = None,
+                     betrag: int | None = None) -> bool:
+        """Mit Text (= Anschreiben gesendet) werden Zeitpunkt, Text und Angebot gespeichert; 'neu' setzt zurück."""
         jetzt = datetime.now().isoformat(timespec="seconds")
-        if status == "kontaktiert":
-            sql, werte = ("UPDATE anzeigen SET status=?, notiz=COALESCE(?, notiz), kontaktiert_am=?, "
-                          "anschreiben_text=COALESCE(?, anschreiben_text) WHERE id=?", (status, notiz, jetzt, text, ad_id))
+        sets, werte = ["status=?", "status_am=?", "notiz=COALESCE(?, notiz)"], [status, jetzt, notiz]
+        if status == "kontaktiert" and text:
+            sets += ["kontaktiert_am=?", "anschreiben_text=?", "angebot_betrag=?", "nachgefasst_am=NULL",
+                     "nachfass_anzahl=0"]
+            werte += [jetzt, text, betrag]
+        elif status == "kontaktiert":
+            sets.append("kontaktiert_am=COALESCE(kontaktiert_am, ?)")
+            werte.append(jetzt)
         elif status == "neu":
-            sql, werte = ("UPDATE anzeigen SET status=?, notiz=COALESCE(?, notiz), kontaktiert_am=NULL WHERE id=?",
-                          (status, notiz, ad_id))
-        else:
-            sql, werte = "UPDATE anzeigen SET status=?, notiz=COALESCE(?, notiz) WHERE id=?", (status, notiz, ad_id)
-        cur = self.con.execute(sql, werte)
+            sets += ["kontaktiert_am=NULL", "nachgefasst_am=NULL", "nachfass_anzahl=0"]
+        if betrag and not (status == "kontaktiert" and text):
+            sets.append("angebot_betrag=?")
+            werte.append(betrag)
+        cur = self.con.execute(f"UPDATE anzeigen SET {', '.join(sets)} WHERE id=?", [*werte, ad_id])
+        self.con.commit()
+        return cur.rowcount > 0
+
+    def nachgefasst(self, ad_id: str, text: str, betrag: int | None = None) -> bool:
+        """Nachfass-Nachricht gesendet: Zeitpunkt merken, Text an den Verlauf anhängen."""
+        jetzt = datetime.now().isoformat(timespec="seconds")
+        cur = self.con.execute(
+            "UPDATE anzeigen SET nachgefasst_am=?, nachfass_anzahl=COALESCE(nachfass_anzahl, 0)+1, "
+            "anschreiben_text=COALESCE(anschreiben_text || char(10) || char(10), '') || ? || char(10) || ?, "
+            "angebot_betrag=COALESCE(?, angebot_betrag), "
+            "status=CASE WHEN status IN ('neu', 'abgesagt') THEN 'kontaktiert' ELSE status END, "
+            "kontaktiert_am=COALESCE(kontaktiert_am, ?) WHERE id=?",
+            (jetzt, f"--- nachgefasst am {jetzt[:10]} ---", text, betrag, jetzt, ad_id))
         self.con.commit()
         return cur.rowcount > 0
 

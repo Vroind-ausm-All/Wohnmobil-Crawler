@@ -37,6 +37,7 @@ filter:
   preis_max: 120000
   ez_ab_jahr: 2000               # Erstzulassung ab
   km_max: 250000
+  max_entfernung_km: 0           # weiter entfernte Fahrzeuge nicht anschreiben (0 = egal)
   # Anzeigen mit diesen Begriffen werden NICHT angeschrieben
   sperrbegriffe:
     - keine händler
@@ -141,7 +142,11 @@ rechner:
     hu_gasprüfung: 350
     standkosten_pro_monat: 120
     standzeit_monate: 3
-    transport_pauschal: 300
+    # Abholung: Grundpauschale + € je km Fahrstrecke (Sprit, Fahrer, Rückreise).
+    # Die Entfernung wird aus deiner PLZ (anschreiben → plz) und der PLZ der Anzeige geschätzt.
+    transport_grundpauschale: 80
+    transport_pro_km: 0.90
+    transport_pauschal: 300           # wenn die Entfernung unbekannt ist
     gewährleistung_rücklage_prozent: 0.025   # vom Händler-VK
     # Reparaturrisiko nach Fahrzeugalter (Jahre bis)
     reparatur_risiko:
@@ -173,10 +178,26 @@ anschreiben:
   ansprechpartner: "Max Mustermann"
   telefon: "0711 123456"
   ort: "Stuttgart"
+  plz: "70173"                     # dein Standort – für Entfernung und Abholkosten
   # Nur Anzeigen mit dieser Ampel oder besser bekommen ein Anschreiben
   ab_ampel: gelb
 
-# --- 6. Ausgabe & Benachrichtigung -----------------------------
+# --- 6. Nachfassen ---------------------------------------------
+# Kontaktierte Fahrzeuge erscheinen unter "Nachfassen", wenn nach so vielen Tagen
+# noch keine Antwort eingetragen ist – oder sofort, wenn der Verkäufer den Preis senkt.
+nachfassen:
+  nach_tagen: 3
+  max_anzahl: 1                    # so oft wird höchstens nachgefasst (Preissenkungen zählen extra)
+  vorlage: vorlagen/nachfassen.txt
+
+# --- 7. App -----------------------------------------------------
+app:
+  port: 8765
+  auto_suche_stunden: 3            # sucht automatisch, solange die App offen ist (0 = aus)
+  auto_suche_von: 7                # nur zwischen 7 und 21 Uhr
+  auto_suche_bis: 21
+
+# --- 8. Ausgabe & Benachrichtigung -----------------------------
 ausgabe:
   ordner: ausgabe
   datenbank: daten/anzeigen.sqlite

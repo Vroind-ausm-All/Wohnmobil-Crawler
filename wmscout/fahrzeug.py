@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import re
 
+from .geo import plz_aus_text
+
 # Aufbauhersteller (Reihenfolge egal – längere Namen werden zuerst geprüft)
 MARKEN = [
     "Adria", "Ahorn", "Benimar", "Bimobil", "Bürstner", "Carado", "Carthago", "Challenger", "Chausson",
@@ -215,8 +217,19 @@ def fahrzeug_bezeichnung(marke: str | None, modell: str | None) -> str:
     return modell or "Wohnmobil"
 
 
+def serie_aus_modell(marke: str | None, modell: str | None) -> str | None:
+    """Modellreihe ohne Grundriss („Sky TI 650 MEG“ → „Sky TI“) – für genauere Vergleiche."""
+    if not modell:
+        return None
+    for serie, mu in _MODELL_MUSTER.get(marke or "", []):
+        if (m := mu.match(modell)) and m.start() == 0:
+            return serie
+    erstes = modell.split()[0]
+    return None if erstes.isdigit() else erstes
+
+
 def ergaenze_fahrzeug(a: dict) -> dict:
-    """Setzt marke (normalisiert), modell und fahrzeug („Knaus Sky TI 650 MEG“) in einer Anzeige."""
+    """Setzt marke (normalisiert), modell, serie, fahrzeug („Knaus Sky TI 650 MEG“) und plz in einer Anzeige."""
     titel = a.get("titel") or ""
     text = " ".join(str(a.get(k) or "") for k in ("kurzbeschreibung", "beschreibung"))
     marke = normalisiere_marke(a.get("marke"))
@@ -227,5 +240,6 @@ def ergaenze_fahrzeug(a: dict) -> dict:
     except ValueError:
         details = {}
     modell = modell_aus_text(marke, titel, text, details.get("Modell"))
-    a.update(marke=marke, modell=modell, fahrzeug=fahrzeug_bezeichnung(marke, modell))
+    a.update(marke=marke, modell=modell, serie=serie_aus_modell(marke, modell),
+             fahrzeug=fahrzeug_bezeichnung(marke, modell), plz=plz_aus_text(a.get("ort")))
     return a

@@ -13,13 +13,16 @@ import yaml
 
 from wmscout import crawler as crawler_mod
 from wmscout.anschreiben import Anschreiber, euro
-from wmscout.app import erstelle_server
+from datetime import datetime, timedelta
+
+from wmscout.app import AutoSuche, erstelle_server
 from wmscout.crawler import Crawler, seiten_url
 from wmscout.db import Datenbank
 from wmscout.fahrzeug import ergaenze_fahrzeug, marke_aus_text, modell_aus_text
+from wmscout.geo import entfernung_km, plz_aus_text
 from wmscout.parser import parse_detailseite, parse_suchseite
 from wmscout.rechner import Rechner
-from wmscout.report import bewerte_alle, schreibe_ausgaben
+from wmscout.report import bewerte_alle, finde_duplikate, schreibe_ausgaben
 
 BASIS = Path(__file__).resolve().parent.parent
 random.seed(4)
@@ -67,6 +70,7 @@ def detail_html(a, marke_feld=None):
 </body></html>"""
 
 
+ORTE = ["70173 Stuttgart", "80331 München", "10115 Berlin", "50667 Köln", "73728 Esslingen"]
 MODELL_NAMEN = {"Knaus": "Sky TI 650 MEG", "Hymer": "ML-T 570", "Dethleffs": "Trend T 7057 EB",
                 "Bürstner": "Lyseo TD 728 G", "Pössl": "Summit 600", "Weinsberg": "CaraCompact 600 MEG"}
 
@@ -82,7 +86,8 @@ def baue_ads(n=60):
         lang = "Gepflegtes Fahrzeug, scheckheftgepflegt, Nichtraucher, keine Feuchtigkeit."
         if i % 9 == 0:
             lang += " Keine Händleranfragen!"
-        ads.append({"id": str(3500000000 + i), "slug": f"wohnmobil-{i}", "plz": "70173", "ort": "Stuttgart",
+        plz, ort = random.choice(ORTE).split(" ", 1)
+        ads.append({"id": str(3500000000 + i), "slug": f"wohnmobil-{i}", "plz": plz, "ort": ort,
                     "titel": f"{marke} {MODELL_NAMEN[marke]} T{i}", "kurz": "Verkaufe unser Wohnmobil …",
                     "preis": preis, "ez": ez, "km": km, "marke": marke, "lang": lang})
     return ads
@@ -178,8 +183,97 @@ def test_anschreiben():
         "Hersteller- bzw. Dichtigkeitsgarantie", "Herstellergarantie")
 
 
+def test_geo_und_transport():
+    assert plz_aus_text("70173 Stuttgart") == "70173" and plz_aus_text("Stuttgart") is None
+    assert entfernung_km("70173", "70173") == 0
+    berlin = entfernung_km("70173", "10115")           # Luftlinie ≈ 510 km, Straße ≈ 630 km
+    assert 560 < berlin < 720, berlin
+    assert entfernung_km("70173", None) is None
+    cfg = copy.deepcopy(CFG)
+    a = {"id": "t", "suche": "Kastenwagen", "ez_jahr": date.today().year - 5, "km": 50000, "entfernung_km": 300}
+    posten = Rechner(cfg).kosten(a, 40000)
+    k = cfg["rechner"]["kosten"]
+    assert posten["Abholung (300 km)"] == round((k["transport_grundpauschale"] + 300 * k["transport_pro_km"]) / 10) * 10
+    assert Rechner(cfg).kosten({**a, "entfernung_km": None}, 40000)["Transport"] == k["transport_pauschal"]
+
+
+def test_duplikate():
+    basis = {"marke": "Knaus", "ez_jahr": 2017, "plz": "70173", "serie": "Sky TI"}
+    alt = {**basis, "id": "1", "km": 85000, "status": "kontaktiert"}
+    neu = {**basis, "id": "2", "km": 85400, "status": "neu"}
+    anderer_ort = {**basis, "id": "3", "km": 85000, "plz": "80331"}
+    andere_serie = {**basis, "id": "4", "km": 85000, "serie": "Van TI"}
+    d = finde_duplikate([alt, neu, anderer_ort, andere_serie])
+    assert {b["id"] for b in d["2"]} == {"1"} and "3" not in d and "4" not in d, d
+
+
+def test_auto_suche():
+    auto = AutoSuche({"app": {"auto_suche_stunden": 3, "auto_suche_von": 7, "auto_suche_bis": 21}}, None)
+    t = datetime(2026, 10, 13, 11, 0)
+    assert auto.naechste(datetime(2026, 10, 13, 10, 0), t) == datetime(2026, 10, 13, 13, 0)
+    assert auto.naechste(datetime(2026, 10, 13, 6, 0), t) == t                      # überfällig → jetzt
+    assert auto.naechste(datetime(2026, 10, 13, 20, 0), t) == datetime(2026, 10, 14, 7, 0)
+    assert auto.naechste(None, datetime(2026, 10, 13, 5, 0)) == datetime(2026, 10, 13, 7, 0)
+
+
+def test_layout_waechter(tmp: Path):
+    cfg = copy.deepcopy(CFG)
+    cfg["crawler"].update(pause_min_sek=0, pause_max_sek=0)
+    cfg["ausgabe"]["ordner"] = str(tmp / "diag")
+
+    class NeuesLayout(Crawler):
+        def _hole(self, url):
+            return "<html><body>" + "<div class='neues-design'>Anzeige</div>" * 2000 + "</body></html>"
+
+    stat = NeuesLayout(cfg, Datenbank(str(tmp / "layout.sqlite"))).lauf([{"name": "x", "url": "https://x.de/c220"}])
+    assert stat["fehler"] and "Seitenlayout" in stat["fehler"], stat
+    assert (tmp / "diag" / "diagnose_suchseite.html").exists()
+
+
+def test_nachfassen(cfg, db, ad: dict):
+    """Erstkontakt → nach 5 Tagen ohne Antwort nachfassen → Preissenkung → Zusage-Text → Duplikat gesperrt."""
+    ad_id = ad["a"]["id"]
+    betrag = ad["b"].erstangebot
+    db.setze_status(ad_id, "kontaktiert", text=ad["brief"], betrag=betrag)
+    vor_5_tagen = (datetime.now() - timedelta(days=5)).isoformat(timespec="seconds")
+    db.con.execute("UPDATE anzeigen SET kontaktiert_am=? WHERE id=?", (vor_5_tagen, ad_id))
+    db.con.commit()
+
+    def zeile():
+        return next(z for z in bewerte_alle(cfg, db, BASIS) if z["a"]["id"] == ad_id)
+
+    z = zeile()
+    assert z["nachfassen"] == "seit 5 Tagen keine Antwort", z["nachfassen"]
+    assert f"Mein Angebot über {euro(betrag)}" in z["nachfass_text"] and "vorbehaltlich" in z["nachfass_text"], z["nachfass_text"]
+    assert z["nachfass_betrag"] == betrag
+
+    db.nachgefasst(ad_id, z["nachfass_text"], z["nachfass_betrag"])
+    assert zeile()["nachfassen"] is None                              # gerade nachgefasst, max_anzahl erreicht
+    vor_1_min = (datetime.now() - timedelta(minutes=1)).isoformat(timespec="seconds")
+    db.con.execute("UPDATE anzeigen SET nachgefasst_am=? WHERE id=?", (vor_1_min, ad_id))
+    db.con.commit()
+
+    # Verkäufer senkt den Preis unter unser Angebot → sofort nachfassen mit Zusage
+    roh = dict(db.con.execute("SELECT * FROM anzeigen WHERE id=?", (ad_id,)).fetchone())
+    neuer_preis = betrag - 500
+    db.speichere_treffer({**roh, "preis": neuer_preis}, roh["suche"])
+    z = zeile()
+    assert z["nachfassen"] == f"Preis gesenkt auf {euro(neuer_preis)}", z["nachfassen"]
+    assert f"Zu Ihrem neuen Preis von {euro(neuer_preis)}" in z["nachfass_text"], z["nachfass_text"]
+    assert z["nachfass_betrag"] == neuer_preis
+
+    # Verkäufer stellt das Fahrzeug neu ein → nicht noch einmal anschreiben
+    kopie = {**roh, "id": "9" + ad_id, "url": roh["url"] + "-neu"}
+    db.speichere_treffer(kopie, roh["suche"])
+    db.speichere_details(kopie["id"], {"km": roh["km"], "ez_jahr": roh["ez_jahr"], "marke": roh["marke"],
+                                       "beschreibung": roh["beschreibung"], "titel": roh["titel"]})
+    dz = next(z for z in bewerte_alle(cfg, db, BASIS) if z["a"]["id"] == kopie["id"])
+    assert dz["sperre"] and "schon bearbeitet" in dz["sperre"] and not dz["bereit"], dz["sperre"]
+    assert dz["a"]["neu_eingestellt"]
+
+
 def test_app(cfg, db, ad_id):
-    server, token = erstelle_server(cfg, db, BASIS, port=0)
+    server, token, _ = erstelle_server(cfg, db, BASIS, port=0)
     port = server.server_address[1]
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
@@ -204,7 +298,15 @@ def test_app(cfg, db, ad_id):
         assert anfrage("POST", "/api/status", {"id": ad_id, "status": "quatsch"}, {"X-Scout-Token": token})[0] == 400
         status, html = anfrage("GET", "/")
         assert "Hallo Test" in html and "Rückruf Fr" in html
-        assert anfrage("POST", "/api/status", {"id": ad_id, "status": "neu"}, {"X-Scout-Token": token})[0] == 200
+        kopf = {"X-Scout-Token": token}
+        assert anfrage("POST", "/api/status", {"id": ad_id, "status": "verhandlung", "betrag": 31000}, kopf)[0] == 200
+        assert anfrage("POST", "/api/nachgefasst", {"id": ad_id, "text": "Noch aktuell?", "betrag": 31000}, kopf)[0] == 200
+        zeile = db.con.execute("SELECT status, angebot_betrag, nachfass_anzahl, anschreiben_text FROM anzeigen WHERE id=?",
+                               (ad_id,)).fetchone()
+        assert zeile["status"] == "verhandlung" and zeile["angebot_betrag"] == 31000 and zeile["nachfass_anzahl"] == 1
+        assert zeile["anschreiben_text"].startswith("Hallo Test") and "Noch aktuell?" in zeile["anschreiben_text"]
+        assert anfrage("POST", "/api/nachgefasst", {"id": ad_id}, kopf)[0] == 400            # ohne Text
+        assert anfrage("POST", "/api/status", {"id": ad_id, "status": "neu"}, kopf)[0] == 200
     finally:
         server.shutdown()
         server.server_close()
@@ -217,6 +319,9 @@ def main():
     test_fahrzeug()
     test_rechner()
     test_anschreiben()
+    test_geo_und_transport()
+    test_duplikate()
+    test_auto_suche()
 
     ads = baue_ads()
     seiten = [ads[i:i + 25] for i in range(0, len(ads), 25)]
@@ -230,6 +335,7 @@ def main():
 
     # End-to-End mit gefälschtem Netz
     tmp = Path(tempfile.mkdtemp())
+    test_layout_waechter(tmp)
     cfg = copy.deepcopy(CFG)
     cfg["suchen"] = [{"name": "Teilintegrierter", "url": "https://www.kleinanzeigen.de/s-wohnwagen-mobile/c220"}]
     cfg["crawler"].update(pause_min_sek=0, pause_max_sek=0, detailseiten_pro_lauf=100)
@@ -245,6 +351,7 @@ def main():
 
     crawler_mod.Crawler._hole = falsch_hole
     stat = Crawler(cfg, db).lauf(cfg["suchen"])
+    assert finde_duplikate([ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()]) == {}, "Testdaten enthalten Duplikate"
     assert stat["neu"] == 60 and stat["details"] == 60, stat
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start="2000")
     erg = schreibe_ausgaben(cfg, zeilen, BASIS)
@@ -256,7 +363,12 @@ def main():
     bereit = [z for z in zeilen if z["bereit"]]
     assert bereit and all(z["a"]["fahrzeug"] in z["brief"] and "Vorbehaltlich" in z["brief"] for z in bereit)
     assert len(list((tmp / "ausgabe" / "anschreiben").glob("*.txt"))) == len(bereit)
+    assert all(z["a"]["entfernung_km"] is not None for z in zeilen)
+    assert any(k.startswith("Abholung (") for k in bereit[0]["b"].kosten_posten), bereit[0]["b"].kosten_posten
     print("OK", stat, erg["zaehl"])
+
+    test_nachfassen(cfg, db, bereit[1])
+    print("Nachfassen/Duplikate OK")
 
     test_app(cfg, db, bereit[0]["a"]["id"])
     print("App-Server OK")

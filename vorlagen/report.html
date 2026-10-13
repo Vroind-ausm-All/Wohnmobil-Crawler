@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Wohnmobil-Scout</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9A%90%3C/text%3E%3C/svg%3E">
 <style>
 :root{
   --bg:#f6f5f1; --card:#fff; --ink:#1d1f1c; --mute:#6b6f68; --line:#e2e0d8; --feld:#faf9f6;
@@ -104,6 +105,22 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
   display:flex;gap:14px;align-items:center;z-index:10;box-shadow:0 6px 24px rgba(0,0,0,.25)}
 #toast.zeigen{opacity:1;transform:translateX(-50%);pointer-events:auto}
 #toast button{font:inherit;font-size:13px;background:none;border:1px solid currentColor;color:inherit;border-radius:6px;padding:3px 9px;cursor:pointer}
+.tag.nachfassen{background:var(--gelb-bg);color:var(--gelb)}
+#liste[data-filter="arbeit"] .karte.erledigt,#liste[data-filter="nachfassen"] .karte.erledigt{opacity:1}
+.kasten{margin:0 0 14px;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--feld)}
+.kasten.hervor{border-color:var(--gelb);background:var(--gelb-bg)}
+.kasten h4{margin:0 0 6px;font-size:14px}
+.kasten textarea{min-height:170px;background:var(--card)}
+.verhandlung .zeile{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.verhandlung input{font:inherit;width:150px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.urteil{margin:8px 0 0;font-size:14px}
+.urteil.gut{color:var(--gruen)} .urteil.knapp{color:var(--gelb)} .urteil.schlecht{color:var(--rot)}
+.antwort-knoepfe{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.antwort-knoepfe button{font:inherit;font-size:13px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.antwort-knoepfe button.an{border-color:var(--akzent);color:var(--akzent);font-weight:600}
+.banner{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 14px;padding:10px 14px;
+  border-radius:10px;background:var(--akzent);color:var(--akzent-ink);font-size:14px}
+.banner .btn{background:var(--card);color:var(--ink);border-color:transparent}
 @media (max-width:760px){ .spalten{grid-template-columns:1fr} .spalten>div:last-child{order:-1} .brief{min-height:300px} }
 </style>
 </head>
@@ -118,15 +135,19 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     {% if app %}
     <div class="suchlauf">
       <span id="suchstatus" class="hinweis" aria-live="polite"></span>
+      <button id="glocke" class="btn" title="Browser-Hinweis bei neuen Treffern" hidden>🔔 Hinweise an</button>
       <button id="suchen" class="btn">↻ Neue Anzeigen suchen</button>
     </div>
     {% endif %}
   </header>
 
+  <div class="banner" id="banner" hidden><span id="banner-text"></span><button class="btn" onclick="location.reload()">Liste aktualisieren</button></div>
+
   <ol class="anleitung">
     <li><b>Wohnmobil anklicken</b> – faire Bewertung und fertiges Anschreiben ansehen (Text änderbar)</li>
     <li><b>✉ Anschreiben</b> – Text ist kopiert, die Anzeige öffnet sich{% if app %}, Status wird gespeichert{% endif %}</li>
     <li>Auf Kleinanzeigen <b>„Nachricht schreiben“</b> → <kbd>Strg</kbd>+<kbd>V</kbd> (Mac <kbd>⌘</kbd>+<kbd>V</kbd>) → Senden</li>
+    <li><b>Antwort bekommen?</b> Gegenangebot im Fahrzeugfenster eintragen → passende Antwort · keine Antwort → Filter <b>„Nachfassen“</b></li>
   </ol>
 
   <div class="kpis">
@@ -134,7 +155,8 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <div class="kpi"><b>{{ zaehl.gruen }}</b><span>Grün – Wunschpreis nah am Max-EK</span></div>
     <div class="kpi"><b>{{ zaehl.gelb }}</b><span>Gelb – mit Verhandlung möglich</span></div>
     <div class="kpi"><b>{{ zaehl.neu }}</b><span>Neu seit letztem Lauf</span></div>
-    <div class="kpi"><b>{{ zaehl.kontaktiert }}</b><span>Kontaktiert</span></div>
+    <div class="kpi"><b>{{ zaehl.nachfassen }}</b><span>Nachfassen fällig</span></div>
+    <div class="kpi"><b>{{ zaehl.arbeit }}</b><span>In Arbeit (kontaktiert, Verhandlung, Besichtigung)</span></div>
   </div>
 
   <div class="bar" role="toolbar">
@@ -142,13 +164,16 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <button data-f="gruen">Grün</button>
     <button data-f="gelb">Gelb</button>
     <button data-f="neu">Neu</button>
-    <button data-f="kontaktiert">Kontaktiert</button>
+    <button data-f="nachfassen">Nachfassen{% if zaehl.nachfassen %} ({{ zaehl.nachfassen }}){% endif %}</button>
+    <button data-f="arbeit">In Arbeit</button>
     <button data-f="alle">Alle</button>
     <select id="sort" aria-label="Sortierung">
       <option value="verh">Sortierung: beste Chance</option>
       <option value="pot">Gewinnpotenzial</option>
       <option value="neu">Neueste zuerst</option>
       <option value="preis">Preis aufsteigend</option>
+      <option value="entf">Entfernung</option>
+      <option value="tage">Längste Standzeit</option>
     </select>
     <input id="q" type="search" placeholder="Suchen: Marke, Modell, Ort …" aria-label="Suchen">
   </div>
@@ -158,7 +183,8 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <article class="karte {{ b.ampel }}" tabindex="0" data-id="{{ a.id }}" data-url="{{ a.url }}" data-ampel="{{ b.ampel }}"
          data-neu="{{ 1 if z.neu else 0 }}" data-bereit="{{ 1 if z.bereit else 0 }}" data-status="{{ a.status or 'neu' }}"
          data-verh="{{ b.verhaeltnis or 99 }}" data-pot="{{ b.potenzial or -999999 }}" data-preis="{{ a.preis or 0 }}"
-         data-zeit="{{ a.erstmals_gesehen }}"
+         data-zeit="{{ a.erstmals_gesehen }}" data-entf="{{ a.entfernung_km if a.entfernung_km is not none else 99999 }}"
+         data-tage="{{ a.tage_online or 0 }}" data-nachfassen="{{ 1 if z.nachfassen else 0 }}" data-erst="{{ b.erstangebot or 0 }}"
          data-text="{{ (a.fahrzeug ~ ' ' ~ a.titel ~ ' ' ~ (a.marke or '') ~ ' ' ~ (a.ort or '') ~ ' ' ~ (a.ez_jahr or '')) | lower }}">
       <div class="streif"></div>
       <div class="bild">
@@ -168,21 +194,26 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
           <span class="tag {{ b.ampel }}">{{ AMPEL[b.ampel] }}</span>
           {% if z.neu %}<span class="tag neu">neu</span>{% endif %}
           {% if a.preis_vorher %}<span class="tag">Preis gesenkt</span>{% endif %}
+          {% if a.neu_eingestellt %}<span class="tag">neu eingestellt</span>{% endif %}
+          {% if z.nachfassen %}<span class="tag nachfassen">nachfassen</span>{% endif %}
           <span class="tag status" hidden></span>
         </div>
       </div>
       <div class="inhalt">
         <h2>{{ a.fahrzeug }}</h2>
         <p class="meta">EZ {{ a.ez_jahr or '?' }} · {{ (a.km | tsd ~ ' km') if a.km else 'km ?' }} · {{ a.ort or 'Ort ?' }}</p>
+        <p class="meta">{% if a.entfernung_km is not none %}{{ a.entfernung_km | tsd }} km entfernt · {% endif %}{{ 'seit heute online' if not a.tage_online else ('seit 1 Tag online' if a.tage_online == 1 else 'seit ' ~ a.tage_online ~ ' Tagen online') }}</p>
         <p class="atitel" title="{{ a.titel }}">{{ a.titel }}</p>
         <div class="zahlen">
           <div><span>Wunschpreis</span><b>{{ a.preis | euro }}</b></div>
           <div class="betont"><span>Erstangebot</span><b>{{ b.erstangebot | euro if b.sicherheit != 'keine' else '–' }}</b></div>
           <div><span>Max-EK</span><b>{{ b.max_ek | euro if b.sicherheit != 'keine' else '–' }}</b></div>
         </div>
-        {% if z.sperre and not a.anschreiben_text %}<p class="sperre">Kein Anschreiben: {{ z.sperre }}</p>{% endif %}
+        {% if z.nachfassen %}<p class="sperre" style="color:var(--gelb)">Nachfassen: {{ z.nachfassen }}</p>
+        {% elif z.sperre and not a.anschreiben_text %}<p class="sperre">Kein Anschreiben: {{ z.sperre }}</p>{% endif %}
         <div class="karte-fuss">
-          {% if z.brief %}<button class="btn primaer{{ '' if z.bereit else ' leise' }}" data-schreiben>✉ Anschreiben</button>{% endif %}
+          {% if z.nachfassen %}<button class="btn primaer" data-nachfassen-senden>↻ Nachfassen</button>
+          {% elif z.brief %}<button class="btn primaer{{ '' if z.bereit else ' leise' }}" data-schreiben>✉ Anschreiben</button>{% endif %}
           <button class="btn" data-oeffnen>Details</button>
         </div>
       </div>
@@ -196,12 +227,14 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
 
 <div id="ablage" hidden>
 {% for z in zeilen %}{% set a = z.a %}{% set b = z.b %}
-  <section id="d{{ a.id }}" data-id="{{ a.id }}">
+  <section id="d{{ a.id }}" data-id="{{ a.id }}" data-vk="{{ b.haendler_vk }}" data-kosten="{{ b.kosten }}"
+           data-maxek="{{ b.max_ek }}" data-erst="{{ b.erstangebot }}" data-preis="{{ a.preis or 0 }}" data-zielmarge="{{ b.ziel_marge }}"
+           data-nfbetrag="{{ z.nachfass_betrag or '' }}">
     <div class="d-kopf">
       <div>
         <h2>{{ a.fahrzeug }}</h2>
         <p class="meta">{{ b.art }} · EZ {{ a.ez_jahr or '?' }}{% if b.alter is not none %} ({{ b.alter }} J.){% endif %} · {{ (a.km | tsd ~ ' km') if a.km else 'km ?' }} · {{ a.ort }} · Wunschpreis {{ a.preis | euro }}{{ ' VB' if a.vb }}</p>
-        <p class="meta">Anzeige: „{{ a.titel }}“</p>
+        <p class="meta">Anzeige: „{{ a.titel }}“{% if a.entfernung_km is not none %} · {{ a.entfernung_km | tsd }} km entfernt{% endif %} · {{ 'seit heute online' if not a.tage_online else 'seit ' ~ a.tage_online ~ (' Tag' if a.tage_online == 1 else ' Tagen') ~ ' online' }}{% if a.duplikat %} · <span class="warn">{{ a.duplikat }}</span>{% endif %}</p>
       </div>
       <button class="btn schliessen" data-schliessen aria-label="Schließen">×</button>
     </div>
@@ -236,6 +269,13 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
         {% endif %}
       </div>
       <div>
+        {% if z.nachfassen %}
+        <div class="kasten hervor">
+          <h4>Nachfassen: {{ z.nachfassen }}</h4>
+          <textarea id="n{{ a.id }}" aria-label="Nachfass-Text">{{ z.nachfass_text }}</textarea>
+          <div class="aktionen"><button class="btn primaer" data-nachfassen-senden>↻ Kopieren &amp; Anzeige öffnen</button></div>
+        </div>
+        {% endif %}
         <h3>Anschreiben</h3>
         {% if z.brief %}
           {% if not z.bereit %}<p class="warn" style="margin:0 0 8px">Ampel {{ AMPEL[b.ampel] }}: Das Erstangebot liegt deutlich unter dem Wunschpreis – nur senden, wenn du es trotzdem versuchen willst.</p>{% endif %}
@@ -254,11 +294,24 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
           <a class="btn" href="{{ a.url }}" target="_blank" rel="noopener">Anzeige öffnen ↗</a>
         </div>
         <div class="status-zeile">Status:
-          <button data-status="neu">offen</button>
-          <button data-status="kontaktiert">kontaktiert</button>
-          <button data-status="uninteressant">uninteressant</button>
-          <button data-status="gekauft">gekauft</button>
+          {% for schluessel, name in status_liste %}<button data-status="{{ schluessel }}">{{ name }}</button>{% endfor %}
         </div>
+        {% if b.sicherheit != 'keine' and b.max_ek %}
+        <div class="kasten verhandlung" style="margin-top:14px">
+          <h4>Verhandlungs-Assistent</h4>
+          <div class="zeile">
+            <label for="g{{ a.id }}" class="meta">Gegenangebot des Verkäufers</label>
+            <input id="g{{ a.id }}" type="number" inputmode="numeric" step="100" min="0" placeholder="z. B. {{ a.preis or '' }}" data-gegen>
+            <span class="meta">€</span>
+          </div>
+          <p class="urteil" data-urteil hidden></p>
+          <div data-antwortbereich hidden>
+            <div class="antwort-knoepfe" data-antwortarten></div>
+            <textarea data-antwort rows="7" aria-label="Antwort an den Verkäufer"></textarea>
+            <div class="aktionen"><button class="btn primaer" data-antwort-kopieren>Antwort kopieren &amp; Anzeige öffnen</button></div>
+          </div>
+        </div>
+        {% endif %}
         {% if app %}
           <label class="notiz">Notiz (wird gespeichert)<textarea data-notiz rows="2">{{ a.notiz or '' }}</textarea></label>
         {% else %}
@@ -274,34 +327,50 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
 
 <script>
 var SCOUT = {{ app | tojson }};
+var STATUS = {{ status_liste | tojson }};
+var SIGNATUR = {{ signatur | tojson }};
+var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
 (function(){
   var APP = SCOUT && SCOUT.token ? SCOUT : null;
   var liste = document.getElementById('liste'), dlg = document.getElementById('dlg'), ablage = document.getElementById('ablage');
   var karten = [].slice.call(liste.querySelectorAll('.karte')), filter = 'anschreiben';
-  var STATUS_TEXT = {kontaktiert:'kontaktiert', uninteressant:'uninteressant', gekauft:'gekauft'};
+  var STATUS_TEXT = {}; STATUS.forEach(function(s){ STATUS_TEXT[s[0]] = s[1]; });
+  var ARBEIT = {kontaktiert:1, verhandlung:1, besichtigung:1};
+
+  function zwei(n){ return (n < 10 ? '0' : '') + n; }
+  function jetztLokal(){ var d = new Date(); return d.getFullYear() + '-' + zwei(d.getMonth() + 1) + '-' + zwei(d.getDate()) + 'T' + zwei(d.getHours()) + ':' + zwei(d.getMinutes()) + ':' + zwei(d.getSeconds()); }
+  function eur(x){ return Math.round(x).toLocaleString('de-DE') + ' €'; }
+  function runde100(x){ return Math.round(x / 100) * 100; }
 
   function ladeLokal(){ try{ return JSON.parse(localStorage.getItem('scout-status') || '{}'); }catch(e){ return {}; } }
   function sichereLokal(o){ try{ localStorage.setItem('scout-status', JSON.stringify(o)); }catch(e){} }
   var lokal = APP ? {} : ladeLokal();
 
   function karte(id){ return liste.querySelector('.karte[data-id="' + id + '"]'); }
+  function abschnitt(id){ return document.getElementById('d' + id); }
   function zeigeStatus(id, status){
     var k = karte(id); if(!k) return;
     k.dataset.status = status;
     var tag = k.querySelector('.tag.status');
-    tag.hidden = !STATUS_TEXT[status]; tag.textContent = STATUS_TEXT[status] || '';
-    k.classList.toggle('erledigt', !!STATUS_TEXT[status]);
-    var d = document.getElementById('d' + id);
+    tag.hidden = status === 'neu'; tag.textContent = STATUS_TEXT[status] || '';
+    k.classList.toggle('erledigt', status !== 'neu');
+    var d = abschnitt(id);
     if(d) d.querySelectorAll('[data-status]').forEach(function(b){ b.classList.toggle('an', b.dataset.status === status); });
-  }
-  function speichere(id, status, text){
-    zeigeStatus(id, status);
-    if(!APP){ if(status === 'neu') delete lokal[id]; else lokal[id] = status; sichereLokal(lokal); return; }
-    post('/api/status', {id:id, status:status, text:text || null}).catch(function(){ toast('Status konnte nicht gespeichert werden – läuft die App noch?'); });
   }
   function post(url, daten){
     return fetch(url, {method:'POST', headers:{'Content-Type':'application/json','X-Scout-Token':APP.token}, body:JSON.stringify(daten)})
       .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); });
+  }
+  function speichere(id, status, text, betrag){
+    zeigeStatus(id, status);
+    if(!APP){ if(status === 'neu') delete lokal[id]; else lokal[id] = status; sichereLokal(lokal); return; }
+    post('/api/status', {id:id, status:status, text:text || null, betrag:betrag || null})
+      .catch(function(){ toast('Status konnte nicht gespeichert werden – läuft die App noch?'); });
+  }
+  // Betrag aus einem Text wie „… biete ich Ihnen … 32.300 € an“
+  function betragAus(text){
+    var m = text.match(/(\d{1,3}(?:\.\d{3})+|\d{4,6})\s*€\s+an\b/g);
+    return m ? parseInt(m[m.length - 1].replace(/[^\d]/g, ''), 10) : null;
   }
 
   // Kopieren: erst synchron (klappt auch bei file://), sonst Clipboard-API
@@ -314,7 +383,6 @@ var SCOUT = {{ app | tojson }};
     if(!ok && navigator.clipboard){ navigator.clipboard.writeText(text).catch(function(){}); ok = true; }
     return ok;
   }
-
   var toastTimer;
   function toast(text, rueckgaengig){
     var t = document.getElementById('toast'), b = document.getElementById('toast-zurueck');
@@ -323,20 +391,95 @@ var SCOUT = {{ app | tojson }};
     t.classList.add('zeigen'); clearTimeout(toastTimer);
     toastTimer = setTimeout(function(){ t.classList.remove('zeigen'); }, rueckgaengig ? 9000 : 5000);
   }
+  var HINWEIS = '  Auf Kleinanzeigen „Nachricht schreiben“ klicken, Strg+V, senden.';
+  function senden(id, text, danach){
+    var k = karte(id), ok = kopiere(text);
+    window.open(k.dataset.url, '_blank', 'noopener');
+    if(dlg.open) dlg.close();
+    danach(ok);
+  }
 
   function anschreiben(id){
     var t = document.getElementById('t' + id), k = karte(id); if(!t || !k) return;
-    var vorher = k.dataset.status, ok = kopiere(t.value);
-    window.open(k.dataset.url, '_blank', 'noopener');
-    speichere(id, 'kontaktiert', t.value);
-    if(dlg.open) dlg.close();
-    toast(ok ? 'Text kopiert ✓  Auf Kleinanzeigen „Nachricht schreiben“ klicken, Strg+V, senden.'
-             : 'Kopieren ging nicht – bitte im Detailfenster den Text markieren und kopieren.',
-          function(){ speichere(id, vorher === 'kontaktiert' ? 'neu' : vorher); });
+    var vorher = k.dataset.status;
+    senden(id, t.value, function(ok){
+      speichere(id, 'kontaktiert', t.value, betragAus(t.value) || +k.dataset.erst || null);
+      toast(ok ? 'Text kopiert ✓' + HINWEIS : 'Kopieren ging nicht – bitte im Detailfenster den Text markieren und kopieren.',
+            function(){ speichere(id, vorher === 'kontaktiert' ? 'neu' : vorher); });
+    });
+  }
+  function nachfassen(id){
+    var t = document.getElementById('n' + id), k = karte(id); if(!t || !k) return;
+    senden(id, t.value, function(ok){
+      k.dataset.nachfassen = '0';
+      var tag = k.querySelector('.tag.nachfassen'); if(tag) tag.remove();
+      var betrag = +abschnitt(id).dataset.nfbetrag || null;
+      if(APP) post('/api/nachgefasst', {id:id, text:t.value, betrag:betrag}).catch(function(){ toast('Konnte nicht gespeichert werden – läuft die App noch?'); });
+      else speichere(id, 'kontaktiert');
+      toast(ok ? 'Nachfass-Text kopiert ✓' + HINWEIS : 'Kopieren ging nicht – bitte Text markieren und kopieren.');
+    });
   }
 
+  // ---------- Verhandlungs-Assistent ----------
+  function gewinn(sec, ek){
+    var vk = +sec.dataset.vk, kosten = +sec.dataset.kosten;
+    if(!P25A) return vk / 1.19 - ek - kosten;
+    return vk > ek ? (vk - ek) * 100 / 119 - kosten : vk - ek - kosten;
+  }
+  var VORBEHALT = 'vorbehaltlich einer Besichtigung mit kurzer Probefahrt und sofern der Zustand Ihrer Beschreibung entspricht';
+  function antwortText(art, x, y){
+    var gruss = '\n\nViele Grüße\n' + SIGNATUR.ansprechpartner + '\n' + SIGNATUR.firma + ' · ' + SIGNATUR.telefon;
+    var start = 'Hallo,\n\nvielen Dank für Ihre Rückmeldung. ';
+    if(art === 'zusage') return start + eur(x) + ' passen für mich – ' + VORBEHALT + '. Wann würde Ihnen ein Termin passen? Zahlung sofort, Abholung und Abmeldung übernehmen wir.' + gruss;
+    if(art === 'mitte') return start + eur(x) + ' sind mir für das Fahrzeug leider etwas zu viel. Treffen wir uns in der Mitte bei ' + eur(y) + '? Das gilt ' + VORBEHALT + ' – dann können wir kurzfristig abwickeln: Zahlung sofort, Abholung durch uns.' + gruss;
+    if(art === 'letztes') return start + eur(x) + ' kann ich als Händler leider nicht darstellen, weil bei uns noch Aufbereitung, Gasprüfung, Gewährleistung und Standzeit dazukommen. Mein letztes Angebot wäre ' + eur(y) + ' – ' + VORBEHALT + '. Wenn das für Sie passt, melden Sie sich gern.' + gruss;
+    return start + 'Bei ' + eur(x) + ' kommen wir leider nicht zusammen. Falls Sie es sich anders überlegen, melden Sie sich gern – ansonsten viel Erfolg beim Verkauf!' + gruss;
+  }
+  var ART_NAME = {zusage:'Zusage zu ', mitte:'Gegenvorschlag ', letztes:'Letztes Angebot ', absage:'Freundlich absagen'};
+  function bewerteGegen(sec){
+    var x = Math.round(+sec.querySelector('[data-gegen]').value);
+    var urteil = sec.querySelector('[data-urteil]'), bereich = sec.querySelector('[data-antwortbereich]');
+    if(!x || x < 500){ urteil.hidden = true; bereich.hidden = true; return; }
+    var erst = +sec.dataset.erst, max = +sec.dataset.maxek, g = gewinn(sec, x), arten;
+    if(x <= max){
+      var mitte = Math.min(max, runde100((erst + x) / 2));
+      urteil.className = 'urteil ' + (x <= erst ? 'gut' : 'knapp');
+      urteil.textContent = (x <= erst ? '✓ Auf oder unter deinem Erstangebot. ' : '✓ Unter deinem Max-EK (' + eur(max) + ') – annehmbar. ')
+        + 'Gewinn bei ' + eur(x) + ': ' + eur(g) + ' (Ziel-Marge ' + eur(+sec.dataset.zielmarge) + ').';
+      arten = x <= erst ? [['zusage', x]] : (x - erst <= 500 ? [['zusage', x], ['mitte', mitte]] : [['mitte', mitte], ['zusage', x]]);
+    } else {
+      urteil.className = 'urteil schlecht';
+      urteil.textContent = '✗ Über deinem Max-EK (' + eur(max) + '). Bei ' + eur(x) + (g < 0 ? ' machst du ' + eur(-g) + ' Verlust.'
+        : ' bleiben nur ' + eur(g) + ' Gewinn statt Ziel-Marge ' + eur(+sec.dataset.zielmarge) + '.');
+      arten = [['letztes', max], ['absage', x]];
+    }
+    var knoepfe = sec.querySelector('[data-antwortarten]'), feld = sec.querySelector('[data-antwort]');
+    knoepfe.innerHTML = '';
+    arten.forEach(function(a, i){
+      var b = document.createElement('button');
+      b.type = 'button'; b.textContent = ART_NAME[a[0]] + (a[0] === 'absage' ? '' : eur(a[1]));
+      b.onclick = function(){
+        knoepfe.querySelectorAll('button').forEach(function(x){ x.classList.remove('an'); });
+        b.classList.add('an'); feld.value = antwortText(a[0], x, a[1]);
+        sec.dataset.antwortBetrag = a[0] === 'absage' ? '' : a[1];
+      };
+      knoepfe.appendChild(b);
+      if(i === 0) b.onclick();
+    });
+    urteil.hidden = false; bereich.hidden = false;
+  }
+  function antwortSenden(sec){
+    var id = sec.dataset.id, text = sec.querySelector('[data-antwort]').value, k = karte(id);
+    senden(id, text, function(ok){
+      var s = k.dataset.status;
+      speichere(id, ARBEIT[s] && s !== 'kontaktiert' ? s : 'verhandlung', null, +sec.dataset.antwortBetrag || null);
+      toast(ok ? 'Antwort kopiert ✓' + HINWEIS : 'Kopieren ging nicht – bitte Text markieren und kopieren.');
+    });
+  }
+
+  // ---------- Detailfenster ----------
   function oeffne(id){
-    var d = document.getElementById('d' + id); if(!d) return;
+    var d = abschnitt(id); if(!d) return;
     if(dlg.firstElementChild) ablage.appendChild(dlg.firstElementChild);
     dlg.appendChild(d); zeigeStatus(id, karte(id).dataset.status);
     dlg.showModal(); dlg.scrollTop = 0;
@@ -347,12 +490,12 @@ var SCOUT = {{ app | tojson }};
     var d = e.target.closest('section'); if(!d) return;
     var id = d.dataset.id;
     if(e.target.closest('[data-schreiben]')) anschreiben(id);
+    else if(e.target.closest('[data-nachfassen-senden]')) nachfassen(id);
+    else if(e.target.closest('[data-antwort-kopieren]')) antwortSenden(d);
     else if(e.target.closest('[data-kopieren]')) toast(kopiere(document.getElementById('t' + id).value) ? 'Text kopiert ✓' : 'Kopieren ging nicht – bitte Text markieren.');
-    else if(e.target.closest('[data-status]')){
-      var s = e.target.closest('[data-status]').dataset.status, t = document.getElementById('t' + id);
-      speichere(id, s, s === 'kontaktiert' && t ? t.value : null);
-    }
+    else if(e.target.closest('[data-status]')) speichere(id, e.target.closest('[data-status]').dataset.status);
   });
+  dlg.addEventListener('input', function(e){ if(e.target.matches('[data-gegen]')) bewerteGegen(e.target.closest('section')); });
   dlg.addEventListener('change', function(e){
     if(!APP || !e.target.matches('[data-notiz]')) return;
     post('/api/notiz', {id:e.target.closest('section').dataset.id, notiz:e.target.value})
@@ -361,20 +504,24 @@ var SCOUT = {{ app | tojson }};
 
   liste.addEventListener('click', function(e){
     var k = e.target.closest('.karte'); if(!k) return;
-    if(e.target.closest('[data-schreiben]')) anschreiben(k.dataset.id); else oeffne(k.dataset.id);
+    if(e.target.closest('[data-schreiben]')) anschreiben(k.dataset.id);
+    else if(e.target.closest('[data-nachfassen-senden]')) nachfassen(k.dataset.id);
+    else oeffne(k.dataset.id);
   });
   liste.addEventListener('keydown', function(e){
     var k = e.target.closest('.karte');
     if(k && e.target === k && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); oeffne(k.dataset.id); }
   });
 
+  // ---------- Filter & Sortierung ----------
   function zeige(){
     var q = document.getElementById('q').value.toLowerCase().trim(), sichtbar = 0;
+    liste.dataset.filter = filter;
     karten.forEach(function(k){
-      var s = k.dataset.status, offen = s === 'neu';
-      var ok = filter === 'alle' || (filter === 'anschreiben' && k.dataset.bereit === '1' && offen)
-            || (filter === 'kontaktiert' && s === 'kontaktiert') || (filter === 'neu' && k.dataset.neu === '1')
-            || ((filter === 'gruen' || filter === 'gelb') && k.dataset.ampel === filter);
+      var s = k.dataset.status;
+      var ok = filter === 'alle' || (filter === 'anschreiben' && k.dataset.bereit === '1' && s === 'neu')
+            || (filter === 'nachfassen' && k.dataset.nachfassen === '1') || (filter === 'arbeit' && ARBEIT[s])
+            || (filter === 'neu' && k.dataset.neu === '1') || ((filter === 'gruen' || filter === 'gelb') && k.dataset.ampel === filter);
       if(q && q.split(/\s+/).some(function(w){ return k.dataset.text.indexOf(w) < 0; })) ok = false;
       k.hidden = !ok; if(ok) sichtbar++;
     });
@@ -386,6 +533,8 @@ var SCOUT = {{ app | tojson }};
       if(s === 'verh') return a.dataset.verh - b.dataset.verh;
       if(s === 'pot') return b.dataset.pot - a.dataset.pot;
       if(s === 'preis') return a.dataset.preis - b.dataset.preis;
+      if(s === 'entf') return a.dataset.entf - b.dataset.entf;
+      if(s === 'tage') return b.dataset.tage - a.dataset.tage;
       return a.dataset.zeit < b.dataset.zeit ? 1 : -1;
     }).forEach(function(k){ liste.insertBefore(k, document.getElementById('leer')); });
   }
@@ -402,21 +551,49 @@ var SCOUT = {{ app | tojson }};
   karten.forEach(function(k){ zeigeStatus(k.dataset.id, lokal[k.dataset.id] || k.dataset.status); });
   sortiere(); zeige();
 
-  // Suchlauf aus der App starten
+  // ---------- Suchlauf (manuell + automatisch) ----------
   var knopf = document.getElementById('suchen');
   if(APP && knopf){
-    var anzeige = document.getElementById('suchstatus');
+    var anzeige = document.getElementById('suchstatus'), glocke = document.getElementById('glocke');
+    var manuell = false, bekanntesEnde, timer;   // undefined = noch nicht abgefragt
+    var plane = function(ms){ clearTimeout(timer); timer = setTimeout(pruefe, ms); };
+    var melde = function(s){
+      if(!('Notification' in window) || Notification.permission !== 'granted' || !(s.neue_treffer || s.nachfassen)) return;
+      try{ new Notification('Wohnmobil-Scout', {body: s.neue_treffer + ' neue Wohnmobile mit fertigem Anschreiben'
+                                                + (s.nachfassen ? ' · ' + s.nachfassen + '× nachfassen' : '')}); }catch(e){}
+    };
     var pruefe = function(){
       fetch('/api/suchlauf').then(function(r){ return r.json(); }).then(function(s){
-        anzeige.textContent = s.meldung || '';
-        if(s.laeuft){ knopf.disabled = true; knopf.textContent = 'Suche läuft …'; setTimeout(pruefe, 3000); }
-        else if(knopf.disabled){ toast((s.fehler ? 'Suchlauf beendet mit Fehler: ' + s.fehler : s.meldung) + ' – Liste wird neu geladen.'); setTimeout(function(){ location.reload(); }, 1800); }
-      }).catch(function(){ anzeige.textContent = 'App nicht erreichbar'; });
+        if(s.laeuft){
+          if(bekanntesEnde === undefined) bekanntesEnde = null;
+          knopf.disabled = true; knopf.textContent = 'Suche läuft …'; anzeige.textContent = s.meldung || ''; plane(3000); return;
+        }
+        knopf.disabled = false; knopf.textContent = '↻ Neue Anzeigen suchen';
+        var heute = jetztLokal().slice(0, 10);
+        anzeige.textContent = s.naechste_auto ? 'Nächste automatische Suche: ' + (s.naechste_auto.slice(0, 10) > heute ? 'morgen ' : '')
+                                               + s.naechste_auto.slice(11, 16) + ' Uhr' : '';
+        var neuesEnde = bekanntesEnde !== undefined && s.ende && s.ende !== bekanntesEnde;
+        bekanntesEnde = s.ende;
+        if(neuesEnde){
+          var text = s.fehler ? 'Suchlauf beendet mit Fehler: ' + s.fehler : s.meldung;
+          if(manuell){ toast(text + ' – Liste wird neu geladen.'); setTimeout(function(){ location.reload(); }, 1800); }
+          else {
+            document.getElementById('banner-text').textContent = text;
+            document.getElementById('banner').hidden = false;
+            melde(s);
+          }
+        }
+        plane(60000);
+      }).catch(function(){ anzeige.textContent = 'App nicht erreichbar – läuft das schwarze Fenster noch?'; plane(60000); });
     };
     knopf.onclick = function(){
-      post('/api/suchlauf', {}).then(function(){ knopf.disabled = true; knopf.textContent = 'Suche läuft …'; pruefe(); },
+      post('/api/suchlauf', {}).then(function(){ manuell = true; knopf.disabled = true; knopf.textContent = 'Suche läuft …'; plane(1000); },
                                     function(){ toast('Suchlauf konnte nicht gestartet werden'); });
     };
+    if('Notification' in window && Notification.permission === 'default'){
+      glocke.hidden = false;
+      glocke.onclick = function(){ Notification.requestPermission().then(function(p){ glocke.hidden = p !== 'default'; if(p === 'granted') toast('Hinweise aktiviert ✓'); }); };
+    }
     pruefe();
   }
 })();

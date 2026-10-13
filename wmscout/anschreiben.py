@@ -6,6 +6,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from .db import STATUS
 from .fahrzeug import ART_PLURAL
 
 AMPEL_RANG = {"gruen": 0, "gelb": 1, "rot": 2, "grau": 3}
@@ -61,7 +62,9 @@ def sperrgrund(a: dict, cfg: dict) -> str | None:
     if a.get("gewerblich"):
         return "gewerblicher Anbieter"
     if a.get("status") not in (None, "neu"):
-        return f"Status: {a['status']}"
+        return f"Status: {STATUS.get(a['status'], a['status'])}"
+    if a.get("duplikat"):
+        return a["duplikat"]
     p = a.get("preis")
     if not p:
         return "kein Preis"
@@ -71,6 +74,8 @@ def sperrgrund(a: dict, cfg: dict) -> str | None:
         return "EZ zu alt"
     if a.get("km") and a["km"] > f["km_max"]:
         return "zu viele km"
+    if f.get("max_entfernung_km") and (a.get("entfernung_km") or 0) > f["max_entfernung_km"]:
+        return f"zu weit entfernt ({a['entfernung_km']} km)"
     text = " ".join(str(a.get(k) or "") for k in ("titel", "kurzbeschreibung", "beschreibung")).lower()
     for begriff in f["sperrbegriffe"]:
         if re.search(r"(?<!\w)" + re.escape(begriff.lower()), text):
@@ -116,21 +121,59 @@ def kontext(a: dict, b, cfg: dict) -> dict:
     )
 
 
+def betrag_aus_text(text: str | None) -> int | None:
+    """Angebotsbetrag aus einem gesendeten Anschreiben („… biete ich Ihnen … 32.300 € an“)."""
+    treffer = re.findall(r"(\d{1,3}(?:\.\d{3})+|\d{4,6})\s*€\s+an\b", text or "")
+    return int(treffer[-1].replace(".", "")) if treffer else None
+
+
+def nachfass_kontext(a: dict, b, cfg: dict) -> dict:
+    """Wie kontext(), plus Datum des Erstkontakts, Preissenkung und das jetzt passende Angebot."""
+    k = kontext(a, b, cfg)
+    kontaktiert = a.get("kontaktiert_am") or ""
+    altes = a.get("angebot_betrag") or betrag_aus_text(a.get("anschreiben_text"))
+    preis = a.get("preis")
+    gesenkt = bool(a.get("preis_geaendert_am") and a["preis_geaendert_am"] > max(kontaktiert, a.get("nachgefasst_am") or ""))
+    neu = b.erstangebot if b and b.sicherheit != "keine" else None
+    if gesenkt and altes and preis and preis <= altes:
+        fall, angebot = "zusage", preis
+    elif altes and neu and neu > altes:
+        fall, angebot = "erhoeht", neu
+    elif altes or neu:
+        fall, angebot = "steht", altes or neu
+    else:
+        fall, angebot = "ohne", None
+    datum = f"{kontaktiert[8:10]}.{kontaktiert[5:7]}." if len(kontaktiert) >= 10 else None
+    k.update(kontaktiert_datum=datum, preis_gesenkt=gesenkt, preis_vorher=a.get("preis_vorher"), angebot=angebot,
+             fall=fall, nachfass_nr=(a.get("nachfass_anzahl") or 0) + 1)
+    return k
+
+
 class Anschreiber:
     def __init__(self, cfg: dict, basis: Path):
         self.gesamt_cfg = cfg
         self.cfg = cfg["anschreiben"]
         pfad = basis / self.cfg["vorlage"]
-        env = Environment(loader=FileSystemLoader(str(pfad.parent)), undefined=StrictUndefined,
-                          trim_blocks=True, lstrip_blocks=True, keep_trailing_newline=False)
+        nachfass_pfad = basis / (cfg.get("nachfassen") or {}).get("vorlage", "vorlagen/nachfassen.txt")
+        env = Environment(loader=FileSystemLoader([str(pfad.parent), str(nachfass_pfad.parent)]),
+                          undefined=StrictUndefined, trim_blocks=True, lstrip_blocks=True, keep_trailing_newline=False)
         env.filters["euro"] = euro
         env.filters["tsd"] = tsd
         self.vorlage = env.get_template(pfad.name)
+        self.nachfass_vorlage = env.get_template(nachfass_pfad.name)
 
     def soll_schreiben(self, ampel: str) -> bool:
         return AMPEL_RANG.get(ampel, 3) <= AMPEL_RANG[self.cfg["ab_ampel"]]
 
     def text(self, a: dict, b) -> str:
-        t = self.vorlage.render(**kontext(a, b, self.gesamt_cfg))
+        return self._aufraeumen(self.vorlage.render(**kontext(a, b, self.gesamt_cfg)))
+
+    def nachfass(self, a: dict, b) -> tuple[str, int | None]:
+        """(Nachfass-Text, darin genannter Betrag)"""
+        k = nachfass_kontext(a, b, self.gesamt_cfg)
+        return self._aufraeumen(self.nachfass_vorlage.render(**k)), k["angebot"]
+
+    @staticmethod
+    def _aufraeumen(t: str) -> str:
         t = re.sub(r"[ \t]+\n", "\n", t)
         return re.sub(r"\n{3,}", "\n\n", t).strip()

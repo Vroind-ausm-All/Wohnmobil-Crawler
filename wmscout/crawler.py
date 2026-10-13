@@ -5,6 +5,7 @@ import logging
 import random
 import re
 import time
+from pathlib import Path
 
 import requests
 
@@ -16,6 +17,10 @@ log = logging.getLogger("scout")
 
 class Gesperrt(Exception):
     pass
+
+
+LAYOUT_HINWEIS = ("Kleinanzeigen-Seite geladen, aber keine Anzeigen erkannt – vermutlich wurde das Seitenlayout "
+                  "geändert. Die Seite liegt zur Analyse in {datei}; die Selektoren stehen in wmscout/parser.py.")
 
 
 def seiten_url(url: str, seite: int) -> str:
@@ -31,6 +36,9 @@ class Crawler:
     def __init__(self, cfg: dict, db: Datenbank):
         self.cfg = cfg["crawler"]
         self.db = db
+        ordner = Path(cfg.get("ausgabe", {}).get("ordner", "ausgabe"))
+        self.diagnose_ordner = ordner if ordner.is_absolute() else Path(__file__).resolve().parent.parent / ordner
+        self.layout_warnung: str | None = None
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": self.cfg["user_agent"],
@@ -60,9 +68,12 @@ class Crawler:
     def suche(self, name: str, url: str) -> dict:
         stat = {"neu": 0, "preis": 0, "bekannt": 0}
         for seite in range(1, self.cfg["max_seiten_pro_suche"] + 1):
-            treffer = parse_suchseite(self._hole(seiten_url(url, seite)))
+            html = self._hole(seiten_url(url, seite))
+            treffer = parse_suchseite(html)
             log.info("  %s – Seite %d: %d Anzeigen", name, seite, len(treffer))
             if not treffer:
+                if seite == 1 and len(html) > 20000:      # volle Seite, aber nichts erkannt
+                    self._layout_problem("diagnose_suchseite.html", html)
                 break
             nur_bekannte = True
             for t in treffer:
@@ -77,14 +88,32 @@ class Crawler:
                 break
         return stat
 
+    def _layout_problem(self, dateiname: str, html: str):
+        datei = self.diagnose_ordner / dateiname
+        try:
+            datei.parent.mkdir(parents=True, exist_ok=True)
+            datei.write_text(html, encoding="utf-8")
+        except OSError:
+            pass
+        self.layout_warnung = LAYOUT_HINWEIS.format(datei=datei)
+        log.warning(self.layout_warnung)
+
     def details(self) -> int:
         offen = self.db.ohne_details(self.cfg["detailseiten_pro_lauf"])
+        leer = 0
         for i, zeile in enumerate(offen, 1):
             try:
-                self.db.speichere_details(zeile["id"], parse_detailseite(self._hole(zeile["url"])))
+                html = self._hole(zeile["url"])
+                d = parse_detailseite(html)
+                if not d.get("titel") and not d.get("details"):
+                    leer += 1
+                    if leer == 5 and leer == i:       # die ersten fünf Detailseiten alle leer
+                        self._layout_problem("diagnose_detailseite.html", html)
+                self.db.speichere_details(zeile["id"], d)
             except requests.HTTPError as e:
                 if e.response is not None and e.response.status_code in (404, 410):
-                    self.db.setze_status(zeile["id"], "gelöscht")
+                    if zeile["status"] in (None, "neu"):      # Ankaufs-Status (kontaktiert …) nicht überschreiben
+                        self.db.setze_status(zeile["id"], "gelöscht")
                     self.db.speichere_details(zeile["id"], {})
                 else:
                     log.warning("Detailseite %s: %s", zeile["url"], e)
@@ -94,12 +123,14 @@ class Crawler:
 
     def lauf(self, suchen: list[dict]) -> dict:
         gesamt = {"neu": 0, "preis": 0, "bekannt": 0, "details": 0, "fehler": None}
+        self.layout_warnung = None
         try:
             for s in suchen:
                 log.info("Suche: %s", s["name"])
                 for k, v in self.suche(s["name"], s["url"]).items():
                     gesamt[k] += v
             gesamt["details"] = self.details()
+            gesamt["fehler"] = self.layout_warnung
         except Gesperrt as e:
             log.error(str(e))
             gesamt["fehler"] = str(e)
