@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 import shutil
 from pathlib import Path
+from typing import NamedTuple
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup, SoupStrainer
@@ -26,7 +27,7 @@ PROJEKT = Path(__file__).resolve().parent.parent.parent
 _GESPEICHERT_VON = re.compile(r"<!--\s*saved from url=\(\d+\)\s*(\S+?)\s*-->", re.I)
 MAX_DATEIGROESSE = 20_000_000                    # größere Dateien werden nicht gelesen (Speicher, Laufzeit unter Sperre)
 # Kleinanzeigen-Suchadressen: …/s-wohnwagen-mobile/teilintegrierter/… bzw. …c220+wohnwagen_mobile.art_s:teilintegrierter
-_ART_S = re.compile(r"art_s:([\w-]+)", re.I)
+_ART_S = re.compile(r"art_s:([\w,-]+)", re.I)
 _KATEGORIE = re.compile(r"/s-wohnwagen-mobile/([^/?#]+)", re.I)
 # Allgemeine Kategorietitel nennen „Wohnwagen“ und „Wohnmobile“, sagen aber nichts über die Fahrzeugart
 _ALLGEMEIN = re.compile(r"wohn(?:wagen|mobile?)\s*(?:&|und|/)\s*(?:wohn)?(?:wagen|mobile?)", re.I)
@@ -108,18 +109,38 @@ def _url_zur_id(html: str, ad_id: str) -> str:
     return f"{BASIS}/s-anzeige/{ad_id}"
 
 
-def _art_aus_url(url: str) -> str | None:
-    for teil in (*_ART_S.findall(url), *_KATEGORIE.findall(url)):
-        if (art := art_schluessel(teil)) != "Sonstige":
+class SuchseitenArt(NamedTuple):
+    """Was eine gespeicherte Suchseite über die Fahrzeugart ihrer Treffer verrät – getrennt nach Verlässlichkeit.
+
+    filter: Art aus einem echten Art-Filter der Suchadresse (`art_s:<wert>`) – alle Treffer haben diese Art.
+    hinweis: Art aus dem Suchwort im Pfad bzw. aus dem Seitentitel – eine Freitextsuche (`…/camper/k0c220`), die
+             auch andere Fahrzeugarten liefert; gilt nur für Treffer, deren eigener Titel keine Art nennt."""
+    filter: str | None = None
+    hinweis: str | None = None
+
+    def fuer_treffer(self, titel: str | None, kurzbeschreibung: str | None = None) -> str | None:
+        """Endgültige Art eines Treffers: (1) Filter, (2) Art aus dem eigenen Titel, (3) Hinweis der Seite – aber nur,
+        wenn die Kurzbeschreibung ihm nicht widerspricht (nennt sie eine andere Art, ist die Art unbekannt: sie wird
+        nicht übernommen, weil zu unsicher, z. B. „kein Wohnwagen“). Sonst None."""
+        if self.filter:
+            return self.filter
+        if (art := art_schluessel(titel)) != "Sonstige":
             return art
-    return None
+        if self.hinweis and art_schluessel(kurzbeschreibung) in ("Sonstige", self.hinweis):
+            return self.hinweis
+        return None
 
 
-def fahrzeugart_der_suchseite(html: str) -> str | None:
-    """Fahrzeugart einer gespeicherten Suchseite (z. B. 'Teilintegrierter') oder None, wenn sie nicht erkennbar ist.
+def _art(text: str) -> str | None:
+    art = art_schluessel(text)
+    return None if art == "Sonstige" else art
 
-    Reihenfolge: canonical-/og:url-/„saved from“-Adresse, ersatzweise der <title>. Die Zuordnung übernimmt
-    `art_schluessel`; „Sonstige“ gilt als nicht erkannt (die Rechnung braucht die echte Art)."""
+
+def fahrzeugart_der_suchseite(html: str) -> SuchseitenArt:
+    """Fahrzeugart-Angaben einer gespeicherten Suchseite (aus canonical-/og:url-/„saved from“-Adresse und <title>).
+
+    Zuverlässig ist nur ein Art-Filter in der Adresse (`art_s:<wert>`). Das Suchwort im Pfad (`/camper/k0c220` ist
+    eine Freitextsuche) und der Seitentitel sind nur ein Hinweis. „Sonstige“/„andere“ gilt als nicht erkannt."""
     kopf = BeautifulSoup(_kopf(html), "html.parser", parse_only=SoupStrainer(["link", "meta", "title"]))
     urls = []
     if el := kopf.find(["link", "meta"], rel="canonical"):
@@ -128,13 +149,20 @@ def fahrzeugart_der_suchseite(html: str) -> str | None:
         urls.append(el.get("content"))
     if m := _GESPEICHERT_VON.search(html[:5000]):
         urls.append(m.group(1))
+    urls = [u for u in urls if u]
+    werte = [t for u in urls for w in _ART_S.findall(u) for t in w.split(",")]
+    filter_arten = {a for t in werte if (a := _art(t))}
+    if len(filter_arten) > 1 or any(not _art(t) for t in werte):
+        return SuchseitenArt()                 # mehrere Arten oder „andere“ gewählt: Suchwort/Titel sagen nichts mehr
+    if filter_arten:
+        return SuchseitenArt(filter=next(iter(filter_arten)))
     for url in urls:
-        if url and (art := _art_aus_url(url)):
-            return art
+        for teil in _KATEGORIE.findall(url):
+            if art := _art(teil):
+                return SuchseitenArt(hinweis=art)
     if (titel := kopf.find("title")) and (text := _ALLGEMEIN.sub(" ", titel.get_text(" ", strip=True))):
-        if (art := art_schluessel(text)) != "Sonstige":
-            return art
-    return None
+        return SuchseitenArt(hinweis=_art(text))
+    return SuchseitenArt()
 
 
 def erkenne_seite(html: str) -> tuple[str, list[Inserat]]:

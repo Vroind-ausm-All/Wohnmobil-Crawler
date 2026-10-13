@@ -11,13 +11,15 @@ Außerdem: `importiere_seiten()` liest im Browser gespeicherte Seiten aus dem Im
 from __future__ import annotations
 
 import logging
+import re
 import time
 from datetime import date
 from pathlib import Path
 
 from .datenbank import IMPORT_SUCHE, Datenbank
-from .eingang import (BegleitordnerFehler, erkenne_seite, fahrzeugart_der_suchseite, html_dateien, lies_html,
-                      verschiebe)
+from .eingang import (BegleitordnerFehler, SuchseitenArt, erkenne_seite, fahrzeugart_der_suchseite, html_dateien,
+                      lies_html, verschiebe)
+from .normalisierung.fahrzeug import ART_PLURAL, art_schluessel
 from .quellen import (STANDARD_QUELLE, Abruf, InseratNichtGefunden, NetzwerkFehler, Quelle, QuelleGesperrt,
                       QuellenFehler, Suchauftrag, erstelle_quelle)
 
@@ -26,6 +28,29 @@ log = logging.getLogger("scout")
 LAYOUT_HINWEIS = ("{quelle}-Seite geladen, aber keine Anzeigen erkannt – vermutlich wurde das Seitenlayout "
                   "geändert. Die Seite liegt zur Analyse in {datei}; die Selektoren stehen im Parser der Quelle "
                   "(wmscout/quellen/{kennung}/parser.py).")
+
+
+_IMPORT_ART = re.compile(r"^Import (?:%s)$" % "|".join(k for k in ART_PLURAL if k != "Sonstige"))
+
+
+def _art(text: str | None) -> str | None:
+    art = art_schluessel(text)
+    return None if art == "Sonstige" else art
+
+
+def _neue_suche(alt: str | None, art: str | None, belastbar: bool) -> str:
+    """Suche, unter der ein importiertes Inserat gespeichert wird.
+
+    alt: bisherige Suche (None = neu). art: erkannte Fahrzeugart oder None. belastbar: Art stammt aus einem
+    Art-Filter der Suchseite oder aus der Anzeigenseite selbst – nur sie darf eine bestehende „Import <Art>“
+    korrigieren (Titel/Stichwort einer anderen Suchseite nicht: sonst hinge die Art von der Reihenfolge ab).
+    Crawler-Suchen bleiben unberührt; unbestimmter Import (`IMPORT_SUCHE`) wird durch jede erkannte Art ersetzt."""
+    neu = f"Import {art}" if art else IMPORT_SUCHE
+    if alt is None or alt == IMPORT_SUCHE:
+        return neu
+    if _IMPORT_ART.match(alt):
+        return neu if art and belastbar else alt
+    return alt
 
 
 class Importer:
@@ -166,19 +191,24 @@ class Importer:
                  stat["unbekannt"], stat["fehlerhaft"], stat["neu"], stat["preis"], stat["bekannt"])
         return stat
 
-    def _speichere_seite(self, art: str, inserate: list, stat: dict, fahrzeugart: str | None = None):
-        """Suchseite: neue Inserate bekommen „Import <Art>“ (Art aus der Seite, damit der Rechner sie kennt)."""
+    def _speichere_seite(self, art: str, inserate: list, stat: dict, seitenart: SuchseitenArt | None = None):
+        """Speichert die Inserate einer Such- oder Detailseite.
+
+        Neue Inserate bekommen die Suche „Import <Art>“ (damit der Rechner die Art kennt), sonst `IMPORT_SUCHE`.
+        Die Art bestimmt je Treffer `SuchseitenArt.fuer_treffer`: Art-Filter der Seite, sonst eigener Titel, sonst
+        Suchwort-Hinweis der Seite (nur ohne Widerspruch der Kurzbeschreibung). Bei Detailseiten gilt das Feld „Art“ der Anzeige."""
         if art == "suche":
             stat["suchseiten"] += 1
         else:
             stat["detailseiten"] += 1
-        neue_suche = f"Import {fahrzeugart}" if fahrzeugart else IMPORT_SUCHE
+        seitenart = seitenart or SuchseitenArt()
         for inserat in inserate:
             d = inserat.als_datensatz()
-            # Bereits bekannte Inserate behalten ihre Suche (Detailabruf des Crawlers wie bisher) – nur ein
-            # unbestimmter Import-Eintrag darf durch eine erkannte Fahrzeugart ersetzt werden
-            alt = self.db.suche_zu(d["id"])
-            suche = alt if alt and not (alt.startswith("Import") and neue_suche != IMPORT_SUCHE) else neue_suche
+            if art == "detail":
+                neue_art, belastbar = _art(d.get("art")), True
+            else:
+                neue_art, belastbar = seitenart.fuer_treffer(d.get("titel"), d.get("kurzbeschreibung")), bool(seitenart.filter)
+            suche = _neue_suche(self.db.suche_zu(d["id"]), neue_art, belastbar)
             if art == "detail" and not d.get("gewerblich"):
                 d["gewerblich"] = None            # kein Hinweis auf der Detailseite ≠ „privat“: Suchlistenwert bleibt
             stat[self.db.speichere_treffer(d, suche)] += 1

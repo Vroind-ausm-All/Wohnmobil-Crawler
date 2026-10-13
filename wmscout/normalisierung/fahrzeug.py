@@ -25,7 +25,7 @@ BASIS_MARKEN = ["Volkswagen", "Mercedes", "Fiat", "Ford", "Citroën", "Peugeot",
 
 ALIASE = {
     "buerstner": "Bürstner", "burstner": "Bürstner", "poessl": "Pössl", "possl": "Pössl",
-    "vw": "Volkswagen", "mercedes-benz": "Mercedes", "citroen": "Citroën", "eura": "Eura Mobil",
+    "vw": "Volkswagen", "mercedes-benz": "Mercedes", "mercedes benz": "Mercedes", "citroen": "Citroën", "eura": "Eura Mobil",
     "euramobil": "Eura Mobil", "niesmann+bischoff": "Niesmann", "n+b": "Niesmann", "hymercar": "Hymer",
     "rollerteam": "Roller Team", "mc louis": "McLouis",
 }
@@ -128,14 +128,21 @@ _AUFBAU_MUSTER = [(m, _muster(m)) for m in MARKEN] + [(z, mu) for z, mu in _ALIA
 _BASIS_MUSTER = [(m, _muster(m)) for m in BASIS_MARKEN] + [(z, mu) for z, mu in _ALIAS_MUSTER if z in BASIS_MARKEN]
 
 
+def _schluessel(name: str) -> str:
+    """Vergleichsform einer Marke: klein, ohne Leerzeichen/Bindestriche („Mercedes Benz“ = „Mercedes-Benz“)."""
+    return re.sub(r"[\s-]+", "", name.lower())
+
+
+_MARKEN_NACH_SCHLUESSEL = {_schluessel(m): m for m in MARKEN + BASIS_MARKEN}
+_ALIAS_NACH_SCHLUESSEL = {_schluessel(a): z for a, z in ALIASE.items()}
+
+
 def normalisiere_marke(name: str | None) -> str | None:
     if not name:
         return None
     n = name.strip()
-    for m in MARKEN + BASIS_MARKEN:
-        if m.lower() == n.lower():
-            return m
-    return ALIASE.get(n.lower(), n)
+    k = _schluessel(n)
+    return _MARKEN_NACH_SCHLUESSEL.get(k) or _ALIAS_NACH_SCHLUESSEL.get(k) or n
 
 
 def ist_basismarke(marke: str | None) -> bool:

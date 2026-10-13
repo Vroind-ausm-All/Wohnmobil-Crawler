@@ -129,9 +129,11 @@ Eingelesene Dateien wandern nach `import/eingelesen/<Datum>/`, nicht erkannte na
 Hinweise zum Einlesen:
 - Je Klick werden höchstens 25 Dateien (bzw. etwa 20 Sekunden lang) gelesen; den Rest liest der nächste Klick.
   Dateien über 20 MB werden nicht gelesen (sie bleiben liegen).
-- Die Fahrzeugart (z. B. Teilintegrierter) wird aus der Adresse der gespeicherten Suchseite erkannt. Speichere
-  deshalb Suchseiten mit gewählter Fahrzeugart. Anzeigen aus Suchseiten ohne erkennbare Art gelten nicht als
-  „anschreibbar“, bis ihre Anzeigenseite (Detailseite) gespeichert und eingelesen wurde.
+- Die Fahrzeugart (z. B. Teilintegrierter) bestimmt das Programm je Anzeige: zuerst aus einem Art-Filter der
+  gespeicherten Suchseite (`art_s:…` in der Adresse), sonst aus dem Titel der Anzeige selbst, sonst aus dem
+  Suchwort der Seite (z. B. „Camper“ – nur ein Hinweis, die Suche liefert auch andere Arten). Eine Anzeigenseite
+  (Detailseite) nennt die Art selbst und korrigiert eine frühere Zuordnung. Anzeigen ohne erkennbare Art gelten
+  nicht als „anschreibbar“, bis ihre Anzeigenseite gespeichert und eingelesen wurde.
 - **Datenschutz:** `import/eingelesen/` enthält die vollständigen gespeicherten Seiten, auch Verkäuferangaben
   (Name, Ort, ggf. Telefonnummer). Das Programm löscht nichts automatisch – lösche die Dateien nach der Prüfung selbst.
   Speichere Seiten möglichst nicht angemeldet, damit keine Kontodaten in der Datei landen.

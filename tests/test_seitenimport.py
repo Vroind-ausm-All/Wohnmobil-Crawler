@@ -16,7 +16,7 @@ from wmscout.bewertung.anschreiben import sperrgrund
 from wmscout.bewertung.auswertung import bewerte_alle
 from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import Datenbank
-from wmscout.eingang import erkenne_seite, fahrzeugart_der_suchseite
+from wmscout.eingang import SuchseitenArt, erkenne_seite, fahrzeugart_der_suchseite
 from wmscout.normalisierung.fahrzeug import art_schluessel
 from wmscout.importer import Importer
 from wmscout.team import TeamSpeicher
@@ -114,7 +114,8 @@ def test_detailseite_bekannt_und_unbekannt(cfg, db, ads, ordner):
     assert "Kilometerstand" in z["details_json"] and z["beschreibung"] == ads[0]["lang"]
     z = zeile(db, ads[30]["id"])
     assert z is not None and z["detail_geladen"] == 1 and z["titel"] == ads[30]["titel"] and z["km"] == ads[30]["km"]
-    assert z["url"] == anzeige_url(ads[30]) and z["suche"] == IMPORT_SUCHE and z["preis"] == ads[30]["preis"]
+    assert z["url"] == anzeige_url(ads[30]) and z["suche"] == "Import Teilintegrierter"     # Feld „Art“ der Anzeige
+    assert z["preis"] == ads[30]["preis"]
     assert (eingelesen(ordner) / "neu.HTM").is_file()
 
 
@@ -262,21 +263,26 @@ def canonical(art):
     return f'<link rel="canonical" href="{SUCHSEITE.format(art, art)}">'
 
 
+KEINE = SuchseitenArt()
+
+
 @pytest.mark.parametrize("kopf, davor, erwartet", [
-    (canonical("teilintegrierter"), "", "Teilintegrierter"),
-    (canonical("wohnwagen"), "", "Wohnwagen"),
-    ('<meta property="og:url" content="https://www.kleinanzeigen.de/s-wohnwagen-mobile/alkoven/c220">', "", "Alkoven"),
+    (canonical("teilintegrierter"), "", SuchseitenArt(filter="Teilintegrierter")),          # art_s:… = echter Filter
+    (canonical("wohnwagen"), "", SuchseitenArt(filter="Wohnwagen")),
+    ('<meta property="og:url" content="https://www.kleinanzeigen.de/s-wohnwagen-mobile/alkoven/c220">', "",
+     SuchseitenArt(hinweis="Alkoven")),                                                     # nur Stichwort im Pfad
     ("", "<!-- saved from url=(0080)https://www.kleinanzeigen.de/s-wohnwagen-mobile/integrierter/k0c220 -->\n",
-     "Integrierter"),
-    (canonical("kastenwagen") + "<title>Alkoven - Kleinanzeigen</title>", "", "Kastenwagen"),   # URL geht vor Titel
-    ("<title>Teilintegrierter Wohnmobile &amp; Wohnwagen gebraucht kaufen - Kleinanzeigen</title>", "", "Teilintegrierter"),
-    ("<title>Alkoven in Stuttgart - Kleinanzeigen</title>", "", "Alkoven"),
+     SuchseitenArt(hinweis="Integrierter")),
+    (canonical("kastenwagen") + "<title>Alkoven - Kleinanzeigen</title>", "", SuchseitenArt(filter="Kastenwagen")),
+    ("<title>Teilintegrierter Wohnmobile &amp; Wohnwagen gebraucht kaufen - Kleinanzeigen</title>", "",
+     SuchseitenArt(hinweis="Teilintegrierter")),
+    ("<title>Alkoven in Stuttgart - Kleinanzeigen</title>", "", SuchseitenArt(hinweis="Alkoven")),
     # keine Art erkennbar: allgemeine Kategorie darf nicht als „Wohnwagen“ gelten
-    ('<link rel="canonical" href="https://www.kleinanzeigen.de/s-wohnwagen-mobile/c220">', "", None),
+    ('<link rel="canonical" href="https://www.kleinanzeigen.de/s-wohnwagen-mobile/c220">', "", KEINE),
     ('<link rel="canonical" href="https://www.kleinanzeigen.de/s-wohnwagen-mobile/andere/c220+wohnwagen_mobile.art_s:andere">',
-     "", None),
-    ("<title>Wohnwagen &amp; Wohnmobile - Kleinanzeigen</title>", "", None),
-    ("", "", None),
+     "", KEINE),
+    ("<title>Wohnwagen &amp; Wohnmobile - Kleinanzeigen</title>", "", KEINE),
+    ("", "", KEINE),
 ])
 def test_fahrzeugart_der_suchseite(ads, kopf, davor, erwartet):
     assert fahrzeugart_der_suchseite(suchseite(ads[:2], kopf, davor)) == erwartet
@@ -499,3 +505,121 @@ def test_api_import_grenzen_und_wirkung(server, db, ads, ordner, tmp_path, monke
     monkeypatch.setattr(seiten_modul, "PROJEKT", tmp_path.resolve())
     status, daten, _ = lokal("POST", "/api/import", {})
     assert status == 200 and daten["ordner"] == str(ordner.resolve().relative_to(tmp_path.resolve()))
+
+
+# ---------- Korrekturrunde 2: Art je Treffer (Freitextsuche ≠ Art-Filter) ----------
+CAMPER = "https://www.kleinanzeigen.de/s-wohnwagen-mobile/camper/k0c220"
+TEILINT = "https://www.kleinanzeigen.de/s-wohnwagen-mobile/teilintegriert/k0c220"
+ALKOVEN_TITEL = "Kentucky Camp K-Line | Alkoven"              # echte Titel, die auf einer fremden Stichwortseite standen
+VOLLINT_TITEL = "Rimor Seal 9 Vollintegriert"
+
+
+def stichwortseite(ads, adresse, titel):
+    kopf = f'<title>{titel}, Wohnmobile &amp; Wohnwagen gebraucht | kleinanzeigen.de</title><link href="{adresse}" rel="canonical"/>'
+    return suchseite(ads, kopf)
+
+
+def art_der(cfg, db, ad_id):
+    return Rechner(cfg).art(dict(zeile(db, ad_id)))
+
+
+@pytest.mark.parametrize("camper_zuerst", [True, False])
+def test_freitextsuche_gibt_treffern_nicht_die_seitenart(cfg, db, ads, ordner, camper_zuerst):
+    alkoven = {**ads[0], "titel": ALKOVEN_TITEL}
+    vollint = {**ads[1], "titel": VOLLINT_TITEL}
+    camper_nur = {**ads[2], "titel": "Wohnmobil gepflegt"}         # nennt keine Art: Hinweis der Seite
+    teilint_nur = {**ads[3], "titel": "Wohnmobil gepflegt"}
+    camper = stichwortseite([alkoven, vollint, camper_nur], CAMPER, "Camper")
+    teilint = stichwortseite([alkoven, vollint, teilint_nur], TEILINT, "Teilintegriert")
+    reihe = [("a.html", camper), ("b.html", teilint)]
+    for name, html in reihe if camper_zuerst else reihe[::-1]:
+        (ordner / name).write_text(html, encoding="utf-8")
+        Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
+    assert zeile(db, alkoven["id"])["suche"] == "Import Alkoven"
+    assert zeile(db, vollint["id"])["suche"] == "Import Integrierter"
+    assert zeile(db, camper_nur["id"])["suche"] == "Import Kastenwagen"
+    assert zeile(db, teilint_nur["id"])["suche"] == "Import Teilintegrierter"
+    assert [art_der(cfg, db, h["id"]) for h in (alkoven, vollint)] == ["Alkoven", "Integrierter"]
+    # Bewertung wie bei einem Crawler-Fund unter der richtigen Art
+    referenz = Datenbank(":memory:")
+    for h, art in ((alkoven, "Alkoven"), (vollint, "Integrierter")):
+        referenz.speichere_treffer(erkenne_seite(such_html([h]))[1][0].als_datensatz(), art)
+    ek, ek_ref = max_eks(cfg, db), max_eks(cfg, referenz)
+    assert all(ek[h["id"]] == ek_ref[h["id"]] for h in (alkoven, vollint))
+
+
+def test_art_filter_geht_vor_dem_titel_und_korrigiert_den_hinweis(cfg, db, ads, ordner):
+    imp = Importer(cfg, db, abruf=KeinNetz())
+    hit = {**ads[0], "titel": "Wohnmobil gepflegt"}
+    (ordner / "a.html").write_text(stichwortseite([hit], CAMPER, "Camper"), encoding="utf-8")
+    imp.importiere_seiten(ordner)
+    assert zeile(db, hit["id"])["suche"] == "Import Kastenwagen"                  # nur Hinweis der Seite
+    (ordner / "b.html").write_text(suchseite([hit], canonical("alkoven")), encoding="utf-8")
+    imp.importiere_seiten(ordner)
+    assert zeile(db, hit["id"])["suche"] == "Import Alkoven"                      # Filter korrigiert
+    # Filter gilt für alle Treffer der Seite, auch gegen den Titel
+    (ordner / "c.html").write_text(suchseite([{**ads[1], "titel": VOLLINT_TITEL}], canonical("kastenwagen")),
+                                   encoding="utf-8")
+    imp.importiere_seiten(ordner)
+    assert zeile(db, ads[1]["id"])["suche"] == "Import Kastenwagen"
+
+
+def test_titel_oder_stichwort_aendert_bestehende_art_nicht(cfg, db, ads, ordner):
+    imp = Importer(cfg, db, abruf=KeinNetz())
+    (ordner / "a.html").write_text(suchseite(ads[:2], canonical("alkoven")), encoding="utf-8")
+    imp.importiere_seiten(ordner)
+    # andere Stichwortseite, einmal mit widersprechendem Titel, einmal ohne Art im Titel
+    (ordner / "b.html").write_text(stichwortseite([{**ads[0], "titel": VOLLINT_TITEL}, ads[1]], TEILINT, "Teilintegriert"),
+                                   encoding="utf-8")
+    imp.importiere_seiten(ordner)
+    assert {zeile(db, a["id"])["suche"] for a in ads[:2]} == {"Import Alkoven"}
+    # unbestimmter Import wird dagegen durch jede erkannte Art ersetzt (Titel oder Hinweis)
+    db.speichere_treffer(erkenne_seite(such_html([ads[5]]))[1][0].als_datensatz(), IMPORT_SUCHE)
+    db.speichere_treffer(erkenne_seite(such_html([ads[6]]))[1][0].als_datensatz(), IMPORT_SUCHE)
+    (ordner / "c.html").write_text(stichwortseite([{**ads[5], "titel": ALKOVEN_TITEL}, ads[6]], TEILINT, "Teilintegriert"),
+                                   encoding="utf-8")
+    imp.importiere_seiten(ordner)
+    assert zeile(db, ads[5]["id"])["suche"] == "Import Alkoven"
+    assert zeile(db, ads[6]["id"])["suche"] == "Import Teilintegrierter"
+
+
+def test_crawler_suche_bleibt_bei_jedem_import(cfg, db, ads, ordner):
+    db.speichere_treffer({"id": ads[0]["id"], "url": anzeige_url(ads[0]), "titel": "x"}, "Kastenwagen")
+    (ordner / "a.html").write_text(suchseite(ads[:1], canonical("alkoven")), encoding="utf-8")
+    (ordner / "b.html").write_text(detailseite(ads[0]), encoding="utf-8")
+    Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
+    assert zeile(db, ads[0]["id"])["suche"] == "Kastenwagen"
+
+
+def test_seite_ohne_erkennbare_art_bleibt_unbestimmt_und_gesperrt(cfg, db, ads, ordner):
+    (ordner / "a.html").write_text(stichwortseite(ads[:3], "https://www.kleinanzeigen.de/s-wohnwagen-mobile/hymer/k0c220",
+                                                  "Hymer"), encoding="utf-8")
+    Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
+    assert {zeile(db, a["id"])["suche"] for a in ads[:3]} == {IMPORT_SUCHE}
+    assert all(z["sperre"] and "Fahrzeugart unbekannt" in z["sperre"] for z in bewerte_alle(cfg, db, BASIS))
+
+
+def detail_mit_art(a, art):
+    return detailseite(a).replace("Teilintegrierter</span>", f"{art}</span>")
+
+
+def test_detailseite_korrigiert_falsche_import_art(cfg, db, ads, ordner):
+    imp = Importer(cfg, db, abruf=KeinNetz())
+    (ordner / "s.html").write_text(stichwortseite(ads[:3], CAMPER, "Camper"), encoding="utf-8")
+    imp.importiere_seiten(ordner)
+    assert {zeile(db, a["id"])["suche"] for a in ads[:3]} == {"Import Kastenwagen"}      # Hinweis der Seite
+    (ordner / "d0.html").write_text(detail_mit_art(ads[0], "Alkoven"), encoding="utf-8")
+    (ordner / "d1.html").write_text(detail_mit_art(ads[1], "Vollintegriert"), encoding="utf-8")
+    (ordner / "d2.html").write_text(detail_mit_art(ads[2], "Andere"), encoding="utf-8")   # keine Art erkennbar: bleibt
+    stat = imp.importiere_seiten(ordner)
+    assert stat["fehler"] == [] and stat["details"] == 3
+    assert zeile(db, ads[0]["id"])["suche"] == "Import Alkoven"
+    assert zeile(db, ads[1]["id"])["suche"] == "Import Integrierter"
+    assert zeile(db, ads[2]["id"])["suche"] == "Import Kastenwagen"
+    assert art_der(cfg, db, ads[0]["id"]) == "Alkoven" and art_der(cfg, db, ads[1]["id"]) == "Integrierter"
+    # unbestimmter Import und neues Inserat bekommen die Art der Anzeigenseite ebenfalls
+    db.speichere_treffer(erkenne_seite(such_html([ads[7]]))[1][0].als_datensatz(), IMPORT_SUCHE)
+    (ordner / "d7.html").write_text(detail_mit_art(ads[7], "Wohnwagen"), encoding="utf-8")
+    (ordner / "d8.html").write_text(detail_mit_art(ads[8], "Alkoven"), encoding="utf-8")
+    imp.importiere_seiten(ordner)
+    assert zeile(db, ads[7]["id"])["suche"] == "Import Wohnwagen" and zeile(db, ads[8]["id"])["suche"] == "Import Alkoven"
