@@ -28,7 +28,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 
-from .fahrzeug import art_schluessel
+from ..normalisierung.fahrzeug import art_schluessel
 
 # Fallbacks, falls config.yaml (ältere Version) den Abschnitt nicht enthält
 STANDARD_MARKTMODELL = {
@@ -98,7 +98,7 @@ def interpoliere(tabelle: dict, x: float) -> float:
     punkte = sorted((float(k), float(v)) for k, v in tabelle.items())
     if x <= punkte[0][0]:
         return punkte[0][1]
-    for (x0, y0), (x1, y1) in zip(punkte, punkte[1:]):
+    for (x0, y0), (x1, y1) in zip(punkte, punkte[1:], strict=False):
         if x <= x1:
             return y0 + (y1 - y0) * (x - x0) / (x1 - x0)
     # über das Tabellenende hinaus mit der letzten Steigung, aber nie unter 5 %

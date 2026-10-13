@@ -20,14 +20,15 @@ CREATE TABLE IF NOT EXISTS anzeigen (
     notiz TEXT,
     bild TEXT, kontaktiert_am TEXT, anschreiben_text TEXT,
     preis_geaendert_am TEXT, nachgefasst_am TEXT, nachfass_anzahl INTEGER DEFAULT 0,
-    angebot_betrag INTEGER, status_am TEXT
+    angebot_betrag INTEGER, status_am TEXT,
+    quelle TEXT                     -- Kennung der Datenquelle; NULL = kleinanzeigen (Daten vor Phase 1)
 );
 CREATE INDEX IF NOT EXISTS idx_zuletzt ON anzeigen(zuletzt_gesehen);
 """
 # Spalten, die nach Version 1 dazugekommen sind (ältere Datenbanken werden beim Start ergänzt)
 NEUE_SPALTEN = {"bild": "TEXT", "kontaktiert_am": "TEXT", "anschreiben_text": "TEXT", "preis_geaendert_am": "TEXT",
                 "nachgefasst_am": "TEXT", "nachfass_anzahl": "INTEGER DEFAULT 0", "angebot_betrag": "INTEGER",
-                "status_am": "TEXT"}
+                "status_am": "TEXT", "quelle": "TEXT"}
 
 # Ablauf eines Ankaufs (Schlüssel → Anzeige in der App)
 STATUS = {"neu": "offen", "kontaktiert": "kontaktiert", "verhandlung": "in Verhandlung",
@@ -35,7 +36,7 @@ STATUS = {"neu": "offen", "kontaktiert": "kontaktiert", "verhandlung": "in Verha
           "uninteressant": "uninteressant"}
 
 FELDER_UPDATE = ["url", "suche", "titel", "preis", "vb", "ort", "km", "ez_jahr", "marke",
-                 "kurzbeschreibung", "gewerblich", "bild"]
+                 "kurzbeschreibung", "gewerblich", "bild", "quelle"]
 
 
 class Datenbank:

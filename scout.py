@@ -12,6 +12,11 @@ from __future__ import annotations
 import sys
 from importlib.util import find_spec
 
+# Windows: umgeleitete Ausgabe (Pipe, Aufgabenplanung) wäre sonst cp1252 und scheitert an „−“, „✓“ usw.
+for _strom in (sys.stdout, sys.stderr):
+    if hasattr(_strom, "reconfigure"):
+        _strom.reconfigure(encoding="utf-8", errors="replace")
+
 if not (3, 10) <= sys.version_info[:2] <= (3, 13):
     print(f"Hinweis: Wohnmobil-Scout ist für Python 3.10–3.13 gedacht, verwendet wird {sys.version.split()[0]}.\n"
           "Unter Windows bitte über app.bat starten – das richtet automatisch eine passende Umgebung (.venv) ein.",
@@ -21,7 +26,7 @@ _fehlt = [paket for paket, modul in (("requests", "requests"), ("beautifulsoup4"
 if _fehlt:
     sys.exit(f"Fehlende Python-Pakete: {', '.join(_fehlt)}\n"
              "Windows: bitte das Programm per Doppelklick auf app.bat starten (installiert alles in .venv).\n"
-             "macOS/Linux: python3.13 -m venv .venv && .venv/bin/pip install -r requirements.txt")
+             "macOS/Linux: ./start.sh (richtet .venv automatisch ein)")
 
 import argparse
 import logging
@@ -30,12 +35,14 @@ from pathlib import Path
 
 import yaml
 
-from wmscout.anschreiben import Anschreiber, euro
-from wmscout.crawler import Crawler
-from wmscout.db import STATUS, Datenbank
-from wmscout.fahrzeug import ergaenze_fahrzeug
-from wmscout.rechner import Rechner
-from wmscout.report import bewerte_alle, schreibe_ausgaben, sende_mail
+from wmscout.ausgabe import schreibe_ausgaben
+from wmscout.benachrichtigung import sende_mail
+from wmscout.bewertung.anschreiben import Anschreiber, euro
+from wmscout.bewertung.auswertung import bewerte_alle
+from wmscout.bewertung.rechner import Rechner
+from wmscout.datenbank import STATUS, Datenbank
+from wmscout.importer import Importer
+from wmscout.normalisierung.fahrzeug import ergaenze_fahrzeug
 
 BASIS = Path(__file__).resolve().parent
 
@@ -55,7 +62,7 @@ def logging_einrichten(cfg: dict):
 
 def cmd_lauf(cfg, db, args):
     start = datetime.now().isoformat(timespec="seconds")
-    stat = Crawler(cfg, db).lauf(cfg["suchen"])
+    stat = Importer(cfg, db).lauf(cfg["suchen"])
     logging.info("Crawl fertig: %d neu, %d Preissenkungen, %d bekannt, %d Detailseiten",
                  stat["neu"], stat["preis"], stat["bekannt"], stat["details"])
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)

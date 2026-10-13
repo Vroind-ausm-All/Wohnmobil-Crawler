@@ -6,8 +6,8 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from .db import STATUS
-from .fahrzeug import ART_PLURAL
+from ..datenbank import STATUS
+from ..normalisierung.fahrzeug import ART_PLURAL
 
 AMPEL_RANG = {"gruen": 0, "gelb": 1, "rot": 2, "grau": 3}
 ART_EINZAHL = {"Sonstige": "Wohnmobil"}
