@@ -15,7 +15,7 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 | QA-Runde 2: Uhrsprung, 2 Prozesse auf Altbestand, abgeschnittenes ZIP, UNC-URI | Befunde Q-F1–Q-F5 reproduziert → FREIGABE MIT AUFLAGEN |
 | Agent nach Korrekturrunde 2: QA-Skripte s4/s7/s9/s5/s1 | Sicherungen bleiben; 10 Runden à 2 Prozesse 0 Fehler; kein Traceback |
 | Migration v1-Altbestand (QA, 203 Zeilen) | ohne Verlust, Sicherung = Altstand, zweiter Lauf ändert nichts |
-| CI Windows (PR #5, 4edf505) | **7 failed**: offene Test-Verbindungen sperrten die Datei („Zugriff verweigert“ beim Austausch), `?` im Ordnernamen → behoben: Tests schließen Verbindungen (lokal 0 ResourceWarnings statt mehrerer), Austausch mit kurzen Wiederholungen, Ordnername ohne `?` unter Windows; 184 passed lokal |
+| CI Windows (PR #5, 4edf505) | **7 failed**: offene Test-Verbindungen sperrten die Datei („Zugriff verweigert“ beim Austausch), `?` im Ordnernamen → behoben: Tests schließen Verbindungen (lokal 0 ResourceWarnings statt mehrerer), Austausch mit kurzen Wiederholungen, Ordnername ohne `?` unter Windows; 184 passed lokal. CI 0616f1f: Windows nur noch 1 failed (Linux-spezifischer UNC-Nachbau `//tmp` → unter Windows übersprungen, dort decken die `PureWindowsPath`-Fälle UNC ab) |
 | Netzlaufwerke | nicht geprüft |
 | QA-Runde 3 (001fe60): Q-F-Nachstellungen, 8 Prozesse gleichzeitig, Aufräumen mit zurückdatierten Dateien, Schreibschutz (als `nobody`) | alle Q-F behoben; 8 eindeutige intakte Sicherungen; DB und Sicherungen bleiben; kein Datenverlust |
 | QA-Runde 3: Mutationen (55 des Agenten + 14 eigene) | 64 von 69 getötet; X1 (Aufräumen trifft DB) danach durch erweiterten Test erkannt (Orchestrator, Gegenprobe in Kopie) |

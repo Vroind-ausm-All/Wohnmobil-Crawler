@@ -762,6 +762,8 @@ def test_f5_uri_funktioniert_mit_sqlite_auch_mit_doppeltem_schraegstrich_und_son
         assert con.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0] == 1
     finally:
         con.close()
+    if os.name == "nt":                                                         # UNC unter Windows: siehe PureWindowsPath-Fälle oben
+        return
     doppelt = PurePosixPath("/" + db.resolve().as_posix())                       # "//tmp/..." entspricht der UNC-Form file:////server/...
     assert modul.datei_uri(doppelt).startswith("file:////")
     con = sqlite3.connect(modul.datei_uri(doppelt, "?mode=ro"), uri=True)
