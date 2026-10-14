@@ -118,6 +118,7 @@ def fahrzeug_kurz(z: dict) -> dict:
             "bild": a.get("bild"), "ez_jahr": a.get("ez_jahr"), "km": a.get("km"), "preis": a.get("preis"),
             "entfernung_km": a.get("entfernung_km"), "tage_online": a.get("tage_online"), "status": a.get("status") or "neu",
             "ampel": b.ampel, "erstangebot": b.erstangebot if b.sicherheit != "keine" else None,
+            "brief_betrag": z.get("brief_betrag"),
             "max_ek": b.max_ek if b.sicherheit != "keine" else None, "bereit": z["bereit"], "nachfassen": z["nachfassen"],
             "sperre": z["sperre"], "hinweise": z["hinweise"], "neu": z["neu"]}
 

@@ -868,6 +868,12 @@ def test_hinweis_ist_in_report_und_api_sichtbar(server, cfg, db, ads, ordner):
     assert liste[hit["id"]]["hinweise"] == [UNBEKANNT_TEXT] and liste[ads[2]["id"]]["hinweise"] == []
     assert anna("GET", f"/api/fahrzeug/{hit['id']}")[1]["hinweise"] == [UNBEKANNT_TEXT]
     assert anna("GET", f"/api/fahrzeug/{hit['id']}")[1]["brief"]                                            # Brief wird erzeugt
+    # Q2-H1: Brief ohne Betrag (F14) → beim Kontakt wird kein Betrag gespeichert; bestätigte Art: Betrag wie im Brief
+    assert liste[hit["id"]]["brief_betrag"] is None and liste[hit["id"]]["erstangebot"]
+    assert liste[ads[2]["id"]]["brief_betrag"] == liste[ads[2]["id"]]["erstangebot"]
+    assert "Erstangebot (rechnerisch, nicht im Anschreiben)" in html and "Erstangebot (im Anschreiben)" in html
+    js = (BASIS / "wmscout" / "web" / "static" / "mobil.js").read_text(encoding="utf-8")
+    assert "inhalt.dataset.erst = f.brief_betrag" in js
 
 
 def test_mobil_js_zeigt_hinweise_nur_escaped():

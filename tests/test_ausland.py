@@ -15,7 +15,9 @@ from wmscout.normalisierung.geo import auslands_kuerzel, plz_aus_text
     ("FR-75001 Paris", "FR", None), ("IT-20121 Mailand", "IT", None), ("ES-28001 Madrid", "ES", None),
     ("SE-123 45 Beispielstadt", "SE", None), ("NL-1234AB Beispieldorf", "NL", None), ("AT-1010 Wien", "AT", None),
     ("CH-8001 Zürich", "CH", None),
-    ("D-70191 Stuttgart", None, "70191"), ("DE-70191 Stuttgart", None, "70191"), ("70173 Stuttgart", None, "70173"),
+    ("D-70191 Stuttgart", None, "70191"),
+    ("DEU-70191 Stuttgart", None, "70191"), ("GER-70191 Stuttgart", None, "70191"),
+    ("DE-70191 Stuttgart", None, "70191"), ("70173 Stuttgart", None, "70173"),
     ("Stuttgart", None, None), ("", None, None), (None, None, None),
 ])
 def test_auslandskuerzel_und_plz(ort, land, plz):
@@ -72,3 +74,13 @@ def test_ort_kurz_ohne_plz_und_laenderkuerzel(cfg, orte):
                       ("NL-1234AB Beispieldorf", "Beispieldorf"), ("Stuttgart", "Stuttgart")):
         z = orte[ort]
         assert kontext(z["a"], z["b"], cfg)["ort_kurz"] == kurz, ort
+
+
+def test_ort_kurz_entfernt_nur_plz_und_auslandskennung():
+    """QA Q2-N3: Ein großgeschriebenes Zweibuchstaben-Wort nach einer deutschen PLZ gehört zum Ort."""
+    from wmscout.bewertung.anschreiben import kontext
+    from tests.daten import lade_cfg
+    cfg = lade_cfg()
+    for ort, erwartet in (("70173 Stuttgart", "Stuttgart"), ("12345 XY", "XY"), ("NL-7595XP Beispieldorf", "Beispieldorf"),
+                          ("SE-123 45 Beispielstadt", "Beispielstadt"), ("", "Ihrer Nähe")):
+        assert kontext({"ort": ort, "titel": "x"}, None, cfg)["ort_kurz"] == erwartet, ort

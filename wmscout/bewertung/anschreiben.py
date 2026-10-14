@@ -175,6 +175,19 @@ def sperrgrund(a: dict, cfg: dict) -> str | None:
     return None
 
 
+def betrag_im_brief(a: dict, b) -> int | None:
+    """Der Betrag, den der Brief nennt – oder None, wenn er keinen nennt. Eine Regel für Brief, Nachfass-Text und den
+    beim Kontakt gespeicherten `angebot_betrag` (QA Q2-H1). F14: bei unbekannter Fahrzeugart (Import) kein Betrag, er
+    könnte z. B. für einen Wohnwagen viel zu hoch sein."""
+    if not (b and b.sicherheit != "keine" and b.erstangebot):
+        return None
+    if import_art(a.get("suche"))[1] == UNBEKANNT:
+        return None
+    if a.get("ausland"):                         # Ausland: Transportkosten nicht berechnet → kein Betrag (ADR-022)
+        return None
+    return b.erstangebot
+
+
 def kontext(a: dict, b, cfg: dict) -> dict:
     """Alle Felder für die Vorlage – passend zu Modell, Baujahr, Ausstattung und Bewertung."""
     c = cfg["anschreiben"]
@@ -213,10 +226,9 @@ def kontext(a: dict, b, cfg: dict) -> dict:
         marke=marke, modell=modell, art=art_einzahl, art_plural=art_plural,
         ez_jahr=ez, alter=alter, alters_stufe=stufe,
         km=a.get("km"), km_text=f"rund {tsd(round(a['km'], -3))} km" if a.get("km") else None,
-        preis=a.get("preis"), vb=bool(a.get("vb")), ort_kurz=re.sub(r"^(?:[A-Z]{1,3}-)?\d[\d ]*[A-Z]{0,2}(?:\s+|$)", "", ort) or "Ihrer Nähe",
-        # F14: bei unbekannter Fahrzeugart (Import) kein Betrag im Brief – er könnte z. B. für einen Wohnwagen viel zu hoch sein
-        mit_angebot=bool(b and b.sicherheit != "keine" and b.erstangebot and import_art(a.get("suche"))[1] != UNBEKANNT
-                         and not a.get("ausland")),      # Ausland: Transportkosten nicht berechnet → kein Betrag im Brief
+        preis=a.get("preis"), vb=bool(a.get("vb")),
+        ort_kurz=re.sub(r"^(?:[A-Z]{1,3}-\d[\d ]*[A-Z]{0,2}|\d[\d ]*)(?:\s+|$)", "", ort) or "Ihrer Nähe",
+        mit_angebot=betrag_im_brief(a, b) is not None,
         erstangebot=b.erstangebot if b else None,
         max_ek=b.max_ek if b else None, ampel=b.ampel if b else "grau", preisbasis=preisbasis,
         pruefpunkte=pruefpunkte, unterlagen=aufzaehlung(unterlagen[:3]),
@@ -238,7 +250,7 @@ def nachfass_kontext(a: dict, b, cfg: dict) -> dict:
     altes = a.get("angebot_betrag") or betrag_aus_text(a.get("anschreiben_text"))
     preis = a.get("preis")
     gesenkt = bool(a.get("preis_geaendert_am") and a["preis_geaendert_am"] > max(kontaktiert, a.get("nachgefasst_am") or ""))
-    neu = b.erstangebot if b and b.sicherheit != "keine" else None
+    neu = betrag_im_brief(a, b)                  # nennt der Brief keinen Betrag, „steht“ auch keiner (Q2-H1)
     if gesenkt and altes and preis and preis <= altes:
         fall, angebot = "zusage", preis
     elif altes and neu and neu > altes:

@@ -13,7 +13,7 @@ from pathlib import Path
 PLZ_DATEI = Path(__file__).with_name("plz_de.csv")
 STRASSENFAKTOR = 1.25          # Fahrstrecke ≈ Luftlinie × 1,25 (Durchschnitt in Deutschland)
 _koordinaten: dict[str, tuple[float, float]] | None = None
-INLAND = {"D", "DE"}
+INLAND = {"D", "DE", "DEU", "GER", "BRD"}
 _LAENDERKUERZEL = re.compile(r"^\s*([A-Z]{1,3})\s*-\s*\d")        # „SE-123 45 Ort“, „NL-1234AB Ort“, „FR-75001 Paris“
 
 

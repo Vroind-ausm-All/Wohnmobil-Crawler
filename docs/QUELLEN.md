@@ -1,6 +1,6 @@
 # Datenquellen anbinden – Adapter-Schnittstelle
 
-Jede Plattform (Kleinanzeigen, später mobile.de, AutoScout24, Caraworld, Händler-Feeds …) wird über einen
+Jede Plattform (Kleinanzeigen, mobile.de – bisher nur gespeicherte Seiten –, später AutoScout24, Caraworld, Händler-Feeds …) wird über einen
 **Adapter** angebunden. Ein Adapter liefert ausschließlich `Inserat`-Objekte. Speichern, Bewerten, Anschreiben
 und die Oberfläche funktionieren für alle Quellen gleich.
 

@@ -9,7 +9,7 @@ from pathlib import Path
 from ..datenbank import STATUS, UNBEKANNT, Datenbank, import_art
 from ..normalisierung.fahrzeug import arten_im_text, ergaenze_fahrzeug
 from ..normalisierung.geo import entfernung_km
-from .anschreiben import Anschreiber, euro, hinweise, sperrgrund
+from .anschreiben import Anschreiber, betrag_im_brief, euro, hinweise, sperrgrund
 from .rechner import Bewertung, Rechner
 
 
@@ -181,6 +181,7 @@ def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None =
             ust = b.haendler_vk - b.haendler_vk / 1.19
         zeilen.append({
             "a": a, "b": b, "sperre": sperre, "hinweise": hinweise(a, b), "brief": brief, "ust": round(ust / 10) * 10,
+            "brief_betrag": betrag_im_brief(a, b),
             "bereit": bool(brief) and schreiber.soll_schreiben(b.ampel),
             "neu": bool(lauf_start and (a.get("erstmals_gesehen") or "") >= lauf_start),
             "nachfassen": grund, "nachfass_text": nachfass_text, "nachfass_betrag": nachfass_betrag,

@@ -186,7 +186,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
          data-neu="{{ 1 if z.neu else 0 }}" data-bereit="{{ 1 if z.bereit else 0 }}" data-status="{{ a.status or 'neu' }}"
          data-verh="{{ b.verhaeltnis or 99 }}" data-pot="{{ b.potenzial or -999999 }}" data-preis="{{ a.preis or 0 }}"
          data-zeit="{{ a.erstmals_gesehen }}" data-entf="{{ a.entfernung_km if a.entfernung_km is not none else 99999 }}"
-         data-tage="{{ a.tage_online or 0 }}" data-nachfassen="{{ 1 if z.nachfassen else 0 }}" data-erst="{{ b.erstangebot or 0 }}"
+         data-tage="{{ a.tage_online or 0 }}" data-nachfassen="{{ 1 if z.nachfassen else 0 }}" data-erst="{{ z.brief_betrag or 0 }}"
          data-text="{{ (a.fahrzeug ~ ' ' ~ a.titel ~ ' ' ~ (a.marke or '') ~ ' ' ~ (a.ort or '') ~ ' ' ~ (a.ez_jahr or '')) | lower }}">
       <div class="streif"></div>
       <div class="bild">
@@ -264,7 +264,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
             <tr><td>− Ziel-Marge (netto)</td><td>{{ b.ziel_marge | euro }}</td></tr>
             <tr><td>− {{ ust_label }}</td><td>{{ z.ust | euro }}</td></tr>
             <tr class="summe"><td>Max. Einkaufspreis</td><td>{{ b.max_ek | euro }}</td></tr>
-            <tr class="angebot"><td>Erstangebot (im Anschreiben)</td><td>{{ b.erstangebot | euro }}</td></tr>
+            <tr class="angebot"><td>{{ "Erstangebot (im Anschreiben)" if z.brief_betrag else "Erstangebot (rechnerisch, nicht im Anschreiben)" }}</td><td>{{ b.erstangebot | euro }}</td></tr>
             <tr><td>Gewinn bei Kauf zum Wunschpreis</td><td>{{ b.potenzial | euro }}</td></tr>
           </table>
           <p class="fair"><b>Fair-Check:</b> Erstangebot = {{ b.fair_anteil | anteil }}, Max-EK = {{ b.max_anteil | anteil }} vom Marktwert privat.
