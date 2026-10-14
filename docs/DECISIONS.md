@@ -196,14 +196,19 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 
 * **Kontext:** Der Betreiber will „möglichst jedes Wohnmobil anschreiben“ und auf Masse gehen. Die Sperre aus ADR-020
   hielt fast alle importierten Fahrzeuge zurück (18 echte Seiten: 350 von 352 ohne bestätigte Art).
-* **Entscheidung (Betreiber, 14.10.2026):** Eine vorläufige oder unbekannte Fahrzeugart ist **kein Sperrgrund** mehr,
-  sondern ein sichtbarer **Hinweis** in Desktop-App, API, Handy-App, CSV, Anschreiben-Datei und Mail. Die
-  Herkunftsregeln aus ADR-020 bleiben und steuern den Hinweis. Der Art-Filter bestätigt nur Treffer der Haupttabelle,
-  eine Detailseite hat Vorrang vor dem Filter. Bei **unbekannter** Art rechnet die Bewertungs-Vorstufe
-  (`fuer_rechner`) ohne Titel-Art („Sonstige“), bei **vorläufiger** Art mit der vorläufigen Art. Bei nicht bestätigter
-  Art nennt der Brief keine Art. Der Profilname des Verkäufers wird nur beim Seitenimport für die Anrede in
-  `details_json` gespeichert (keine Telefonnummer, keine Profil-ID); eine Löschfunktion folgt mit P1-14a.
+* **Entscheidung des Betreibers (14.10.2026):** Jedes Fahrzeug soll anschreibbar sein; der Brief soll weniger den
+  Modellnamen und, falls vorhanden, den Profilnamen des Verkäufers verwenden.
+* **Umsetzungsentscheidungen (Orchestrator, nach QA):** Eine vorläufige oder unbekannte Fahrzeugart ist **kein
+  Sperrgrund** mehr, sondern ein sichtbarer **Hinweis** in Desktop-App, API, Handy-App, CSV, Anschreiben-Datei und
+  Mail. Die Herkunftsregeln aus ADR-020 bleiben und steuern den Hinweis. Der Art-Filter bestätigt nur Treffer der
+  Haupttabelle, eine Detailseite hat Vorrang vor dem Filter. Bei **vorläufiger** Art wird mit der vorläufigen Art
+  gerechnet. Bei **unbekannter** Art rechnet die Vorstufe (`fuer_rechner`, `bewerte_anzeige`) vorsichtig: niedrigster
+  Max-EK über „ohne Art“ und die Art-Wörter in Titel/Kurzbeschreibung, Spanne über alle Kandidaten, Sicherheit höchstens
+  „niedrig“ – der Rechner bleibt unverändert. Bei nicht bestätigter Art nennt der Brief keine Art. Der Profilname wird
+  nur beim Seitenimport für die Anrede in `details_json` gespeichert (keine Telefonnummer, keine Profil-ID); er steht
+  danach auch im erzeugten Brief. Eine Löschfunktion folgt mit P1-14a.
 * **Folgen:** Viel mehr Fahrzeuge sind sofort anschreibbar. Max-EK kann bei falscher Art danebenliegen – der
-  Mitarbeiter prüft vor dem Absenden. Offen: „Sonstige“ rechnet mit einem höheren Neupreis als z. B. „Kastenwagen“ und
-  deckt Wohnwagen/Anhänger nicht ab (Frage F14). Die übrigen Sperrgründe (gewerblich, Sperrbegriffe, Filter) folgen
+  Mitarbeiter prüft vor dem Absenden. Offen (F14): Wohnwagen ohne Art-Wort im Text werden wie Wohnmobile gerechnet; im
+  QA-Lauf stand ein echter Wohnwagen zunächst mit Max-EK 54.600 € statt 18.900 € auf Rang 3 – mit der vorsichtigen
+  Rechnung nur noch, wenn das Wort „Wohnwagen“ fehlt. Die übrigen Sperrgründe (gewerblich, Sperrbegriffe, Filter) folgen
   als Hinweise in einem eigenen Paket. ADR-020 gilt nur noch für die Herkunftsregeln.

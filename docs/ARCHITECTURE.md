@@ -46,7 +46,8 @@ stichprobenartig nachgeprüft (R1, R2, R3, R5, R14). Entscheidungen: `docs/DECIS
 ```
 config.yaml (suchen) → Suchauftrag → KleinanzeigenQuelle.suche → HoeflicherAbruf → Parser → Inserat
    → Datenbank.speichere_treffer (ein Commit je Treffer) → Importer.details → speichere_details
-   → bewerte_alle: Normalisierung → finde_duplikate → Rechner.bewerte → sperrgrund → Anschreiben
+   → bewerte_alle: Normalisierung → finde_duplikate → vergleichsbasis/fuer_rechner (Import-Art) → bewerte_anzeige
+     (Rechner.bewerte, bei unbekannter Art je Kandidat) → sperrgrund/hinweise → Anschreiben
    → Ausgabe (CSV/HTML/Texte) · E-Mail · WhatsApp
    → App: Kontext.zeilen (30-s-Cache) → Desktop „/“ bzw. Handy „/m“
    → Kontakt: Text kopieren + Inserat öffnen + POST /api/status „kontaktiert“   ← zu früh (R5)

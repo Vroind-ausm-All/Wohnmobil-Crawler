@@ -134,10 +134,14 @@ Hinweise zum Einlesen:
   nicht für „Weitere Ergebnisse in anderen Orten“) oder wenn die Detailseite der Anzeige mit eingelesen wird (die
   Detailseite hat Vorrang vor dem Filter). Eine Art, die nur aus dem Titel oder einem Suchwort (z. B. „Camper“) geraten
   wurde, ist **vorläufig**; widersprechen sich zwei Hinweise, ist die Art **unbekannt**. Angeschrieben werden kann in
-  jedem Fall (Betreiberentscheidung 14.10.2026) – das Fahrzeug trägt aber eine gelbe Hinweiszeile „Fahrzeugart nicht
-  bestätigt – bitte prüfen“ bzw. „Fahrzeugart unbekannt – bitte prüfen“ (auch in CSV-Spalte „Hinweise“, im Kopf der
-  Anschreiben-Textdatei und in der Benachrichtigungs-Mail). Gerechnet wird so: **„unbekannt“ ohne Art** (wie „Sonstige“),
-  **„nicht bestätigt“ mit der vorläufigen Art**. Der Brief nennt bei nicht bestätigter oder unbekannter Art keine
+  jedem Fall (Betreiberentscheidung 14.10.2026) – das Fahrzeug trägt aber eine gelbe Hinweiszeile, z. B. „Fahrzeugart
+  nicht bestätigt (gerechnet mit der vorläufigen Art) – bitte prüfen“ oder „Fahrzeugart unbekannt (vorsichtig gerechnet
+  als Wohnwagen) – bitte prüfen“ (auch in CSV-Spalte „Hinweise“, im Kopf der Anschreiben-Textdatei und in der
+  Benachrichtigungs-Mail). Gerechnet wird so: **„nicht bestätigt“ mit der vorläufigen Art**; bei **„unbekannt“
+  vorsichtig**: Der Scout rechnet ohne Art („Sonstige“) und mit jeder Art, die im Titel oder in der Kurzbeschreibung
+  vorkommt, nimmt den **niedrigsten** Max-EK, zeigt die Spanne über alle Möglichkeiten und stuft die Sicherheit auf
+  „niedrig“. **Achtung:** Wohnwagen, deren Text kein Art-Wort enthält (z. B. nur „Knaus Südwind 580“), werden dabei wie
+  ein Wohnmobil gerechnet und können zu hoch bewertet sein – vor dem Anschreiben prüfen. Der Brief nennt bei nicht bestätigter oder unbekannter Art keine
   Fahrzeugart. Eine später eingelesene Detailseite oder ein Art-Filter bestätigt bzw. korrigiert die Art.
 - **Datenschutz:** `import/eingelesen/` enthält die vollständigen gespeicherten Seiten, auch Verkäuferangaben
   (Name, Ort, ggf. Telefonnummer). Das Programm löscht nichts automatisch – lösche die Dateien nach der Prüfung selbst.
@@ -166,8 +170,9 @@ Nachrichten verschicken, und viele Verkäufer reagieren auf Massenanfragen aller
   Profil-IDs übernommen. (Der Freitext der Anzeige – Titel, Beschreibung – wird unverändert gespeichert und kann
   Kontaktangaben enthalten, wenn der Verkäufer sie dort selbst schreibt.) Einzige Ausnahme beim Verkäuferkasten: der öffentliche **Profilname** des Verkäufers – nur beim **Einlesen gespeicherter Anzeigenseiten**
   (nicht im Suchlauf mit Detailabruf), abgelegt in `details_json` → `verkaeufer_name`; Kürzel, „Privater Nutzer“,
-  Nummern und Adressen werden verworfen. Er dient der persönlichen Anrede im Anschreiben. **Eine Lösch- oder
-  Anonymisierungsfunktion gibt es noch nicht** (geplant als Paket P1-14a, Backlog): der Status „gelöscht“ markiert nur
+  Nummern und Adressen werden verworfen. Er dient der persönlichen Anrede im Anschreiben und steht deshalb
+  auch im erzeugten Brief: in `ausgabe/report.html`, in `ausgabe/anschreiben/<id>.txt` und – nach dem Kontakt – im
+  gespeicherten Anschreibentext der Datenbank. **Eine Lösch- oder Anonymisierungsfunktion gibt es noch nicht** (geplant als Paket P1-14a, Backlog): der Status „gelöscht“ markiert nur
   das Inserat und entfernt den Namen **nicht** aus `details_json`. Die App ist nur auf dem eigenen Rechner erreichbar
   (127.0.0.1).
 - **Wenn plötzlich 0 Anzeigen gefunden werden**, hat Kleinanzeigen vermutlich das Seitenlayout

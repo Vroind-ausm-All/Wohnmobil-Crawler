@@ -15,8 +15,8 @@ Wert „–“.
 - **Verantwortliche Agenten:** `source-integrations` (Import, Parser, Ausgaben), `acquisition-analyst` (Brief,
   Bewertungs-Vorstufe, eigener Worktree, danach zusammengeführt), `qa-security-reviewer` (Runde 5), Orchestrator
   (`scout.py rechne`, Doku).
-- **Zweig/Commits:** `claude/phase2-seitenimport`: 12cef17/a912c83 (Zwischenstände „ungeprüft“), 5174eef (Korrektur
-  nach QA-Runde 5), 9479b6b + fc086f3 (Anschreiben, Merge).
+- **Zweig/Commits:** `claude/phase2-seitenimport`: 12cef17/a912c83/bcdb68b (Zwischenstände „ungeprüft“), 5174eef
+  (Korrektur nach QA-Runde 5), 9479b6b + fc086f3 (Anschreiben, Merge), 7f96a8e (Doku), Korrektur nach QA-Runde 6.
 - **Geänderte Dateien (Auswahl):**
   - `wmscout/bewertung/anschreiben.py` (`hinweise`, `verkaeufer_name`, `anrede_name`, `art_bestaetigt`)
   - `wmscout/bewertung/auswertung.py` (`fuer_rechner`, Feld `hinweise`)
@@ -35,23 +35,32 @@ Wert „–“.
   - K-A behoben: Der Art-Filter bestätigt nur Treffer aus `#srchrslt-adtable`. Detailseite hat Vorrang (M-W).
   - Brief: „Hallo <Name>,“ aus dem Profil (Hr → Herr, Kleinschreibung korrigiert), Modell nur einmal in der
     Einleitung, danach Marke bzw. „Ihr Wohnmobil“; bei nicht bestätigter Art keine Art im Text.
-  - Bei unbekannter Art rechnet die Vorstufe ohne Titel-Art („Sonstige“), Rechner unverändert.
-  - Datenschutz: nur der Profilname, nur beim Seitenimport; keine Telefonnummern/Profil-IDs; echte Namen und Orte aus
-    den Fixtures entfernt.
+  - Bei unbekannter Art rechnet die Vorstufe vorsichtig: niedrigster Max-EK über „ohne Art“ und die Art-Wörter im
+    Text, Spanne über alle Kandidaten, Sicherheit „niedrig“; Rechner unverändert. `scout.py rechne` nutzt dieselbe
+    Logik (`vergleichsbasis`, `bewerte_anzeige`).
+  - Brief markenneutral „Ihr <Art> von <Marke>“ (statt „Ihr Hobby …“).
+  - Datenschutz: nur der Profilname, nur beim Seitenimport; Zeichen-Whitelist, keine Ziffern/Adressen/Füllwörter;
+    keine Telefonnummern/Profil-IDs. Echte Namen und Orte aus Fixtures, Tests und Vorlagen entfernt; ein Test
+    (`test_keine_echten_verkaeufernamen_im_repository`) verhindert ihre Rückkehr.
 - **Tests:** `.venv/bin/python -m pytest -q -p no:cacheprovider`, `.venv/bin/python -m ruff check .`,
   `node --check wmscout/web/static/mobil.js`, Mutationsproben der Agenten in Kopien
-- **Testergebnis (Orchestrator, Stand fc086f3 + `scout.py`-Änderung):** `326 passed`, ruff „All checks passed!“.
-  Agenten: Import-Korrektur 287 passed, Anschreiben 289 passed (getrennte Stände), Mutationen alle erkannt.
+- **Testergebnis (Orchestrator):** Stand 7f96a8e `326 passed`; nach Korrektur Runde 6 (bcdb68b) **`374 passed`**,
+  ruff „All checks passed!“. Mutationsproben der Agenten in Kopien: alle erkannt (Runde 6: 17 von 17).
 - **Review-Ergebnis:** QA-Runde 5 (Stand a912c83): ABLEHNUNG ohne KRITISCH; K-A, H-T, M-W, N-1..N-3 bestätigt
   behoben. Offen waren H1 (echte Profilnamen in Tests), H2 (Name gespeichert, aber ungenutzt), H3 (unbekannte Art mit
-  Titel-Art gerechnet), M1–M4, N1–N5 → alle in dieser Runde bearbeitet. QA-Runde 6: steht aus.
+  Titel-Art gerechnet), M1–M4, N1–N5 → bearbeitet. QA-Runde 6 (Stand 7f96a8e): ABLEHNUNG ohne KRITISCH – H1-R (die
+  echten Namen kamen über den parallelen Anschreiben-Worktree zurück: der Orchestrator hatte sie dem Agenten als
+  Beispiel genannt), H6-1 (unbekannte Art als „Sonstige“: echter Wohnwagen mit Max-EK 54.600 € statt 18.900 € auf
+  Rang 3), M6-1..M6-3, N6-1..N6-5 → in Korrekturrunde 2 bearbeitet. QA-Runde 7: steht aus.
 - **Bekannte Risiken:**
   - Die echten Profilnamen aus a912c83 stehen in der Historie des Arbeitszweigs (Bereinigung nur mit Freigabe des
     Betreibers; Squash-Merge hält sie aus dem Integrationszweig).
-  - F14: „Sonstige“ rechnet höher als manche konkrete Art.
+  - F14: Wohnwagen ohne Art-Wort im Text werden wie Wohnmobile gerechnet (zu hoher Max-EK, teils „grün“).
+  - Max-EK 0 ergibt Ampel „grau“ (bestehendes Rechnerverhalten).
   - N4: früher falsch bestätigte Inserate werden nicht automatisch herabgestuft.
   - Kein Browser-Klicktest der Hinweiszeile; Windows nicht geprüft.
-- **Nächster sinnvoller Schritt:** QA-Runde 6, dann PR gegen den Integrationszweig.
+- **Nächster sinnvoller Schritt:** QA-Runde 7 (letzte erlaubte Runde nach Wiederaufnahme), dann PR gegen den
+  Integrationszweig; Betreiberentscheidung F14.
 
 ## Phase 2 (vorgezogen) – Gespeicherte Seiten einlesen (13.10.2026)
 

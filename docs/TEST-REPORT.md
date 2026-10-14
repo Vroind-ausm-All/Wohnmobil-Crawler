@@ -8,14 +8,18 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 | Prüfung | Ergebnis |
 |---|---|
-| `.venv/bin/python -m pytest -q -p no:cacheprovider` (Orchestrator, Stand fc086f3 + `scout.py`) | **326 passed** |
+| `.venv/bin/python -m pytest -q -p no:cacheprovider` (Orchestrator) | 7f96a8e: 326 passed; nach Korrektur Runde 6 (bcdb68b): **374 passed** |
 | `.venv/bin/python -m ruff check .` | All checks passed! |
 | `node --check wmscout/web/static/mobil.js` (Agent) | ohne Fehler |
 | QA-Runde 5 (Stand a912c83): 18 echte Seiten, Temp-DB, Sockets gesperrt | 352 Inserate; bestätigt 2, vorläufig 186, unbekannt 164; nicht bestätigt ohne Hinweis: **0**; Sperrgrund Fahrzeugart: 0; vorwärts/rückwärts 0 Abweichungen |
 | QA-Runde 5: K-A am echten Original mit eingesetztem Filter | altads-Seiten: 0 bestätigt; Adria-Seite: 27 bestätigt |
 | QA-Runde 5: Mutationen | 26 von 29 erkannt (überlebt: `|safe`, Ziffernprüfung, eine gleichwertige) → in dieser Runde mit Tests abgedeckt |
 | Mutationen der Agenten (Kopien) | Import-Korrektur: alle erkannt (M1, M2, M4, N1, N3, N5, H2); Anschreiben: 13 von 13 |
-| QA-Urteil Runde 5 | **ABLEHNUNG** (H1–H3, M1–M4) → bearbeitet; Runde 6 **nicht geprüft** (steht aus) |
+| QA-Urteil Runde 5 | **ABLEHNUNG** (H1–H3, M1–M4) → bearbeitet |
+| QA-Runde 6 (7f96a8e): 18 echte Seiten, Briefmatrix 1.152 Briefe + 1.152 Nachfass-Texte | Modell mehrfach: 0; Art-Wort bei nicht bestätigter Art: 0; Escaping hält; Mutationen 28 von 34 erkannt |
+| QA-Urteil Runde 6 | **ABLEHNUNG** (H1-R echte Namen zurück, H6-1 Wohnwagen als „Sonstige“ auf Rang 3) → bearbeitet |
+| Agent nach Korrektur Runde 6: 18 echte Seiten vorher/nachher | Bürstner-Wohnwagen 54.600 € (hoch, Rang 3) → 18.900 € (niedrig, Rang 22); Dethleffs-Wohnanhänger → nicht bereit; Sicherheit bei unbekannter Art: 96 niedrig, 68 keine |
+| QA-Runde 7 | nicht geprüft (steht aus) |
 | Browser-Klicktest Hinweiszeile, Windows, CI | nicht geprüft |
 
 ---
