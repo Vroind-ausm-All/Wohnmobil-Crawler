@@ -19,6 +19,8 @@ from pathlib import Path
 from .datenbank import BESTAETIGT, IMPORT_SUCHE, VORLAEUFIG, Datenbank, import_art, import_suche
 from .eingang import (BegleitordnerFehler, SuchseitenArt, erkenne_seite_mit_hinweisen, fahrzeugart_der_suchseite, haupttabelle_ids,
                       html_dateien, lies_html, plattform_der_seite, verschiebe)
+from .ereignisse import InseratEreignis
+from .ereignis_speicher import EreignisSpeicher
 from .normalisierung.fahrzeug import art_schluessel
 from .quellen import (STANDARD_QUELLE, Abruf, InseratNichtGefunden, NetzwerkFehler, Quelle, QuelleGesperrt,
                       QuellenFehler, Suchauftrag, erstelle_quelle)
@@ -84,9 +86,13 @@ class Importer:
         if kennung not in self._quellen:
             q = erstelle_quelle(kennung, self.cfg, self.abruf)
             if not q.freigegeben:
-                log.warning("Quelle %s ist nicht vom Anbieter freigegeben (%s). %s", q.name, q.zugriffsart, q.hinweis)
+                raise QuellenFehler(f"Quelle {q.name} nicht freigegeben ({q.zugriffsart}). {q.hinweis}")
             self._quellen[kennung] = q
         return self._quellen[kennung]
+
+    def importiere_ereignis(self, ereignis: InseratEreignis) -> str:
+        """Ein normalisiertes Ereignis ohne Portalabruf in Schema v4 einlesen."""
+        return EreignisSpeicher(self.db).verarbeite(ereignis)
 
     # ---------- Suche ----------
     def suche(self, auftrag: Suchauftrag) -> dict:

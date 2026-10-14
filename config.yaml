@@ -29,7 +29,7 @@ crawler:
   pause_min_sek: 4               # zufällige Pause zwischen Abrufen
   pause_max_sek: 9
   timeout_sek: 25
-  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36"
+  user_agent: "WohnmobilScout/0.1 (lokales Recherchewerkzeug; Betreiberkontakt konfigurieren)"
 
 # --- 3. Filter ------------------------------------------------
 filter:
@@ -193,7 +193,7 @@ nachfassen:
 # --- 7. App -----------------------------------------------------
 app:
   port: 8765
-  auto_suche_stunden: 3            # sucht automatisch, solange die App offen ist (0 = aus)
+  auto_suche_stunden: 0            # standardmäßig AUS: unfreigegebene Web-Quelle darf nicht automatisch laufen
   auto_suche_von: 7                # nur zwischen 7 und 21 Uhr
   auto_suche_bis: 21
   # Handy-App fürs Team (docs/HANDY-APP.md): Adresse, unter der die App per Tailscale erreichbar ist,
