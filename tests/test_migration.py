@@ -8,7 +8,7 @@ from tests.test_datenbank import SCHEMA_V1
 from wmscout import migrationen
 from wmscout.datenbank import Datenbank
 from wmscout.migrationen import AKTUELLE_VERSION, MigrationsFehler, lese_version, migriere
-from wmscout.sicherung import sicherungen, wiederherstellen
+from wmscout.sicherung import sichere, sicherungen, wiederherstellen
 
 # Stand vor Phase 1, unabhängig von migrationen.py nachgebaut (damit der Test den Altbestand wirklich abbildet)
 SCHEMA_V2 = """
@@ -263,3 +263,118 @@ def test_rueckweg_pre_migration_sicherung_stellt_v1_wieder_her(tmp_path):
     assert lese_version(pfad) == 1 and zeilen(pfad, "anzeigen") == vorher
     Datenbank(str(pfad), str(ziel)).con.close()                                # und lässt sich erneut migrieren
     assert lese_version(pfad) == 3 and len(zeilen(pfad, "anzeigen")) == 3
+
+
+# ---------- Korrekturrunde 1: H1 (Migration räumt nicht auf), M3/M4-Mutanten, paralleles Anlegen, N2 ----------
+
+def test_h1_migration_loescht_keine_sicherungen_auch_bei_voller_aufbewahrung(tmp_path):
+    pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
+    baue_v2(pfad)
+    vorhandene = [sichere(pfad, ziel, behalten=20) for _ in range(15)]           # Betreiber: config sicherung.behalten = 20
+    assert len(sicherungen(ziel, "db")) == 15
+    assert migriere(pfad, ziel) == [3]
+    jetzt = sicherungen(ziel, "db")
+    assert len(jetzt) == 16 and all(v in jetzt for v in vorhandene)               # nichts gelöscht, nur die Migrationssicherung dazu
+    assert jetzt[-1].name.endswith("-vor-v3.sqlite")
+
+
+def test_h1_migrationssicherungen_bleiben_bis_eine_normale_sicherung_nach_konfiguration_aufraeumt(tmp_path):
+    pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
+    baue_v2(pfad)
+    for _ in range(12):
+        sichere(pfad, ziel, behalten=20)
+    migriere(pfad, ziel)
+    assert len(sicherungen(ziel, "db")) == 13
+    sichere(pfad, ziel, behalten=5)                                               # normale Sicherung räumt nach Konfiguration auf
+    assert len(sicherungen(ziel, "db")) == 5
+
+
+def test_m3_stille_zeilenverluste_in_einem_schritt_werden_zurueckgerollt(tmp_path, monkeypatch):
+    pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
+    baue_v2(pfad)
+    vorher = {t: zeilen(pfad, t) for t in ("anzeigen", "nutzer", "besichtigungen", "fotos")}
+    monkeypatch.setitem(migrationen.SCHRITTE, 3, lambda con: con.execute("DELETE FROM anzeigen WHERE id='2'"))    # wirft keinen Fehler
+    with pytest.raises(MigrationsFehler, match="Zeilenzahl"):
+        migriere(pfad, ziel)
+    assert {t: zeilen(pfad, t) for t in vorher} == vorher and lese_version(pfad) == 2
+    monkeypatch.setitem(migrationen.SCHRITTE, 3, lambda con: con.execute("INSERT INTO nutzer (name, passwort_hash) VALUES ('Neu', 'x')"))
+    with pytest.raises(MigrationsFehler, match="Zeilenzahl"):
+        migriere(pfad, ziel)                                                       # auch zusätzliche Zeilen sind nicht erlaubt
+    assert {t: zeilen(pfad, t) for t in vorher} == vorher
+
+
+def test_m4_zweiter_prozess_war_schneller_schritt_laeuft_nicht_doppelt(tmp_path, monkeypatch):
+    pfad = tmp_path / "db.sqlite"
+    baue_v2(pfad)
+    veraltet = sqlite3.connect(pfad, isolation_level=None)                          # hat Stand 2 erkannt ...
+    assert migrationen.erkenne_version(veraltet) == 2
+    migriere(pfad, tmp_path / "sich")                                               # ... da migriert ein anderer Prozess auf 3
+    aufrufe = []
+    monkeypatch.setitem(migrationen.SCHRITTE, 3, lambda con: aufrufe.append(1))
+    migrationen._fuehre_aus(veraltet, 3, 2)
+    veraltet.close()
+    assert aufrufe == [] and versionen(pfad) == [2, 3] and not veraltet_in_transaktion(pfad)
+
+
+def veraltet_in_transaktion(pfad) -> bool:
+    con = sqlite3.connect(pfad, timeout=0.5, isolation_level=None)
+    try:
+        con.execute("BEGIN IMMEDIATE")                                              # gelingt nur, wenn keine Sperre hängen blieb
+        con.execute("ROLLBACK")
+        return False
+    finally:
+        con.close()
+
+
+def test_m3_paralleles_neuanlegen_zweiter_bekommt_keinen_integrity_error(tmp_path):
+    pfad = tmp_path / "neu.sqlite"
+    a = sqlite3.connect(pfad, isolation_level=None)
+    b = sqlite3.connect(pfad, isolation_level=None)
+    assert migrationen.erkenne_version(a) == 0 and migrationen.erkenne_version(b) == 0     # beide sehen "leer"
+    assert migrationen._neu_anlegen(a) is True
+    assert migrationen._neu_anlegen(b) is False                                     # kein sqlite3.IntegrityError, nichts doppelt
+    a.close()
+    b.close()
+    assert versionen(pfad) == [AKTUELLE_VERSION] and lese_version(pfad) == AKTUELLE_VERSION
+
+
+def test_m3_paralleler_start_mehrerer_threads(tmp_path):
+    import threading
+    pfad, ziel = tmp_path / "neu.sqlite", tmp_path / "sich"
+    start, fehler, ergebnisse = threading.Barrier(6), [], []
+
+    def lauf():
+        try:
+            start.wait()
+            ergebnisse.append(migriere(pfad, ziel))
+        except BaseException as e:  # noqa: BLE001
+            fehler.append(e)
+
+    threads = [threading.Thread(target=lauf) for _ in range(6)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(60)
+    assert fehler == []
+    assert sorted(map(tuple, ergebnisse)) == [()] * 5 + [(AKTUELLE_VERSION,)]       # genau einer hat angelegt
+    assert versionen(pfad) == [AKTUELLE_VERSION] and not ziel.exists()
+
+
+def test_n2_lese_version_legt_nichts_an(tmp_path):
+    fehlt = tmp_path / "gibtsnicht.sqlite"
+    with pytest.raises(sqlite3.Error):
+        lese_version(fehlt)
+    assert not fehlt.exists() and list(tmp_path.iterdir()) == []
+    leer = tmp_path / "leer.sqlite"
+    leer.write_bytes(b"")
+    assert lese_version(leer) == 0 and leer.stat().st_size == 0
+
+
+def test_n3_app_nutzt_sicherungsordner_aus_der_konfiguration(cfg, tmp_path):
+    from wmscout.app import Suchlauf
+    baue_v1(tmp_path / "anzeigen.sqlite")
+    cfg["ausgabe"]["datenbank"] = str(tmp_path / "anzeigen.sqlite")
+    cfg["sicherung"] = {"ordner": "eigene-sicherungen", "behalten": 5}
+    Suchlauf(cfg, cfg["ausgabe"]["datenbank"], tmp_path).oeffne_datenbank().con.close()
+    assert len(sicherungen(tmp_path / "eigene-sicherungen", "anzeigen")) == 1       # nicht daten/sicherungen neben der Datenbank
+    assert not (tmp_path / "sicherungen").exists()

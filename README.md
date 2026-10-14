@@ -61,6 +61,12 @@ Einrichtung (Nutzer anlegen, Tailscale, App auf den Startbildschirm): **[docs/HA
   `python scout.py wiederherstellen daten/sicherungen/<Datei>.sqlite --bestaetigt`. Der bisherige Stand wird vorher
   selbst gesichert, bisherige Fotos werden nur umbenannt (`fotos.alt-…`), nicht gelöscht.
 * Ist die Datenbank neuer als das Programm (Schemaversion), startet es nicht – bitte das Programm aktualisieren.
+* **Datenschutz:** Sicherungen (`*.sqlite`, `*.fotos.zip`), Rohkopien defekter Datenbanken (`*.defekt`, `*-reste-*`) und
+  umbenannte Fotoordner (`fotos.alt-…`) enthalten personenbezogene Daten (Verkäufernamen, Telefonnummern, Anschriften,
+  Notizen, Fotos). Nur dort aufbewahren, wo sie hingehören, und nach einer festgelegten Frist selbst löschen – das
+  automatische Löschen/Anonymisieren folgt mit P1-14a. Das Programm löscht `.defekt`-, `-reste-`- und `fotos.alt-…`-Kopien nie.
+* Vor einer Migration angelegte Sicherungen (`…-vor-v3`) bleiben erhalten, bis eine normale Sicherung nach `behalten`
+  aufräumt; beim Zurückspielen bleibt die verwendete Sicherung immer erhalten.
 
 ## So rechnet der Einkaufspreis-Rechner (faire Bewertung)
 

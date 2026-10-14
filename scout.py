@@ -33,6 +33,7 @@ if _fehlt:
 
 import argparse
 import logging
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 
@@ -47,7 +48,7 @@ from wmscout.datenbank import STATUS, Datenbank
 from wmscout.importer import Importer
 from wmscout.migrationen import MigrationsFehler
 from wmscout.normalisierung.fahrzeug import ergaenze_fahrzeug
-from wmscout.sicherung import STANDARD_BEHALTEN, SicherungsFehler, sichere, wiederherstellen
+from wmscout.sicherung import SicherungsFehler, einstellungen, sichere, sicherung_ordner, wiederherstellen
 from wmscout.team import ROLLEN, TeamSpeicher
 
 BASIS = Path(__file__).resolve().parent
@@ -126,19 +127,12 @@ def foto_ordner(cfg) -> Path:
     return (BASIS / cfg["ausgabe"]["datenbank"]).parent / "fotos"
 
 
-def sicherung_ordner(cfg) -> Path:
-    return BASIS / ((cfg.get("sicherung") or {}).get("ordner") or "daten/sicherungen")
-
-
-def sicherung_behalten(cfg) -> int:
-    return int((cfg.get("sicherung") or {}).get("behalten") or STANDARD_BEHALTEN)
-
-
 def cmd_sichern(cfg, args):
     db_pfad = BASIS / cfg["ausgabe"]["datenbank"]
     try:
-        ziel = sichere(db_pfad, sicherung_ordner(cfg), foto_ordner(cfg), sicherung_behalten(cfg))
-    except (SicherungsFehler, OSError) as e:
+        ordner, behalten = einstellungen(cfg, BASIS)
+        ziel = sichere(db_pfad, ordner, foto_ordner(cfg), behalten)
+    except (SicherungsFehler, MigrationsFehler, ValueError, sqlite3.Error, OSError) as e:
         sys.exit(f"Sicherung fehlgeschlagen: {e}")
     print(f"Sicherung angelegt und geprüft: {ziel}")
     if ziel.with_name(ziel.name[:-len('.sqlite')] + ".fotos.zip").exists():
@@ -147,13 +141,13 @@ def cmd_sichern(cfg, args):
 
 def cmd_wiederherstellen(cfg, args):
     quelle = Path(args.datei)
-    if not quelle.is_file() and (sicherung_ordner(cfg) / args.datei).is_file():
-        quelle = sicherung_ordner(cfg) / args.datei
     try:
-        erg = wiederherstellen(quelle, BASIS / cfg["ausgabe"]["datenbank"], args.bestaetigt, sicherung_ordner(cfg),
-                               foto_ordner(cfg), sicherung_behalten(cfg))
-    except (SicherungsFehler, OSError) as e:
-        sys.exit(f"{e}")
+        ordner, behalten = einstellungen(cfg, BASIS)
+        if not quelle.is_file() and (ordner / args.datei).is_file():
+            quelle = ordner / args.datei
+        erg = wiederherstellen(quelle, BASIS / cfg["ausgabe"]["datenbank"], args.bestaetigt, ordner, foto_ordner(cfg), behalten)
+    except (SicherungsFehler, MigrationsFehler, ValueError, sqlite3.Error, OSError) as e:
+        sys.exit(f"Wiederherstellung fehlgeschlagen: {e}")
     print(f"Wiederhergestellt aus {quelle}.")
     if erg.sicherung_vorher:
         print(f"Stand davor gesichert in: {erg.sicherung_vorher}")
@@ -245,8 +239,9 @@ def main():
     if args.cmd == "wiederherstellen":
         return cmd_wiederherstellen(cfg, args)
     try:
-        db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]), str(sicherung_ordner(cfg)))
-    except MigrationsFehler as e:
+        einstellungen(cfg, BASIS)           # ungültiges „sicherung“ in config.yaml sofort melden, nicht erst bei der Sicherung
+        db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]), str(sicherung_ordner(cfg, BASIS)))
+    except (MigrationsFehler, ValueError, sqlite3.Error) as e:
         sys.exit(f"Datenbank-Start abgebrochen: {e}")
     {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "rechne": cmd_rechne, "nutzer": cmd_nutzer,
      "status": cmd_status}[args.cmd](cfg, db, args)

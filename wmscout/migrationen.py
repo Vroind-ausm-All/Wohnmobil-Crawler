@@ -12,7 +12,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from .sicherung import SicherungsFehler, sichere
+from .sicherung import SicherungsFehler, oeffne_lesend, sichere
 
 AKTUELLE_VERSION = 3
 
@@ -111,12 +111,34 @@ def erkenne_version(con: sqlite3.Connection) -> int:
 
 
 def lese_version(db_pfad: str | Path) -> int:
-    """Nur lesen (z. B. für Diagnose); legt nichts an."""
-    con = sqlite3.connect(str(db_pfad), timeout=30)
+    """Nur lesen (z. B. für Diagnose); legt nichts an (``mode=ro``)."""
+    con = oeffne_lesend(db_pfad)
     try:
         return erkenne_version(con)
     finally:
         con.close()
+
+
+def pruefe_wiederherstellbar(pfad: str | Path):
+    """Darf diese Datei als Datenbank eingespielt werden? Tabelle ``anzeigen`` vorhanden und Version nicht neuer als der Code.
+
+    Wirft ``SicherungsFehler`` (Meldung für den Betreiber); die Datei wird nur lesend geöffnet.
+    """
+    pfad = Path(pfad)
+    try:
+        con = oeffne_lesend(pfad)
+        try:
+            if "anzeigen" not in _tabellen(con):
+                raise SicherungsFehler("Die Sicherung ist keine Wohnmobil-Scout-Datenbank (Tabelle „anzeigen“ fehlt). "
+                                       "Es wurde nichts verändert.")
+            version = erkenne_version(con)
+        finally:
+            con.close()
+    except (sqlite3.Error, MigrationsFehler) as e:
+        raise SicherungsFehler(f"Die Sicherung lässt sich nicht als Wohnmobil-Scout-Datenbank lesen ({e}). Nichts verändert.") from e
+    if version > AKTUELLE_VERSION:
+        raise SicherungsFehler(f"Die Sicherung hat Schemaversion {version}, dieses Programm kennt nur Version {AKTUELLE_VERSION}. "
+                               "Bitte das Programm aktualisieren. Es wurde nichts verändert.")
 
 
 def _fuehre_aus(con: sqlite3.Connection, version: int, erkannt: int):
@@ -151,17 +173,24 @@ def _zaehle(con: sqlite3.Connection) -> dict[str, int]:
     return {t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in ("anzeigen", *TEAM_TABELLEN) if t in vorhanden}
 
 
-def _neu_anlegen(con: sqlite3.Connection):
-    """Neue, leere Datenbank: direkt in der aktuellen Version, ohne Sicherung (es gibt nichts zu sichern)."""
+def _neu_anlegen(con: sqlite3.Connection) -> bool:
+    """Neue, leere Datenbank: direkt in der aktuellen Version, ohne Sicherung (es gibt nichts zu sichern).
+
+    Rückgabe False: Ein zweiter Prozess war schneller (Prüfung unter der Schreibsperre), nichts wurde getan.
+    """
     con.execute("BEGIN IMMEDIATE")
     try:
+        if erkenne_version(con) != 0:
+            con.execute("ROLLBACK")
+            return False
         for sql in UR_SCHEMA:
             con.execute(sql)
         for v in sorted(SCHRITTE):
             SCHRITTE[v](con)
         con.execute(_SCHEMA_VERSION)
-        con.execute("INSERT INTO schema_version VALUES (?,?)", (AKTUELLE_VERSION, _jetzt()))
+        con.execute("INSERT OR IGNORE INTO schema_version VALUES (?,?)", (AKTUELLE_VERSION, _jetzt()))
         con.execute("COMMIT")
+        return True
     except BaseException:
         if con.in_transaction:
             con.execute("ROLLBACK")
@@ -172,7 +201,9 @@ def migriere(db_pfad: str | Path, sicherung_ordner: str | Path | None = None) ->
     """Bringt die Datenbank auf ``AKTUELLE_VERSION``. Rückgabe: ausgeführte Schritte (leer = nichts zu tun).
 
     Vor dem ersten Schritt wird die Datenbank gesichert (Backup-API + integrity_check); ohne gültige Sicherung
-    erfolgt keine Änderung. Ist die Datenbank neuer als dieser Code, wird nichts geschrieben.
+    erfolgt keine Änderung. Migrationssicherungen werden nie aufgeräumt (sie sind der Rückweg); das erledigt die
+    nächste normale Sicherung nach der konfigurierten Aufbewahrung. Ist die Datenbank neuer als dieser Code,
+    wird nichts geschrieben.
     """
     db_pfad = Path(db_pfad)
     sicherung_ordner = Path(sicherung_ordner) if sicherung_ordner else db_pfad.parent / "sicherungen"
@@ -190,14 +221,16 @@ def migriere(db_pfad: str | Path, sicherung_ordner: str | Path | None = None) ->
                 f"{AKTUELLE_VERSION}. Bitte das Programm aktualisieren (nicht mit der alten Version weiterarbeiten). "
                 "Es wurde nichts verändert.")
         if erkannt == 0:
-            _neu_anlegen(con)
-            return [AKTUELLE_VERSION]
+            if _neu_anlegen(con):
+                return [AKTUELLE_VERSION]
+            con.close()
+            return migriere(db_pfad, sicherung_ordner)     # parallel angelegt: Stand neu beurteilen
         offen = [v for v in sorted(SCHRITTE) if v > erkannt]
         if not offen:
             return []
         con.close()                # Verbindung vor der Sicherung freigeben (Windows-Dateisperren)
         try:
-            kopie = sichere(db_pfad, sicherung_ordner, zusatz=f"vor-v{offen[-1]}")
+            kopie = sichere(db_pfad, sicherung_ordner, zusatz=f"vor-v{offen[-1]}", aufraeumen=False)
         except (SicherungsFehler, OSError, sqlite3.Error) as e:
             raise MigrationsFehler(f"Migration abgebrochen: Die Sicherung vor der Migration ist fehlgeschlagen ({e}). "
                                    "Die Datenbank wurde nicht verändert.") from e
