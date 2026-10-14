@@ -21,6 +21,8 @@ EZ = date.today().year - 9
 ARTWOERTER = ("Kastenwagen", "Teilintegrierte", "Integrierte", "Alkoven", "Wohnwagen")
 EVEREST = "Everest Minicamp, Camper, Wohnwagen, Motocrosshänger"          # echter Titel aus dem QA-Befund H3
 
+WW_HINWEIS = "Fahrzeugart unbekannt (vorsichtig gerechnet als Wohnwagen; Ampel höchstens gelb, Brief ohne Betrag) – bitte prüfen"
+
 
 def knaus(**extra) -> dict:
     return ergaenze_fahrzeug({"id": "k", "suche": "Teilintegrierter", "titel": "Knaus Sky TI 650 MEG Platinum", "ez_jahr": EZ,
@@ -180,7 +182,10 @@ def test_keine_art_im_brief_bei_vorlaeufig_oder_unbekannt(suche):
     for wort in ARTWOERTER:
         assert wort not in t, (suche, wort)
     assert "Ihr Inserat zu Ihrem Wohnmobil (EZ" in t and "Ihr Wohnmobil passt gut" in t
-    assert "(Wohnmobile der Baujahre" in t
+    if suche == IMPORT_SUCHE:                                                   # F14: unbekannte Art → Brief ohne Betrag
+        assert "€ an" not in t and "(Wohnmobile der Baujahre" not in t and "konkretes Angebot" in t
+    else:
+        assert "(Wohnmobile der Baujahre" in t
 
 
 def test_bestaetigte_art_steht_im_brief():
@@ -227,7 +232,7 @@ def test_vorstufe_behaelt_wertfaktoren_aus_dem_titel():
 
 
 def test_hinweistext_nennt_womit_gerechnet_wurde():
-    assert HINWEIS_ART_UNBEKANNT == "Fahrzeugart unbekannt (gerechnet ohne Art) – bitte prüfen"
+    assert HINWEIS_ART_UNBEKANNT == "Fahrzeugart unbekannt (gerechnet ohne Art; Ampel höchstens gelb, Brief ohne Betrag) – bitte prüfen"
     assert HINWEIS_ART_VORLAEUFIG == "Fahrzeugart nicht bestätigt (gerechnet mit der vorläufigen Art) – bitte prüfen"
     assert hinweise(everest()) == [HINWEIS_ART_UNBEKANNT]
     assert hinweise(everest("Import Kastenwagen (vorläufig)")) == [HINWEIS_ART_VORLAEUFIG]
@@ -251,7 +256,7 @@ def test_bewerte_alle_rechnet_unbekannt_vorsichtig_und_schreibt_neutral(cfg, db)
     zeilen = {z["a"]["id"]: z for z in bewerte_alle(cfg, db, BASIS)}
     ev, kw = zeilen["ev1"], zeilen["kw1"]
     assert ev["b"].art == "Wohnwagen" and ev["b"].marktwert_angebote == 15600 and ev["b"].vergleich_anzahl == 0
-    assert ev["hinweise"] == ["Fahrzeugart unbekannt (vorsichtig gerechnet als Wohnwagen) – bitte prüfen"] and ev["a"]["titel"] == EVEREST
+    assert ev["hinweise"] == [WW_HINWEIS] and ev["a"]["titel"] == EVEREST
     assert "niedrigster Max-EK aus ohne Art, Kastenwagen, Wohnwagen" in ev["b"].vergleich_basis
     assert kw["b"].art == "Kastenwagen" and kw["hinweise"] == [HINWEIS_ART_VORLAEUFIG]
     assert ev["sperre"] is None and kw["sperre"] is None
@@ -301,7 +306,7 @@ def test_unbekannte_art_nimmt_niedrigsten_max_ek_und_sicherheit_hoechstens_niedr
     assert b.sicherheit == "niedrig"
     assert (b.spanne_von, b.spanne_bis) == (14300, 35200)
     assert b.ampel == als_ww.ampel and b.verhaeltnis == als_ww.verhaeltnis and b.erstangebot == als_ww.erstangebot
-    assert hinweise(a, b) == [hinweis_art_unbekannt("Wohnwagen")] == ["Fahrzeugart unbekannt (vorsichtig gerechnet als Wohnwagen) – bitte prüfen"]
+    assert hinweise(a, b) == [hinweis_art_unbekannt("Wohnwagen")] == [WW_HINWEIS]
     # Brief: Art weiterhin nicht genannt
     t = Anschreiber(cfg, BASIS).text(a, b)
     for wort in ARTWOERTER:
@@ -344,3 +349,32 @@ def test_unbekannte_importe_vergleichen_sich_in_rechner_sicht(cfg, db):
     z = {z["a"]["id"]: z for z in bewerte_alle(cfg, db, BASIS)}["a"]
     assert (z["b"].art, z["b"].vergleich_anzahl, z["b"].marktwert_angebote) == ("Sonstige", 1, 29050)
     assert z["hinweise"] == [HINWEIS_ART_UNBEKANNT]
+
+
+def test_f14_unbekannte_art_ampel_hoechstens_gelb_und_brief_ohne_betrag():
+    """Betreiberentscheidung F14 (14.10.2026): Wohnwagen ohne Art-Wort im Text werden als „Sonstige“ gerechnet und wären
+    sonst grün mit konkretem Betrag. Bei unbekannter Art daher Ampel höchstens „gelb“ und kein Betrag im Brief."""
+    cfg = copy.deepcopy(CFG)
+    alle = [imp(i, "Beispiel 450", 33800) for i in range(10)]
+    a = imp(99, "Beispiel Südwind 580", 12000)                                 # kein Art-Wort, Preis weit unter Markt
+    vergleich = vergleichsbasis(alle)
+    ohne_deckel = Rechner(cfg).bewerte(fuer_rechner(a), vergleich)
+    assert ohne_deckel.ampel == "gruen" and ohne_deckel.erstangebot             # ohne F14 grün mit Angebot
+    b = bewerte_anzeige(Rechner(cfg), a, vergleich)
+    assert b.ampel == "gelb" and b.max_ek == ohne_deckel.max_ek
+    t = Anschreiber(cfg, BASIS).text(a, b)
+    assert "€ an" not in t and f"{b.erstangebot:,}".replace(",", ".") not in t and "konkretes Angebot" in t
+    assert "Brief ohne Betrag" in hinweise(a, b)[0]
+    # Gegenprobe: bestätigte Art bleibt grün und nennt den Betrag
+    best = {**a, "suche": "Import Teilintegrierter (bestätigt)", "art": "Teilintegrierter"}
+    bb = bewerte_anzeige(Rechner(cfg), best, vergleich)
+    tb = Anschreiber(cfg, BASIS).text(best, bb)
+    assert bb.ampel == "gruen" and "€ an" in tb
+
+
+def test_f14_rot_und_grau_bleiben_unveraendert():
+    cfg = copy.deepcopy(CFG)
+    alle = [imp(i, "Beispiel 450", 33800) for i in range(10)]
+    a = imp(99, "Beispiel Südwind 580", 90000)                                  # weit über Markt
+    b = bewerte_anzeige(Rechner(cfg), a, vergleichsbasis(alle))
+    assert b.ampel == "rot"

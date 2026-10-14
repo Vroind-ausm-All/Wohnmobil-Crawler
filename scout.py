@@ -7,6 +7,8 @@
   python scout.py import [--ordner PFAD]    Im Browser gespeicherte Kleinanzeigen-Seiten einlesen (ohne Internet)
   python scout.py rechne --preis 32900 --ez 2016 --km 98000 --titel "Knaus Sky TI 650 MEG" [--anschreiben]
   python scout.py nutzer anlegen <Name> [--rolle inhaber]   Team-Zugang für Handy-App anlegen
+  python scout.py sichern                   Datenbank (und Fotos) sichern -> daten/sicherungen
+  python scout.py wiederherstellen <Datei> --bestaetigt [--ohne-fotos]   Sicherung zurückspielen (App und Suchlauf vorher beenden)
   python scout.py status <ID> kontaktiert   Status setzen (neu|kontaktiert|verhandlung|besichtigung|gekauft|abgesagt|uninteressant)
 """
 from __future__ import annotations
@@ -32,6 +34,7 @@ if _fehlt:
 
 import argparse
 import logging
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 
@@ -45,7 +48,9 @@ from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import STATUS, Datenbank
 from wmscout.eingang import import_ordner
 from wmscout.importer import Importer
+from wmscout.migrationen import MigrationsFehler
 from wmscout.normalisierung.fahrzeug import ergaenze_fahrzeug
+from wmscout.sicherung import SicherungsFehler, einstellungen, sichere, sicherung_ordner, wiederherstellen
 from wmscout.team import ROLLEN, TeamSpeicher
 
 BASIS = Path(__file__).resolve().parent
@@ -156,6 +161,38 @@ def foto_ordner(cfg) -> Path:
     return (BASIS / cfg["ausgabe"]["datenbank"]).parent / "fotos"
 
 
+def cmd_sichern(cfg, args):
+    db_pfad = BASIS / cfg["ausgabe"]["datenbank"]
+    try:
+        ordner, behalten = einstellungen(cfg, BASIS)
+        ziel = sichere(db_pfad, ordner, foto_ordner(cfg), behalten)
+    except (SicherungsFehler, MigrationsFehler, ValueError, sqlite3.Error, OSError) as e:
+        sys.exit(f"Sicherung fehlgeschlagen: {e}")
+    print(f"Sicherung angelegt und geprüft: {ziel}")
+    if ziel.with_name(ziel.name[:-len('.sqlite')] + ".fotos.zip").exists():
+        print("Fotos gesichert in:             " + ziel.with_name(ziel.name[:-len('.sqlite')] + ".fotos.zip").name)
+
+
+def cmd_wiederherstellen(cfg, args):
+    quelle = Path(args.datei)
+    try:
+        ordner, behalten = einstellungen(cfg, BASIS)
+        if not quelle.is_file() and (ordner / args.datei).is_file():
+            quelle = ordner / args.datei
+        erg = wiederherstellen(quelle, BASIS / cfg["ausgabe"]["datenbank"], args.bestaetigt, ordner, foto_ordner(cfg), behalten,
+                              mit_fotos=not args.ohne_fotos)
+    except (SicherungsFehler, MigrationsFehler, ValueError, sqlite3.Error, OSError) as e:
+        sys.exit(f"Wiederherstellung fehlgeschlagen: {e}")
+    print(f"Wiederhergestellt aus {quelle}.")
+    if erg.sicherung_vorher:
+        print(f"Stand davor gesichert in: {erg.sicherung_vorher}")
+    if args.ohne_fotos:
+        print("Nur die Datenbank wurde zurückgespielt; der Fotoordner blieb unverändert.")
+    if erg.fotos_wiederhergestellt:
+        print("Fotos wiederhergestellt." + (f" Bisherige Fotos liegen unverändert in: {erg.alter_fotoordner}" if erg.alter_fotoordner else ""))
+    print("Beim nächsten Start wird die Datenbank bei Bedarf auf die aktuelle Version gebracht (mit eigener Sicherung).")
+
+
 def _passwort_abfragen(name: str) -> str:
     import getpass
     while True:
@@ -227,11 +264,26 @@ def main():
     s.add_argument("id")
     s.add_argument("status", choices=list(STATUS))
     s.add_argument("--notiz")
+    sub.add_parser("sichern", help="Datenbank und Fotos sichern (Ordner: config.yaml -> sicherung)")
+    w = sub.add_parser("wiederherstellen", help="Sicherung zurückspielen (App und Suchlauf vorher beenden)")
+    w.add_argument("datei", help="Sicherungsdatei (.sqlite), auch nur der Dateiname aus dem Sicherungsordner")
+    w.add_argument("--bestaetigt", action="store_true", help="bestätigt: App und Suchlauf sind beendet")
+    w.add_argument("--ohne-fotos", action="store_true",
+                   help="nur die Datenbank zurückspielen, Fotoordner unverändert lassen (z. B. bei beschädigtem Foto-Archiv)")
     args = p.parse_args()
 
     cfg = lade_config(args.config)
     logging_einrichten(cfg)
-    db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]))
+    # Sichern/Wiederherstellen arbeiten ohne Datenbank-Start (die Datenbank darf defekt oder neuer sein)
+    if args.cmd == "sichern":
+        return cmd_sichern(cfg, args)
+    if args.cmd == "wiederherstellen":
+        return cmd_wiederherstellen(cfg, args)
+    try:
+        einstellungen(cfg, BASIS)           # ungültiges „sicherung“ in config.yaml sofort melden, nicht erst bei der Sicherung
+        db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]), str(sicherung_ordner(cfg, BASIS)))
+    except (MigrationsFehler, ValueError, sqlite3.Error) as e:
+        sys.exit(f"Datenbank-Start abgebrochen: {e}")
     {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "rechne": cmd_rechne,
      "nutzer": cmd_nutzer, "status": cmd_status}[args.cmd](cfg, db, args)
 

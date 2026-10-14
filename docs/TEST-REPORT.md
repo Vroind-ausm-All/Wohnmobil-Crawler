@@ -22,6 +22,8 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 | QA-Runde 7 (be0afd2): Tests, 18 echte Seiten, Hinweise, Briefe, id-Leck, Laufzeit, Mutationen | 374 passed; Hinweise konsistent in allen Ausgaben; `#als`-id 0 Treffer; 1.500 unbekannte Importe 23 s statt 6,4 s; Mutationen 24 von 28 |
 | QA-Urteil Runde 7 | **FREIGABE MIT AUFLAGEN** – A1: F14 (10 der Top 20 sind Wohnwagen ohne Art-Wort, Rechnung als „Sonstige“) vor Merge entscheiden; A2: M7-1/M7-2 → behoben |
 | Namensschutz nach M7-1 (Orchestrator) | Gegenprobe: eingefügter echter Name → Test rot; ohne → grün |
+| Nach Zusammenführung mit PR #5 (Datensicherung) | zunächst 8 failed (doppelte `main()` in `scout.py`, `:memory:`-Test) → behoben: **464 passed**, ruff grün |
+| F14 (Orchestrator): Ampel höchstens gelb, Brief ohne Betrag bei unbekannter Art | **377 passed** (vor Zusammenführung); Mutationen „Ampel nicht gedeckelt“ und „Betrag trotzdem“ jeweils von einem Test erkannt |
 | Browser-Klicktest Hinweiszeile, Windows, CI | nicht geprüft |
 
 ---
@@ -39,6 +41,22 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 | QA-Urteil nach Runde 3 | **ABLEHNUNG**: K-A KRITISCH (Art-Filter bestätigt auch „Weitere Ergebnisse in anderen Orten“); H-T, M-W, N-1 bis N-3 offen |
 | Windows | nicht geprüft |
 | Echte Seite mit Kleinanzeigen-Art-Filter | **nicht geprüft** (liegt nicht vor) |
+## P1-02 / P1-03 – Datensicherung und Migrationsrahmen (14.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q -p no:cacheprovider` (Orchestrator, Worktree nach Korrekturrunde 2 und Test N-1) | **182 passed** |
+| `ruff check .` | All checks passed! |
+| QA-Runde 1 (1b104ad): Nachbau „älteste Sicherung bei voller Aufbewahrung“ | **leere DB** (K1) → ABLEHNUNG |
+| QA-Runde 2 (e8b1be1): K1/H1/Zip-Slip/paralleles Neuanlegen nachgebaut | behoben (Quelle bleibt, 15 → 16 Sicherungen, 3× abgewiesen, 0 Fehler) |
+| QA-Runde 2: Uhrsprung, 2 Prozesse auf Altbestand, abgeschnittenes ZIP, UNC-URI | Befunde Q-F1–Q-F5 reproduziert → FREIGABE MIT AUFLAGEN |
+| Agent nach Korrekturrunde 2: QA-Skripte s4/s7/s9/s5/s1 | Sicherungen bleiben; 10 Runden à 2 Prozesse 0 Fehler; kein Traceback |
+| Migration v1-Altbestand (QA, 203 Zeilen) | ohne Verlust, Sicherung = Altstand, zweiter Lauf ändert nichts |
+| CI Windows (PR #5, 4edf505) | **7 failed**: offene Test-Verbindungen sperrten die Datei („Zugriff verweigert“ beim Austausch), `?` im Ordnernamen → behoben: Tests schließen Verbindungen (lokal 0 ResourceWarnings statt mehrerer), Austausch mit kurzen Wiederholungen, Ordnername ohne `?` unter Windows; 184 passed lokal. CI 0616f1f: Windows nur noch 1 failed (Linux-spezifischer UNC-Nachbau `//tmp` → unter Windows übersprungen, dort decken die `PureWindowsPath`-Fälle UNC ab) |
+| Netzlaufwerke | nicht geprüft |
+| QA-Runde 3 (001fe60): Q-F-Nachstellungen, 8 Prozesse gleichzeitig, Aufräumen mit zurückdatierten Dateien, Schreibschutz (als `nobody`) | alle Q-F behoben; 8 eindeutige intakte Sicherungen; DB und Sicherungen bleiben; kein Datenverlust |
+| QA-Runde 3: Mutationen (55 des Agenten + 14 eigene) | 64 von 69 getötet; X1 (Aufräumen trifft DB) danach durch erweiterten Test erkannt (Orchestrator, Gegenprobe in Kopie) |
+| QA-Urteil Runde 3 | **FREIGABE** (N-1 MITTEL behoben, N-2..N-7 NIEDRIG im Backlog) |
 
 ---
 
@@ -110,7 +128,7 @@ Bestätigung der Architektur-Risiken durch die QA:
 | ID | Stufe | Befund | Beleg | Paket |
 |---|---|---|---|---|
 | R1 | KRITISCH | Nicht freigegebene Quelle (Kleinanzeigen) läuft standardmäßig und per Auto-Suche alle 3 h; Detailabruf ohne Freigabeprüfung (R19) | `config.yaml:196`; `importer.py:39-40`; `importer.py:78-100` | P1-01a |
-| R3 | KRITISCH | Keine Backups, keine Schemaversion; blockiert jede Migration | `datenbank.py:49-53` | P1-02, P1-03 |
+| R3 | KRITISCH | Keine Backups, keine Schemaversion; blockiert jede Migration (behoben mit P1-02/P1-03, `wmscout/migrationen.py`) | – | P1-02, P1-03 |
 | Q1 | KRITISCH | Ohne Erstzulassung wird der **Angebotspreis als Marktniveau** genommen. Max-EK und Erstangebot sind damit zirkulär. Die Oberfläche blendet sie aus, CSV und eingefrorene Besichtigungsbasis übernehmen sie aber. | `rechner.py:261-264`; `api.py:104`; `ausgabe.py:57-58` | P1-12 |
 | Q2 | HOCH | **Negativer `Content-Length`** umgeht das Größenlimit (`rfile.read(-1)`), noch vor der Anmeldung. Der Thread hängt und puffert unbegrenzt. | `api.py:485-488` (ausgeführt) | P1-13 |
 | Q3 | HOCH | **Datenschutz:** Verkäuferdaten, Unterschriften und Fotos werden unbefristet gespeichert, eine Lösch- oder Anonymisierungsfunktion fehlt | `team.py`, `api.py:461-467` | P1-14a |
@@ -129,7 +147,7 @@ Bestätigung der Architektur-Risiken durch die QA:
 | Q15 | NIEDRIG | ICS-Escape behandelt `\r` nicht | `api.py:124-125` | P1-13 |
 | Q16 | NIEDRIG | Verstecktes `--passwort` in Prozessliste/Shell-Historie | `scout.py:189` | P1-09 |
 | Q17 | NIEDRIG | `installieren.bat` akzeptiert 3.10–3.13 | `installieren.bat:28` | P1-10 |
-| Q18 | NIEDRIG | Irreführender Kommentar zur Thread-Nutzung | `datenbank.py:45` | P1-04 |
+| Q18 | NIEDRIG | Irreführender Kommentar zur Thread-Nutzung | `datenbank.py:29` | P1-04 |
 
 Positiv geprüft:
 - **Keine XSS-Lücke gefunden.** Autoescape ist aktiv, kein `|safe`, Fremddaten laufen über `textContent` bzw. `esc()`, Links nur http(s), Unterschriften werden per Regex geprüft.

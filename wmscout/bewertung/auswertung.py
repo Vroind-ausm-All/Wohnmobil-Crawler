@@ -78,7 +78,9 @@ def bewerte_anzeige(rechner: Rechner, a: dict, vergleich: list[dict], marktwert_
         Wohnwagen ist (Neupreis 30.000 statt 65.000 €).
       * Sicherheit höchstens „niedrig“ – die Art ist nicht bekannt, die Vergleichsgruppe also unsicher. „keine“ und
         „manuell“ bleiben. Ampel, Verhältnis und Sortierung hängen nur am Max-EK (Sicherheit nur über „keine“) und
-        bleiben damit zur genommenen Bewertung stimmig; die Ampel wird nicht zusätzlich gedeckelt (Betreiberfrage F14).
+        bleiben damit zur genommenen Bewertung stimmig.
+      * Ampel höchstens „gelb“ (Betreiberentscheidung F14, 14.10.2026): Wohnwagen ohne Art-Wort im Text würden sonst als
+        „Sonstige“ grün; der Brief nennt dann keinen Betrag (`anschreiben.kontext`).
       * Spanne = von der kleinsten bis zur größten Spanne aller Kandidaten (Unsicherheit über die Art ausweisen).
     Welche Art genommen wurde, steht in `b.art` und im Hinweis am Fahrzeug (`anschreiben.hinweise(a, b)`)."""
     sicht = fuer_rechner(a)
@@ -94,6 +96,7 @@ def bewerte_anzeige(rechner: Rechner, a: dict, vergleich: list[dict], marktwert_
         geprueft = ", ".join("ohne Art" if k == "Sonstige" else k for k in kandidaten)
         basis += f" · Fahrzeugart unbekannt: niedrigster Max-EK aus {geprueft}"
     return replace(b, sicherheit=SICHERHEIT_ART_UNBEKANNT if b.sicherheit in ("hoch", "mittel") else b.sicherheit,
+                   ampel="gelb" if b.ampel == "gruen" else b.ampel,
                    spanne_von=min(von) if von else b.spanne_von, spanne_bis=max(bis) if bis else b.spanne_bis,
                    vergleich_basis=basis)
 
