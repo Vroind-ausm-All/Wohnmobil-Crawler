@@ -129,12 +129,14 @@ Eingelesene Dateien wandern nach `import/eingelesen/<Datum>/`, nicht erkannte na
 Hinweise zum Einlesen:
 - Je Klick werden höchstens 25 Dateien (bzw. etwa 20 Sekunden lang) gelesen; den Rest liest der nächste Klick.
   Dateien über 20 MB werden nicht gelesen (sie bleiben liegen).
-- Die Fahrzeugart (z. B. Teilintegrierter) bestimmt, wie der Scout den Wert rechnet. Damit der Scout ein Anschreiben
-  vorbereitet, muss die Fahrzeugart sicher sein: Suche über den Art-Filter von Kleinanzeigen (linke Spalte) oder
-  Detailseite der Anzeige mit einlesen. Eine Art, die nur aus dem Titel oder einem Suchwort (z. B. „Camper“) geraten
-  wurde, gilt als vorläufig: Die Anzeige erscheint in der Liste, ist aber nicht „anschreibbar“ (Grund: „Fahrzeugart nicht
-  bestätigt“ bzw. „unbekannt“). Widersprechen sich zwei Hinweise, wird die Art unbekannt. Eine später eingelesene
-  Detailseite oder ein Art-Filter bestätigt bzw. korrigiert die Art.
+- Die Fahrzeugart (z. B. Teilintegrierter) bestimmt, wie der Scout den Wert rechnet. **Bestätigt** ist sie bei einer
+  Suche über den Art-Filter von Kleinanzeigen (linke Spalte; er gilt nur für die Treffer der eigentlichen Trefferliste,
+  nicht für „Weitere Ergebnisse in anderen Orten“) oder wenn die Detailseite der Anzeige mit eingelesen wird (die
+  Detailseite hat Vorrang vor dem Filter). Eine Art, die nur aus dem Titel oder einem Suchwort (z. B. „Camper“) geraten
+  wurde, ist **vorläufig**; widersprechen sich zwei Hinweise, ist die Art **unbekannt**. Angeschrieben werden kann in
+  jedem Fall (Betreiberentscheidung 14.10.2026) – das Fahrzeug trägt aber eine gelbe Hinweiszeile „Fahrzeugart nicht
+  bestätigt – bitte prüfen“ bzw. „Fahrzeugart unbekannt – bitte prüfen“, und die Bewertung rechnet mit der vorläufigen
+  bzw. ohne Art. Eine später eingelesene Detailseite oder ein Art-Filter bestätigt bzw. korrigiert die Art.
 - **Datenschutz:** `import/eingelesen/` enthält die vollständigen gespeicherten Seiten, auch Verkäuferangaben
   (Name, Ort, ggf. Telefonnummer). Das Programm löscht nichts automatisch – lösche die Dateien nach der Prüfung selbst.
   Speichere Seiten möglichst nicht angemeldet, damit keine Kontodaten in der Datei landen.
@@ -158,8 +160,11 @@ Nachrichten verschicken, und viele Verkäufer reagieren auf Massenanfragen aller
   Verantwortung.
 - **Händleranfragen**: Anzeigen mit „keine Händler“ o. ä. werden automatisch ausgefiltert
   (Liste unter `filter → sperrbegriffe`). Das Anschreiben nennt dich offen als gewerblichen Ankäufer.
-- **Datenschutz**: Gespeichert werden nur Anzeigendaten, keine Kontaktdaten der Verkäufer. Die App ist
-  nur auf dem eigenen Rechner erreichbar (127.0.0.1).
+- **Datenschutz**: Gespeichert werden Anzeigendaten, keine Kontaktdaten der Verkäufer (keine Telefonnummern,
+  Adressen oder Profil-IDs). Einzige Ausnahme: der öffentliche **Profilname** des Verkäufers aus einer eingelesenen
+  Anzeigenseite (`details_json` → `verkaeufer_name`; Kürzel, „Privater Nutzer“ u. Ä. werden verworfen). Er dient nur
+  zur persönlichen Anrede im Anschreiben und wird zusammen mit dem Inserat gelöscht (ein Lösch-/Anonymisierungsbefehl
+  mit Frist ist als Paket P1-14a geplant). Die App ist nur auf dem eigenen Rechner erreichbar (127.0.0.1).
 - **Wenn plötzlich 0 Anzeigen gefunden werden**, hat Kleinanzeigen vermutlich das Seitenlayout
   geändert. Die App meldet das als „Seitenlayout geändert“ und legt
   die Seite als `ausgabe/diagnose_suchseite.html` ab. Alle Selektoren liegen in

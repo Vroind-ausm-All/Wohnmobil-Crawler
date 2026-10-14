@@ -168,6 +168,7 @@
         (l.length ? l.map(function (f) {
           return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + ampelTag(f.ampel) + "</div>" +
             '<p class="leise">EZ ' + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") + (f.entfernung_km !== null ? " · " + tsd(f.entfernung_km) + " km entfernt" : "") + "</p>" +
+            hinweisZeilen(f) +
             (f.nachfassen ? '<p class="leise" style="color:var(--gelb)">Nachfassen: ' + esc(f.nachfassen) + "</p>" : "") +
             '<div class="zahlen"><div><span>Wunschpreis</span>' + eur(f.preis) + "</div><div><span>Erstangebot</span><b>" + eur(f.erstangebot) +
             "</b></div><div><span>Max-EK</span>" + eur(f.max_ek) + "</div></div></a>";
@@ -175,6 +176,11 @@
       var feld = document.getElementById("suche"), uhr;
       feld.oninput = function () { clearTimeout(uhr); uhr = setTimeout(function () { liste(filter, feld.value).then(function () { var f = document.getElementById("suche"); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }); }, 400); };
     });
+  }
+
+  // Hinweise zum Fahrzeug (z. B. Fahrzeugart nicht bestätigt): gelbe Zeile, Text nur über esc()
+  function hinweisZeilen(f) {
+    return (f.hinweise || []).map(function (h) { return '<p class="hinweis info">⚠ ' + esc(h) + "</p>"; }).join("");
   }
 
   function fahrzeug(id) {
@@ -189,6 +195,7 @@
         "</b></div><div><span>Max-EK</span>" + eur(f.max_ek) + "</div></div>" +
         '<p class="leise">Marktniveau ' + eur(b.marktwert_angebote) + " · Sicherheit " + esc(b.sicherheit) + "</p>" +
         '<a class="knopf klein" href="' + link(f.url) + '" target="_blank" rel="noopener">Anzeige öffnen ↗</a></div>' +
+        hinweisZeilen(f) +
         (f.nachfass_text ? "<h2>Nachfassen</h2><p class=\"leise\">" + esc(f.nachfassen) + '</p><textarea id="nf">' + esc(f.nachfass_text) + "</textarea>" +
           '<button class="knopf primaer voll" data-aktion="nachfassen">↻ Kopieren &amp; Anzeige öffnen</button>' : "") +
         (f.brief ? '<h2>Anschreiben</h2><textarea id="brief">' + esc(f.brief) + "</textarea>" +

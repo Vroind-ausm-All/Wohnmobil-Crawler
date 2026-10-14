@@ -66,6 +66,7 @@ kbd{font:12px ui-monospace,monospace;padding:1px 5px;border:1px solid var(--line
 .zahlen .betont b{color:var(--akzent)}
 .karte-fuss{display:flex;gap:8px;align-items:center;margin-top:auto;padding-top:6px}
 .sperre{color:var(--rot);font-size:13px;margin:0}
+.hinweiszeile{background:var(--gelb-bg);color:var(--gelb);font-size:13px;margin:0 0 6px;padding:4px 8px;border-radius:8px}
 .btn{font:inherit;font-size:14px;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);
   text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .btn:hover{border-color:var(--akzent)}
@@ -210,6 +211,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
           <div class="betont"><span>Erstangebot</span><b>{{ b.erstangebot | euro if b.sicherheit != 'keine' else '–' }}</b></div>
           <div><span>Max-EK</span><b>{{ b.max_ek | euro if b.sicherheit != 'keine' else '–' }}</b></div>
         </div>
+        {% for h in z.hinweise %}<p class="hinweiszeile">⚠ {{ h }}</p>{% endfor %}
         {% if z.nachfassen %}<p class="sperre" style="color:var(--gelb)">Nachfassen: {{ z.nachfassen }}</p>
         {% elif z.sperre and not a.anschreiben_text %}<p class="sperre">Kein Anschreiben: {{ z.sperre }}</p>{% endif %}
         <div class="karte-fuss">
@@ -277,6 +279,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
           <div class="aktionen"><button class="btn primaer" data-nachfassen-senden>↻ Kopieren &amp; Anzeige öffnen</button></div>
         </div>
         {% endif %}
+        {% for h in z.hinweise %}<p class="hinweiszeile">⚠ {{ h }}</p>{% endfor %}
         <h3>Anschreiben</h3>
         {% if z.brief %}
           {% if not z.bereit %}<p class="warn" style="margin:0 0 8px">Ampel {{ AMPEL[b.ampel] }}: Das Erstangebot liegt deutlich unter dem Wunschpreis – nur senden, wenn du es trotzdem versuchen willst.</p>{% endif %}

@@ -12,8 +12,7 @@ from tests.test_cli import _scout
 from tests.test_handy import Client
 from wmscout.app import erstelle_server
 from wmscout.datenbank import IMPORT_SUCHE, import_art, import_suche
-from wmscout.bewertung.anschreiben import (HINWEIS_ART_UNBEKANNT, HINWEIS_ART_VORLAEUFIG, hinweise, sperrgrund,
-                                           verkaeufer_name)
+from wmscout.bewertung.anschreiben import HINWEIS_ART_UNBEKANNT, HINWEIS_ART_VORLAEUFIG, hinweise, sperrgrund
 from wmscout.bewertung.auswertung import bewerte_alle
 from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import Datenbank
@@ -841,3 +840,145 @@ def test_jede_nicht_bestaetigte_art_traegt_einen_hinweis_im_gesamten_bestand(cfg
         assert z["hinweise"] == erwartet[suche], suche
         assert "Fahrzeugart" not in (z["sperre"] or "") and (z["brief"] is not None) == (z["sperre"] is None)
     assert gesehen == set(erwartet)                                          # alle drei Herkünfte kamen vor
+
+
+# ---------- Runde 5: Betreiberentscheidung 14.10.2026 und QA-Befunde (Hinweis statt Sperre) ----------
+def kanonisch(url):
+    return f'<link rel="canonical" href="{url}">'
+
+
+def test_hinweis_ist_in_report_und_api_sichtbar(server, cfg, db, ads, ordner):
+    """Der Hinweis erreicht Desktop-Report (Karte und Detail) und Handy-API; Fremdtext wird escaped."""
+    hit = {**ads[1], **GUENSTIG}
+    lies_ein(cfg, db, ordner, [("a.html", suchseite([hit])), ("b.html", suchseite([{**ads[2], **GUENSTIG}], canonical("alkoven")))])
+    lokal = Client(server.server_address[1])
+    html = lokal("GET", "/")[1]
+    assert html.count('<p class="hinweiszeile">⚠ Fahrzeugart unbekannt – bitte prüfen</p>') == 2          # Karte + Detailbereich
+    assert "Fahrzeugart nicht bestätigt" not in html                                                      # bestätigte Art: kein Hinweis
+    TeamSpeicher(db, ordner.parent / "fotos").nutzer_anlegen("Anna", "sicher1234", "inhaber")
+    anna = Client(server.server_address[1]).anmelden("Anna")
+    liste = {f["id"]: f for f in anna("GET", "/api/fahrzeuge?filter=alle")[1]}
+    assert liste[hit["id"]]["hinweise"] == [UNBEKANNT_TEXT] and liste[ads[2]["id"]]["hinweise"] == []
+    assert anna("GET", f"/api/fahrzeug/{hit['id']}")[1]["hinweise"] == [UNBEKANNT_TEXT]
+    assert anna("GET", f"/api/fahrzeug/{hit['id']}")[1]["brief"]                                            # Brief wird erzeugt
+
+
+def test_mobil_js_zeigt_hinweise_nur_escaped():
+    js = (BASIS / "wmscout" / "web" / "static" / "mobil.js").read_text(encoding="utf-8")
+    assert "function hinweisZeilen" in js and js.count("hinweisZeilen(f) +") == 2            # Liste und Fahrzeugansicht
+    assert "esc(h)" in js
+    assert "f.hinweise" in js
+    import shutil
+    import subprocess
+    if shutil.which("node"):
+        r = subprocess.run(["node", "--check", str(BASIS / "wmscout" / "web" / "static" / "mobil.js")], capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+
+
+@pytest.mark.parametrize("art_feld", ["ohne", "Andere"])
+def test_detailseite_ohne_art_bestaetigt_nie(cfg, db, ads, ordner, art_feld):
+    """QA H-T: Detailseite ohne Feld „Art“ bzw. „Art: Andere“ + Titel mit genau einer Art → nur vorläufig, nie bestätigt."""
+    hit = {**ads[1], **GUENSTIG, "titel": "Hymer Alkoven 544"}
+    seite = detailseite(hit)
+    if art_feld == "ohne":
+        seite = seite.replace('<li class="addetailslist--detail">Art<span class="addetailslist--detail--value">Teilintegrierter</span></li>', "")
+    else:
+        seite = detail_mit_art(hit, art_feld)
+    assert ("Teilintegrierter</span>" in seite) is False
+    lies_ein(cfg, db, ordner, [("d.html", seite)])
+    assert zeile(db, hit["id"])["suche"] == "Import Alkoven (vorläufig)"
+    z = bewertet(cfg, db, hit["id"])
+    assert z["b"].art == "Alkoven"
+    nur_hinweis(z, VORLAEUFIG_TEXT)
+    # nennt der Titel keine oder mehrere Arten, bleibt die Art unbekannt
+    for i, titel in enumerate(("Wohnmobil gepflegt", "Alkoven oder Kastenwagen")):
+        andere = {**ads[2 + i], **GUENSTIG, "titel": titel}
+        seite = detailseite(andere)
+        seite = seite.replace("Teilintegrierter</span>", "Andere</span>") if art_feld == "Andere" else seite.replace(
+            '<li class="addetailslist--detail">Art<span class="addetailslist--detail--value">Teilintegrierter</span></li>', "")
+        lies_ein(cfg, db, ordner, [(f"e{i}.html", seite)])
+        assert zeile(db, andere["id"])["suche"] == IMPORT_SUCHE
+        nur_hinweis(bewertet(cfg, db, andere["id"]), UNBEKANNT_TEXT)
+
+
+@pytest.mark.parametrize("detail_zuerst", [True, False])
+def test_detailseite_hat_vorrang_vor_dem_art_filter(cfg, db, ads, ordner, detail_zuerst):
+    """QA M-W: Filterseite (Kastenwagen) und Detailseite (Alkoven) widersprechen sich → die konkretere Detailseite gilt."""
+    hit = {**ads[1], **GUENSTIG}
+    seiten = [("a.html", suchseite([hit], canonical("kastenwagen"))), ("b.html", detail_mit_art(hit, "Alkoven"))]
+    lies_ein(cfg, db, ordner, seiten[::-1] if detail_zuerst else seiten)
+    assert zeile(db, hit["id"])["suche"] == "Import Alkoven (bestätigt)"
+    assert art_der(cfg, db, hit["id"]) == "Alkoven" and bewertet(cfg, db, hit["id"])["hinweise"] == []
+    # derselbe Filter noch einmal danach ändert nichts mehr; eine neue Detailseite darf korrigieren
+    lies_ein(cfg, db, ordner, [("c.html", suchseite([hit], canonical("kastenwagen")))])
+    assert zeile(db, hit["id"])["suche"] == "Import Alkoven (bestätigt)"
+    lies_ein(cfg, db, ordner, [("d.html", detail_mit_art(hit, "Integrierter"))])
+    assert zeile(db, hit["id"])["suche"] == "Import Integrierter (bestätigt)"
+
+
+def test_detailseite_andere_laesst_filter_art_bestehen(cfg, db, ads, ordner):
+    hit = {**ads[1], **GUENSTIG}
+    lies_ein(cfg, db, ordner, [("a.html", suchseite([hit], canonical("kastenwagen"))), ("b.html", detail_mit_art(hit, "Andere"))])
+    assert zeile(db, hit["id"])["suche"] == "Import Kastenwagen (bestätigt)"          # „Andere“ widerspricht nicht
+    lies_ein(cfg, db, ordner, [("c.html", suchseite([hit], canonical("alkoven")))])
+    assert zeile(db, hit["id"])["suche"] == "Import Alkoven (bestätigt)"              # und bestätigt auch nichts
+
+
+@pytest.mark.parametrize("url, filter_art", [
+    ("https://www.kleinanzeigen.de/s-wohnwagen-mobile/x/c220+wohnwagen_mobile.art_s:alkoven", "Alkoven"),
+    ("https://www.kleinanzeigen.de/s-wohnwagen-mobile/x/c220.art_s:alkoven", "Alkoven"),
+    ("https://www.kleinanzeigen.de/s-wohnwagen-mobile/x/c220/art_s:alkoven", "Alkoven"),
+    ("https://www.kleinanzeigen.de/s-wohnwagen-mobile/x/art_s:alkoven", "Alkoven"),
+    ("https://www.kleinanzeigen.de/s-wohnwagen-mobile/x/c220+wohnwagen_mobile.aufbauart_s:alkoven", None),
+    ("https://www.kleinanzeigen.de/s-wohnwagen-mobile/x/c220+wohnwagen_mobile.xart_s:alkoven", None),
+    ("https://www.kleinanzeigen.de/s-wohnwagen-mobile/x/c220+wohnwagen_mobile._art_s:alkoven", None),
+    ("https://www.kleinanzeigen.de/s-wohnwagen-mobile/x/c220+wohnwagen_mobile.1art_s:alkoven", None),
+    ("https://www.kleinanzeigen.de/s-wohnwagen-mobile/x/c220+wohnwagen_mobile.fahrzeugart_s:alkoven", None),
+])
+def test_art_s_nur_mit_wortgrenze(ads, url, filter_art):
+    """QA N-1: nur der Parameter `art_s` selbst ist ein Art-Filter, nicht jeder Name, der darauf endet."""
+    assert fahrzeugart_der_suchseite(suchseite(ads[:1], kanonisch(url))).filter == filter_art
+
+
+def test_canonical_nur_aus_dem_head(cfg, db, ads, ordner):
+    """QA N-2: canonical/og:url/Titel zählen nur im <head>; ohne Head und Body gibt es keine Bestätigung."""
+    url = SUCHSEITE.format("kastenwagen", "kastenwagen")
+    hit = {**ads[1], **GUENSTIG}
+    voll = such_html([hit])
+    ohne_huelle = voll.replace("<html><body>", "").replace("</body></html>", "")
+    assert "<head" not in ohne_huelle and "<body" not in ohne_huelle
+    # Link am Ende einer Seite ohne Head/Body
+    assert fahrzeugart_der_suchseite(ohne_huelle + kanonisch(url)) == SuchseitenArt()
+    assert fahrzeugart_der_suchseite(kanonisch(url) + ohne_huelle) == SuchseitenArt()          # auch am Anfang: kein Head, kein Body
+    # Link im Body hinter dem Kopf
+    assert fahrzeugart_der_suchseite(voll.replace("<body>", "<body>" + kanonisch(url))) == SuchseitenArt()
+    assert fahrzeugart_der_suchseite(voll.replace("<body>", "<body><title>Alkoven</title>")) == SuchseitenArt()
+    # Speichervermerk im Seitentext zählt nicht, am Dateianfang schon
+    vermerk = f"<!-- saved from url=(0090){url} -->"
+    assert fahrzeugart_der_suchseite(voll.replace("</body>", vermerk + "</body>")) == SuchseitenArt()
+    assert fahrzeugart_der_suchseite(vermerk + "\n" + voll) == SuchseitenArt(filter="Kastenwagen")
+    # im Head gilt er
+    assert fahrzeugart_der_suchseite(suchseite([hit], kanonisch(url))) == SuchseitenArt(filter="Kastenwagen")
+    assert fahrzeugart_der_suchseite(voll.replace("<html>", f"<html><head>{kanonisch(url)}", 1).replace("<body>", "</head><body>", 1)
+                                     ) == SuchseitenArt(filter="Kastenwagen")
+    # und der Import bestätigt entsprechend nichts
+    lies_ein(cfg, db, ordner, [("a.html", ohne_huelle + kanonisch(url))])
+    assert zeile(db, hit["id"])["suche"] == IMPORT_SUCHE
+    nur_hinweis(bewertet(cfg, db, hit["id"]), UNBEKANNT_TEXT)
+
+
+def test_ohne_details_nur_echte_importe_ausnehmen(db):
+    """QA N-3: Crawler-Suchen mit „Import…“ im Namen werden weiter per Detailseite nachgeladen."""
+    suchen = {"1": IMPORT_SUCHE, "2": "Import Alkoven (bestätigt)", "3": "Import Kastenwagen (vorläufig)", "4": "Import Integrierter",
+              "5": "Importfahrzeuge Teilintegrierte", "6": "Import Wohnmobile", "7": "Alkoven", "8": "Import Quatsch (bestätigt)",
+              "9": None}
+    for ad_id, suche in suchen.items():
+        db.speichere_treffer({"id": ad_id, "url": f"https://x.example/{ad_id}", "titel": "t"}, suche or "x")
+        if suche is None:
+            db.con.execute("UPDATE anzeigen SET suche=NULL WHERE id=?", (ad_id,))
+    db.con.commit()
+    assert sorted(r["id"] for r in db.ohne_details(100)) == ["5", "6", "7", "9"]
+    assert [r["id"] for r in db.ohne_details(2)] != [] and len(db.ohne_details(2)) == 2
+    # die Python-Erkennung stimmt mit dem SQL überein
+    from wmscout.datenbank import import_art
+    assert sorted(i for i, s in suchen.items() if import_art(s) == (None, None)) == ["5", "6", "7", "9"]
