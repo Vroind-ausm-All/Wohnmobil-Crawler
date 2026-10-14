@@ -20,6 +20,7 @@ Zu Ihrem neuen Preis von {{ preis | euro }} würde ich das Fahrzeug gern überne
 Ich habe noch einmal nachgerechnet: Vorbehaltlich einer Besichtigung und sofern der Zustand Ihrer Beschreibung entspricht, kann ich Ihnen jetzt {{ angebot | euro }} anbieten.
 {% elif fall == "steht" %}
 Mein Angebot über {{ angebot | euro }} – vorbehaltlich einer Besichtigung und sofern der Zustand Ihrer Beschreibung entspricht – steht weiterhin.{% if preis_gesenkt %} Vielleicht kommen wir ja zusammen.{% endif %}
+
 {% else %}
 Ist das Fahrzeug noch zu haben? Dann mache ich Ihnen gern ein konkretes Angebot – vorbehaltlich einer Besichtigung.
 {% endif %}

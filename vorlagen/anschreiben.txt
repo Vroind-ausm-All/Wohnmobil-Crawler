@@ -1,11 +1,12 @@
 {# Jinja2-Vorlage für das Anschreiben. Dieser Kommentarblock erscheint nicht im Text.
    Verfügbare Felder:
-     anrede        Begrüßung mit Komma: mit Profilnamen des Verkäufers (vorsichtig aufbereitet, z. B. „volker“ → „Volker“,
-                   „Hr Wie“ → „Herr Wie“) oder ohne Namen; name = aufbereiteter Name oder leer
+     anrede        Begrüßung mit Komma: mit Profilnamen des Verkäufers (vorsichtig aufbereitet, z. B. „anton“ → „Anton“,
+                   „Hr Beispiel“ → „Herr Beispiel“) oder ohne Namen; name = aufbereiteter Name oder leer
      fahrzeug      „Knaus Sky TI 650 MEG“ bzw. „Knaus-Wohnmobil“ (Marke + erkanntes Modell) – möglichst nur EINMAL
                    nennen: erkannte Modelle sind nicht immer richtig zerlegt
      zum_fahrzeug  „zum Knaus Sky TI 650 MEG“ bzw. ohne Marke/Modell „zu Ihrem Wohnmobil“ / „zu Ihrem Kastenwagen“
-     ihr_fahrzeug  „Ihr Knaus“ (nur die Marke) bzw. „Ihr Kastenwagen“ / „Ihr Wohnmobil“ – für jede weitere Nennung
+     ihr_fahrzeug  „Ihr Teilintegrierter von Knaus“ / „Ihr Wohnmobil von Hobby“ (Art + Marke, ohne Modell) bzw. ohne
+                   Marke „Ihr Kastenwagen“ / „Ihr Wohnmobil“ – für jede weitere Nennung
      marke, modell, titel (Anzeigentitel), art („Teilintegrierter“), art_plural („Teilintegrierte“)
                    art/art_plural sind neutral („Wohnmobil“/„Wohnmobile“), wenn die Fahrzeugart nicht bestätigt ist
      ez_jahr, alter, alters_stufe (jung | mittel | aelter | alt | unbekannt), km, km_text („rund 85.000 km“)

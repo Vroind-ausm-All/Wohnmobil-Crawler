@@ -12,11 +12,13 @@ from tests.test_cli import _scout
 from tests.test_handy import Client
 from wmscout.app import erstelle_server
 from wmscout.datenbank import IMPORT_SUCHE, import_art, import_suche
-from wmscout.bewertung.anschreiben import HINWEIS_ART_UNBEKANNT, HINWEIS_ART_VORLAEUFIG, hinweise, sperrgrund
+from wmscout.bewertung.anschreiben import (HINWEIS_ART_UNBEKANNT, HINWEIS_ART_UNBEKANNT_ANFANG, HINWEIS_ART_VORLAEUFIG, hinweis_art_unbekannt,
+                                           hinweise, sperrgrund)
 from wmscout.bewertung.auswertung import bewerte_alle
 from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import Datenbank
 from wmscout.eingang import SuchseitenArt, erkenne_seite, fahrzeugart_der_suchseite
+from wmscout.eingang.seiten import _detail_kennung
 from wmscout.normalisierung.fahrzeug import art_schluessel, arten_im_text
 from wmscout.importer import Importer
 from wmscout.team import TeamSpeicher
@@ -357,7 +359,11 @@ VORLAEUFIG_TEXT = HINWEIS_ART_VORLAEUFIG
 
 
 def nur_hinweis(z, text):
-    """Die Art ist nur ein Hinweis: sie steht in `hinweise` und taucht nie als Sperrgrund auf."""
+    """Die Art ist nur ein Hinweis: sie steht in `hinweise` und taucht nie als Sperrgrund auf. Bei unbekannter Art nennt
+    der Text die Art, mit der vorsichtig gerechnet wurde (b.art, QA H6-1)."""
+    if text == UNBEKANNT_TEXT:
+        text = hinweis_art_unbekannt(z["b"].art)
+        assert text.startswith(HINWEIS_ART_UNBEKANNT_ANFANG)
     assert z["hinweise"] == [text], z["hinweise"]
     assert "Fahrzeugart" not in (z["sperre"] or "")
     assert (z["brief"] is not None) == (z["sperre"] is None)              # ohne anderen Sperrgrund gibt es den Brief
@@ -731,7 +737,8 @@ def test_titel_mit_zwei_arten_ist_nie_anschreibbar(cfg, db, ads, ordner):
     assert z["sperre"] is None and z["brief"]                                  # Brief wird trotzdem erzeugt, mit Hinweis
     # auch auf einer Seite mit Hinweis „Kastenwagen“ (Freitext) wird daraus keine Art
     lies_ein(cfg, db, ordner, [("b.html", stichwortseite([hit], CAMPER, "Camper"))])
-    assert zeile(db, hit["id"])["suche"] == IMPORT_SUCHE and bewertet(cfg, db, hit["id"])["hinweise"] == [UNBEKANNT_TEXT]
+    assert zeile(db, hit["id"])["suche"] == IMPORT_SUCHE
+    nur_hinweis(bewertet(cfg, db, hit["id"]), UNBEKANNT_TEXT)
 
 
 @pytest.mark.parametrize("titel, kurz", [
@@ -1089,3 +1096,14 @@ def test_hinweis_fremdtext_wird_im_report_escaped(cfg, db, ads, ordner):
     assert "<script>x</script>" not in html
     assert html.count("⚠ &lt;script&gt;x&lt;/script&gt;") == 2               # Karte + Detailbereich
     assert "⚠ a&#34;b&amp;c" in html
+
+
+def test_detail_kennung_nur_aus_dem_strengen_kopf():
+    """QA N2: Ohne </head> und ohne <body> hat die Seite keinen Kopf – ein /s-anzeige/-Link irgendwo im Inhalt (z. B.
+    „ähnliche Anzeigen“) ist keine Kennung der Seite (`_strenger_kopf` statt `_kopf`, der dann bis 100.000 Zeichen liest)."""
+    url = "https://www.kleinanzeigen.de/s-anzeige/beispiel-wohnmobil/3900000099-221-1234"
+    ohne_kopf = f'<html><div class="aehnlich"><a href="{url}">Ähnliche Anzeige</a></div></html>'
+    assert _detail_kennung(ohne_kopf) == (None, None, False)
+    # Gegenprobe: derselbe Link im Kopf zählt (unsicher, weil nicht canonical/og:url)
+    mit_kopf = f'<html><head><link rel="alternate" href="{url}"></head><body></body></html>'
+    assert _detail_kennung(mit_kopf) == ("3900000099", url, False)

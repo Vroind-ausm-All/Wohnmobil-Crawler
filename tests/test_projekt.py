@@ -5,6 +5,7 @@ Entwicklungsablaufs stehen im Skill, der Wartungsauftrag hat seine zehn Punkte, 
 Projektdokumenten zeigt auf eine existierende Zeile. Grenze: Ob die Zeile inhaltlich noch passt, prüft der Test nicht;
 erfasst werden nur Belege in Backticks.
 """
+import codecs
 import re
 import subprocess
 from pathlib import Path
@@ -97,3 +98,24 @@ def test_belege_zeigen_auf_existierende_zeilen(dokument):
     assert not fehler, "\n".join(fehler)
     if dokument in ("docs/ARCHITECTURE.md", "docs/TEST-REPORT.md"):
         assert geprueft > 20                                          # Belege werden tatsächlich gefunden
+
+
+# Echte Verkäufer-Profilnamen aus Originalseiten, die schon einmal im Arbeitsbaum standen (QA H1-R). Als ROT13 und als
+# Muster gespeichert, damit dieser Test nicht selbst trifft. Neue Funde hier ergänzen.
+_ECHTE_NAMEN_ROT13 = (r"\oibyxre\o", r"\o(?:ue|uree)\o\.?\f*jvr\o")
+
+
+def test_keine_echten_verkaeufernamen_im_repository():
+    """Personenbezogene Daten aus Originalseiten gehören nicht ins Repository – Tests und Doku nutzen erfundene Namen.
+    Geprüft werden alle getrackten Dateien außer docs/ (die Projektdokumente bereinigt der Orchestrator)."""
+    muster = [re.compile(codecs.decode(m, "rot13"), re.I) for m in _ECHTE_NAMEN_ROT13]
+    namen = subprocess.run(["git", "ls-files"], cwd=WURZEL, capture_output=True, text=True, check=True).stdout.splitlines()
+    assert len(namen) > 50                                            # die Liste ist tatsächlich gefüllt
+    treffer = []
+    for name in namen:
+        pfad = WURZEL / name
+        if name.startswith("docs/") or not pfad.is_file():
+            continue
+        text = pfad.read_bytes().decode("utf-8", errors="ignore")
+        treffer += [f"{name}:{text.count(chr(10), 0, m.start()) + 1}" for mu in muster for m in mu.finditer(text)]
+    assert not treffer, treffer

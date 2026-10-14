@@ -59,23 +59,32 @@ def aufzaehlung(teile: list[str]) -> str:
     return ", ".join(teile[:-1]) + " und " + teile[-1]
 
 
-# Die Texte nennen, womit gerechnet wurde. Die vorläufige Art selbst steht in der Bewertung (b.art) direkt daneben;
-# der Text bleibt fest, damit Report, Handy-App und Tests ihn wiedererkennen.
+# Die Texte nennen, womit gerechnet wurde. Die vorläufige Art selbst steht in der Bewertung (b.art) direkt daneben.
+# Bei unbekannter Art nennt der Text die Art, mit der vorsichtig gerechnet wurde; er beginnt immer gleich
+# (HINWEIS_ART_UNBEKANNT_ANFANG), damit Report, Handy-App und Tests ihn wiedererkennen.
 HINWEIS_ART_VORLAEUFIG = "Fahrzeugart nicht bestätigt (gerechnet mit der vorläufigen Art) – bitte prüfen"
 HINWEIS_ART_UNBEKANNT = "Fahrzeugart unbekannt (gerechnet ohne Art) – bitte prüfen"
+HINWEIS_ART_UNBEKANNT_ANFANG = "Fahrzeugart unbekannt ("
 
 
-def hinweise(a: dict) -> list[str]:
+def hinweis_art_unbekannt(art: str | None = None) -> str:
+    """„… (vorsichtig gerechnet als Wohnwagen) …“ bzw. ohne Art (`Sonstige`/None) HINWEIS_ART_UNBEKANNT."""
+    if art and art != "Sonstige":
+        return f"Fahrzeugart unbekannt (vorsichtig gerechnet als {art}) – bitte prüfen"
+    return HINWEIS_ART_UNBEKANNT
+
+
+def hinweise(a: dict, b=None) -> list[str]:
     """Hinweise zum Fahrzeug, die das Anschreiben NICHT sperren (Betreiberentscheidung 14.10.2026: möglichst jedes
     Wohnmobil anschreiben können). Bisher: Herkunft der Fahrzeugart bei importierten Seiten – ist sie nicht durch
     Art-Filter oder Detailseite bestätigt, steht sie nur im Titel bzw. fehlt, und die Bewertung rechnet mit der
-    vorläufigen bzw. mit „Sonstige“ (siehe auswertung.fuer_rechner). Crawler-Funde (Art aus der Suche) und bestätigte
-    Arten tragen keinen Hinweis."""
+    vorläufigen bzw. vorsichtig mit der Kandidaten-Art mit dem niedrigsten Max-EK (`b.art`, siehe
+    auswertung.bewerte_anzeige). Crawler-Funde (Art aus der Suche) und bestätigte Arten tragen keinen Hinweis."""
     _, herkunft = import_art(a.get("suche"))
     if herkunft == VORLAEUFIG:
         return [HINWEIS_ART_VORLAEUFIG]
     if herkunft == UNBEKANNT:
-        return [HINWEIS_ART_UNBEKANNT]
+        return [hinweis_art_unbekannt(b.art if b else None)]
     return []
 
 
@@ -97,7 +106,8 @@ def verkaeufer_name(a: dict) -> str | None:
     return profilname(roh) if isinstance(roh, str) else None      # keine Listen/Zahlen („['Max']“) als Anrede
 
 
-_ANREDE_TITEL = re.compile(r"(?i)(herr|hr|frau|fr|familie|fam)\b\.?\s*(.*)$")
+# Titel nur als eigenes Wort: danach Punkt, Leerzeichen oder Bindestrich („fr-meier“ → „Frau Meier“, nicht „Frau -Meier“)
+_ANREDE_TITEL = re.compile(r"(?i)(herr|hr|frau|fr|familie|fam)(?:[.\s-]+|$)(.*)$")
 _TITEL_LANG = {"herr": "Herr", "hr": "Herr", "frau": "Frau", "fr": "Frau", "familie": "Familie", "fam": "Familie"}
 
 
@@ -105,7 +115,7 @@ def anrede_name(roh) -> str | None:
     """Profilname, vorsichtig für „Hallo <Name>,“ aufbereitet – oder None (dann „Hallo,“).
 
     „Hr“/„Hr.“ → „Herr“, „Fr“/„Fr.“ → „Frau“, „Fam.“ → „Familie“; ein einzelnes kleingeschriebenes Wort (auch nach
-    dem Titel) bekommt einen großen Anfangsbuchstaben („volker“ → „Volker“, „hr wie“ → „Herr Wie“). Sonst bleibt der
+    dem Titel) bekommt einen großen Anfangsbuchstaben („anton“ → „Anton“, „hr beispiel“ → „Herr Beispiel“). Sonst bleibt der
     Name unverändert – kein Raten von Geschlecht oder Schreibweise. Spitznamen mit Ziffern („camper77“) und ein Titel
     ohne Namen („Herr“) ergeben keine Anrede."""
     name = profilname(roh) if isinstance(roh, str) else None
@@ -175,13 +185,14 @@ def kontext(a: dict, b, cfg: dict) -> dict:
     gepflegt = [satz for n, satz in PFLEGE.items() if b and (b.wertfaktoren or {}).get(n, 0) > 0]
     marke, modell = a.get("marke"), a.get("modell")
     fahrzeug = a.get("fahrzeug") or fahrzeug_bezeichnung(marke, modell)
-    # Marke + Modell höchstens einmal (Einleitung); danach nur Marke bzw. Art – erkannte Modelle sind nicht immer richtig
+    # Marke + Modell höchstens einmal (Einleitung); danach „Ihr <Art> von <Marke>“ – erkannte Modelle sind nicht immer
+    # richtig, und „Ihr Hobby“/„Ihr Fiat“ allein wäre doppeldeutig (Marke = Wort bzw. Basisfahrzeug, QA N6-3)
     zum_fahrzeug = f"zum {fahrzeug}" if marke or modell else f"zu Ihrem {ART_DATIV.get(art, art_einzahl)}"
     name = anrede_name(verkaeufer_name(a))
     return dict(
         anrede=f"Hallo {name}," if name else "Hallo,", name=name,
         titel=a.get("titel") or "Ihr Wohnmobil", fahrzeug=fahrzeug, zum_fahrzeug=zum_fahrzeug,
-        ihr_fahrzeug=f"Ihr {marke}" if marke else f"Ihr {art_einzahl}",
+        ihr_fahrzeug=f"Ihr {art_einzahl} von {marke}" if marke else f"Ihr {art_einzahl}",
         marke=marke, modell=modell, art=art_einzahl, art_plural=art_plural,
         ez_jahr=ez, alter=alter, alters_stufe=stufe,
         km=a.get("km"), km_text=f"rund {tsd(round(a['km'], -3))} km" if a.get("km") else None,

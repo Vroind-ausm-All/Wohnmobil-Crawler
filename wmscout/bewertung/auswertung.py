@@ -2,14 +2,15 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
 from ..datenbank import STATUS, UNBEKANNT, Datenbank, import_art
-from ..normalisierung.fahrzeug import ergaenze_fahrzeug
+from ..normalisierung.fahrzeug import arten_im_text, ergaenze_fahrzeug
 from ..normalisierung.geo import entfernung_km
 from .anschreiben import Anschreiber, euro, hinweise, sperrgrund
-from .rechner import Rechner
+from .rechner import Bewertung, Rechner
 
 
 BEARBEITET = {"kontaktiert", "verhandlung", "besichtigung", "gekauft", "abgesagt", "uninteressant"}
@@ -38,11 +39,72 @@ def fuer_rechner(a: dict) -> dict:
     der Titel die Art nicht bestimmen – sonst macht „Everest Minicamp, Camper, Wohnwagen, Motocrosshänger“ über den
     ersten Art-Begriff einen Kastenwagen. Der Rechner (`art_schluessel(suche, art, titel)`) bleibt unverändert; er
     bekommt eine Kopie ohne `art`/`titel`, der Titel wandert vor die Kurzbeschreibung, damit Ausstattung und Mängel
-    (Wertfaktoren) gleich erkannt werden. Ergebnis: gerechnet wird mit „Sonstige“. Vorläufige Arten bleiben (mit
-    Hinweis), alle anderen Anzeigen werden unverändert durchgereicht."""
+    (Wertfaktoren) gleich erkannt werden. Ergebnis: Diese Sicht rechnet mit „Sonstige“; so steht die Anzeige auch in
+    der Vergleichsliste. Bewertet wird sie selbst vorsichtig über alle Kandidaten-Arten (siehe `bewerte_anzeige`).
+    Vorläufige Arten bleiben (mit Hinweis), alle anderen Anzeigen werden unverändert durchgereicht."""
     if import_art(a.get("suche"))[1] != UNBEKANNT:
         return a
     return {**a, "art": None, "titel": None, "kurzbeschreibung": f"{a.get('titel') or ''} {a.get('kurzbeschreibung') or ''}"}
+
+
+def kandidaten_arten(a: dict) -> list[str]:
+    """Arten, mit denen eine importierte Anzeige UNBEKANNTER Art gerechnet wird: „Sonstige“ (ohne Art) und jede Art,
+    die Titel oder Kurzbeschreibung nennen (`arten_im_text`, z. B. „Wohnwagen .Bürstner premio life“ → Wohnwagen).
+    Leer für alle anderen Anzeigen (Crawler-Funde, vorläufige und bestätigte Arten)."""
+    if import_art(a.get("suche"))[1] != UNBEKANNT:
+        return []
+    return ["Sonstige"] + sorted(arten_im_text(f"{a.get('titel') or ''} {a.get('kurzbeschreibung') or ''}"))
+
+
+def _sicht_als(sicht: dict, art: str) -> dict:
+    """Rechner-Sicht mit vorgegebener Art. „Sonstige“ ist genau die Sicht aus der Vergleichsliste (gleiche id); jede
+    andere Art bekommt eine eigene Kennung, weil der Rechner Referenzwerte je id zwischenspeichert – sonst bekäme die
+    Anzeige in der Vergleichsliste den Referenzwert einer anderen Art (M6-1)."""
+    if art == "Sonstige":
+        return sicht
+    kennung = sicht.get("id")
+    return {**sicht, "art": art, "id": f"{kennung}#als {art}" if kennung and kennung != "manuell" else kennung}
+
+
+SICHERHEIT_ART_UNBEKANNT = "niedrig"
+
+
+def bewerte_anzeige(rechner: Rechner, a: dict, vergleich: list[dict], marktwert_manuell: int | None = None) -> Bewertung:
+    """Bewertung einer Anzeige in Rechner-Sicht; `vergleich` aus `vergleichsbasis`.
+
+    Bei UNBEKANNTER Art (Import) vorsichtig (QA H6-1), ohne den Rechner zu ändern:
+      * Der Rechner läuft einmal je Kandidaten-Art (`kandidaten_arten`); genommen wird die Bewertung mit dem
+        NIEDRIGSTEN Max-EK (bei Gleichstand „Sonstige“). „Sonstige“ allein wäre zu hoch, wenn die Anzeige z. B. ein
+        Wohnwagen ist (Neupreis 30.000 statt 65.000 €).
+      * Sicherheit höchstens „niedrig“ – die Art ist nicht bekannt, die Vergleichsgruppe also unsicher. „keine“ und
+        „manuell“ bleiben. Ampel, Verhältnis und Sortierung hängen nur am Max-EK (Sicherheit nur über „keine“) und
+        bleiben damit zur genommenen Bewertung stimmig; die Ampel wird nicht zusätzlich gedeckelt (Betreiberfrage F14).
+      * Spanne = von der kleinsten bis zur größten Spanne aller Kandidaten (Unsicherheit über die Art ausweisen).
+    Welche Art genommen wurde, steht in `b.art` und im Hinweis am Fahrzeug (`anschreiben.hinweise(a, b)`)."""
+    sicht = fuer_rechner(a)
+    kandidaten = kandidaten_arten(a)
+    if not kandidaten:
+        return rechner.bewerte(sicht, vergleich, marktwert_manuell=marktwert_manuell)
+    alle_b = [rechner.bewerte(_sicht_als(sicht, art), vergleich, marktwert_manuell=marktwert_manuell) for art in kandidaten]
+    b = min(alle_b, key=lambda x: x.max_ek)                       # min() nimmt bei Gleichstand den ersten: „Sonstige“
+    von = [x.spanne_von for x in alle_b if x.spanne_von]
+    bis = [x.spanne_bis for x in alle_b if x.spanne_bis]
+    basis = b.vergleich_basis
+    if len(kandidaten) > 1:
+        geprueft = ", ".join("ohne Art" if k == "Sonstige" else k for k in kandidaten)
+        basis += f" · Fahrzeugart unbekannt: niedrigster Max-EK aus {geprueft}"
+    return replace(b, sicherheit=SICHERHEIT_ART_UNBEKANNT if b.sicherheit in ("hoch", "mittel") else b.sicherheit,
+                   spanne_von=min(von) if von else b.spanne_von, spanne_bis=max(bis) if bis else b.spanne_bis,
+                   vergleich_basis=basis)
+
+
+def vergleichsbasis(alle: list[dict], duplikate: dict[str, list[dict]] | None = None) -> list[dict]:
+    """Vergleichsangebote für den Rechner – für `bewerte_alle` und `scout.py rechne` gleich: von mehrfach eingestellten
+    Fahrzeugen nur die aktuellste Anzeige, jede in Rechner-Sicht (`fuer_rechner`), damit Art und Rechner-Cache (je id)
+    zur bewerteten Anzeige passen (M6-1/M6-2)."""
+    duplikate = finde_duplikate(alle) if duplikate is None else duplikate
+    return [fuer_rechner(a) for a in alle if not any((b.get("zuletzt_gesehen") or "", b["id"]) > (a.get("zuletzt_gesehen") or "", a["id"])
+                                                     for b in duplikate.get(a["id"], []))]
 
 
 def _datum(iso: str | None) -> str:
@@ -70,10 +132,7 @@ def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None =
     standort = str(cfg["anschreiben"].get("plz") or "") or None
     alle = [ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()]
     duplikate = finde_duplikate(alle)
-    # Vergleichsbasis: von mehrfach eingestellten Fahrzeugen nur die aktuellste Anzeige – in Rechner-Sicht, damit Art
-    # und Rechner-Cache (je id) zur bewerteten Anzeige passen
-    vergleich = [fuer_rechner(a) for a in alle if not any((b.get("zuletzt_gesehen") or "", b["id"]) > (a.get("zuletzt_gesehen") or "", a["id"])
-                                            for b in duplikate.get(a["id"], []))]
+    vergleich = vergleichsbasis(alle, duplikate)
     zeilen = []
     for r in db.aktive():
         a = ergaenze_fahrzeug(dict(r))
@@ -94,7 +153,7 @@ def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None =
                              f"({STATUS.get(b0['status'], b0['status'])} am {_datum(b0.get('status_am') or b0.get('kontaktiert_am'))})")
         elif live_aelter:
             a["duplikat"] = f"doppelt eingestellt – ältere Anzeige {live_aelter[0]['id']} ist noch online"
-        b = rechner.bewerte(fuer_rechner(a), vergleich)
+        b = bewerte_anzeige(rechner, a, vergleich)
         sperre = sperrgrund(a, cfg)
         # Text gibt es für jede nicht gesperrte Anzeige; „bereit“ sind nur die, deren Ampel passt.
         # `hinweise` (z. B. Fahrzeugart nicht bestätigt) sperren nichts, sie stehen sichtbar am Fahrzeug
@@ -106,7 +165,7 @@ def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None =
         else:
             ust = b.haendler_vk - b.haendler_vk / 1.19
         zeilen.append({
-            "a": a, "b": b, "sperre": sperre, "hinweise": hinweise(a), "brief": brief, "ust": round(ust / 10) * 10,
+            "a": a, "b": b, "sperre": sperre, "hinweise": hinweise(a, b), "brief": brief, "ust": round(ust / 10) * 10,
             "bereit": bool(brief) and schreiber.soll_schreiben(b.ampel),
             "neu": bool(lauf_start and (a.get("erstmals_gesehen") or "") >= lauf_start),
             "nachfassen": grund, "nachfass_text": nachfass_text, "nachfass_betrag": nachfass_betrag,
