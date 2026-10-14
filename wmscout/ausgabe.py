@@ -48,7 +48,7 @@ def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | 
                     "Tage online", "Angebotspreis",
                     "Marktniveau", "Spanne von", "Spanne bis", "Sicherheit", "Anz. Vergleiche", "Marktwert privat",
                     "Händler-VK", "Kosten", "Ziel-Marge", "Max-EK", "Erstangebot", "Erstangebot % Marktwert",
-                    "Gewinn bei Angebotspreis", "Wertfaktoren", "Sperrgrund", "Status", "Nachfassen", "Kontaktiert am",
+                    "Gewinn bei Angebotspreis", "Wertfaktoren", "Sperrgrund", "Hinweise", "Status", "Nachfassen", "Kontaktiert am",
                     "Erstmals gesehen", "URL"])
         for z in sorted(zeilen, key=lambda z: z["b"].verhaeltnis or 99):
             a, b = z["a"], z["b"]
@@ -57,13 +57,15 @@ def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | 
                         b.vergleich_anzahl, b.marktwert_privat, b.haendler_vk, b.kosten, b.ziel_marge, b.max_ek,
                         b.erstangebot, f"{b.fair_anteil:.0%}" if b.fair_anteil else "", b.potenzial,
                         ", ".join(f"{n} {w:+.1%}" for n, w in b.wertfaktoren.items()), z["sperre"] or "",
-                        a["status"], z["nachfassen"] or "", a.get("kontaktiert_am") or "", a["erstmals_gesehen"], a["url"]])
+                        " | ".join(z.get("hinweise") or []), a["status"], z["nachfassen"] or "", a.get("kontaktiert_am") or "",
+                        a["erstmals_gesehen"], a["url"]])
 
     # --- Anschreiben als Textdateien ---
     for z in zeilen:
         if z["bereit"]:
+            hinweis = "".join(f"Hinweis (nicht Teil des Briefs): {h}\n" for h in z.get("hinweise") or [])
             (ordner / "anschreiben" / f"{z['a']['id']}.txt").write_text(
-                f"{z['a']['url']}\n\n{z['brief']}\n", encoding="utf-8")
+                f"{z['a']['url']}\n{hinweis}\n{z['brief']}\n", encoding="utf-8")
 
     # --- HTML-Report ---
     html, zaehl = render_html(cfg, zeilen, basis, fehler=fehler)

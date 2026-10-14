@@ -77,8 +77,10 @@ def import_art(suche: str | None) -> tuple[str | None, str | None]:
     return None, None
 
 
-# SQL-Gegenstück zu import_art() != (None, None): nur die exakten Muster, nicht jeder Name mit „Import“ am Anfang
-_IMPORT_SQL = ("(suche = ? OR suche IN ({arten}) OR suche LIKE 'Import % (bestätigt)' OR suche LIKE 'Import % (vorläufig)')"
+# SQL-Gegenstück zu import_art() != (None, None): nur die exakten Muster, nicht jeder Name mit „Import“ am Anfang.
+# GLOB statt LIKE: LIKE ignoriert die Groß-/Kleinschreibung, Python (startswith/endswith) nicht. In den Mustern stehen keine
+# GLOB-Sonderzeichen außer dem gewollten „*“ (die Marken aus _MARKE enthalten nur Buchstaben, Leerzeichen und Klammern).
+_IMPORT_SQL = ("(suche = ? OR suche IN ({arten}) OR suche GLOB 'Import * (bestätigt)' OR suche GLOB 'Import * (vorläufig)')"
                .format(arten=",".join("?" * len(IMPORT_ARTEN))))
 _IMPORT_PARAMETER = (IMPORT_SUCHE, *(f"Import {a}" for a in IMPORT_ARTEN))
 

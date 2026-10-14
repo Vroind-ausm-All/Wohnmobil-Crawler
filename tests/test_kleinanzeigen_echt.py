@@ -61,12 +61,12 @@ def test_suchseite_felder_im_einzelnen(such):
     t = nach_id(parse_suchseite(such))
     pro_und_top = t["3900000001"]
     assert (pro_und_top["preis"], pro_und_top["vb"], pro_und_top["ez_jahr"]) == (63990, False, 2025)
-    assert pro_und_top["gewerblich"] is True and pro_und_top["ort"] == "34346 Hann. Münden"
+    assert pro_und_top["gewerblich"] is True and pro_und_top["ort"] == "71111 Beispielstadt"
 
     top = t["3900000002"]                                   # nur „TOP“ (bezahlte Hervorhebung) – kein Händlerhinweis
     assert top["gewerblich"] is False
     assert (top["preis"], top["vb"]) == (34999, True)       # nicht der durchgestrichene Altpreis 37.500 €
-    assert (top["ez_jahr"], top["km"], top["ort"]) == (2012, 98004, "40764 Langenfeld")
+    assert (top["ez_jahr"], top["km"], top["ort"]) == (2012, 98004, "72222 Musterdorf")
     assert top["marke"] == "Knaus"
 
     pro = t["3900000003"]
@@ -391,8 +391,8 @@ def test_verkaeufername_aus_detailseite(detail):
     ({}, "Max Muster"),
     ({'aria-label="Profil von Max Muster"': 'aria-label="Profil von Erika Beispiel"'}, "Erika Beispiel"),
     ({'aria-label="Profil von Max Muster"': ""}, "Max Muster"),                              # ohne aria-label: Namenslink
-    ({'aria-label="Profil von Max Muster"': "", ">Max Muster</a>": ">volker</a>"}, "volker"),
-    ({'aria-label="Profil von Max Muster"': 'aria-label="Profil von HW"', ">Max Muster</a>": ">HW</a>"}, None),   # nur Kürzel
+    ({'aria-label="Profil von Max Muster"': "", ">Max Muster</a>": ">anton</a>"}, "anton"),
+    ({'aria-label="Profil von Max Muster"': 'aria-label="Profil von QX"', ">Max Muster</a>": ">QX</a>"}, None),   # nur Kürzel
     ({'aria-label="Profil von Max Muster"': "", ">Max Muster</a>": ">Privater Nutzer</a>"}, None),
     ({'aria-label="Profil von Max Muster"': "", ">Max Muster</a>": ">Aktiv seit 26.05.2011</a>"}, None),
     ({'aria-label="Profil von Max Muster"': "", ">Max Muster</a>": ">TOP Zufriedenheit</a>"}, None),
@@ -416,11 +416,19 @@ def test_verkaeufername_altes_layout_und_fehlender_kasten(ads):
 
 
 @pytest.mark.parametrize("text, erwartet", [
-    ("Max Muster", "Max Muster"), ("  volker ", "volker"), ("Hr Wie", "Hr Wie"), ("Anna-Lena", "Anna-Lena"),
-    ("HW", None), ("V", None), ("", None), (None, None), ("5.0", None), ("( 1 )", None),
+    ("Max Muster", "Max Muster"), ("  anton ", "anton"), ("Fr Beispiel", "Fr Beispiel"), ("Anna-Lena", "Anna-Lena"),
+    ("QX", None), ("Z", None), ("", None), (None, None), ("5.0", None), ("( 1 )", None),
     ("Privater Nutzer", None), ("Gewerblicher Nutzer", None), ("Aktiv seit 04.05.2024", None), ("SUPER", None),
     ("TOP Zufriedenheit", None), ("Besonders freundlich", None), ("Zuverlässig", None),
     ("max@example.org", None), ("https://x.example/p", None), ("0171 1234567", None), ("x" * 80, None),
+    # M4: Buchstaben plus gegliederte Nummer bzw. Adresse
+    ("Max 0171 123 4567", None), ("Max 0171/1234567", None), ("Max 123", None), ("Max Muster 2", None), ("Müller 70191", None),
+    ("Familie Müller Hauptstr. 5", None), ("Familie Müller Hauptstr.", None), ("Lindenstraße", None), ("Hans Lindenstrasse 12", None),
+    ("Rosenweg 7", None), ("Am Kirchplatz", None), ("Beispielallee", None),
+    ("Hans Weg", "Hans Weg"), ("Strasser", "Strasser"), ("Fritz Straßer", "Fritz Straßer"), ("Mehmet Özdemir", "Mehmet Özdemir"),
+    # N5: Link- und Schaltflächentexte sind keine Namen
+    ("Anzeigen des Anbieters", None), ("Alle Anzeigen", None), ("Profil ansehen", None), ("Zum Profil", None), ("Folgen", None),
+    ("Feedback geben", None), ("Mehr anzeigen", None), ("Nachricht schreiben", None), ("Weitere Anzeigen des Nutzers", None),
 ])
 def test_profilname(text, erwartet):
     assert profilname(text) == erwartet
@@ -446,16 +454,64 @@ def test_import_speichert_nur_den_namen(cfg, db, ordner, detail, such):
 def test_verkaeufer_name_hilfsfunktion_ist_robust():
     assert verkaeufer_name({}) is None and verkaeufer_name({"details_json": None}) is None
     assert verkaeufer_name({"details_json": "kein json"}) is None and verkaeufer_name({"details_json": "[1]"}) is None
-    assert verkaeufer_name({"details_json": json.dumps({"verkaeufer_name": "HW"})}) is None
+    assert verkaeufer_name({"details_json": json.dumps({"verkaeufer_name": "QX"})}) is None
     assert verkaeufer_name({"details_json": json.dumps({"verkaeufer_name": 42})}) is None
     assert verkaeufer_name({"details_json": json.dumps({"Art": "Alkoven"})}) is None
     assert verkaeufer_name({"details_json": json.dumps({"verkaeufer_name": "Max Muster"})}) == "Max Muster"
 
 
-def test_adapter_speichert_den_namen_auch_beim_detailabruf(cfg, detail):
+def test_adapter_speichert_den_namen_nicht_beim_detailabruf(cfg, detail):
+    """Der Verkäufername wird nur beim Import gespeicherter Seiten abgelegt – nicht im Crawler-Pfad (H2)."""
     class Abruf:
         def hole(self, url):
             return detail
 
     i = KleinanzeigenQuelle(cfg, Abruf()).details(f"https://www.kleinanzeigen.de/s-anzeige/x/{DETAIL_ID}-220-1010")
-    assert i.details["verkaeufer_name"] == "Max Muster" and "userId" not in json.dumps(i.details)
+    assert "verkaeufer_name" not in i.details and "Max Muster" not in json.dumps(i.als_datensatz(), default=str)
+    assert i.titel and i.details       # sonst unverändert ausgewertet
+
+
+@pytest.mark.parametrize("linktext", ["Anzeigen des Anbieters", "Alle Anzeigen", "Profil ansehen", "Folgen", "Feedback geben"])
+def test_verkaeufername_ignoriert_linktexte_ohne_aria_label(detail, linktext):
+    """N5: Ohne aria-label wurde der Text des ersten userId-Links genommen – Navigationstexte sind aber keine Namen."""
+    html = detail.replace('aria-label="Profil von Max Muster"', "").replace(">Max Muster</a>", f">{linktext}</a>")
+    assert linktext in html and parse_detailseite(html)["verkaeufer_name"] is None
+    # steht der echte Name als weiterer Link dahinter, gilt er
+    nach = html.replace(f">{linktext}</a>", f">{linktext}</a><a href=\"/s-bestandsliste.html?userId=7\">Erika Beispiel</a>", 1)
+    assert parse_detailseite(nach)["verkaeufer_name"] == "Erika Beispiel"
+
+
+# ---------- M1: Kontaktkasten allein ist keine erkannte Anzeigenseite ----------
+KONTAKT_NUR = ('<div id="viewad-contact"><a aria-label="Profil von Erika Beispiel" href="/s-bestandsliste.html?userId=7">'
+               'Erika Beispiel</a></div>')
+
+
+@pytest.mark.parametrize("seite", [
+    '<html><head><link rel="canonical" href="https://www.kleinanzeigen.de/s-anzeige/x/3900000099-220-1">'
+    f'</head><body>{KONTAKT_NUR}</body></html>',
+    f'<html><head></head><body><meta rel="canonical" href="https://www.kleinanzeigen.de/s-anzeige/x/3900000099-220-1">{KONTAKT_NUR}</body></html>',
+])
+def test_nur_kontaktkasten_ist_keine_detailseite(cfg, db, tmp_path, seite):
+    assert parse_detailseite(seite)["verkaeufer_name"] == "Erika Beispiel"
+    assert erkenne_seite(seite) == ("unbekannt", [])                      # früher: „detail“ mit dem Namen als einzigem Inhalt
+    ordner = tmp_path / "import"
+    ordner.mkdir()
+    cfg["import"] = {"ordner": str(ordner)}
+    (ordner / "x.html").write_text(seite, encoding="utf-8")
+    stat = Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
+    assert (stat["unbekannt"], stat["detailseiten"], stat["neu"]) == (1, 0, 0) and len(stat["fehler"]) == 1
+    assert (ordner / "nicht_erkannt" / "x.html").exists() and not (ordner / "x.html").exists()
+    assert db.con.execute("SELECT COUNT(*) FROM anzeigen").fetchone()[0] == 0
+
+
+def test_detailseite_mit_titel_und_kasten_bleibt_erkannt_und_leer_hat_keinen_namen(detail):
+    art, inserate = erkenne_seite(detail)
+    assert art == "detail" and inserate[0].details["verkaeufer_name"] == "Max Muster"
+    # Layout-Prüfung des Suchlaufs: Seite nur mit Kontaktkasten bleibt „leer“ (kein Titel, keine Merkmale)
+    class Abruf:
+        def hole(self, url):
+            return f"<html><body>{KONTAKT_NUR}</body></html>"
+
+    cfg_min = {"crawler": {"max_seiten_pro_suche": 1}}
+    leer = KleinanzeigenQuelle(cfg_min, Abruf()).details(f"https://www.kleinanzeigen.de/s-anzeige/x/{DETAIL_ID}-220-1010")
+    assert not leer.titel and not leer.details

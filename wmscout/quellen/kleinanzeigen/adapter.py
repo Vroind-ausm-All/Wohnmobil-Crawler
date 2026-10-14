@@ -11,7 +11,7 @@ from collections.abc import Iterator
 from ...netz import HoeflicherAbruf
 from ..basis import (Abruf, HttpFehler, Inserat, InseratNichtGefunden, Quelle, QuelleGesperrt, Suchauftrag,
                      Suchseite)
-from .parser import name_in_details, parse_detailseite, parse_suchseite
+from .parser import parse_detailseite, parse_suchseite
 
 
 def seiten_url(url: str, seite: int) -> str:
@@ -66,6 +66,6 @@ class KleinanzeigenQuelle(Quelle):
                 raise InseratNichtGefunden(url) from e
             raise
         d = parse_detailseite(html)
-        name_in_details(d)
+        d.pop("verkaeufer_name", None)                  # der Name wird nur beim Import gespeicherter Seiten abgelegt (README, Datenschutz)
         id_aus_seite = d.pop("anzeigen_id", None)         # Kasten „Anzeigen-ID“ – nur Ersatz, die URL gilt zuerst
         return Inserat(quelle=self.kennung, anzeigen_id=anzeigen_id_aus_url(url) or id_aus_seite or "", url=url, **d)

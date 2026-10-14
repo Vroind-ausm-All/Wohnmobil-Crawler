@@ -97,14 +97,14 @@ def _gespeichert_von(html: str) -> str | None:
 
 def _detail_kennung(html: str) -> tuple[str | None, str | None, bool]:
     """(Anzeigen-ID, URL, sicher). Sicher = aus canonical/og:url/Speichervermerk, sonst aus einem Link im Kopf."""
-    kopf = BeautifulSoup(_kopf(html), "html.parser", parse_only=SoupStrainer(["link", "meta", "a"]))
+    kopf = BeautifulSoup(_strenger_kopf(html) or "", "html.parser", parse_only=SoupStrainer(["link", "meta", "a"]))
     kandidaten = []
     if el := kopf.find(["link", "meta"], rel="canonical"):      # Kleinanzeigen schreibt es teils als <meta rel=…>
         kandidaten.append(el.get("href"))
     if el := kopf.find("meta", attrs={"property": "og:url"}):
         kandidaten.append(el.get("content"))
-    if m := _GESPEICHERT_VON.search(html[:5000]):
-        kandidaten.append(m.group(1))
+    if gespeichert := _gespeichert_von(html):
+        kandidaten.append(gespeichert)
     weitere = [tag.get(attr) for tag in kopf.find_all(["link", "meta", "a"]) for attr in ("href", "content")]
     for sicher, urls in ((True, kandidaten), (False, weitere)):
         for url in urls:
@@ -114,9 +114,9 @@ def _detail_kennung(html: str) -> tuple[str | None, str | None, bool]:
 
 
 def _detail_inserat(ad_id: str, url: str, d: dict) -> Inserat | None:
-    d = {k: v for k, v in name_in_details(dict(d)).items() if k != "anzeigen_id"}   # Name nur zur Anrede, sonst keine Personendaten
-    if not d.get("titel") and not d.get("details"):
+    if not d.get("titel") and not d.get("details"):          # Leer-Prüfung VOR dem Namen: ein Kontaktkasten allein macht keine Anzeige
         return None
+    d = {k: v for k, v in name_in_details(dict(d)).items() if k != "anzeigen_id"}   # Name nur zur Anrede, sonst keine Personendaten
     return Inserat(quelle=QUELLE, anzeigen_id=ad_id, url=url, **d)
 
 

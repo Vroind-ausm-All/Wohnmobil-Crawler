@@ -135,8 +135,10 @@ Hinweise zum Einlesen:
   Detailseite hat Vorrang vor dem Filter). Eine Art, die nur aus dem Titel oder einem Suchwort (z. B. „Camper“) geraten
   wurde, ist **vorläufig**; widersprechen sich zwei Hinweise, ist die Art **unbekannt**. Angeschrieben werden kann in
   jedem Fall (Betreiberentscheidung 14.10.2026) – das Fahrzeug trägt aber eine gelbe Hinweiszeile „Fahrzeugart nicht
-  bestätigt – bitte prüfen“ bzw. „Fahrzeugart unbekannt – bitte prüfen“, und die Bewertung rechnet mit der vorläufigen
-  bzw. ohne Art. Eine später eingelesene Detailseite oder ein Art-Filter bestätigt bzw. korrigiert die Art.
+  bestätigt – bitte prüfen“ bzw. „Fahrzeugart unbekannt – bitte prüfen“ (auch in CSV-Spalte „Hinweise“, im Kopf der
+  Anschreiben-Textdatei und in der Benachrichtigungs-Mail). Gerechnet wird so: **„unbekannt“ ohne Art** (wie „Sonstige“),
+  **„nicht bestätigt“ mit der vorläufigen Art**. Der Brief nennt bei nicht bestätigter oder unbekannter Art keine
+  Fahrzeugart. Eine später eingelesene Detailseite oder ein Art-Filter bestätigt bzw. korrigiert die Art.
 - **Datenschutz:** `import/eingelesen/` enthält die vollständigen gespeicherten Seiten, auch Verkäuferangaben
   (Name, Ort, ggf. Telefonnummer). Das Programm löscht nichts automatisch – lösche die Dateien nach der Prüfung selbst.
   Speichere Seiten möglichst nicht angemeldet, damit keine Kontodaten in der Datei landen.
@@ -160,11 +162,14 @@ Nachrichten verschicken, und viele Verkäufer reagieren auf Massenanfragen aller
   Verantwortung.
 - **Händleranfragen**: Anzeigen mit „keine Händler“ o. ä. werden automatisch ausgefiltert
   (Liste unter `filter → sperrbegriffe`). Das Anschreiben nennt dich offen als gewerblichen Ankäufer.
-- **Datenschutz**: Gespeichert werden Anzeigendaten, keine Kontaktdaten der Verkäufer (keine Telefonnummern,
-  Adressen oder Profil-IDs). Einzige Ausnahme: der öffentliche **Profilname** des Verkäufers aus einer eingelesenen
-  Anzeigenseite (`details_json` → `verkaeufer_name`; Kürzel, „Privater Nutzer“ u. Ä. werden verworfen). Er dient nur
-  zur persönlichen Anrede im Anschreiben und wird zusammen mit dem Inserat gelöscht (ein Lösch-/Anonymisierungsbefehl
-  mit Frist ist als Paket P1-14a geplant). Die App ist nur auf dem eigenen Rechner erreichbar (127.0.0.1).
+- **Datenschutz**: Gespeichert werden Anzeigendaten; aus dem Verkäuferkasten werden keine Telefonnummern, Adressen oder
+  Profil-IDs übernommen. (Der Freitext der Anzeige – Titel, Beschreibung – wird unverändert gespeichert und kann
+  Kontaktangaben enthalten, wenn der Verkäufer sie dort selbst schreibt.) Einzige Ausnahme beim Verkäuferkasten: der öffentliche **Profilname** des Verkäufers – nur beim **Einlesen gespeicherter Anzeigenseiten**
+  (nicht im Suchlauf mit Detailabruf), abgelegt in `details_json` → `verkaeufer_name`; Kürzel, „Privater Nutzer“,
+  Nummern und Adressen werden verworfen. Er dient der persönlichen Anrede im Anschreiben. **Eine Lösch- oder
+  Anonymisierungsfunktion gibt es noch nicht** (geplant als Paket P1-14a, Backlog): der Status „gelöscht“ markiert nur
+  das Inserat und entfernt den Namen **nicht** aus `details_json`. Die App ist nur auf dem eigenen Rechner erreichbar
+  (127.0.0.1).
 - **Wenn plötzlich 0 Anzeigen gefunden werden**, hat Kleinanzeigen vermutlich das Seitenlayout
   geändert. Die App meldet das als „Seitenlayout geändert“ und legt
   die Seite als `ausgabe/diagnose_suchseite.html` ab. Alle Selektoren liegen in

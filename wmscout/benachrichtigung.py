@@ -31,7 +31,8 @@ def sende_mail(cfg: dict, zeilen: list[dict], ergebnis: dict):
     zeilen_txt = "\n".join(
         f"[{z['b'].ampel.upper():5}] {z['a']['fahrzeug']} · EZ {z['a']['ez_jahr'] or '?'} – {z['a']['ort']}\n"
         f"        Angebot {euro(z['a']['preis'])} · Max-EK {euro(z['b'].max_ek)} · Erstangebot {euro(z['b'].erstangebot)}\n"
-        f"        {z['a']['url']}" for z in treffer[:25])
+        + "".join(f"        Hinweis: {h}\n" for h in z.get("hinweise") or [])
+        + f"        {z['a']['url']}" for z in treffer[:25])
     msg = EmailMessage()
     msg["Subject"] = f"Wohnmobil-Scout: {len(treffer)} neue Treffer"
     msg["From"], msg["To"] = m["benutzer"], m["empfaenger"]

@@ -982,3 +982,110 @@ def test_ohne_details_nur_echte_importe_ausnehmen(db):
     # die Python-Erkennung stimmt mit dem SQL überein
     from wmscout.datenbank import import_art
     assert sorted(i for i, s in suchen.items() if import_art(s) == (None, None)) == ["5", "6", "7", "9"]
+
+
+def test_import_sql_unterscheidet_gross_und_kleinschreibung_wie_python(db):
+    """QA N1: SQL-LIKE ignorierte die Schreibweise, Python nicht – jetzt GLOB; beide müssen für jede `suche` gleich entscheiden."""
+    suchen = ["Import Alkoven (bestätigt)", "import Alkoven (bestätigt)", "IMPORT Alkoven (bestätigt)", "Import Alkoven (BESTÄTIGT)",
+              "Import Alkoven (Bestätigt)", "Import Alkoven (vorläufig)", "Import Alkoven (Vorläufig)", "Import alkoven (vorläufig)",
+              "import (gespeicherte seite)", "Import (Gespeicherte Seite)", "Import * (bestätigt)", "Import ? (vorläufig)",
+              "Import [x] (bestätigt)", "Import  (bestätigt)", "Import (bestätigt)", "Importx Alkoven (bestätigt)",
+              "Import Alkoven (bestätigt) ", "Import Alkoven", "import Alkoven"]
+    for i, suche in enumerate(suchen):
+        db.speichere_treffer({"id": str(i), "url": f"https://x.example/{i}", "titel": "t"}, suche)
+    nachgeladen = {r["id"] for r in db.ohne_details(100)}
+    for i, suche in enumerate(suchen):
+        ist_import = import_art(suche) != (None, None)
+        assert (str(i) not in nachgeladen) == ist_import, suche
+    # die Groß-/Kleinschreibung entscheidet tatsächlich (sonst wäre der Test nichts wert)
+    assert import_art("import Alkoven (bestätigt)") == (None, None) and "1" in nachgeladen
+    assert import_art("Import Alkoven (BESTÄTIGT)") == (None, None) and "3" in nachgeladen
+    assert "0" not in nachgeladen and "10" not in nachgeladen
+
+
+# ---------- Runde 6: M2 (Hinweis auf allen Ausgabewegen), N3 (Escaping) ----------
+def zeilen_mit_hinweis(cfg, db, ads, ordner):
+    """Ein Import mit unbekannter Art (anschreibbar) → Zeile mit Hinweis und Brief."""
+    hit = {**ads[1], **GUENSTIG}
+    lies_ein(cfg, db, ordner, [("a.html", suchseite([hit]))])
+    zeilen = bewerte_alle(cfg, db, BASIS)
+    z = next(z for z in zeilen if z["a"]["id"] == hit["id"])
+    assert z["hinweise"] == [UNBEKANNT_TEXT] and z["bereit"] and z["brief"]
+    return zeilen, z
+
+
+def test_hinweis_in_csv_und_anschreibendatei(cfg, db, ads, ordner):
+    import csv
+    from pathlib import Path
+
+    from wmscout.ausgabe import schreibe_ausgaben
+    zeilen, z = zeilen_mit_hinweis(cfg, db, ads, ordner)
+    erg = schreibe_ausgaben(cfg, zeilen, BASIS)
+    with open(erg["csv"], encoding="utf-8-sig") as f:
+        tabelle = {r["ID"]: r for r in csv.DictReader(f, delimiter=";")}
+    assert tabelle[z["a"]["id"]]["Hinweise"] == UNBEKANNT_TEXT
+    assert all(r["Hinweise"] == "" for i, r in tabelle.items() if i != z["a"]["id"])
+    text = (Path(cfg["ausgabe"]["ordner"]) / "anschreiben" / f"{z['a']['id']}.txt").read_text(encoding="utf-8")
+    kopf, _, brief = text.partition("\n\n")
+    assert kopf.splitlines()[0] == z["a"]["url"] and f"Hinweis (nicht Teil des Briefs): {UNBEKANNT_TEXT}" in kopf
+    assert brief.strip() == z["brief"].strip() and "Fahrzeugart unbekannt" not in brief          # der Hinweis steht nicht im Brief
+    # ohne Hinweis: Datei wie bisher (URL, Leerzeile, Brief)
+    z["hinweise"] = []
+    schreibe_ausgaben(cfg, zeilen, BASIS)
+    ohne = (Path(cfg["ausgabe"]["ordner"]) / "anschreiben" / f"{z['a']['id']}.txt").read_text(encoding="utf-8")
+    assert ohne == f"{z['a']['url']}\n\n{z['brief']}\n"
+
+
+def test_hinweis_in_benachrichtigungsmail(cfg, db, ads, ordner, monkeypatch):
+    """Mail ohne Netz: smtplib.SMTP wird durch eine Attrappe ersetzt, die die Nachricht nur festhält."""
+    import smtplib
+
+    from wmscout.ausgabe import schreibe_ausgaben
+    from wmscout.benachrichtigung import sende_mail
+    zeilen, z = zeilen_mit_hinweis(cfg, db, ads, ordner)
+    gesendet = []
+
+    class Attrappe:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def starttls(self):
+            pass
+
+        def login(self, *a):
+            pass
+
+        def send_message(self, msg):
+            gesendet.append(msg)
+
+    monkeypatch.setattr(smtplib, "SMTP", Attrappe)
+    monkeypatch.setenv("SCOUT_TEST_PASSWORT", "x")
+    cfg["email"] = {**cfg["email"], "aktiv": True, "passwort_env": "SCOUT_TEST_PASSWORT", "nur_bei_neuen_treffern": False}
+    sende_mail(cfg, zeilen, schreibe_ausgaben(cfg, zeilen, BASIS))
+    assert len(gesendet) == 1
+    text = gesendet[0].get_body(preferencelist=("plain",)).get_content()
+    assert f"Hinweis: {UNBEKANNT_TEXT}" in text and z["a"]["url"] in text
+    # Hinweis gehört zum Fahrzeug: zwischen Angebotszeile und Adresse
+    assert text.index("Angebot ") < text.index("Hinweis: ") < text.index(z["a"]["url"])
+    # ohne Hinweis keine Hinweiszeile
+    gesendet.clear()
+    z["hinweise"] = []
+    sende_mail(cfg, zeilen, schreibe_ausgaben(cfg, zeilen, BASIS))
+    assert "Hinweis:" not in gesendet[0].get_body(preferencelist=("plain",)).get_content()
+
+
+def test_hinweis_fremdtext_wird_im_report_escaped(cfg, db, ads, ordner):
+    """N3: Hinweise sind Text, kein HTML – ein <script> in einem Hinweis darf im Report nie als Markup erscheinen."""
+    from wmscout.ausgabe import render_html
+    zeilen, z = zeilen_mit_hinweis(cfg, db, ads, ordner)
+    z["hinweise"] = ["<script>x</script>", 'a"b&c']
+    html, _ = render_html(cfg, zeilen, BASIS)
+    assert "<script>x</script>" not in html
+    assert html.count("⚠ &lt;script&gt;x&lt;/script&gt;") == 2               # Karte + Detailbereich
+    assert "⚠ a&#34;b&amp;c" in html
