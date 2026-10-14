@@ -1,7 +1,7 @@
 """Versionierte Schema-Migrationen (ADR-009).
 
 Versionen: 1 = ZIP-Stand (Tabelle ``anzeigen`` im Ur-Schema), 2 = Stand vor Phase 1 (ergänzte Spalten + Team-Tabellen),
-3 = Phase 1 (``schema_version``, ``bearbeitung``). Jeder Schritt läuft in einer eigenen Transaktion, ist idempotent
+3 = Phase 1 (``schema_version``, ``bearbeitung``), 4 = vorbereiteter Mehrquellen-Ereigniseingang. Jeder Schritt läuft in einer eigenen Transaktion, ist idempotent
 (``IF NOT EXISTS``, Spaltenprüfung) und wird erst nach erfolgreicher Sicherung der Datenbank ausgeführt.
 Die DDL der Schritte ist eingefroren: spätere Änderungen gehören in einen neuen Schritt, nicht in einen alten.
 """
@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .sicherung import SicherungsFehler, oeffne_lesend, sichere
 
-AKTUELLE_VERSION = 3
+AKTUELLE_VERSION = 4
 
 
 class MigrationsFehler(RuntimeError):
@@ -79,7 +79,41 @@ def _schritt_3(con: sqlite3.Connection):
         kontaktiert_von INTEGER, kontaktiert_am TEXT)""")
 
 
-SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3}
+def _schritt_4(con: sqlite3.Connection):
+    """Additive v4: alte App-Tabellen bleiben erhalten; neue Ereignisse nutzen Plattform-IDs."""
+    con.execute("""CREATE TABLE IF NOT EXISTS quellen (
+        kennung TEXT PRIMARY KEY, zugriffsart TEXT NOT NULL, freigegeben INTEGER NOT NULL DEFAULT 0,
+        aktiv INTEGER NOT NULL DEFAULT 0, CHECK(freigegeben IN (0,1)), CHECK(aktiv IN (0,1)))""")
+    con.execute("INSERT OR IGNORE INTO quellen (kennung, zugriffsart, freigegeben, aktiv) VALUES ('kleinanzeigen', 'web', 0, 0)")
+    con.execute("""CREATE TABLE IF NOT EXISTS inserate (
+        id INTEGER PRIMARY KEY, plattform TEXT NOT NULL, anzeigen_id TEXT NOT NULL,
+        legacy_id TEXT UNIQUE, url TEXT, titel TEXT, preis INTEGER,
+        verfuegbarkeit TEXT NOT NULL DEFAULT 'unbekannt',
+        erstmals_gesehen TEXT NOT NULL, zuletzt_gesehen TEXT NOT NULL,
+        UNIQUE(plattform, anzeigen_id))""")
+    con.execute("""CREATE TABLE IF NOT EXISTS beobachtungen (
+        id INTEGER PRIMARY KEY, inserat_id INTEGER NOT NULL REFERENCES inserate(id),
+        plattform TEXT NOT NULL, kanal TEXT NOT NULL, ereignis_typ TEXT NOT NULL,
+        ereignis_id TEXT, zeitpunkt TEXT NOT NULL, preis INTEGER, inhalt_hash TEXT NOT NULL,
+        UNIQUE(plattform, kanal, ereignis_id))""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_beobachtungen_inserat ON beobachtungen(inserat_id, zeitpunkt)")
+    con.execute("""CREATE TABLE IF NOT EXISTS preis_historie (
+        id INTEGER PRIMARY KEY, inserat_id INTEGER NOT NULL REFERENCES inserate(id),
+        zeitpunkt TEXT NOT NULL, preis INTEGER NOT NULL, kanal TEXT NOT NULL)""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_preis_historie_inserat ON preis_historie(inserat_id, zeitpunkt)")
+    # Bestehende Fahrzeuge verlustfrei referenzieren; Status der Ankaufbearbeitung ist
+    # KEINE Aussage darüber, ob das Inserat auf der Plattform noch verfügbar ist.
+    con.execute("""INSERT OR IGNORE INTO inserate
+        (plattform, anzeigen_id, legacy_id, url, titel, preis, verfuegbarkeit, erstmals_gesehen, zuletzt_gesehen)
+        SELECT COALESCE(NULLIF(quelle, ''), 'kleinanzeigen'), id, id, url, titel, preis,
+               'unbekannt', COALESCE(erstmals_gesehen, ''), COALESCE(zuletzt_gesehen, '')
+          FROM anzeigen""")
+    con.execute("""INSERT INTO preis_historie (inserat_id, zeitpunkt, preis, kanal)
+        SELECT id, erstmals_gesehen, preis, 'migration'
+          FROM inserate WHERE legacy_id IS NOT NULL AND preis IS NOT NULL""")
+
+
+SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4}
 
 _SCHEMA_VERSION = ("CREATE TABLE IF NOT EXISTS schema_version ("
                    "version INTEGER PRIMARY KEY, angewendet_am TEXT NOT NULL)")
