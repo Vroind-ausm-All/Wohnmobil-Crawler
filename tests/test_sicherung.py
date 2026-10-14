@@ -859,10 +859,11 @@ def test_f10_und_q6_liegen_gebliebene_arbeitskopien_stoeren_nicht_und_alte_werde
     for d in (alt_fotos, frisch_fotos):
         d.mkdir()
         (d / "x.jpg").write_bytes(b"x")
-    for f in (ungueltig_alt_name, alt_db, alt_fotos, fremd):
+    for f in (ungueltig_alt_name, alt_db, alt_fotos, fremd, pfad, kopie):                 # auch DB und Sicherung „alt“ (QA N-1)
         os.utime(f, (alt_zeit, alt_zeit))
-    wiederherstellen(kopie, pfad, bestaetigt=True, ziel_ordner=ziel, foto_ordner=fotos)
+    erg = wiederherstellen(kopie, pfad, bestaetigt=True, ziel_ordner=ziel, foto_ordner=fotos)
     assert abbild(pfad) == vorher                                                           # ungültige Altlast beeinträchtigt nichts
+    assert kopie.is_file() and abbild(erg.sicherung_vorher) == vorher                      # Aufräumen ließ DB und Sicherung stehen
     assert not ungueltig_alt_name.exists() and not alt_db.exists() and not alt_fotos.exists()
     assert frisch_db.exists() and (frisch_fotos / "x.jpg").exists() and fremd.exists()      # frische (laufende) und fremde bleiben
 

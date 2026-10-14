@@ -32,16 +32,23 @@ Wert „–“.
   - Windows-taugliche Datei-URIs (Laufwerk, UNC), CLI-Meldungen ohne Traceback, Typprüfung der Konfiguration.
 - **Tests:** `pytest -q -p no:cacheprovider`, `ruff check .` (Python der Haupt-`.venv`), Mutationsläufe der Agenten
   und der QA in Kopien, QA-Reproduktionsskripte (Uhrsprung, Parallelprozesse, defektes ZIP, Sonderzeichen-Pfade)
-- **Testergebnis (Orchestrator, Worktree nach Korrekturrunde 2):** `182 passed`, ruff „All checks passed!“.
+- **Testergebnis (Orchestrator):** nach Korrekturrunde 2 `182 passed`; nach Ergänzung N-1 `182 passed`, ruff „All checks passed!“.
   Agent: 55 Mutanten, nach Nachträgen alle getötet (Volllauf nach den letzten Tests nicht wiederholt).
 - **Review-Ergebnis:**
   1. QA-Runde 1 (1b104ad): ABLEHNUNG – K1 (älteste Sicherung zurückspielen → leere DB), H1, M1–M5, N1–N4.
   2. QA-Runde 2 (e8b1be1): FREIGABE MIT AUFLAGEN – alle Runde-1-Befunde behoben; neu Q-F1–Q-F10 (MITTEL/NIEDRIG).
-  3. Korrekturrunde 2: Q-F1–Q-F10 und fehlende Mutantentests bearbeitet; Nachprüfung durch QA steht aus.
+  3. Korrekturrunde 2: Q-F1–Q-F10 und fehlende Mutantentests bearbeitet.
+  4. QA-Runde 3 (001fe60): **FREIGABE** – alle Q-F behoben (eigene Nachstellung), 64 von 69 Mutanten getötet (alle 55
+     des Agenten); 8 Prozesse gleichzeitig: 8 eindeutige, intakte Sicherungen. Offen: N-1 (MITTEL, Schutztest „Aufräumen
+     löscht nie die DB“) → vom Orchestrator ergänzt, Mutant X1 jetzt erkannt; N-2..N-7 (NIEDRIG) → Backlog.
 - **Bekannte Risiken:** Windows und Netzlaufwerke nicht real geprüft; Sperrprüfung erkennt nur aktive
   Schreibvorgänge (App vorher beenden; echte Laufsperre mit P1-04); Sicherungen enthalten personenbezogene Daten
   (Löschfristen mit P1-14a).
-- **Nächster sinnvoller Schritt:** QA-Nachprüfung, dann PR gegen `claude/gifted-heisenberg-d1cjlr`.
+- **Backlog aus QA-Runde 3:** N-2 verwaiste `-journal`-Begleitdateien von Arbeitskopien; N-3 Meldung bei
+  Schreibschutz; N-4 Doppelfehler im Fotoschritt; N-5 Tests für `ordner: ""`, Foto-`.teil` im Fehlerpfad,
+  ZIP_DEFLATED-Fehler, CLI-Hinweis `--ohne-fotos`; N-6 `\\?\unc\` in Kleinschreibung.
+- **Nächster sinnvoller Schritt:** PR gegen `claude/gifted-heisenberg-d1cjlr`; danach Team-Übersicht (Tabelle
+  `bearbeitung`, Schema-Version 3).
 
 ## Phase 0 – Bestandsaufnahme (13.10.2026)
 

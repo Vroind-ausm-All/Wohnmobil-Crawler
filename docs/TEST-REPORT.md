@@ -8,7 +8,7 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 | Prüfung | Ergebnis |
 |---|---|
-| `pytest -q -p no:cacheprovider` (Orchestrator, Worktree nach Korrekturrunde 2) | **182 passed** |
+| `pytest -q -p no:cacheprovider` (Orchestrator, Worktree nach Korrekturrunde 2 und Test N-1) | **182 passed** |
 | `ruff check .` | All checks passed! |
 | QA-Runde 1 (1b104ad): Nachbau „älteste Sicherung bei voller Aufbewahrung“ | **leere DB** (K1) → ABLEHNUNG |
 | QA-Runde 2 (e8b1be1): K1/H1/Zip-Slip/paralleles Neuanlegen nachgebaut | behoben (Quelle bleibt, 15 → 16 Sicherungen, 3× abgewiesen, 0 Fehler) |
@@ -16,7 +16,9 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 | Agent nach Korrekturrunde 2: QA-Skripte s4/s7/s9/s5/s1 | Sicherungen bleiben; 10 Runden à 2 Prozesse 0 Fehler; kein Traceback |
 | Migration v1-Altbestand (QA, 203 Zeilen) | ohne Verlust, Sicherung = Altstand, zweiter Lauf ändert nichts |
 | Windows, Netzlaufwerke, CI | nicht geprüft |
-| QA-Nachprüfung der Korrekturrunde 2 | nicht geprüft (steht aus) |
+| QA-Runde 3 (001fe60): Q-F-Nachstellungen, 8 Prozesse gleichzeitig, Aufräumen mit zurückdatierten Dateien, Schreibschutz (als `nobody`) | alle Q-F behoben; 8 eindeutige intakte Sicherungen; DB und Sicherungen bleiben; kein Datenverlust |
+| QA-Runde 3: Mutationen (55 des Agenten + 14 eigene) | 64 von 69 getötet; X1 (Aufräumen trifft DB) danach durch erweiterten Test erkannt (Orchestrator, Gegenprobe in Kopie) |
+| QA-Urteil Runde 3 | **FREIGABE** (N-1 MITTEL behoben, N-2..N-7 NIEDRIG im Backlog) |
 
 ---
 
