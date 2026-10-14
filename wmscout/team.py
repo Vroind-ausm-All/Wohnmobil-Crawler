@@ -1,6 +1,6 @@
 """Team-Daten: Nutzer und Anmeldungen, Besichtigungen (Termin, Zuständigkeit, Ergebnis) und Fotos.
 
-Liegt in derselben SQLite-Datenbank wie die Inserate. Passwörter werden mit scrypt gehasht, Anmelde-Tokens nur
+Liegt in derselben SQLite-Datenbank wie die Inserate (Tabellen: wmscout/migrationen.py). Passwörter werden mit scrypt gehasht, Anmelde-Tokens nur
 als SHA-256 gespeichert. Fotos landen als Dateien unter daten/fotos/<Besichtigung>/.
 """
 from __future__ import annotations
@@ -20,26 +20,6 @@ BESICHTIGUNG_STATUS = {"geplant": "geplant", "laeuft": "läuft", "abgeschlossen"
                        "abgebrochen": "abgebrochen"}
 SITZUNG_TAGE = 30
 MAX_FOTO_BYTES = 8 * 1024 * 1024
-
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS nutzer (
-    id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE, rolle TEXT NOT NULL DEFAULT 'mitarbeiter',
-    passwort_hash TEXT NOT NULL, telefon TEXT, aktiv INTEGER NOT NULL DEFAULT 1, erstellt_am TEXT);
-CREATE TABLE IF NOT EXISTS sitzungen (
-    token_hash TEXT PRIMARY KEY, nutzer_id INTEGER NOT NULL, ablauf TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS besichtigungen (
-    id INTEGER PRIMARY KEY, anzeige_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'geplant',
-    termin TEXT, adresse TEXT, zustaendig_id INTEGER, erstellt_von INTEGER, erstellt_am TEXT, geaendert_am TEXT,
-    daten_json TEXT NOT NULL DEFAULT '{}',   -- Eingaben: Prüfpunkte, Messungen, Mängel, Fahrzeugdaten
-    basis_json TEXT NOT NULL DEFAULT '{}',   -- eingefrorene Bewertung beim Anlegen (Angebot, Max-EK, …)
-    ergebnis_json TEXT,                      -- letzte verbindliche Abzugsrechnung
-    protokoll_json TEXT,                     -- Abschluss: Verkäufer, vereinbarter Preis, Unterschriften
-    endpreis INTEGER, version INTEGER NOT NULL DEFAULT 1);
-CREATE INDEX IF NOT EXISTS idx_besichtigung_anzeige ON besichtigungen(anzeige_id);
-CREATE TABLE IF NOT EXISTS fotos (
-    id INTEGER PRIMARY KEY, besichtigung_id INTEGER NOT NULL, mangel_key TEXT, datei TEXT NOT NULL,
-    erstellt_am TEXT, nutzer_id INTEGER);
-"""
 
 
 def _jetzt() -> str:
@@ -71,8 +51,6 @@ class TeamSpeicher:
         self.db = db
         self.con = db.con
         self.foto_ordner = Path(foto_ordner)
-        self.con.executescript(SCHEMA)
-        self.con.commit()
 
     # ---------- Nutzer ----------
     def hat_nutzer(self) -> bool:
