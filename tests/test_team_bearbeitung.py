@@ -19,7 +19,7 @@ from wmscout.bearbeitung import (FREI, KONTAKTIERT, OHNE_ZUORDNUNG, RESERVIERT, 
                                  reservierung_tage, zustand)
 from wmscout.bewertung.auswertung import bewerte_alle
 from wmscout.datenbank import Datenbank
-from wmscout.migrationen import migriere
+from wmscout.migrationen import AKTUELLE_VERSION, migriere
 from wmscout.team import TeamSpeicher, lade_team_sicht
 
 JETZT = datetime(2026, 10, 14, 12, 0, 0)
@@ -451,7 +451,7 @@ def test_altbestand_kontaktiert_ist_ohne_zuordnung_und_uebernehmbar(tmp_path, ba
     baue(pfad)
     vorher = sqlite3.connect(pfad).execute("SELECT id, status, notiz, preis FROM anzeigen ORDER BY id").fetchall()
     db = Datenbank(str(pfad), tmp_path / "sich")
-    assert db.con.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 3
+    assert db.con.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == AKTUELLE_VERSION
     assert [tuple(r) for r in db.con.execute("SELECT id, status, notiz, preis FROM anzeigen ORDER BY id")] == vorher
     assert db.con.execute("SELECT COUNT(*) FROM bearbeitung").fetchone()[0] == 0
     t = TeamSpeicher(db, tmp_path / "fotos")
@@ -473,10 +473,11 @@ def test_altbestand_kontaktiert_ist_ohne_zuordnung_und_uebernehmbar(tmp_path, ba
     assert len(db.con.execute("SELECT id FROM anzeigen").fetchall()) == 3
 
 
-def test_migrierte_datenbank_hat_weiterhin_version_3(tmp_path):
-    """Keine Migration in T1: die Tabelle ``bearbeitung`` aus Version 3 genügt."""
+def test_t1_braucht_keine_eigene_migration(tmp_path):
+    """Keine Migration in T1: die Tabelle ``bearbeitung`` aus Version 3 genügt (spätere Versionen, z. B. v4 der
+    Ereignis-Grundlage aus PR #7, ändern sie nicht)."""
     pfad = tmp_path / "neu.sqlite"
-    assert migriere(pfad) == [3]
+    assert migriere(pfad)[-1] == AKTUELLE_VERSION
     con = sqlite3.connect(pfad)
     assert [r[1] for r in con.execute("PRAGMA table_info(bearbeitung)")] == ["anzeige_id", "bearbeiter_id", "uebernommen_am",
                                                                              "kontaktiert_von", "kontaktiert_am"]
