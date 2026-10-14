@@ -1,7 +1,8 @@
 """Versionierte Schema-Migrationen (ADR-009).
 
 Versionen: 1 = ZIP-Stand (Tabelle ``anzeigen`` im Ur-Schema), 2 = Stand vor Phase 1 (ergänzte Spalten + Team-Tabellen),
-3 = Phase 1 (``schema_version``, ``bearbeitung``), 4 = vorbereiteter Mehrquellen-Ereigniseingang. Jeder Schritt läuft in einer eigenen Transaktion, ist idempotent
+3 = Phase 1 (``schema_version``, ``bearbeitung``), 4 = vorbereiteter Mehrquellen-Ereigniseingang.
+Jeder Schritt läuft in einer eigenen Transaktion, ist idempotent
 (``IF NOT EXISTS``, Spaltenprüfung) und wird erst nach erfolgreicher Sicherung der Datenbank ausgeführt.
 Die DDL der Schritte ist eingefroren: spätere Änderungen gehören in einen neuen Schritt, nicht in einen alten.
 """
