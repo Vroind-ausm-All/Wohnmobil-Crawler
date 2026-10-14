@@ -120,6 +120,7 @@ def basis_fuer(z: dict, cfg: dict) -> dict:
 def fahrzeug_kurz(z: dict, team: dict | None = None) -> dict:
     a, b = z["a"], z["b"]
     return {"id": a["id"], "fahrzeug": a["fahrzeug"], "titel": a["titel"], "ort": a.get("ort"), "url": a["url"],
+            "quelle": a.get("quelle") or "kleinanzeigen",
             "bild": a.get("bild"), "ez_jahr": a.get("ez_jahr"), "km": a.get("km"), "preis": a.get("preis"),
             "entfernung_km": a.get("entfernung_km"), "tage_online": a.get("tage_online"), "status": a.get("status") or "neu",
             "ampel": b.ampel, "erstangebot": b.erstangebot if b.sicherheit != "keine" else None,

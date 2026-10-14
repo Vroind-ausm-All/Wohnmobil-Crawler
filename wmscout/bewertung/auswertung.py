@@ -72,6 +72,10 @@ SICHERHEIT_ART_UNBEKANNT = "niedrig"
 def bewerte_anzeige(rechner: Rechner, a: dict, vergleich: list[dict], marktwert_manuell: int | None = None) -> Bewertung:
     """Bewertung einer Anzeige in Rechner-Sicht; `vergleich` aus `vergleichsbasis`.
 
+    Orte im Ausland (`a["ausland"]`, siehe `normalisierung.geo.auslands_kuerzel`) haben keine PLZ und keine Entfernung; der Rechner
+    nähme dann die Transportpauschale für unbekannte Entfernung – für eine Abholung im Ausland viel zu wenig, der Max-EK wäre zu hoch.
+    Deshalb Ampel höchstens „gelb“ und ein Vermerk in der Vergleichsbasis; der Hinweis am Fahrzeug steht in `anschreiben.hinweise`.
+
     Bei UNBEKANNTER Art (Import) vorsichtig (QA H6-1), ohne den Rechner zu ändern:
       * Der Rechner läuft einmal je Kandidaten-Art (`kandidaten_arten`); genommen wird die Bewertung mit dem
         NIEDRIGSTEN Max-EK (bei Gleichstand „Sonstige“). „Sonstige“ allein wäre zu hoch, wenn die Anzeige z. B. ein
@@ -83,6 +87,14 @@ def bewerte_anzeige(rechner: Rechner, a: dict, vergleich: list[dict], marktwert_
         „Sonstige“ grün; der Brief nennt dann keinen Betrag (`anschreiben.kontext`).
       * Spanne = von der kleinsten bis zur größten Spanne aller Kandidaten (Unsicherheit über die Art ausweisen).
     Welche Art genommen wurde, steht in `b.art` und im Hinweis am Fahrzeug (`anschreiben.hinweise(a, b)`)."""
+    b = _bewerte_nach_art(rechner, a, vergleich, marktwert_manuell)
+    if a.get("ausland"):
+        b = replace(b, ampel="gelb" if b.ampel == "gruen" else b.ampel,
+                    vergleich_basis=f"{b.vergleich_basis} · Ausland ({a['ausland']}): Entfernung und Transport nicht berechnet")
+    return b
+
+
+def _bewerte_nach_art(rechner: Rechner, a: dict, vergleich: list[dict], marktwert_manuell: int | None) -> Bewertung:
     sicht = fuer_rechner(a)
     kandidaten = kandidaten_arten(a)
     if not kandidaten:
