@@ -6,6 +6,48 @@ Wert „–“.
 
 ---
 
+## Phase 2 – Team-Übersicht (14.10.2026)
+
+### T1 – Team-Übersicht Kern und API · Status: REVIEW
+
+- **Anlass:** Betreiberwunsch „auf Masse gehen und trotzdem den Überblick behalten auch unter den Kollegen“.
+  Plan: `scout-architect` (Freigabe mit Auflagen); Betreiber-Standards: Reservierung 2 Tage, nur Inhaber erzwingt/
+  weist zu, „gesendet ✓“ zählt (P1-06, mit T2).
+- **Verantwortliche Agenten:** `scout-architect` (Plan), `scout-data-engineer` (Umsetzung, Korrekturrunde 1),
+  `qa-security-reviewer` (Runde 1), Orchestrator (Doku, ADR-023).
+- **Zweig/Commits:** `claude/phase2-team-kern`: 33defb1 (Umsetzung), e91b81d (Merge mobile.de), Korrekturrunde 1.
+- **Geänderte Dateien:** `wmscout/bearbeitung.py` (neu), `wmscout/datenbank.py`, `wmscout/team.py`,
+  `wmscout/web/api.py`, `wmscout/bewertung/auswertung.py` (`dubletten_ids` ohne Bewertung), `wmscout/ausgabe.py`,
+  `wmscout/app.py`, `scout.py` (`status --nutzer`), `wmscout/web/static/sw.js`, `config.yaml` (`team`), Tests
+  `tests/test_team_bearbeitung.py`, `tests/test_team_korrektur.py`, `tests/prozess_helfer.py`.
+- **Implementierte Funktionen:** siehe ADR-023; Fehlerantworten mit `grund` (`csrf`, `recht`, `zugriff`,
+  `konflikt`, `belegt`) für T2; gesperrte Datenbank → 503 statt 500, keine offene Transaktion.
+- **Tests:** `pytest -q -p no:cacheprovider`, `ruff check .`, `node --check sw.js`; Nebenläufigkeit mit zwei
+  Datenbank-Objekten und zwei Prozessen; QA-Skripte (Wettlauf 4 Prozesse, Nebenwege, Sperre, Dubletten mit mobile.de,
+  Regression ohne Nutzer, Performance); Mutationsproben.
+- **Testergebnis (Orchestrator):** **658 passed**, ruff grün. Agent: QA-Wettlauf 43 Runden 0 Abweichungen;
+  `/api/status` mit Team bei 3 000 Inseraten 16,1 s → 0,2 s (10 Aufrufe). Korrektur: Hier stand zunächst
+  „29 Mutationen erkannt“; die gespeicherte Ergebnisdatei belegte nur 24 von 29 (QA-Runde 2, Q-M2). Belegter Stand
+  nach Korrekturrunde 2: **62 von 63** erkannt (Datei `/tmp/claude-0/team3/mutation_ergebnis.txt`, volle Suite je
+  Mutation); nicht erkannt nur eine gleichwertige Mutante (Reihenfolge innerhalb einer Transaktion).
+- **Review-Ergebnis:** QA-Runde 1 (e91b81d): FREIGABE MIT AUFLAGEN – Atomarität, Rechte, CSRF, Einzelplatz ok;
+  offen H1 (Besichtigung umgeht Reservierung), H2 (Verhandlung/Besichtigung ohne Übernahme), H3 (Doku), M1–M5,
+  N1–N7 → Korrekturrunde 1 bearbeitet (M4/N5 → T2). Nachprüfung steht aus.
+- **QA-Runde 2 (f16943d): FREIGABE MIT AUFLAGEN** – H1/H2/M1–M3/M5 bestätigt behoben; neu Q-H1: über eine
+  Besichtigung ohne Zuständigen konnte sich ein Mitarbeiter selbst eintragen und ein fremdes Fahrzeug auf „gekauft“
+  setzen. Korrekturrunde 2: Zuständigkeit setzen nur Inhaber oder Bearbeiter; Besichtigungen fremd gehaltener
+  Inserate ohne Zuständigen sind für Mitarbeiter nur lesbar; Erzwingen bei Verhandlung/Besichtigung übernimmt
+  wirklich und wird nur bei echter Änderung protokolliert; Besichtigung anlegen/abschließen in EINER Transaktion;
+  fehlende Tests ergänzt. **678 passed.**
+- **Entscheidungen (Orchestrator):** Der zuständige Besichtiger darf beim Abschluss den Status setzen (sonst könnte
+  er seine Besichtigung nicht abschließen); eintragen dürfen ihn nur Inhaber oder Bearbeiter des Fahrzeugs. Erzwingen/Zuweisen scheitert an einer
+  kontaktierten Dublette eines anderen (409, erst dort zuweisen).
+- **Bekannte Risiken:** Bisherige Oberflächen werten 409 nicht aus (M4) → Team-Betrieb erst mit T2; bei gesperrter
+  DB warten Anfragen bis 5 s; Zeitumstellung (naive Ortszeit) bis 1 h Abweichung beim Ablauf; Windows/echte Browser
+  nicht geprüft.
+- **Nächster sinnvoller Schritt:** QA-Nachprüfung, PR; danach T2 (Oberfläche) mit P1-06.
+
+
 ## Phase 2 (vorgezogen) – mobile.de-Seiten einlesen (14.10.2026)
 
 ### P2-05b – mobile.de: gespeicherte Such- und Anzeigenseiten einlesen · Status: REVIEW

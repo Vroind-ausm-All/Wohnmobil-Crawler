@@ -34,6 +34,13 @@ def finde_duplikate(alle: list[dict]) -> dict[str, list[dict]]:
     return duplikate
 
 
+def dubletten_ids(db: Datenbank) -> dict[str, list[str]]:
+    """id → sortierte IDs der Dubletten – dieselbe Gruppierung wie in `bewerte_alle` (`dubletten_ids` je Zeile), aber ohne
+    Rechner, Anschreiben und Entfernungen. Für die Team-Prüfung bei Schreibzugriffen (Reservierung wirkt auf die Fahrzeuggruppe)."""
+    alle = [ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()]
+    return {i: sorted(b["id"] for b in andere) for i, andere in finde_duplikate(alle).items()}
+
+
 def fuer_rechner(a: dict) -> dict:
     """Fahrzeugdaten, wie der Rechner sie bekommt (QA H3): Bei importierten Inseraten mit UNBEKANNTER Fahrzeugart darf
     der Titel die Art nicht bestimmen – sonst macht „Everest Minicamp, Camper, Wohnwagen, Motocrosshänger“ über den
@@ -185,5 +192,6 @@ def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None =
             "bereit": bool(brief) and schreiber.soll_schreiben(b.ampel),
             "neu": bool(lauf_start and (a.get("erstmals_gesehen") or "") >= lauf_start),
             "nachfassen": grund, "nachfass_text": nachfass_text, "nachfass_betrag": nachfass_betrag,
+            "dubletten_ids": sorted(b["id"] for b in andere),       # Fahrzeuggruppe: Team-Reservierungen wirken auf alle
         })
     return zeilen

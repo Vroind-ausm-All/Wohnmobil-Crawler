@@ -14,6 +14,7 @@ import json
 import logging
 import mimetypes
 import re
+import sqlite3
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -24,9 +25,11 @@ from urllib.parse import parse_qs, quote, urlparse
 from jinja2 import Environment, FileSystemLoader
 
 from ..ausgabe import render_html
+from ..bearbeitung import (IN_ARBEIT, OFFEN, BearbeitungsKonflikt, TeamSicht, ablauf_grenze, darf_erzwingen, darf_status,
+                           darf_zuweisen, reservierung_tage)
 from ..benachrichtigung import WhatsAppCloud, whatsapp_link
 from ..bewertung.anschreiben import euro, tsd
-from ..bewertung.auswertung import bewerte_alle
+from ..bewertung.auswertung import bewerte_alle, dubletten_ids
 from ..bewertung.besichtigung import berechne, lade_katalog
 from ..datenbank import STATUS, Datenbank
 from ..eingang import import_ordner, relativ_zum_projekt
@@ -43,12 +46,23 @@ MAX_IMPORT_DATEIEN = 25        # gespeicherte Seiten je Klick, der Rest beim nä
 MAX_IMPORT_SEKUNDEN = 20       # Zeitbudget je Klick (die Anfrage hält die Datenbanksperre)
 
 
-class Antwort(Exception):
-    """Beendet eine Anfrage mit HTTP-Status und JSON-Fehlertext."""
+# Maschinenlesbarer Grund einer Ablehnung (Feld ``grund`` in der JSON-Antwort), damit Oberflächen z. B. ein fehlendes CSRF-Token
+# (neu laden, wiederholen) von einer fachlichen Ablehnung (nicht wiederholen) unterscheiden:
+#   csrf      403  Token fehlt/veraltet (Server neu gestartet) – Token neu holen und einmal wiederholen ist sinnvoll
+#   recht     403  fachlich nicht erlaubt (Erzwingen/Zuweisen nur Inhaber, fremde Besichtigung, fremdes Inserat abgeben)
+#   zugriff   403  Hostname/Zugang nicht freigegeben
+#   konflikt  409  Zustand passt nicht (Kollege hält das Inserat bzw. eine Dublette, Besichtigung abgeschlossen, Suchlauf läuft)
+#   belegt    503  Datenbank kurz von einem anderen Vorgang gesperrt – später erneut versuchen
+GRUENDE = {403: "recht", 409: "konflikt", 503: "belegt"}
 
-    def __init__(self, status: int, fehler: str):
+
+class Antwort(Exception):
+    """Beendet eine Anfrage mit HTTP-Status, JSON-Fehlertext und (für 403/409/503) einem ``grund``."""
+
+    def __init__(self, status: int, fehler: str, extra: dict | None = None, grund: str | None = None):
         super().__init__(fehler)
-        self.status, self.fehler = status, fehler
+        self.status, self.fehler, self.extra = status, fehler, extra or {}
+        self.grund = grund or GRUENDE.get(status)
 
 
 class Kontext:
@@ -57,9 +71,11 @@ class Kontext:
     def __init__(self, cfg: dict, db: Datenbank, basis: Path, token: str, suchlauf, foto_ordner: Path):
         self.cfg, self.db, self.basis, self.token, self.suchlauf = cfg, db, basis, token, suchlauf
         self.team = TeamSpeicher(db, foto_ordner)
+        self.reservierung_tage = reservierung_tage(cfg)     # ValueError mit verständlicher Meldung bei falscher Konfiguration
         self.katalog_pfad = basis / "maengel.yaml"
         self.sperre = threading.Lock()          # Datenbankzugriffe nacheinander, Netzwerk parallel
         self._zeilen: tuple[float, list[dict]] | None = None
+        self._dubletten: tuple[tuple, float, dict[str, list[str]]] | None = None
         self.whatsapp = WhatsAppCloud(cfg)
         self.env = Environment(loader=FileSystemLoader(str(basis / "vorlagen")), autoescape=True)
         self.env.filters["euro"] = euro
@@ -74,6 +90,18 @@ class Kontext:
 
     def veraendert(self):
         self._zeilen = None
+
+    def dubletten_von(self, anzeige_id: str) -> list[str]:
+        """IDs der Dubletten ohne die teure Bewertung (`bewerte_alle`). Eigener Zwischenspeicher: Statuswechsel und Reservierungen
+        ändern die Gruppen nicht, deshalb verwirft ihn `veraendert()` NICHT. Neu berechnet wird bei Schreibzugriffen anderer
+        Verbindungen (Suchlauf: `PRAGMA data_version`), bei `dubletten_verwerfen()` (Seitenimport über diese Verbindung) und nach 30 s."""
+        schluessel = self.db.daten_version()
+        if not self._dubletten or self._dubletten[0] != schluessel or time.monotonic() - self._dubletten[1] > 30:
+            self._dubletten = (schluessel, time.monotonic(), dubletten_ids(self.db))
+        return self._dubletten[2].get(anzeige_id, [])
+
+    def dubletten_verwerfen(self):
+        self._dubletten = None
 
     def zeile(self, anzeige_id: str) -> dict:
         for z in self.zeilen():
@@ -111,7 +139,7 @@ def basis_fuer(z: dict, cfg: dict) -> dict:
     }
 
 
-def fahrzeug_kurz(z: dict) -> dict:
+def fahrzeug_kurz(z: dict, team: dict | None = None) -> dict:
     a, b = z["a"], z["b"]
     return {"id": a["id"], "fahrzeug": a["fahrzeug"], "titel": a["titel"], "ort": a.get("ort"), "url": a["url"],
             "quelle": a.get("quelle") or "kleinanzeigen",
@@ -120,7 +148,7 @@ def fahrzeug_kurz(z: dict) -> dict:
             "ampel": b.ampel, "erstangebot": b.erstangebot if b.sicherheit != "keine" else None,
             "brief_betrag": z.get("brief_betrag"),
             "max_ek": b.max_ek if b.sicherheit != "keine" else None, "bereit": z["bereit"], "nachfassen": z["nachfassen"],
-            "sperre": z["sperre"], "hinweise": z["hinweise"], "neu": z["neu"]}
+            "sperre": z["sperre"], "hinweise": z["hinweise"], "neu": z["neu"], "team": team}
 
 
 def ics(b: dict, cfg: dict, link: str | None) -> str:
@@ -203,11 +231,11 @@ class Anfrage:
         host = self.h.headers.get("Host") or ""
         lokal = host in (f"127.0.0.1:{port}", f"localhost:{port}")
         if host not in self.k.erlaubte_hosts(port):
-            raise Antwort(403, "Dieser Hostname ist nicht freigegeben (config.yaml → app → oeffentliche_url)")
+            raise Antwort(403, "Dieser Hostname ist nicht freigegeben (config.yaml → app → oeffentliche_url)", grund="zugriff")
         team = self.k.team.hat_nutzer()
         if not team:
             if not lokal:
-                raise Antwort(403, "Zugriff von außen erst, wenn Nutzer angelegt sind: python scout.py nutzer anlegen …")
+                raise Antwort(403, "Zugriff von außen erst, wenn Nutzer angelegt sind: python scout.py nutzer anlegen …", grund="zugriff")
             self.nutzer = {"id": None, "name": "lokal", "rolle": "inhaber", "telefon": None}
         else:
             self.nutzer = self.k.team.nutzer_zu_token(self.sitzung)
@@ -216,17 +244,86 @@ class Anfrage:
         if not self.nutzer:
             raise Antwort(401, "Bitte anmelden")
         if aendernd and self.h.headers.get("X-Scout-Token") != self.k.token:
-            raise Antwort(403, "Zugriff verweigert – Seite bitte neu laden")
+            raise Antwort(403, "Zugriff verweigert – Seite bitte neu laden", grund="csrf")
 
-    def darf_besichtigung(self, b: dict) -> bool:
-        return self.nutzer["rolle"] == "inhaber" or b["zustaendig_id"] in (None, self.nutzer["id"])
+    @property
+    def team_aktiv(self) -> bool:
+        """Team-Funktionen gelten nur mit angelegten Nutzern (ohne: anonymer „lokal“-Nutzer ohne ID, alles wie bisher)."""
+        return bool(self.nutzer) and self.nutzer["id"] is not None
+
+    def team_sicht(self) -> TeamSicht | None:
+        """Frischer Stand aus der Datenbank (zwei SELECTs) – nie aus dem 30-s-Zwischenspeicher der Bewertung."""
+        return self.k.team.sicht(self.k.reservierung_tage, self.nutzer) if self.team_aktiv else None
+
+    def jetzt_grenze(self) -> tuple[str, str]:
+        jetzt = datetime.now()
+        return jetzt.isoformat(timespec="seconds"), ablauf_grenze(jetzt, self.k.reservierung_tage)
+
+    def team_parameter(self, daten: dict, anzeige_id: str) -> dict:
+        """Zusätzliche Argumente für ``setze_status``/``nachgefasst`` im Team; ohne Team leer (= bisheriges Verhalten)."""
+        if not self.team_aktiv:
+            return {}
+        erzwingen = self.erzwingen_gewuenscht(daten)
+        _, grenze = self.jetzt_grenze()
+        return {"nutzer_id": self.nutzer["id"], "grenze": grenze, "erzwingen": erzwingen,
+                "dubletten": self.k.dubletten_von(anzeige_id), "inhaber": self.nutzer["rolle"] == "inhaber"}
+
+    def erzwingen_gewuenscht(self, daten: dict) -> bool:
+        """Nur das JSON-Literal ``true`` erzwingt (nicht "false", 1 oder "ja"); 403 für Nicht-Inhaber."""
+        erzwingen = daten.get("erzwingen") is True
+        if erzwingen and not darf_erzwingen(self.nutzer["rolle"]):
+            raise Antwort(403, "Erzwingen ist dem Inhaber vorbehalten")
+        return erzwingen
+
+    def vorheriger_halter(self, anzeige_id: str, team: dict):
+        """Wer hält das Inserat (oder eine Dublette) jetzt noch – nur bei Erzwingen gebraucht (für das Protokoll)."""
+        return self.team_sicht().fremder_halter(anzeige_id, team["dubletten"]) if team.get("erzwingen") else None
+
+    def logge_erzwingen(self, anzeige_id: str, vorher):
+        """Erzwungene Übernahme ins Protokoll – nur, wenn sich der Halter tatsächlich geändert hat (``vorher`` = (Inserat, Nutzer) des
+        bisherigen Halters, siehe ``vorheriger_halter``). Ein Statuswechsel ohne Übernahme (Besichtigung auf abgeschlossenem Inserat)
+        ändert ihn nicht und wird deshalb nicht als „erzwungen“ gemeldet."""
+        if not vorher:
+            return
+        sicht = self.team_sicht()
+        if sicht.halter(vorher[0]) != vorher[1]:
+            log.info("Erzwungene Übernahme: Anzeige %s von %s durch %s", anzeige_id, (sicht.person(vorher[1]) or {}).get("name"),
+                     self.nutzer["name"])
+
+    def konflikt(self, anzeige_id: str, dubletten=(), *, ziel_id: int | None = None, gruppe: bool = False) -> Antwort:
+        """409 mit verständlichem Text und dem aktuellen Team-Stand des Inserats.
+
+        ``gruppe``: Zuweisen/Erzwingen (an ``ziel_id``, sonst an den Anfragenden) scheiterte an einer bereits kontaktierten
+        Dublette eines anderen – dann sagt der Text, wo zuerst zugewiesen werden muss."""
+        sicht = self.team_sicht()
+        status = self.k.db.status_von(anzeige_id)
+        ziel = ziel_id if ziel_id is not None else self.nutzer["id"]
+        if gruppe and sicht.kontaktierte_dublette(anzeige_id, dubletten, ziel):
+            text = sicht.zuweisung_konflikt_text(anzeige_id, dubletten, ziel)
+        else:
+            text = sicht.konflikt_text(anzeige_id, dubletten)
+        return Antwort(409, text, {"team": sicht.objekt_id(anzeige_id, status, dubletten)})
+
+    def ist_inhaber_oder_bearbeiter(self, anzeige_id: str, sicht: TeamSicht | None = None) -> bool:
+        """Inhaber oder wirksamer Bearbeiter des Inserats – nur sie dürfen im Team die Zuständigkeit für eine Besichtigung vergeben.
+        Ohne Team (Einzelplatz, Nutzer „lokal“) immer ``True``. Wer das Inserat nicht hält (frei, abgelaufen, Kollege), darf sich
+        nicht selbst eintragen: Die Ausnahme beim Abschluss (``b_abschluss``) beruht darauf, dass die Zuständigkeit legitim vergeben wurde."""
+        if not self.team_aktiv or self.nutzer["rolle"] == "inhaber":
+            return True
+        sicht = sicht or self.team_sicht()
+        return sicht.halter(anzeige_id) == self.nutzer["id"]
+
+    def darf_besichtigung(self, b: dict, sicht: TeamSicht | None = None) -> bool:
+        """Schreiben (planen, speichern, Foto, Abschluss): Inhaber, Bearbeiter des Inserats oder eingetragener Zuständiger. Eine
+        Besichtigung ohne Zuständigen (Altbestand) auf einem Inserat, das ein Kollege hält, ist für Mitarbeiter nur lesbar."""
+        return b["zustaendig_id"] == self.nutzer["id"] or self.ist_inhaber_oder_bearbeiter(b["anzeige_id"], sicht)
 
     def besichtigung(self, bid: str, schreiben: bool = False) -> dict:
         b = self.k.team.besichtigung(int(bid))
         if not b:
             raise Antwort(404, "Besichtigung nicht gefunden")
         if schreiben and not self.darf_besichtigung(b):
-            raise Antwort(403, "Diese Besichtigung ist einem anderen Mitarbeiter zugewiesen")
+            raise Antwort(403, "Diese Besichtigung darf nur der Zuständige, der Bearbeiter des Inserats oder der Inhaber ändern")
         return b
 
     # ----- statische Dateien (ohne Sperre)
@@ -259,7 +356,7 @@ class Anfrage:
         if p == "/m":
             return self.html(k.env.get_template("mobil.html").render(firma=k.cfg["anschreiben"]["firma"]))
         if p == "/api/ich":
-            return self.json(200, {"nutzer": self.nutzer, "csrf": k.token, "team": k.team.hat_nutzer(),
+            return self.json(200, {"nutzer": self.ich_mit_kuerzel(), "csrf": k.token, "team": k.team.hat_nutzer(),
                                    "rollen": ROLLEN, "status": STATUS, "besichtigung_status": BESICHTIGUNG_STATUS,
                                    "firma": {x: k.cfg["anschreiben"].get(x) for x in
                                              ("firma", "ansprechpartner", "telefon", "ort")},
@@ -267,7 +364,9 @@ class Anfrage:
         if p == "/api/suchlauf":
             return self.json(200, k.suchlauf.stand)
         if p == "/api/nutzer":
-            return self.json(200, k.team.nutzer_liste())
+            return self.json(200, k.team.nutzer_mit_kuerzel())
+        if p == "/api/team":
+            return self.json(200, self.team_uebersicht())
         if p == "/api/katalog":
             return self.json(200, k.katalog())
         if p == "/api/heute":
@@ -294,13 +393,46 @@ class Anfrage:
             return self.html(self.protokoll(self.besichtigung(m.group(1))))
         raise Antwort(404, "nicht gefunden")
 
+    def ich_mit_kuerzel(self) -> dict:
+        if not self.team_aktiv:
+            return {**self.nutzer, "kuerzel": None}
+        return {**self.nutzer, "kuerzel": next((n["kuerzel"] for n in self.k.team.nutzer_mit_kuerzel(False)
+                                                if n["id"] == self.nutzer["id"]), None)}
+
+    def team_uebersicht(self) -> dict:
+        """Wer arbeitet woran? ``bearbeitung`` enthält nur Inserate mit Zustand ≠ frei oder mit belegter Dublette
+        (fehlende Einträge = frei). Zähler und Zustände kommen aus demselben Stand."""
+        k, sicht = self.k, self.team_sicht()
+        stand = datetime.now().isoformat(timespec="seconds")
+        if not sicht:
+            return {"aktiv": False, "ich": None, "nutzer": [], "zaehler": [], "ohne_zuordnung": 0, "verwaist": 0, "bearbeitung": {},
+                    "reservierung_tage": k.reservierung_tage, "stand": stand}
+        zaehler = k.db.team_zaehler(sicht.jetzt, sicht.grenze)
+        # Leistungszähler sind personenbezogen: Mitarbeiter sehen nur die eigene Zeile, der Inhaber alle. Die Bearbeiter-Kürzel an den
+        # Fahrzeugen (``bearbeitung``) bleiben für alle sichtbar – sie verhindern den Doppelkontakt.
+        sichtbar = [z for z in zaehler["nutzer"] if self.nutzer["rolle"] == "inhaber" or z["nutzer_id"] == self.nutzer["id"]]
+        nutzer = [{"id": n["id"], "name": n["name"], "kuerzel": sicht.kuerzel[n["id"]], "aktiv": bool(n["aktiv"]), "rolle": n["rolle"]}
+                  for n in sicht.nutzer.values()]
+        objekte = {z["a"]["id"]: sicht.objekt(z) for z in k.zeilen()}
+        return {"aktiv": True, "ich": {**sicht.person(self.nutzer["id"]), "rolle": self.nutzer["rolle"]},
+                "nutzer": nutzer,
+                "zaehler": [{**z, "kuerzel": sicht.kuerzel[z["nutzer_id"]]} for z in sichtbar],
+                "ohne_zuordnung": zaehler["ohne_zuordnung"], "verwaist": zaehler["verwaist"],
+                "bearbeitung": {i: o for i, o in objekte.items() if not sicht.ist_triviale_sicht(o)},
+                "reservierung_tage": k.reservierung_tage, "stand": stand}
+
     def heute(self) -> dict:
         k, ich = self.k, self.nutzer
         eigene = ich["rolle"] != "inhaber" and ich["id"]
         termine = k.team.besichtigungen(zustaendig_id=ich["id"] if eigene else None)
         zeilen = k.zeilen()
+        sicht = self.team_sicht()
+        teams = [(z, sicht.objekt(z)) for z in zeilen] if sicht else []
         return {
-            "termine": [self.besichtigung_kurz(b) for b in termine],
+            "meine": sum(1 for z, t in teams if t["mein"] and (z["a"].get("status") or "neu") in OFFEN) if sicht else None,
+            "frei_bereit": sum(1 for z, t in teams if z["bereit"] and (z["a"].get("status") or "neu") == "neu"
+                               and sicht.ist_frei(t)) if sicht else None,
+            "termine": [self.besichtigung_kurz(b, sicht) for b in termine],
             "bereit": sum(1 for z in zeilen if z["bereit"] and (z["a"].get("status") or "neu") == "neu"),
             "nachfassen": sum(1 for z in zeilen if z["nachfassen"]),
             "arbeit": sum(1 for z in zeilen if z["a"].get("status") in ("kontaktiert", "verhandlung", "besichtigung")),
@@ -310,31 +442,41 @@ class Anfrage:
     def fahrzeuge(self) -> list[dict]:
         f = (self.query.get("filter") or ["bereit"])[0]
         q = (self.query.get("q") or [""])[0].lower().split()
+        wer = (self.query.get("wer") or ["alle"])[0]
+        if wer not in ("alle", "meine", "frei"):
+            raise Antwort(400, "wer muss alle, meine oder frei sein")
+        sicht = self.team_sicht()
+        if wer != "alle" and not sicht:
+            raise Antwort(400, "Team nicht aktiv (keine Nutzer angelegt) – „wer“ gibt es nur im Team")
         auswahl = []
         for z in self.k.zeilen():
             s = z["a"].get("status") or "neu"
+            t = sicht.objekt(z) if sicht else None
+            if (wer == "meine" and not t["mein"]) or (wer == "frei" and not sicht.ist_frei(t)):
+                continue
             ok = {"bereit": z["bereit"] and s == "neu", "nachfassen": bool(z["nachfassen"]),
                   "arbeit": s in ("kontaktiert", "verhandlung", "besichtigung"), "alle": True}.get(f, False)
             text = f"{z['a']['fahrzeug']} {z['a']['titel']} {z['a'].get('ort') or ''}".lower()
             if ok and all(w in text for w in q):
-                auswahl.append(z)
-        auswahl.sort(key=lambda z: z["b"].verhaeltnis or 99)
-        return [fahrzeug_kurz(z) for z in auswahl[:200]]
+                auswahl.append((z, t))
+        auswahl.sort(key=lambda zt: zt[0]["b"].verhaeltnis or 99)
+        return [fahrzeug_kurz(z, t) for z, t in auswahl[:200]]
 
     def fahrzeug(self, anzeige_id: str) -> dict:
         z = self.k.zeile(anzeige_id)
-        return {**fahrzeug_kurz(z), "bewertung": z["b"].dict(), "brief": z["brief"], "nachfass_text": z["nachfass_text"],
+        sicht = self.team_sicht()
+        return {**fahrzeug_kurz(z, sicht.objekt(z) if sicht else None), "bewertung": z["b"].dict(), "brief": z["brief"], "nachfass_text": z["nachfass_text"],
                 "nachfass_betrag": z["nachfass_betrag"], "anschreiben_text": z["a"].get("anschreiben_text"),
-                "notiz": z["a"].get("notiz"), "besichtigungen": [self.besichtigung_kurz(b) for b in
+                "notiz": z["a"].get("notiz"), "besichtigungen": [self.besichtigung_kurz(b, sicht) for b in
                                                                  self.k.team.besichtigungen(offen=False, anzeige_id=anzeige_id)]}
 
-    def besichtigung_kurz(self, b: dict) -> dict:
+    def besichtigung_kurz(self, b: dict, sicht: TeamSicht | None = None) -> dict:
         link = self.k.app_link(f"/m#/besichtigung/{b['id']}")
         return {"id": b["id"], "anzeige_id": b["anzeige_id"], "status": b["status"], "termin": b["termin"],
                 "adresse": b["adresse"], "zustaendig": b["zustaendig"], "fahrzeug": b["basis"].get("fahrzeug"),
                 "bild": None, "endpreis": b["endpreis"], "karte": karten_link(b.get("adresse") or b["basis"].get("ort")),
                 "whatsapp": whatsapp_link(termin_text(b, link), (b["zustaendig"] or {}).get("telefon")),
-                "darf_bearbeiten": self.darf_besichtigung(b)}
+                "darf_bearbeiten": self.darf_besichtigung(b, sicht)}
 
     def besichtigung_voll(self, b: dict) -> dict:
         e = berechne(self.k.katalog(), b["daten"] or {}, b["basis"])
@@ -367,13 +509,31 @@ class Anfrage:
         if p == "/api/status":
             if daten.get("status") not in STATUS:
                 raise Antwort(400, "unbekannter Status")
-            ok = k.db.setze_status(str(daten.get("id")), daten["status"], text=text, betrag=betrag)
+            ad_id = str(daten.get("id"))
+            team = self.team_parameter(daten, ad_id)
+            uebernimmt = daten["status"] in IN_ARBEIT
+            vorher = self.vorheriger_halter(ad_id, team) if uebernimmt else None
+            try:
+                ok = k.db.setze_status(ad_id, daten["status"], text=text, betrag=betrag, **team)
+            except BearbeitungsKonflikt:
+                raise self.konflikt(ad_id, team["dubletten"] if uebernimmt else (), gruppe=team["erzwingen"]) from None
+            self.logge_erzwingen(ad_id, vorher)
             k.veraendert()
             return self.json(200 if ok else 404, {"ok": ok})
         if p == "/api/nachgefasst":
-            ok = bool(text) and k.db.nachgefasst(str(daten.get("id")), text, betrag)
+            ad_id = str(daten.get("id"))
+            team = {k_: v for k_, v in self.team_parameter(daten, ad_id).items() if k_ != "inhaber"}
+            vorher = self.vorheriger_halter(ad_id, team) if text else None
+            try:
+                ok = bool(text) and k.db.nachgefasst(ad_id, text, betrag, **team)
+            except BearbeitungsKonflikt:
+                raise self.konflikt(ad_id, team["dubletten"], gruppe=team["erzwingen"]) from None
+            if ok:
+                self.logge_erzwingen(ad_id, vorher)
             k.veraendert()
             return self.json(200 if ok else 400, {"ok": ok})
+        if m := re.fullmatch(r"/api/bearbeitung/([\w-]+)/(uebernehmen|abgeben|zuweisen)", p):
+            return self.json(200, getattr(self, f"bearbeitung_{m.group(2)}")(m.group(1), daten))
         if p == "/api/notiz":
             ok = k.db.setze_notiz(str(daten.get("id")), str(daten.get("notiz") or "")[:2000])
             k.veraendert()
@@ -389,6 +549,61 @@ class Anfrage:
             return self.json(200, getattr(self, f"b_{m.group(2)}")(b, daten))
         raise Antwort(404, "nicht gefunden")
 
+    # ----- Team: Übernehmen, Abgeben, Zuweisen
+    def _team_anzeige(self, anzeige_id: str) -> str:
+        """Status des Inserats; 400 ohne Team, 404 bei unbekannter Anzeige."""
+        if not self.team_aktiv:
+            raise Antwort(400, "Team nicht aktiv – es sind keine Nutzer angelegt (python scout.py nutzer anlegen …)")
+        status = self.k.db.status_von(anzeige_id)
+        if status is None:
+            raise Antwort(404, "Inserat nicht gefunden")
+        return status
+
+    def _team_antwort(self, anzeige_id: str, status: str) -> dict:
+        return {"ok": True, "team": self.team_sicht().objekt_id(anzeige_id, status, self.k.dubletten_von(anzeige_id))}
+
+    def bearbeitung_uebernehmen(self, anzeige_id: str, daten: dict) -> dict:
+        status = self._team_anzeige(anzeige_id)
+        erzwingen = self.erzwingen_gewuenscht(daten)
+        dubletten = self.k.dubletten_von(anzeige_id)
+        vorher = self.team_sicht().fremder_halter(anzeige_id, dubletten) if erzwingen else None
+        jetzt, grenze = self.jetzt_grenze()
+        if not self.k.db.uebernimm(anzeige_id, self.nutzer["id"], jetzt, grenze, erzwingen, dubletten):
+            raise self.konflikt(anzeige_id, dubletten, gruppe=erzwingen)
+        self.logge_erzwingen(anzeige_id, vorher)
+        return self._team_antwort(anzeige_id, status)
+
+    def bearbeitung_abgeben(self, anzeige_id: str, daten: dict) -> dict:
+        status = self._team_anzeige(anzeige_id)
+        sicht = self.team_sicht()
+        zeile = sicht.zeilen.get(anzeige_id)
+        inhaber = self.nutzer["rolle"] == "inhaber"
+        h = sicht.halter(anzeige_id)
+        if h is not None and h != self.nutzer["id"] and not inhaber:        # Fremdes gibt nur der Inhaber ab
+            raise Antwort(403, "Nur der Bearbeiter oder der Inhaber kann ein Inserat abgeben")
+        if zeile and zeile.get("kontaktiert_von"):
+            raise Antwort(409, "Bereits kontaktiert – der Inhaber kann das Inserat zuweisen",
+                          {"team": sicht.objekt_id(anzeige_id, status)})
+        self.k.db.gib_ab(anzeige_id, self.nutzer["id"], inhaber)
+        return self._team_antwort(anzeige_id, status)
+
+    def bearbeitung_zuweisen(self, anzeige_id: str, daten: dict) -> dict:
+        status = self._team_anzeige(anzeige_id)
+        if not darf_zuweisen(self.nutzer["rolle"]):
+            raise Antwort(403, "Zuweisen ist dem Inhaber vorbehalten")
+        ziel = daten.get("nutzer_id")
+        n = self.k.team.nutzer(ziel) if isinstance(ziel, int) and not isinstance(ziel, bool) else None
+        if not n or not n["aktiv"]:
+            raise Antwort(400, "nutzer_id fehlt oder der Mitarbeiter ist unbekannt bzw. deaktiviert")
+        jetzt, grenze = self.jetzt_grenze()
+        dubletten = self.k.dubletten_von(anzeige_id)
+        try:
+            self.k.db.weise_zu(anzeige_id, n["id"], jetzt, dubletten, grenze)
+        except BearbeitungsKonflikt:
+            raise self.konflikt(anzeige_id, dubletten, ziel_id=n["id"], gruppe=True) from None
+        log.info("Zuweisung: Anzeige %s an %s durch %s", anzeige_id, n["name"], self.nutzer["name"])
+        return self._team_antwort(anzeige_id, status)
+
     def seiten_einlesen(self) -> dict:
         """Gespeicherte Seiten aus dem konfigurierten Import-Ordner – nie ein Pfad aus der Anfrage, kein Netzabruf."""
         k = self.k
@@ -399,6 +614,7 @@ class Anfrage:
         stat = Importer(k.cfg, k.db).importiere_seiten(ordner, max_dateien=MAX_IMPORT_DATEIEN,
                                                              max_sekunden=MAX_IMPORT_SEKUNDEN)
         k.veraendert()
+        k.dubletten_verwerfen()
         return {**stat, "ordner": relativ_zum_projekt(ordner)}
 
     def _termin(self, wert) -> str | None:
@@ -410,21 +626,65 @@ class Anfrage:
             raise Antwort(400, "Termin bitte als Datum und Uhrzeit angeben") from e
 
     def _zustaendig(self, wert) -> int | None:
+        """Besichtiger beim Anlegen: leer = der Anlegende. Ob er die Zuständigkeit vergeben darf, prüft ``besichtigung_anlegen``."""
         if wert in (None, ""):
             return self.nutzer["id"]
-        if not self.k.team.nutzer(int(wert)):
+        try:
+            ziel = int(wert)
+        except (TypeError, ValueError):
+            raise Antwort(400, "Mitarbeiter nicht gefunden") from None
+        if not self.k.team.nutzer(ziel):
             raise Antwort(400, "Mitarbeiter nicht gefunden")
-        return int(wert)
+        return ziel
+
+    def _zustaendig_planen(self, b: dict, wert) -> int | None:
+        """Besichtiger beim Planen. Leer = unverändert (nie stillschweigend der Aufrufer); nur Inhaber und Bearbeiter des Inserats
+        dürfen die Zuständigkeit setzen oder ändern – ein Mitarbeiter kann sich auf fremden Inseraten nicht selbst eintragen (403).
+        Eine noch leere Zuständigkeit (Altbestand) übernimmt ein berechtigter Aufrufer selbst."""
+        berechtigt = self.ist_inhaber_oder_bearbeiter(b["anzeige_id"])
+        if wert in (None, ""):
+            return self.nutzer["id"] if b["zustaendig_id"] is None and berechtigt else b["zustaendig_id"]
+        ziel = self._zustaendig(wert)
+        if ziel != b["zustaendig_id"] and not berechtigt:
+            raise Antwort(403, "Die Zuständigkeit für eine Besichtigung vergeben nur der Bearbeiter des Inserats oder der Inhaber")
+        return ziel
 
     def besichtigung_anlegen(self, daten: dict) -> dict:
+        """Besichtigung anlegen. Im Team ist das wie ein Kontakt: ein Kollege hält das Inserat → 409; ist es frei, übernimmt der
+        Anlegende es (samt Dubletten) in derselben Transaktion wie den Status „Besichtigung“. Die Besichtigungs-Rolle
+        (``zustaendig_id``, Besichtiger) bleibt davon getrennt: Der Inhaber kann einem Kollegen eine Besichtigung zuweisen, ohne die
+        Bearbeitung zu ändern."""
         k = self.k
         z = k.zeile(str(daten.get("anzeige_id")))
-        bid = k.team.besichtigung_anlegen(z["a"]["id"], basis_fuer(z, k.cfg), self._termin(daten.get("termin")),
-                                          (daten.get("adresse") or "").strip() or None,
-                                          self._zustaendig(daten.get("zustaendig_id")), self.nutzer["id"])
-        if (z["a"].get("status") or "neu") in ("neu", "kontaktiert", "verhandlung"):
-            k.db.setze_status(z["a"]["id"], "besichtigung")
-            k.veraendert()
+        ad_id = z["a"]["id"]
+        termin, adresse = self._termin(daten.get("termin")), (daten.get("adresse") or "").strip() or None
+        zustaendig = self._zustaendig(daten.get("zustaendig_id"))              # prüfen, bevor etwas geändert wird (400)
+        basis = basis_fuer(z, k.cfg)
+        status = k.db.status_von(ad_id) or "neu"
+        # Status/Übernahme und Besichtigungsdatensatz in EINER Transaktion: bei Konflikt, Fehler oder „database is locked“ bleibt
+        # beides unverändert (nie ein Status „Besichtigung“ ohne Besichtigung).
+        if self.team_aktiv:
+            team = self.team_parameter(daten, ad_id)
+            vorher = self.vorheriger_halter(ad_id, team)
+            try:
+                with k.db.transaktion():
+                    if status in ("neu", "kontaktiert", "verhandlung", "besichtigung"):
+                        k.db.setze_status(ad_id, "besichtigung", **team)        # danach hält der Anlegende das Inserat (oder ist Inhaber)
+                    elif not darf_status(self.team_sicht().halter(ad_id), self.nutzer["id"], self.nutzer["rolle"]):
+                        raise BearbeitungsKonflikt(ad_id)                      # abgeschlossenes Inserat eines Kollegen
+                    elif not self.ist_inhaber_oder_bearbeiter(ad_id):
+                        raise Antwort(403, "Besichtigung auf einem abgeschlossenen Inserat nur durch den Bearbeiter oder den Inhaber – "
+                                           "bitte das Inserat zuerst übernehmen")
+                    bid = k.team.besichtigung_anlegen(ad_id, basis, termin, adresse, zustaendig, self.nutzer["id"])
+            except BearbeitungsKonflikt:
+                raise self.konflikt(ad_id, team["dubletten"] if status in IN_ARBEIT + ("neu",) else (), gruppe=team["erzwingen"]) from None
+            self.logge_erzwingen(ad_id, vorher)
+        else:
+            with k.db.transaktion():
+                if status in ("neu", "kontaktiert", "verhandlung"):
+                    k.db.setze_status(ad_id, "besichtigung")
+                bid = k.team.besichtigung_anlegen(ad_id, basis, termin, adresse, zustaendig, self.nutzer["id"])
+        k.veraendert()
         b = k.team.besichtigung(bid)
         self._zuweisung_melden(b)
         return self.besichtigung_kurz(b)
@@ -437,9 +697,8 @@ class Anfrage:
                                   [b["basis"].get("fahrzeug", ""), termin, b.get("adresse") or b["basis"].get("ort") or ""])
 
     def b_planen(self, b: dict, daten: dict) -> dict:
-        self.k.team.besichtigung_planen(b["id"], self._termin(daten.get("termin")),
-                                        (daten.get("adresse") or "").strip() or None,
-                                        self._zustaendig(daten.get("zustaendig_id")))
+        termin, adresse = self._termin(daten.get("termin")), (daten.get("adresse") or "").strip() or None
+        self.k.team.besichtigung_planen(b["id"], termin, adresse, self._zustaendig_planen(b, daten.get("zustaendig_id")))
         neu = self.k.team.besichtigung(b["id"])
         if neu["zustaendig_id"] != b["zustaendig_id"]:
             self._zuweisung_melden(neu)
@@ -487,12 +746,29 @@ class Anfrage:
                          abgeschlossen_von=self.nutzer["name"])
         endpreis = daten.get("endpreis") if entscheidung == "gekauft" else None
         status = "abgebrochen" if entscheidung == "abgebrochen" else "abgeschlossen"
-        self.k.team.besichtigung_abschliessen(b["id"], protokoll, endpreis, status)
         ad_status = {"gekauft": "gekauft", "abgelehnt": "abgesagt", "offen": "verhandlung"}.get(entscheidung)
-        if ad_status:
-            self.k.db.setze_status(b["anzeige_id"], ad_status, betrag=endpreis)
-            self.k.veraendert()
+        team = self.team_parameter({}, b["anzeige_id"]) if ad_status else {}
+        if team:
+            # Inhaber und der eingetragene Besichtiger dürfen den Status eines Inserats ändern, das ein Kollege bearbeitet, ohne die
+            # Bearbeitung zu übernehmen. Die Zuständigkeit kann sich ein Mitarbeiter nicht selbst geben (``_zustaendig_planen``,
+            # ``besichtigung_anlegen``): sie stammt vom Inhaber oder vom Bearbeiter des Inserats. Der Bearbeiter selbst braucht keine Ausnahme.
+            team["inhaber"] = team["inhaber"] or b["zustaendig_id"] == self.nutzer["id"]
+        # Inserat-Status (kann im Team 409 ergeben) und Protokoll in EINER Transaktion – nie halb gespeichert
+        try:
+            with self.k.db.transaktion():
+                if ad_status:
+                    self.k.db.setze_status(b["anzeige_id"], ad_status, betrag=endpreis, **team)
+                self.k.team.besichtigung_abschliessen(b["id"], protokoll, endpreis, status)
+        except BearbeitungsKonflikt:
+            raise self.konflikt(b["anzeige_id"], team["dubletten"] if ad_status in IN_ARBEIT else ()) from None
+        self.k.veraendert()
         return {"ok": True, "protokoll": f"/protokoll/{b['id']}"}
+
+
+def ist_gesperrt(fehler: sqlite3.OperationalError) -> bool:
+    """„database is locked“ / „database table is locked“ / „busy“: ein anderer Vorgang schreibt gerade."""
+    text = str(fehler).lower()
+    return "locked" in text or "busy" in text
 
 
 def bearbeite(handler, k: Kontext, methode: str):
@@ -513,14 +789,27 @@ def bearbeite(handler, k: Kontext, methode: str):
             if not isinstance(daten, dict):
                 raise Antwort(400, "ungültige Anfrage")
         with k.sperre:
-            a.pruefe_zugriff(aendernd=methode == "POST" and a.pfad != "/api/login")
-            a.get() if methode == "GET" else a.post(daten)
+            try:
+                a.pruefe_zugriff(aendernd=methode == "POST" and a.pfad != "/api/login")
+                a.get() if methode == "GET" else a.post(daten)
+            except BaseException:
+                # innerhalb der Sperre: auf der gemeinsamen Verbindung bleibt nach einem Fehler nie eine Transaktion offen
+                # (sie würde die Datenbank für den Suchlauf und andere Prozesse sperren)
+                if k.db.con.in_transaction:
+                    k.db.con.rollback()
+                raise
     except Antwort as e:
         if a.verzoegern:
             time.sleep(1)
         if e.status == 401 and methode == "GET" and not a.pfad.startswith("/api/"):
             return a.weiterleiten("/login?weiter=" + quote(handler.path))
-        a.json(e.status, {"fehler": e.fehler})
+        a.json(e.status, {"fehler": e.fehler, **({"grund": e.grund} if e.grund else {}), **e.extra})
+    except sqlite3.OperationalError as e:
+        if not ist_gesperrt(e):
+            log.exception("Fehler bei %s %s", methode, handler.path)
+            return a.json(500, {"fehler": "Interner Fehler – Details in ausgabe/scout.log"})
+        log.warning("Datenbank belegt bei %s %s: %s", methode, handler.path, e)
+        a.json(503, {"fehler": "Datenbank kurz belegt – bitte erneut versuchen", "grund": "belegt"}, {"Retry-After": "2"})
     except Exception:  # noqa: BLE001 – Server soll bei einem Fehler weiterlaufen
         log.exception("Fehler bei %s %s", methode, handler.path)
         a.json(500, {"fehler": "Interner Fehler – Details in ausgabe/scout.log"})

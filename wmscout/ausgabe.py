@@ -36,7 +36,15 @@ def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None =
         signatur={k: cfg["anschreiben"].get(k, "") for k in ("ansprechpartner", "firma", "telefon")}), zaehl
 
 
-def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None = None) -> dict:
+def _team_spalten(t: dict | None) -> list[str]:
+    """Bearbeiter, Übernommen am, Kontaktiert von – leer ohne Team oder ohne Zuordnung."""
+    if not t:
+        return ["", "", ""]
+    return [(t["bearbeiter"] or {}).get("name", ""), t["seit"] or "", (t["kontaktiert_von"] or {}).get("name", "")]
+
+
+def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None = None, team=None) -> dict:
+    """``team``: ``TeamSicht`` (bearbeitung.py) oder ``None`` – dann bleiben die Team-Spalten der CSV leer."""
     ordner = basis / cfg["ausgabe"]["ordner"]
     (ordner / "anschreiben").mkdir(parents=True, exist_ok=True)
 
@@ -49,16 +57,18 @@ def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | 
                     "Marktniveau", "Spanne von", "Spanne bis", "Sicherheit", "Anz. Vergleiche", "Marktwert privat",
                     "Händler-VK", "Kosten", "Ziel-Marge", "Max-EK", "Erstangebot", "Erstangebot % Marktwert",
                     "Gewinn bei Angebotspreis", "Wertfaktoren", "Sperrgrund", "Hinweise", "Status", "Nachfassen", "Kontaktiert am",
-                    "Erstmals gesehen", "URL"])
+                    "Erstmals gesehen", "URL", "Bearbeiter", "Übernommen am", "Kontaktiert von"])
         for z in sorted(zeilen, key=lambda z: z["b"].verhaeltnis or 99):
             a, b = z["a"], z["b"]
+            t = team.objekt(z) if team else None
             w.writerow([a["id"], b.ampel, a["titel"], a["marke"], a.get("modell"), b.art, a["ez_jahr"], a["km"],
                         a["ort"], a.get("entfernung_km"), a.get("tage_online"), a["preis"], b.marktwert_angebote, b.spanne_von, b.spanne_bis, b.sicherheit,
                         b.vergleich_anzahl, b.marktwert_privat, b.haendler_vk, b.kosten, b.ziel_marge, b.max_ek,
                         b.erstangebot, f"{b.fair_anteil:.0%}" if b.fair_anteil else "", b.potenzial,
                         ", ".join(f"{n} {w:+.1%}" for n, w in b.wertfaktoren.items()), z["sperre"] or "",
                         " | ".join(z.get("hinweise") or []), a["status"], z["nachfassen"] or "", a.get("kontaktiert_am") or "",
-                        a["erstmals_gesehen"], a["url"]])
+                        a["erstmals_gesehen"], a["url"],
+                        *_team_spalten(t)])
 
     # --- Anschreiben als Textdateien ---
     for z in zeilen:

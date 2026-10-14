@@ -9,7 +9,8 @@
   python scout.py nutzer anlegen <Name> [--rolle inhaber]   Team-Zugang für Handy-App anlegen
   python scout.py sichern                   Datenbank (und Fotos) sichern -> daten/sicherungen
   python scout.py wiederherstellen <Datei> --bestaetigt [--ohne-fotos]   Sicherung zurückspielen (App und Suchlauf vorher beenden)
-  python scout.py status <ID> kontaktiert   Status setzen (neu|kontaktiert|verhandlung|besichtigung|gekauft|abgesagt|uninteressant)
+  python scout.py status <ID> kontaktiert [--nutzer NAME]   Status setzen (neu|kontaktiert|verhandlung|besichtigung|gekauft|abgesagt|
+                                            uninteressant); mit --nutzer im Team für diesen Mitarbeiter (sonst „ohne Zuordnung“)
 """
 from __future__ import annotations
 
@@ -43,7 +44,7 @@ import yaml
 from wmscout.ausgabe import schreibe_ausgaben
 from wmscout.benachrichtigung import sende_mail
 from wmscout.bewertung.anschreiben import Anschreiber, euro
-from wmscout.bewertung.auswertung import bewerte_alle, bewerte_anzeige, vergleichsbasis
+from wmscout.bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids, vergleichsbasis
 from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import STATUS, Datenbank
 from wmscout.eingang import import_ordner
@@ -51,7 +52,8 @@ from wmscout.importer import Importer
 from wmscout.migrationen import MigrationsFehler
 from wmscout.normalisierung.fahrzeug import ergaenze_fahrzeug
 from wmscout.sicherung import SicherungsFehler, einstellungen, sichere, sicherung_ordner, wiederherstellen
-from wmscout.team import ROLLEN, TeamSpeicher
+from wmscout.bearbeitung import BearbeitungsKonflikt, ablauf_grenze, reservierung_tage
+from wmscout.team import ROLLEN, TeamSpeicher, lade_team_sicht
 
 BASIS = Path(__file__).resolve().parent
 
@@ -69,13 +71,18 @@ def logging_einrichten(cfg: dict):
         handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(ordner / "scout.log", encoding="utf-8")])
 
 
+def _team(cfg, db):
+    """Team-Sicht für die CSV (Bearbeiter je Inserat); ``None`` ohne angelegte Nutzer."""
+    return lade_team_sicht(db, reservierung_tage(cfg))
+
+
 def cmd_lauf(cfg, db, args):
     start = datetime.now().isoformat(timespec="seconds")
     stat = Importer(cfg, db).lauf(cfg["suchen"])
     logging.info("Crawl fertig: %d neu, %d Preissenkungen, %d bekannt, %d Detailseiten",
                  stat["neu"], stat["preis"], stat["bekannt"], stat["details"])
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
-    erg = schreibe_ausgaben(cfg, zeilen, BASIS, fehler=stat["fehler"])
+    erg = schreibe_ausgaben(cfg, zeilen, BASIS, fehler=stat["fehler"], team=_team(cfg, db))
     logging.info("Report: %s  (%s)", erg["html"], erg["zaehl"])
     sende_mail(cfg, zeilen, erg)
 
@@ -107,13 +114,13 @@ def cmd_import(cfg, db, args):
     if stat["fehler"]:
         print("Bitte prüfen:\n" + "\n".join(f"  - {f}" for f in stat["fehler"]))
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
-    erg = schreibe_ausgaben(cfg, zeilen, BASIS)
+    erg = schreibe_ausgaben(cfg, zeilen, BASIS, team=_team(cfg, db))
     print(f"Report: {erg['html']}  ({erg['zaehl']})")
 
 
 def cmd_report(cfg, db, args):
     zeilen = bewerte_alle(cfg, db, BASIS)
-    erg = schreibe_ausgaben(cfg, zeilen, BASIS)
+    erg = schreibe_ausgaben(cfg, zeilen, BASIS, team=_team(cfg, db))
     print(f"Report: {erg['html']}\nCSV:    {erg['csv']}\n{erg['zaehl']}")
 
 
@@ -228,7 +235,21 @@ def cmd_nutzer(cfg, db, args):
 
 
 def cmd_status(cfg, db, args):
-    ok = db.setze_status(args.id, args.status, args.notiz)
+    """Ohne ``--nutzer`` wie bisher: kein Eintrag in `bearbeitung`, ein kontaktiertes Inserat gilt im Team als „ohne Zuordnung“.
+    Mit ``--nutzer`` gilt die Team-Regel wie in der App (Übernahme, Konflikt mit Kollegen, Kontakt durch wen)."""
+    team_args = {}
+    if args.nutzer:
+        n = next((x for x in TeamSpeicher(db, foto_ordner(cfg)).nutzer_liste() if x["name"] == args.nutzer.strip()), None)
+        if not n:
+            sys.exit(f"Nutzer „{args.nutzer}“ nicht gefunden oder gesperrt (python scout.py nutzer liste)")
+        tage = reservierung_tage(cfg)
+        team_args = {"nutzer_id": n["id"], "grenze": ablauf_grenze(datetime.now(), tage), "inhaber": n["rolle"] == "inhaber",
+                     "dubletten": dubletten_ids(db).get(args.id, ())}
+    try:
+        ok = db.setze_status(args.id, args.status, args.notiz, **team_args)
+    except BearbeitungsKonflikt:
+        sicht = lade_team_sicht(db, tage, {"id": n["id"], "rolle": n["rolle"]})
+        sys.exit(f"Nicht gespeichert: {sicht.konflikt_text(args.id, team_args['dubletten'])}")
     print("gespeichert" if ok else f"Anzeige {args.id} nicht gefunden")
 
 
@@ -264,6 +285,8 @@ def main():
     s.add_argument("id")
     s.add_argument("status", choices=list(STATUS))
     s.add_argument("--notiz")
+    s.add_argument("--nutzer", help="Mitarbeiter, in dessen Namen der Status gesetzt wird (Team: Reservierung/Kontakt eintragen). "
+                                    "Ohne diese Option wird kein Bearbeiter eingetragen: „kontaktiert“ gilt dann als „ohne Zuordnung“")
     sub.add_parser("sichern", help="Datenbank und Fotos sichern (Ordner: config.yaml -> sicherung)")
     w = sub.add_parser("wiederherstellen", help="Sicherung zurückspielen (App und Suchlauf vorher beenden)")
     w.add_argument("datei", help="Sicherungsdatei (.sqlite), auch nur der Dateiname aus dem Sicherungsordner")
@@ -280,6 +303,7 @@ def main():
     if args.cmd == "wiederherstellen":
         return cmd_wiederherstellen(cfg, args)
     try:
+        reservierung_tage(cfg)              # ungültiges „team“ in config.yaml ebenso sofort melden
         einstellungen(cfg, BASIS)           # ungültiges „sicherung“ in config.yaml sofort melden, nicht erst bei der Sicherung
         db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]), str(sicherung_ordner(cfg, BASIS)))
     except (MigrationsFehler, ValueError, sqlite3.Error) as e:

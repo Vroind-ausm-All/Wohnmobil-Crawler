@@ -115,6 +115,11 @@ Fehler beim Versand werden nur protokolliert und halten nichts auf.
 * **Passwörter und Anmeldungen:** Passwörter werden mit scrypt gespeichert, Anmeldungen laufen nach 30 Tagen ab, ein
   Passwortwechsel meldet überall ab. Abmelden in der App löscht die zwischengespeicherten Daten auf dem Handy.
 
+* **Team-Übersicht (ADR-023):** Gespeichert wird, wer ein Fahrzeug übernommen bzw. angeschrieben hat und wann.
+  Mitarbeiter sehen nur ihre eigenen Zähler, der Inhaber alle; Kürzel am Fahrzeug sehen alle. Das sind
+  Leistungsdaten – Zweck (Doppelkontakt vermeiden, Arbeit verteilen) und Speicherdauer festlegen; bei Betriebsrat
+  Mitbestimmung beachten.
+
 ## Grenzen
 
 * Das Ankaufprotokoll ist ein **Muster** und ersetzt keinen Kaufvertrag. Vor dem ersten Einsatz rechtlich prüfen lassen.

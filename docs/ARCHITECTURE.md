@@ -39,6 +39,7 @@ stichprobenartig nachgeprüft (R1, R2, R3, R5, R14). Entscheidungen: `docs/DECIS
 | `wmscout/bewertung/anschreiben.py`, `ausgabe.py` | Texte, CSV, HTML | importieren `STATUS` aus `datenbank` |
 | `wmscout/bewertung/besichtigung.py` + `web/static/besichtigung.js` | Mängelabzug (Python verbindlich, JS offline) | Paritätstest |
 | `wmscout/team.py` | Nutzer, Sitzungen, Besichtigungen, Fotos | teilt die DB-Verbindung |
+| `wmscout/bearbeitung.py` (T1) | reine Team-Regeln: Kürzel, Zustand (frei/reserviert/kontaktiert/ohne Zuordnung/verwaist), Rechte, `TeamSicht` | ohne DB; Schreibzugriffe in `Datenbank` (`uebernimm`, `gib_ab`, `weise_zu`, Team-Pfad von `setze_status`), API `/api/team`, `/api/bearbeitung/<id>/…` |
 | `wmscout/web/api.py` | Routen, Zugriffsschutz, Statusübergänge | Fachlogik in der HTTP-Schicht; globaler Lock (R6) |
 | `wmscout/app.py` | Server, Suchlauf-Thread, Auto-Suche (alle 3 h) | eigene DB-Verbindung je Thread |
 | `wmscout/benachrichtigung.py` | E-Mail, WhatsApp-Link, WhatsApp Cloud API | Geheimnisse korrekt über Umgebungsvariablen |
