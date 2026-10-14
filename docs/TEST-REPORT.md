@@ -4,6 +4,22 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## T1 – Team-Übersicht Kern und API (14.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q -p no:cacheprovider` (Orchestrator, nach Korrekturrunde 1) | **658 passed** |
+| `ruff check .` / `node --check sw.js` | All checks passed! / ok |
+| QA-Runde 1: Wettlauf 4 Prozesse (43 Runden: übernehmen, kontaktiert, nachgefasst, Dubletten) | je Runde genau ein Gewinner, 0 offene Transaktionen |
+| QA-Runde 1: Regression ohne Nutzer (HTTP, DB, CSV, Report gegen e99623e) | gleich bis auf Zeitstempel und neue Felder |
+| QA-Runde 1: 19 Mutationen | 19 erkannt |
+| QA-Urteil Runde 1 | **FREIGABE MIT AUFLAGEN** (H1 Besichtigung, H2 Verhandlung, H3 Doku) → Korrekturrunde 1 |
+| Agent nach Korrekturrunde 1: QA-Skripte (Nebenwege, Wettlauf, Sperre, Dubletten, Inaktive, Suchlauf, Regression) | H1/H2 → 409; 503 statt 500, keine offene Transaktion; 10× `/api/status` mit Team 16,1 s → 0,2 s |
+| QA-Nachprüfung, Browser, Windows | nicht geprüft |
+
+---
+
+
 ## P2-05b – mobile.de: gespeicherte Seiten einlesen (14.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

@@ -35,6 +35,14 @@ Unterwegs mit dem Handy anschreiben, Besichtigungen planen und zuweisen, beim Ve
 Fotos und live mitlaufendem Preisabzug, auch ohne Netz) und das Ankaufprotokoll unterschreiben lassen.
 Einrichtung (Nutzer anlegen, Tailscale, App auf den Startbildschirm): **[docs/HANDY-APP.md](docs/HANDY-APP.md)**.
 
+**Team-Übersicht (in Arbeit):** Sobald Nutzer angelegt sind, merkt sich der Scout, wer welches Fahrzeug bearbeitet.
+„Ich übernehme“ reserviert ein Fahrzeug (Standard 2 Tage, `config.yaml → team → reservierung_tage`, 0 = nie);
+Anschreiben, Verhandlung oder Besichtigung übernehmen es automatisch. Ein Kollege bekommt dann „Reserviert von …“
+statt doppelt anzuschreiben. Nur der Inhaber kann eine fremde Reservierung aufheben oder zuweisen. Die CSV hat am
+Ende die Spalten „Bearbeiter“, „Übernommen am“, „Kontaktiert von“. Die Anzeige in Desktop- und Handy-App (Badges,
+Knöpfe, Filter) folgt mit Paket T2 – **bis dahin die Team-Funktion nicht im Alltag nutzen**. Status per Kommandozeile:
+`scout.py status <id> <status> --nutzer NAME` (ohne `--nutzer` gilt das Fahrzeug als „ohne Zuordnung“).
+
 ## Befehle
 
 | Befehl | Was passiert |

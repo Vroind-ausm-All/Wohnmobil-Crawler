@@ -1,5 +1,6 @@
 """Team-Übersicht (T1): wer bearbeitet welches Inserat? Reine Regeln, Datenbank (auch nebenläufig), Altbestände, HTTP, CSV."""
 import csv
+import re
 import sqlite3
 import threading
 from datetime import datetime, timedelta
@@ -215,13 +216,14 @@ def test_uebernahme_mit_dublette(db, team, importiert):
     assert not db.uebernimm(b, carl, NEUN, dubletten=[a, c]) and bearbeitung(db, b) is None      # Dublette von Ben reserviert
     assert db.uebernimm(b, ben, NEUN, dubletten=[a, c])                                          # eigene Dublette: kein Konflikt
     assert db.uebernimm(c, anna, NEUN, dubletten=[a], erzwingen=True)                            # erzwingen übergeht auch Dubletten
+    assert bearbeitung(db, a)[0] == anna and bearbeitung(db, c)[0] == anna                       # … und nimmt Bens Reservierung der Dublette mit
     assert db.uebernimm(c, carl, NEUN, dubletten=[b]) is False                                   # b gehört Ben
-    # a (Ben, 14.10. 09:00): nicht abgelaufen blockiert die Dublette, abgelaufen nicht
+    # a (jetzt Anna, 14.10. 09:00): nicht abgelaufen blockiert die Dublette, abgelaufen nicht
     d, e = anzeige_ids(db, 5)[3:]
     assert not db.uebernimm(e, carl, "2026-10-14T10:00:00", grenze="2026-10-14T08:00:00", dubletten=[a])
     assert db.uebernimm(d, carl, "2026-10-20T00:00:00", grenze="2026-10-19T00:00:00", dubletten=[a])
     # deaktivierter Bearbeiter einer Dublette blockiert ebenfalls nicht
-    team.nutzer_aktiv_setzen("Ben", False)
+    team.nutzer_aktiv_setzen("Anna", False)
     assert db.uebernimm(e, carl, "2026-10-14T10:00:00", grenze="2026-10-14T08:00:00", dubletten=[a])
 
 
@@ -803,16 +805,20 @@ def test_http_team_uebersicht_zaehler_und_bearbeitung(server, team, db):
     assert s == 200 and r.getheader("Cache-Control") == "no-store"
     assert t["aktiv"] and t["ich"] == {"id": team.ids["Ben"], "name": "Ben", "kuerzel": "BE", "aktiv": True, "rolle": "mitarbeiter"}
     assert [(n["name"], n["kuerzel"], n["aktiv"]) for n in t["nutzer"]] == [("Anna", "AN", True), ("Ben", "BE", True), ("Carl", "CA", True)]
-    je = {z["name"]: z for z in t["zaehler"]}
+    assert [z["name"] for z in t["zaehler"]] == ["Ben"]                                              # Mitarbeiter: nur die eigene Zeile (M5)
+    assert t["zaehler"][0]["reserviert"] == 1 and t["zaehler"][0]["uebernommen_heute"] == 1 and t["zaehler"][0]["kuerzel"] == "BE"
+    ta = anna("GET", "/api/team")[1]
+    je = {z["name"]: z for z in ta["zaehler"]}                                                        # Inhaber: alle
+    assert set(je) == {"Anna", "Ben", "Carl"}
     assert je["Ben"]["reserviert"] == 1 and je["Ben"]["uebernommen_heute"] == 1 and je["Carl"]["kontakte_heute"] == 1
     assert je["Carl"]["in_arbeit"] == 1 and je["Anna"]["reserviert"] == 0 and je["Ben"]["kuerzel"] == "BE"
-    assert t["ohne_zuordnung"] == 1 and t["reservierung_tage"] == 2
+    assert t["ohne_zuordnung"] == 1 and t["verwaist"] == 0 and t["reservierung_tage"] == 2
     assert set(t["bearbeitung"]) == {a, b, c} and d not in t["bearbeitung"]                          # nur nicht freie
     assert t["bearbeitung"][a]["zustand"] == "reserviert" and t["bearbeitung"][b]["zustand"] == "kontaktiert"
     assert t["bearbeitung"][c]["zustand"] == "ohne_zuordnung" and t["bearbeitung"][c]["bearbeiter"] is None
     # Zähler und Zustände stammen aus demselben Stand: Anzahl je Zustand stimmt überein
     zustaende = [o["zustand"] for o in t["bearbeitung"].values()]
-    assert zustaende.count("reserviert") == sum(z["reserviert"] for z in t["zaehler"])
+    assert zustaende.count("reserviert") == sum(z["reserviert"] for z in ta["zaehler"])
     assert zustaende.count("ohne_zuordnung") == t["ohne_zuordnung"]
     # ohne Anmeldung: nichts
     assert Client(server.server_address[1])("GET", "/api/team")[0] == 401
@@ -868,13 +874,29 @@ def test_csv_team_spalten_am_ende_ohne_team_leer(cfg, db, importiert, team, tmp_
     assert {r[0] for r in z_ohne} == set(z_mit)                                                       # gleiche Inserate, nur Spalten dazu
 
 
-def test_statischer_report_ohne_team_unveraendert(cfg, db, importiert):
+def _ohne_zeit(html: str) -> str:
+    return re.sub(r"\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}", "<ZEIT>", html)           # „Stand“ des Reports
+
+
+def test_statischer_report_ohne_team_unveraendert(cfg, db, importiert, team):
+    """Der HTML-Report kennt keine Team-Daten: gleiche Bytes (bis auf den Zeitstempel) ohne und mit Team-Sicht, auch wenn Inserate
+    reserviert/kontaktiert sind – und jedes Inserat der Eingabe steht darin (Referenz: die bewerteten Zeilen, nicht der Renderer)."""
     zeilen = bewerte_alle(cfg, db, BASIS)
-    erg = schreibe_ausgaben(cfg, zeilen, BASIS)
-    html = Path(erg["html"]).read_text(encoding="utf-8")
-    assert "Wohnmobil" in html and "Bearbeiter" not in html and "uebernehmen" not in html
-    assert render_html(cfg, zeilen, BASIS)[0].count("<tr") == html.count("<tr") > 0
-    assert set(erg) == {"html", "csv", "zaehl"}
+    ohne = Path(schreibe_ausgaben(cfg, zeilen, BASIS)["html"]).read_text(encoding="utf-8")
+    assert set(schreibe_ausgaben(cfg, zeilen, BASIS)) == {"html", "csv", "zaehl"}
+    a, b = zeilen[0]["a"]["id"], zeilen[1]["a"]["id"]
+    db.setze_status(a, "kontaktiert", text="x", nutzer_id=team.ids["Ben"])
+    db.uebernimm(b, team.ids["Carl"], NEUN)
+    sicht = lade_team_sicht(db, 0, jetzt=JETZT)
+    mit = Path(schreibe_ausgaben(cfg, zeilen, BASIS, team=sicht)["html"]).read_text(encoding="utf-8")          # dieselben Zeilen
+    assert sicht.objekt(zeilen[0])["zustand"] == "kontaktiert" and sicht.objekt(zeilen[1])["zustand"] == "reserviert"
+    assert _ohne_zeit(mit) == _ohne_zeit(ohne)
+    for wort in ("Bearbeiter", "Übernommen", "uebernehmen", "Reserviert"):
+        assert wort not in ohne and wort not in mit
+    assert render_html(cfg, zeilen, BASIS)[0].count("<tr") == ohne.count("<tr") > 0
+    assert len(zeilen) >= 20
+    for z in zeilen:                                                    # jedes bewertete Inserat steht im Report (Titel maskiert HTML-Zeichen)
+        assert z["a"]["url"] in ohne, z["a"]["id"]
 
 
 def test_bewerte_alle_liefert_dubletten_ids(cfg, db, importiert):

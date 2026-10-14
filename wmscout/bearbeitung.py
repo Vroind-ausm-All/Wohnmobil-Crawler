@@ -8,13 +8,15 @@ Zustände eines Inserats:
   reserviert       ein aktiver Kollege hat es übernommen, noch kein bestätigter Kontakt (läuft nach ``reservierung_tage`` ab)
   kontaktiert      der Kontakt wurde bestätigt (``kontaktiert_von``); läuft nie ab
   ohne_zuordnung   Altbestand: Status „kontaktiert“/„in Verhandlung“/„Besichtigung“, aber niemand zugeordnet
+  verwaist         Status wie oben, der Kontakt wurde bestätigt, der Bearbeiter ist aber deaktiviert (oder fehlt); übernehmbar wie
+                   ``ohne_zuordnung`` (Mitarbeiter per Übernehmen, Inhaber per Zuweisen), damit nichts liegen bleibt
 """
 from __future__ import annotations
 
 import re
 from datetime import datetime, timedelta
 
-FREI, RESERVIERT, KONTAKTIERT, OHNE_ZUORDNUNG = "frei", "reserviert", "kontaktiert", "ohne_zuordnung"
+FREI, RESERVIERT, KONTAKTIERT, OHNE_ZUORDNUNG, VERWAIST = "frei", "reserviert", "kontaktiert", "ohne_zuordnung", "verwaist"
 IN_ARBEIT = ("kontaktiert", "verhandlung", "besichtigung")      # Inserat-Status, die einen Kontakt voraussetzen
 OFFEN = ("neu", *IN_ARBEIT)                                      # nicht abgeschlossen (für „meine“ auf der Startseite)
 INHABER = "inhaber"
@@ -102,9 +104,11 @@ def halter(zeile: dict | None, grenze: str, aktive_ids) -> int | None:
 def zustand(zeile: dict | None, jetzt: datetime, reservierung_tage: int, aktive_ids) -> str:
     """``zeile``: Zeile aus ``bearbeitung`` (oder ``None``) plus ``status`` des Inserats (für den Altbestand)."""
     z = zeile or {}
+    grenze = ablauf_grenze(jetzt, reservierung_tage)
     if z.get("kontaktiert_von"):
-        return KONTAKTIERT
-    if halter(z, ablauf_grenze(jetzt, reservierung_tage), aktive_ids):
+        # Kontakt bestätigt: hält ihn niemand mehr (Bearbeiter deaktiviert) und ist das Inserat noch in Arbeit → verwaist
+        return KONTAKTIERT if halter(z, grenze, aktive_ids) or z.get("status") not in IN_ARBEIT else VERWAIST
+    if halter(z, grenze, aktive_ids):
         return RESERVIERT
     return OHNE_ZUORDNUNG if z.get("status") in IN_ARBEIT else FREI
 
@@ -201,7 +205,7 @@ class TeamSicht:
     @staticmethod
     def ist_frei(obj: dict) -> bool:
         """Niemand hält es: keine aktive Reservierung, kein bestätigter Kontakt, auch nicht über Dubletten."""
-        return obj["zustand"] in (FREI, OHNE_ZUORDNUNG) and not obj["dublette_von"]
+        return obj["zustand"] in (FREI, OHNE_ZUORDNUNG, VERWAIST) and not obj["dublette_von"]
 
     @staticmethod
     def ist_triviale_sicht(obj: dict) -> bool:
@@ -217,6 +221,23 @@ class TeamSicht:
             if d != anzeige_id and h is not None and h != self.ich_id:
                 return d, h
         return None
+
+    def kontaktierte_dublette(self, anzeige_id: str, dubletten, ziel_id: int | None) -> tuple[str, int] | None:
+        """(Dublette, Bearbeiter) einer bereits kontaktierten Dublette, die ein anderer aktiver Kollege als ``ziel_id`` bearbeitet:
+        Zuweisen und Erzwingen scheitern daran (erst dort zuweisen)."""
+        for d in dubletten:
+            h = self.halter(d)
+            if d != anzeige_id and h is not None and h != ziel_id and (self.zeilen.get(d) or {}).get("kontaktiert_von"):
+                return d, h
+        return None
+
+    def zuweisung_konflikt_text(self, anzeige_id: str, dubletten, ziel_id: int | None) -> str:
+        f = self.kontaktierte_dublette(anzeige_id, dubletten, ziel_id)
+        if not f:
+            return "Die Zuordnung hat sich gerade geändert – bitte erneut versuchen"
+        p = self.person(f[1])
+        return (f"Dublette {f[0]} ist bereits von {p['name']} ({p['kuerzel']}) kontaktiert – bitte zuerst dort zuweisen "
+                "(oder den Kontakt mit Status „offen“ zurücksetzen)")
 
     def konflikt_text(self, anzeige_id: str, dubletten=()) -> str:
         f = self.fremder_halter(anzeige_id, dubletten)
