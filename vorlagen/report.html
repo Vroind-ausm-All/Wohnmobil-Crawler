@@ -137,7 +137,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <div class="suchlauf">
       <span id="suchstatus" class="hinweis" aria-live="polite"></span>
       <button id="glocke" class="btn" title="Browser-Hinweis bei neuen Treffern" hidden>🔔 Hinweise an</button>
-      <button id="einlesen" class="btn" title="Im Browser gespeicherte Kleinanzeigen-Seiten (Strg+S) einlesen – ohne Internetabruf">⤓ Gespeicherte Seiten einlesen</button>
+      <button id="einlesen" class="btn" title="Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten (Strg+S) einlesen – ohne Internetabruf">⤓ Gespeicherte Seiten einlesen</button>
       <button id="suchen" class="btn">↻ Neue Anzeigen suchen</button>
     </div>
     {% endif %}
@@ -148,7 +148,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
   <ol class="anleitung">
     <li><b>Wohnmobil anklicken</b> – faire Bewertung und fertiges Anschreiben ansehen (Text änderbar)</li>
     <li><b>✉ Anschreiben</b> – Text ist kopiert, die Anzeige öffnet sich{% if app %}, Status wird gespeichert{% endif %}</li>
-    <li>Auf Kleinanzeigen <b>„Nachricht schreiben“</b> → <kbd>Strg</kbd>+<kbd>V</kbd> (Mac <kbd>⌘</kbd>+<kbd>V</kbd>) → Senden</li>
+    <li>In der Anzeige den Kontakt öffnen (Kleinanzeigen: <b>„Nachricht schreiben“</b> · mobile.de: <b>„E-Mail“/„Nachricht“</b>-Formular des Anbieters) → <kbd>Strg</kbd>+<kbd>V</kbd> (Mac <kbd>⌘</kbd>+<kbd>V</kbd>) → Senden</li>
     <li><b>Antwort bekommen?</b> Gegenangebot im Fahrzeugfenster eintragen → passende Antwort · keine Antwort → Filter <b>„Nachfassen“</b></li>
   </ol>
 
@@ -182,7 +182,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
 
   <div class="raster" id="liste">
   {% for z in zeilen %}{% set a = z.a %}{% set b = z.b %}
-    <article class="karte {{ b.ampel }}" tabindex="0" data-id="{{ a.id }}" data-url="{{ a.url }}" data-ampel="{{ b.ampel }}"
+    <article class="karte {{ b.ampel }}" tabindex="0" data-id="{{ a.id }}" data-url="{{ a.url }}" data-quelle="{{ a.quelle or 'kleinanzeigen' }}" data-ampel="{{ b.ampel }}"
          data-neu="{{ 1 if z.neu else 0 }}" data-bereit="{{ 1 if z.bereit else 0 }}" data-status="{{ a.status or 'neu' }}"
          data-verh="{{ b.verhaeltnis or 99 }}" data-pot="{{ b.potenzial or -999999 }}" data-preis="{{ a.preis or 0 }}"
          data-zeit="{{ a.erstmals_gesehen }}" data-entf="{{ a.entfernung_km if a.entfernung_km is not none else 99999 }}"
@@ -395,7 +395,8 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     t.classList.add('zeigen'); clearTimeout(toastTimer);
     toastTimer = setTimeout(function(){ t.classList.remove('zeigen'); }, rueckgaengig ? 9000 : (dauer || 5000));
   }
-  var HINWEIS = '  Auf Kleinanzeigen „Nachricht schreiben“ klicken, Strg+V, senden.';
+  var KONTAKT = {'mobile.de': 'Auf mobile.de das „E-Mail“/„Nachricht“-Formular des Anbieters öffnen', kleinanzeigen: 'Auf Kleinanzeigen „Nachricht schreiben“ klicken'};
+  function hinweisFuer(k){ return '  ' + (KONTAKT[k.dataset.quelle] || 'In der Anzeige den Kontakt zum Anbieter öffnen') + ', Strg+V, senden.'; }
   function senden(id, text, danach){
     var k = karte(id), ok = kopiere(text);
     window.open(k.dataset.url, '_blank', 'noopener');
@@ -408,7 +409,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     var vorher = k.dataset.status;
     senden(id, t.value, function(ok){
       speichere(id, 'kontaktiert', t.value, betragAus(t.value) || +k.dataset.erst || null);
-      toast(ok ? 'Text kopiert ✓' + HINWEIS : 'Kopieren ging nicht – bitte im Detailfenster den Text markieren und kopieren.',
+      toast(ok ? 'Text kopiert ✓' + hinweisFuer(k) : 'Kopieren ging nicht – bitte im Detailfenster den Text markieren und kopieren.',
             function(){ speichere(id, vorher === 'kontaktiert' ? 'neu' : vorher); });
     });
   }
@@ -605,7 +606,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
         .then(function(s){
           if(!s.dateien){
             fertig();
-            toast('Keine gespeicherten Seiten gefunden in ' + s.ordner + ' – Seite in Kleinanzeigen mit Strg+S als „Webseite, nur HTML“ in diesen Ordner speichern.');
+            toast('Keine gespeicherten Seiten gefunden in ' + s.ordner + ' – Seite (Kleinanzeigen oder mobile.de) mit Strg+S speichern: Kleinanzeigen als „Webseite, nur HTML“, mobile.de als „Webseite, komplett“, in diesen Ordner.');
             return;
           }
           var gelesen = s.dateien - s.unbekannt - s.fehlerhaft;

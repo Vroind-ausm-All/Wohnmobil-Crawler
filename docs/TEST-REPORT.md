@@ -4,6 +4,21 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P2-05b – mobile.de: gespeicherte Seiten einlesen (14.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q -p no:cacheprovider` (Orchestrator, nach Korrekturrunde 1) | **570 passed** |
+| `ruff check .` / `node --check mobil.js` | All checks passed! / ok |
+| QA-Runde 1: Feldvergleich aller 70 Trefferblöcke der 6 echten Seiten (unabhängiger Extraktor) | 0 Abweichungen |
+| QA-Runde 1: Datenschutz (41 Telefonnummern, 43 seller-IDs, 19 Händlertexte, Tracking) in DB/Report/CSV/API/Log | 0 Treffer |
+| QA-Runde 1: Kleinanzeigen-Regression (18 echte Seiten + Fixtures, Code vor/nach) | Hash identisch |
+| QA-Urteil Runde 1 | **ABLEHNUNG** (H1 Handy 404, H2 Fixtures, H3 Ausland) → Korrekturrunde 1 |
+| Agent nach Korrekturrunde 1: 6 echte Seiten | 65 Inserate, 24 privat, 41 gewerblich, 0 unbekannt; 2 Auslandsorte mit Hinweis; Fixture-Kombinationsscan 0 Treffer; 24 Mutanten erkannt |
+| QA-Runde 2, „Webseite, nur HTML“, Händler-Anzeigenseite, Browser-Klicktest | nicht geprüft |
+
+---
+
 ## P2-05 (Teil) – Hinweise statt Sperre, Anrede mit Verkäufername (14.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

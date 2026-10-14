@@ -41,7 +41,7 @@ Einrichtung (Nutzer anlegen, Tailscale, App auf den Startbildschirm): **[docs/HA
 |---|---|
 | `python scout.py app` | Browser-App: Wohnmobile anklicken, anschreiben, Status und Notizen speichern, Suchlauf starten |
 | `python scout.py lauf` | Crawlen → bewerten → Report, CSV, Anschreiben (+ Mail, falls aktiv) |
-| `python scout.py import` | Im Browser gespeicherte Kleinanzeigen-Seiten aus dem Ordner `import/` einlesen, bewerten, Report erzeugen (ohne Internet; anderer Ordner: `--ordner PFAD`) |
+| `python scout.py import` | Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten aus dem Ordner `import/` einlesen, bewerten, Report erzeugen (ohne Internet; anderer Ordner: `--ordner PFAD`) |
 | `python scout.py report` | Report neu erzeugen, z. B. nach Änderung der Kosten in `config.yaml` (ohne Internet) |
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --titel "Knaus Sky TI 650 MEG" --anschreiben` | Einzelfahrzeug durchrechnen und Anschreiben ausgeben (auch für Anfragen außerhalb von Kleinanzeigen; `--text` mit der Beschreibung berücksichtigt Ausstattung/Mängel) |
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --marktwert 44000` | mit eigenem Marktwert (z. B. aus mobile.de oder DAT) |
@@ -149,7 +149,7 @@ Du bekommst dann nur eine Mail, wenn neue Treffer mit Anschreiben dabei sind.
 3. **✉ Anschreiben** (auf der Karte oder im Fenster) → der Text liegt in der Zwischenablage, die Anzeige
    öffnet sich in einem neuen Tab und das Fahrzeug wird als „kontaktiert“ gespeichert (inkl. gesendetem
    Text; „Rückgängig“ im Hinweis unten).
-4. Auf Kleinanzeigen **„Nachricht schreiben“** → `Strg`+`V` → Senden.
+4. In der Anzeige den Kontakt öffnen – bei Kleinanzeigen **„Nachricht schreiben“**, bei mobile.de das **„E-Mail“/„Nachricht“-Formular** des Anbieters → `Strg`+`V` → Senden.
 
 **Gespeicherte Seiten einlesen:** Öffne eine Suchergebnisseite oder eine einzelne Anzeige auf Kleinanzeigen
 ganz normal im Browser, drücke `Strg`+`S` und speichere sie als „Webseite, nur HTML“ in den Ordner `import`
@@ -165,7 +165,12 @@ aus dem Internet geladen – weder Anzeigen hinter den Links noch Bilder (die mo
 In der mobile.de-Suche den Filter **„Privatanbieter“** setzen (linke Spalte „Anbieter“), dann stehen in der Liste nur private
 Verkäufer; jede Suchseite enthält höchstens 20 Treffer, weitere Seiten einzeln speichern. Die Treffer tragen als Nummer `md-<mobile.de-ID>`.
 Gesponserte Plätze („Gesponsert“) werden mitgelesen, weil es normale Anzeigen sind. Gewerbliche Anbieter („Gewerbe“, Händler mit
-Namen) werden als gewerblich erkannt und – wie bei Kleinanzeigen – nicht zum Anschreiben vorgeschlagen.
+Namen) werden als gewerblich erkannt und – wie bei Kleinanzeigen – nicht zum Anschreiben vorgeschlagen. Fehlt bei einem Treffer der
+Anbieterkasten, ist der Anbieter **unbekannt** (nicht „privat“): das Fahrzeug trägt den Hinweis „Anbieter unbekannt“, und beim Einlesen
+wird die Zahl gemeldet (über die Hälfte der Treffer: Seitenlayout vermutlich geändert). Es werden nur **Wohnmobile und Wohnwagen**
+eingelesen; Pkw-Treffer oder -Anzeigen (z. B. Kategorie „Limousine“) landen mit einer Meldung in `import/nicht_erkannt/` bzw. werden
+übersprungen und gemeldet. **Orte im Ausland** („SE-123 45 Ort“, „FR-75001 Paris“): keine Entfernung, Ampel höchstens gelb, Brief ohne Betrag
+und der Hinweis „Ausland – Abholung, Überführung und Zulassung prüfen“; mit `max_entfernung_km` > 0 werden sie nicht angeschrieben.
 
 Hinweise zum Einlesen:
 - Je Klick werden höchstens 25 Dateien (bzw. etwa 20 Sekunden lang) gelesen; den Rest liest der nächste Klick.

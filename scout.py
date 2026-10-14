@@ -4,7 +4,7 @@
   python scout.py app                       Browser-App: Wohnmobile anklicken und anschreiben
   python scout.py lauf                      Crawlen + bewerten + Report (+ Mail)
   python scout.py report                    Nur Report neu erzeugen (ohne Internet)
-  python scout.py import [--ordner PFAD]    Im Browser gespeicherte Kleinanzeigen-Seiten einlesen (ohne Internet)
+  python scout.py import [--ordner PFAD]    Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten einlesen (ohne Internet)
   python scout.py rechne --preis 32900 --ez 2016 --km 98000 --titel "Knaus Sky TI 650 MEG" [--anschreiben]
   python scout.py nutzer anlegen <Name> [--rolle inhaber]   Team-Zugang für Handy-App anlegen
   python scout.py sichern                   Datenbank (und Fotos) sichern -> daten/sicherungen
@@ -94,8 +94,8 @@ def cmd_import(cfg, db, args):
     stat = Importer(cfg, db).importiere_seiten(ordner)
     if not stat["dateien"]:
         print("Keine gespeicherten Seiten gefunden (.html/.htm).\n"
-              "So geht's: Suchergebnis- oder Anzeigenseite in Kleinanzeigen öffnen, Strg+S drücken und als "
-              "„Webseite, nur HTML“ in diesen Ordner speichern. Danach diesen Befehl erneut ausführen.")
+              "So geht's: Suchergebnis- oder Anzeigenseite in Kleinanzeigen oder mobile.de öffnen, Strg+S drücken und in diesen Ordner "
+              "speichern (Kleinanzeigen: „Webseite, nur HTML“; mobile.de: „Webseite, komplett“). Danach diesen Befehl erneut ausführen.")
         return
     print(f"{_anzahl(stat['dateien'], 'Datei', 'Dateien')} gelesen: {_anzahl(stat['suchseiten'], 'Suchseite', 'Suchseiten')}, "
           f"{_anzahl(stat['detailseiten'], 'Detailseite', 'Detailseiten')}, {stat['unbekannt']} nicht erkannt")
@@ -241,7 +241,7 @@ def main():
     a.add_argument("--kein-browser", action="store_true", help="Browser nicht automatisch öffnen")
     sub.add_parser("lauf", help="crawlen, bewerten, Report erzeugen")
     sub.add_parser("report", help="Report aus vorhandenen Daten neu erzeugen")
-    im = sub.add_parser("import", help="im Browser gespeicherte Kleinanzeigen-Seiten einlesen (ohne Internet)")
+    im = sub.add_parser("import", help="im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten einlesen (ohne Internet)")
     im.add_argument("--ordner", help="Ordner mit den gespeicherten Seiten (Standard: config.yaml → import → ordner)")
     r = sub.add_parser("rechne", help="Einzelfahrzeug durchrechnen")
     r.add_argument("--preis", type=int, help="Angebotspreis des Verkäufers")

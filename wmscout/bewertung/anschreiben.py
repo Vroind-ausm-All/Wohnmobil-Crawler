@@ -74,18 +74,33 @@ def hinweis_art_unbekannt(art: str | None = None) -> str:
     return HINWEIS_ART_UNBEKANNT
 
 
+HINWEIS_AUSLAND = "Ausland – Abholung, Überführung und Zulassung prüfen"
+HINWEIS_ANBIETER_UNBEKANNT = "Anbieter unbekannt (privat oder gewerblich) – bitte vor dem Anschreiben prüfen"
+
+
+def hinweis_ausland(land: str) -> str:
+    return (f"{HINWEIS_AUSLAND} (Standort {land}; Entfernung und Transportkosten nicht berechnet – Ampel höchstens gelb, Brief ohne Betrag)")
+
+
 def hinweise(a: dict, b=None) -> list[str]:
     """Hinweise zum Fahrzeug, die das Anschreiben NICHT sperren (Betreiberentscheidung 14.10.2026: möglichst jedes
     Wohnmobil anschreiben können). Bisher: Herkunft der Fahrzeugart bei importierten Seiten – ist sie nicht durch
     Art-Filter oder Detailseite bestätigt, steht sie nur im Titel bzw. fehlt, und die Bewertung rechnet mit der
     vorläufigen bzw. vorsichtig mit der Kandidaten-Art mit dem niedrigsten Max-EK (`b.art`, siehe
-    auswertung.bewerte_anzeige). Crawler-Funde (Art aus der Suche) und bestätigte Arten tragen keinen Hinweis."""
+    auswertung.bewerte_anzeige). Crawler-Funde (Art aus der Suche) und bestätigte Arten tragen keinen Hinweis.
+    Außerdem: Ort im Ausland (`a["ausland"]` – keine Entfernung, Transport ungewiss) und unbekannter Anbieter (`gewerblich` ist
+    None, z. B. fehlender Anbieterkasten der Trefferliste) – beides sperrt nichts, steht aber sichtbar am Fahrzeug."""
+    liste = []
     _, herkunft = import_art(a.get("suche"))
     if herkunft == VORLAEUFIG:
-        return [HINWEIS_ART_VORLAEUFIG]
-    if herkunft == UNBEKANNT:
-        return [hinweis_art_unbekannt(b.art if b else None)]
-    return []
+        liste.append(HINWEIS_ART_VORLAEUFIG)
+    elif herkunft == UNBEKANNT:
+        liste.append(hinweis_art_unbekannt(b.art if b else None))
+    if a.get("ausland"):
+        liste.append(hinweis_ausland(a["ausland"]))
+    if "gewerblich" in a and a["gewerblich"] is None:
+        liste.append(HINWEIS_ANBIETER_UNBEKANNT)
+    return liste
 
 
 def art_bestaetigt(a: dict) -> bool:
@@ -151,6 +166,8 @@ def sperrgrund(a: dict, cfg: dict) -> str | None:
         return "zu viele km"
     if f.get("max_entfernung_km") and (a.get("entfernung_km") or 0) > f["max_entfernung_km"]:
         return f"zu weit entfernt ({a['entfernung_km']} km)"
+    if f.get("max_entfernung_km") and a.get("ausland"):
+        return f"Ausland ({a['ausland']}) – Entfernung nicht berechenbar"
     text = " ".join(str(a.get(k) or "") for k in ("titel", "kurzbeschreibung", "beschreibung")).lower()
     for begriff in f["sperrbegriffe"]:
         if re.search(r"(?<!\w)" + re.escape(begriff.lower()), text):
@@ -196,9 +213,10 @@ def kontext(a: dict, b, cfg: dict) -> dict:
         marke=marke, modell=modell, art=art_einzahl, art_plural=art_plural,
         ez_jahr=ez, alter=alter, alters_stufe=stufe,
         km=a.get("km"), km_text=f"rund {tsd(round(a['km'], -3))} km" if a.get("km") else None,
-        preis=a.get("preis"), vb=bool(a.get("vb")), ort_kurz=re.sub(r"^\d{5}\s*", "", ort) or "Ihrer Nähe",
+        preis=a.get("preis"), vb=bool(a.get("vb")), ort_kurz=re.sub(r"^(?:[A-Z]{1,3}-)?\d[\d ]*[A-Z]{0,2}(?:\s+|$)", "", ort) or "Ihrer Nähe",
         # F14: bei unbekannter Fahrzeugart (Import) kein Betrag im Brief – er könnte z. B. für einen Wohnwagen viel zu hoch sein
-        mit_angebot=bool(b and b.sicherheit != "keine" and b.erstangebot and import_art(a.get("suche"))[1] != UNBEKANNT),
+        mit_angebot=bool(b and b.sicherheit != "keine" and b.erstangebot and import_art(a.get("suche"))[1] != UNBEKANNT
+                         and not a.get("ausland")),      # Ausland: Transportkosten nicht berechnet → kein Betrag im Brief
         erstangebot=b.erstangebot if b else None,
         max_ek=b.max_ek if b else None, ampel=b.ampel if b else "grau", preisbasis=preisbasis,
         pruefpunkte=pruefpunkte, unterlagen=aufzaehlung(unterlagen[:3]),

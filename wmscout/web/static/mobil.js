@@ -212,7 +212,7 @@
           return '<option value="' + n.id + '"' + (n.id === ich.id ? " selected" : "") + ">" + esc(n.name) + "</option>";
         }).join("") : '<option value="">ich</option>') + "</select></label>" +
         '<button class="knopf primaer voll" style="margin-top:12px" data-aktion="planen">Besichtigung planen</button></div>';
-      inhalt.dataset.id = f.id; inhalt.dataset.url = f.url; inhalt.dataset.erst = f.erstangebot || "";
+      inhalt.dataset.id = f.id; inhalt.dataset.url = f.url; inhalt.dataset.quelle = f.quelle || ""; inhalt.dataset.erst = f.erstangebot || "";
       inhalt.dataset.nfbetrag = f.nachfass_betrag || "";
       document.getElementById("notiz").onchange = function (e) { api("/api/notiz", { id: f.id, notiz: e.target.value }).then(function () { toast("Notiz gespeichert"); }); };
     });
@@ -489,7 +489,7 @@
       var p = a === "anschreiben"
         ? api("/api/status", { id: id, status: "kontaktiert", text: text, betrag: parseInt(inhalt.dataset.erst, 10) || null })
         : api("/api/nachgefasst", { id: id, text: text, betrag: parseInt(inhalt.dataset.nfbetrag, 10) || null });
-      p.then(function () { toast(ok ? "Text kopiert ✓ – in Kleinanzeigen einfügen und senden" : "Bitte Text markieren und kopieren"); });
+      p.then(function () { toast(ok ? "Text kopiert ✓ – in " + (inhalt.dataset.quelle === "mobile.de" ? "mobile.de im „E-Mail“/„Nachricht“-Formular" : inhalt.dataset.quelle === "kleinanzeigen" ? "Kleinanzeigen" : "der Anzeige") + " einfügen und senden" : "Bitte Text markieren und kopieren"); });
     } else if (t.hasAttribute("data-status")) {
       api("/api/status", { id: id, status: t.getAttribute("data-status") }).then(function () { toast("Status gespeichert"); fahrzeug(id); });
     } else if (a === "planen") {

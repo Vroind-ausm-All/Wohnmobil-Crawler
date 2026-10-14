@@ -17,11 +17,12 @@ from datetime import date
 from pathlib import Path
 
 from .datenbank import BESTAETIGT, IMPORT_SUCHE, VORLAEUFIG, Datenbank, import_art, import_suche
-from .eingang import (BegleitordnerFehler, SuchseitenArt, erkenne_seite, fahrzeugart_der_suchseite, haupttabelle_ids,
+from .eingang import (BegleitordnerFehler, SuchseitenArt, erkenne_seite_mit_hinweisen, fahrzeugart_der_suchseite, haupttabelle_ids,
                       html_dateien, lies_html, plattform_der_seite, verschiebe)
 from .normalisierung.fahrzeug import art_schluessel
 from .quellen import (STANDARD_QUELLE, Abruf, InseratNichtGefunden, NetzwerkFehler, Quelle, QuelleGesperrt,
                       QuellenFehler, Suchauftrag, erstelle_quelle)
+from .quellen.basis import ART_QUELLE_KATEGORIE
 
 log = logging.getLogger("scout")
 
@@ -33,6 +34,15 @@ LAYOUT_HINWEIS = ("{quelle}-Seite geladen, aber keine Anzeigen erkannt – vermu
 def _art(text: str | None) -> str | None:
     art = art_schluessel(text)
     return None if art == "Sonstige" else art
+
+
+DETAIL_OHNE_ID = {
+    "mobile.de": ("Anzeigenseite ohne Adresse der Anzeige (Anzeigen-ID nicht ermittelbar) – bitte die Anzeige noch einmal als "
+                  "„Webseite, komplett“ speichern (so lagen alle geprüften mobile.de-Seiten vor; „nur HTML“ wurde nicht geprüft); "
+                  "Datei verschoben nach nicht_erkannt/"),
+}
+DETAIL_OHNE_ID_STANDARD = ("Anzeigenseite ohne Adresse der Anzeige (Anzeigen-ID nicht ermittelbar) – bitte die Anzeige noch "
+                           "einmal als „Webseite, nur HTML“ speichern; Datei verschoben nach nicht_erkannt/")
 
 
 def _neue_suche(alt: str | None, art: str | None, herkunft: str | None) -> str:
@@ -171,16 +181,20 @@ class Importer:
             stat["dateien"] += 1
             try:
                 html = lies_html(datei)
-                art, inserate = erkenne_seite(html)
+                art, inserate, hinweise = erkenne_seite_mit_hinweisen(html)
                 if art in ("unbekannt", "detail_ohne_id"):
                     verschiebe(datei, ordner / "nicht_erkannt")
                     stat["unbekannt"] += 1
-                    melde(f"{datei.name}: " + (
-                        "Anzeigenseite ohne Adresse der Anzeige (Anzeigen-ID nicht ermittelbar) – bitte die Anzeige noch "
-                        "einmal als „Webseite, nur HTML“ speichern; Datei verschoben nach nicht_erkannt/"
-                        if art == "detail_ohne_id" else
-                        "keine Kleinanzeigen- oder mobile.de-Such- oder Detailseite erkannt – verschoben nach nicht_erkannt/"))
+                    if art == "detail_ohne_id":
+                        grund = DETAIL_OHNE_ID.get(plattform_der_seite(html), DETAIL_OHNE_ID_STANDARD)
+                    elif hinweise:
+                        grund = f"{'; '.join(hinweise)} – verschoben nach nicht_erkannt/"
+                    else:
+                        grund = "keine Kleinanzeigen- oder mobile.de-Such- oder Detailseite erkannt – verschoben nach nicht_erkannt/"
+                    melde(f"{datei.name}: {grund}")
                     continue
+                for h in hinweise:                                        # übersprungene Treffer, fehlende Anbieterkästen …
+                    stat["fehler"].append(f"{datei.name}: {h}")
                 # Art-Filter (art_s:) und Haupttabelle gibt es nur bei Kleinanzeigen; mobile.de nennt die Art je Treffer
                 mit_filter = art == "suche" and plattform_der_seite(html) == STANDARD_QUELLE
                 self._speichere_seite(art, inserate, stat, fahrzeugart_der_suchseite(html) if mit_filter else None,
@@ -227,15 +241,15 @@ class Importer:
                     neue_art, herkunft = SuchseitenArt().fuer_treffer(d.get("titel"), d.get("kurzbeschreibung"))
             elif neue_art := _art(self.db.detail_art(d["id"])):
                 herkunft = BESTAETIGT                           # schon eingelesene Anzeigenseite geht dem Filter vor
-            elif neue_art := _art(d.get("art")):
+            elif (d.get("details") or {}).get("art_quelle") == ART_QUELLE_KATEGORIE and (neue_art := _art(d.get("art"))):
                 herkunft = BESTAETIGT                           # Kategorie des Treffers selbst (mobile.de nennt sie je Treffer)
             else:
                 # Treffer außerhalb der Haupttabelle: wie eine Seite ohne Filter und ohne Hinweis
                 eigene = seitenart if d["id"] in (haupttreffer or ()) else SuchseitenArt()
                 neue_art, herkunft = eigene.fuer_treffer(d.get("titel"), d.get("kurzbeschreibung"))
             suche = _neue_suche(self.db.suche_zu(d["id"]), neue_art, herkunft)
-            if art == "detail" and not d.get("gewerblich"):
-                d["gewerblich"] = None            # kein Hinweis auf der Detailseite ≠ „privat“: Suchlistenwert bleibt
+            if art == "detail" and not d.get("gewerblich") and self.db.gewerblich_zu(d["id"]):
+                d["gewerblich"] = None            # kein Hinweis auf der Detailseite ≠ „privat“: gewerblicher Listenwert bleibt
             stat[self.db.speichere_treffer(d, suche)] += 1
             if art == "detail":
                 self.db.speichere_details(d["id"], d)

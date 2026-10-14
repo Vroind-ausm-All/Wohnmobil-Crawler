@@ -6,6 +6,36 @@ Wert „–“.
 
 ---
 
+## Phase 2 (vorgezogen) – mobile.de-Seiten einlesen (14.10.2026)
+
+### P2-05b – mobile.de: gespeicherte Such- und Anzeigenseiten einlesen · Status: REVIEW
+
+- **Anlass:** Betreiberwunsch „auf Masse gehen“, Beispielseiten von mobile.de geliefert (3 Such-, 3 Anzeigenseiten;
+  nicht im Repo).
+- **Verantwortliche Agenten:** `source-integrations` (Umsetzung, Korrekturrunde 1), `qa-security-reviewer` (Runde 1),
+  Orchestrator (Doku, ADR-022).
+- **Zweig/Commits:** `claude/phase2-mobilede` (Worktree): 45ae636 (Umsetzung), 2ce4649 (Merge Stand PR #4),
+  Korrekturrunde 1 (dieser Commit).
+- **Geänderte Dateien (Auswahl):** `wmscout/quellen/mobilede/` (neu), `wmscout/eingang/seiten.py`,
+  `wmscout/importer.py`, `wmscout/normalisierung/geo.py` (Ausland), `wmscout/bewertung/auswertung.py`/`anschreiben.py`
+  (Ausland-Hinweis, Anbieter unbekannt), `wmscout/datenbank.py` (`gewerblich` NULL = unbekannt), `wmscout/web/api.py`
+  (Bindestrich-IDs), `vorlagen/report.html`, `wmscout/web/static/mobil.js` (Hinweise je Plattform), `README.md`,
+  Tests `tests/test_mobilede.py`, `tests/test_ausland.py`, Fixtures `tests/seiten/mobilede/` (frei erfunden).
+- **Implementierte Funktionen:** mobile.de-Seiten im selben `import/`-Ordner; IDs `md-<Nummer>`, `quelle=mobile.de`;
+  privat/gewerblich/unbekannt; Kategorie als bestätigte Art (ADR-022); Pkw-Seiten werden abgewiesen; Auslandsorte
+  ohne Entfernung, Ampel höchstens gelb, Brief ohne Betrag; keine Telefonnummern, seller-IDs, Händlernamen, Tracking.
+- **Tests:** `pytest -q -p no:cacheprovider`, `ruff check .`, `node --check`, Mutationsproben, Lauf mit 6 echten Seiten.
+- **Testergebnis (Orchestrator):** **570 passed**, ruff grün, `node --check` ok. Agent: 24 Mutanten erkannt;
+  6 echte Seiten: 65 Inserate (24 privat, 41 gewerblich), 55 Arten bestätigt, 2 Auslandsorte mit Hinweis.
+- **Review-Ergebnis:** QA-Runde 1 (2ce4649): ABLEHNUNG ohne KRITISCH – Parser 0 Abweichungen auf 65 Inseraten,
+  Kleinanzeigen bitgleich, keine Datenlecks; aber H1 (Handy-App 404 bei `md-`-IDs), H2 (Fixtures mit echten
+  Merkmalskombinationen – liegen in 45ae636/2ce4649 auf GitHub; Squash-Merge empfohlen), H3 (Auslandsorte →
+  falsche/fehlende Entfernung), M1–M5, N1–N6 → in Korrekturrunde 1 bearbeitet; QA-Runde 2 steht aus.
+- **Bekannte Risiken:** „Webseite, nur HTML“, Händler-Anzeigenseite und andere Kategorien nicht mit echten Seiten
+  geprüft; Fehlklassifikation durch Anbieter; Rechner wertet unbekannten Anbieter in der Vergleichsbasis wie privat;
+  Verbraucher-AGB zum dauerhaften Speichern nicht zitiert (M5).
+- **Nächster sinnvoller Schritt:** QA-Runde 2; PR gegen den Integrationszweig erst nach dem Merge von PR #4.
+
 ## Phase 2 (vorgezogen) – Gespeicherte Seiten einlesen, wieder aufgenommen (14.10.2026)
 
 ### P2-05 (Teil) – Hinweise statt Sperre, Anrede mit Verkäufername · Status: REVIEW
