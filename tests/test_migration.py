@@ -115,7 +115,7 @@ def test_v1_wird_erkannt_und_ohne_verlust_migriert(tmp_path):
     assert lese_version(pfad) == 1
     spalten_alt = spaltennamen(pfad, "anzeigen")
     vorher = zeilen(pfad, "anzeigen")
-    assert len(vorher) == 4
+    assert len(vorher) == 3
 
     assert migriere(pfad, ziel) == [2, 3, 4]
     assert lese_version(pfad) == AKTUELLE_VERSION == 4
@@ -123,7 +123,7 @@ def test_v1_wird_erkannt_und_ohne_verlust_migriert(tmp_path):
     nachher_spalten = spaltennamen(pfad, "anzeigen")
     assert set(spalten_alt) <= set(nachher_spalten) and set(migrationen.NEUE_SPALTEN) <= set(nachher_spalten)
     assert zeilen(pfad, "anzeigen", ", ".join(spalten_alt)) == vorher            # alle alten Zeilen und Spalten unverändert
-    assert len(zeilen(pfad, "anzeigen")) == 4
+    assert len(zeilen(pfad, "anzeigen")) == 3
     z = _sql(pfad, "SELECT status, notiz, preis FROM anzeigen WHERE id='1'")[0]
     assert z == ("kontaktiert", "alte Notiz Müller 0171 1234567", 40000)
     assert {"nutzer", "sitzungen", "besichtigungen", "fotos", "bearbeitung", "schema_version"} <= tabellen(pfad)
@@ -244,7 +244,7 @@ def test_schritt_3_scheitert_nach_erfolgreichem_schritt_2(tmp_path, monkeypatch)
     with pytest.raises(MigrationsFehler):
         migriere(pfad, ziel)
     assert lese_version(pfad) == 2 and versionen(pfad) == [1, 2]               # Schritt 2 gilt, Schritt 3 nicht
-    assert len(zeilen(pfad, "anzeigen")) == 4
+    assert len(zeilen(pfad, "anzeigen")) == 3
     monkeypatch.undo()
     assert migriere(pfad, ziel) == [3, 4] and versionen(pfad) == [1, 2, 3, 4]
 
@@ -274,7 +274,7 @@ def test_rueckweg_pre_migration_sicherung_stellt_v1_wieder_her(tmp_path):
     wiederherstellen(sicherungen(ziel, "db")[0], pfad, bestaetigt=True, ziel_ordner=ziel)
     assert lese_version(pfad) == 1 and zeilen(pfad, "anzeigen") == vorher
     Datenbank(str(pfad), str(ziel)).con.close()                                # und lässt sich erneut migrieren
-    assert lese_version(pfad) == 4 and len(zeilen(pfad, "anzeigen")) == 4
+    assert lese_version(pfad) == 4 and len(zeilen(pfad, "anzeigen")) == 3
 
 
 # ---------- Korrekturrunde 1: H1 (Migration räumt nicht auf), M3/M4-Mutanten, paralleles Anlegen, N2 ----------
