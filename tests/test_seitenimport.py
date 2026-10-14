@@ -853,7 +853,7 @@ def test_hinweis_ist_in_report_und_api_sichtbar(server, cfg, db, ads, ordner):
     lies_ein(cfg, db, ordner, [("a.html", suchseite([hit])), ("b.html", suchseite([{**ads[2], **GUENSTIG}], canonical("alkoven")))])
     lokal = Client(server.server_address[1])
     html = lokal("GET", "/")[1]
-    assert html.count('<p class="hinweiszeile">⚠ Fahrzeugart unbekannt – bitte prüfen</p>') == 2          # Karte + Detailbereich
+    assert html.count(f'<p class="hinweiszeile">⚠ {UNBEKANNT_TEXT}</p>') == 2                             # Karte + Detailbereich
     assert "Fahrzeugart nicht bestätigt" not in html                                                      # bestätigte Art: kein Hinweis
     TeamSpeicher(db, ordner.parent / "fotos").nutzer_anlegen("Anna", "sicher1234", "inhaber")
     anna = Client(server.server_address[1]).anmelden("Anna")

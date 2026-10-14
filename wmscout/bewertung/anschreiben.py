@@ -8,11 +8,12 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from ..datenbank import STATUS, UNBEKANNT, VORLAEUFIG, import_art
-from ..normalisierung.fahrzeug import ART_PLURAL
+from ..normalisierung.fahrzeug import ART_PLURAL, fahrzeug_bezeichnung
 from ..normalisierung.person import profilname
 
 AMPEL_RANG = {"gruen": 0, "gelb": 1, "rot": 2, "grau": 3}
 ART_EINZAHL = {"Sonstige": "Wohnmobil"}
+ART_DATIV = {"Teilintegrierter": "Teilintegrierten", "Integrierter": "Integrierten"}     # „zu Ihrem Teilintegrierten“
 # Wertfaktoren, die für Pflege stehen → Formulierung im Anschreiben („Schön, dass Sie … erwähnen“)
 PFLEGE = {"Scheckheft": "das Scheckheft", "Dichtigkeitsprüfung": "die Dichtigkeitsprüfungen",
           "Garagen-/Hallenplatz": "den Hallen- bzw. Garagenstellplatz"}
@@ -58,21 +59,30 @@ def aufzaehlung(teile: list[str]) -> str:
     return ", ".join(teile[:-1]) + " und " + teile[-1]
 
 
-HINWEIS_ART_VORLAEUFIG = "Fahrzeugart nicht bestätigt – bitte prüfen"
-HINWEIS_ART_UNBEKANNT = "Fahrzeugart unbekannt – bitte prüfen"
+# Die Texte nennen, womit gerechnet wurde. Die vorläufige Art selbst steht in der Bewertung (b.art) direkt daneben;
+# der Text bleibt fest, damit Report, Handy-App und Tests ihn wiedererkennen.
+HINWEIS_ART_VORLAEUFIG = "Fahrzeugart nicht bestätigt (gerechnet mit der vorläufigen Art) – bitte prüfen"
+HINWEIS_ART_UNBEKANNT = "Fahrzeugart unbekannt (gerechnet ohne Art) – bitte prüfen"
 
 
 def hinweise(a: dict) -> list[str]:
     """Hinweise zum Fahrzeug, die das Anschreiben NICHT sperren (Betreiberentscheidung 14.10.2026: möglichst jedes
     Wohnmobil anschreiben können). Bisher: Herkunft der Fahrzeugart bei importierten Seiten – ist sie nicht durch
     Art-Filter oder Detailseite bestätigt, steht sie nur im Titel bzw. fehlt, und die Bewertung rechnet mit der
-    vorläufigen bzw. mit „Sonstige“. Crawler-Funde (Art aus der Suche) und bestätigte Arten tragen keinen Hinweis."""
+    vorläufigen bzw. mit „Sonstige“ (siehe auswertung.fuer_rechner). Crawler-Funde (Art aus der Suche) und bestätigte
+    Arten tragen keinen Hinweis."""
     _, herkunft = import_art(a.get("suche"))
     if herkunft == VORLAEUFIG:
         return [HINWEIS_ART_VORLAEUFIG]
     if herkunft == UNBEKANNT:
         return [HINWEIS_ART_UNBEKANNT]
     return []
+
+
+def art_bestaetigt(a: dict) -> bool:
+    """Darf der Brief die Fahrzeugart nennen? Nicht bei importierten Seiten mit vorläufiger oder unbekannter Art –
+    lieber neutral „Wohnmobil“ als dem Verkäufer eine falsche Art zu schreiben."""
+    return import_art(a.get("suche"))[1] not in (VORLAEUFIG, UNBEKANNT)
 
 
 def verkaeufer_name(a: dict) -> str | None:
@@ -82,9 +92,33 @@ def verkaeufer_name(a: dict) -> str | None:
     („HW“, „Privater Nutzer“) liefert der Parser nie, sie werden hier zur Sicherheit noch einmal geprüft."""
     try:
         roh = json.loads(a.get("details_json") or "{}").get("verkaeufer_name")
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError, TypeError):
         return None
-    return profilname(roh)
+    return profilname(roh) if isinstance(roh, str) else None      # keine Listen/Zahlen („['Max']“) als Anrede
+
+
+_ANREDE_TITEL = re.compile(r"(?i)(herr|hr|frau|fr|familie|fam)\b\.?\s*(.*)$")
+_TITEL_LANG = {"herr": "Herr", "hr": "Herr", "frau": "Frau", "fr": "Frau", "familie": "Familie", "fam": "Familie"}
+
+
+def anrede_name(roh) -> str | None:
+    """Profilname, vorsichtig für „Hallo <Name>,“ aufbereitet – oder None (dann „Hallo,“).
+
+    „Hr“/„Hr.“ → „Herr“, „Fr“/„Fr.“ → „Frau“, „Fam.“ → „Familie“; ein einzelnes kleingeschriebenes Wort (auch nach
+    dem Titel) bekommt einen großen Anfangsbuchstaben („volker“ → „Volker“, „hr wie“ → „Herr Wie“). Sonst bleibt der
+    Name unverändert – kein Raten von Geschlecht oder Schreibweise. Spitznamen mit Ziffern („camper77“) und ein Titel
+    ohne Namen („Herr“) ergeben keine Anrede."""
+    name = profilname(roh) if isinstance(roh, str) else None
+    if not name or re.search(r"\d", name):
+        return None
+    titel, rest = None, name
+    if m := _ANREDE_TITEL.match(name):
+        titel, rest = _TITEL_LANG[m.group(1).lower()], m.group(2).strip()
+    if not rest:
+        return None
+    if " " not in rest and rest.islower():
+        rest = "-".join(t[:1].upper() + t[1:] for t in rest.split("-"))
+    return f"{titel} {rest}" if titel else rest
 
 
 def sperrgrund(a: dict, cfg: dict) -> str | None:
@@ -126,22 +160,30 @@ def kontext(a: dict, b, cfg: dict) -> dict:
             if alter <= bis:
                 stufe, pruefpunkte, unterlagen = name, satz.format(ez=ez, alter=alter), liste
                 break
-    art = b.art if b else "Sonstige"
+    # Nicht bestätigte Art (Import) wird im Brief nicht genannt – auch nicht in der Preisbasis
+    art = (b.art if b else "Sonstige") if art_bestaetigt(a) else "Sonstige"
+    art_einzahl, art_plural = ART_EINZAHL.get(art, art), ART_PLURAL.get(art, "Wohnmobile")
     jt = cfg["rechner"]["vergleich_jahre_toleranz"]
     if b and b.vergleich_anzahl and ez:
-        preisbasis = (f"an vergleichbaren Angeboten ({ART_PLURAL.get(art, 'Wohnmobile')} der Baujahre "
-                      f"{ez - jt}–{ez + jt})")
+        preisbasis = f"an vergleichbaren Angeboten ({art_plural} der Baujahre {ez - jt}–{ez + jt})"
     elif ez:
-        preisbasis = f"am aktuellen Marktniveau für {ART_PLURAL.get(art, 'Wohnmobile')} aus {ez}"
+        preisbasis = f"am aktuellen Marktniveau für {art_plural} aus {ez}"
     else:
         preisbasis = "am aktuellen Marktniveau"
     ort = a.get("ort") or ""
     ausstattung = [n for n, w in (b.wertfaktoren if b else {}).items() if w > 0 and n not in PFLEGE and n != "Nichtraucher"]
     gepflegt = [satz for n, satz in PFLEGE.items() if b and (b.wertfaktoren or {}).get(n, 0) > 0]
+    marke, modell = a.get("marke"), a.get("modell")
+    fahrzeug = a.get("fahrzeug") or fahrzeug_bezeichnung(marke, modell)
+    # Marke + Modell höchstens einmal (Einleitung); danach nur Marke bzw. Art – erkannte Modelle sind nicht immer richtig
+    zum_fahrzeug = f"zum {fahrzeug}" if marke or modell else f"zu Ihrem {ART_DATIV.get(art, art_einzahl)}"
+    name = anrede_name(verkaeufer_name(a))
     return dict(
-        titel=a.get("titel") or "Ihr Wohnmobil", fahrzeug=a.get("fahrzeug") or "Wohnmobil",
-        marke=a.get("marke"), modell=a.get("modell"), art=ART_EINZAHL.get(art, art),
-        art_plural=ART_PLURAL.get(art, "Wohnmobile"), ez_jahr=ez, alter=alter, alters_stufe=stufe,
+        anrede=f"Hallo {name}," if name else "Hallo,", name=name,
+        titel=a.get("titel") or "Ihr Wohnmobil", fahrzeug=fahrzeug, zum_fahrzeug=zum_fahrzeug,
+        ihr_fahrzeug=f"Ihr {marke}" if marke else f"Ihr {art_einzahl}",
+        marke=marke, modell=modell, art=art_einzahl, art_plural=art_plural,
+        ez_jahr=ez, alter=alter, alters_stufe=stufe,
         km=a.get("km"), km_text=f"rund {tsd(round(a['km'], -3))} km" if a.get("km") else None,
         preis=a.get("preis"), vb=bool(a.get("vb")), ort_kurz=re.sub(r"^\d{5}\s*", "", ort) or "Ihrer Nähe",
         mit_angebot=bool(b and b.sicherheit != "keine" and b.erstangebot), erstangebot=b.erstangebot if b else None,

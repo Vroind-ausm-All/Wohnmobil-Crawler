@@ -5,7 +5,7 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from ..datenbank import STATUS, Datenbank
+from ..datenbank import STATUS, UNBEKANNT, Datenbank, import_art
 from ..normalisierung.fahrzeug import ergaenze_fahrzeug
 from ..normalisierung.geo import entfernung_km
 from .anschreiben import Anschreiber, euro, hinweise, sperrgrund
@@ -33,6 +33,18 @@ def finde_duplikate(alle: list[dict]) -> dict[str, list[dict]]:
     return duplikate
 
 
+def fuer_rechner(a: dict) -> dict:
+    """Fahrzeugdaten, wie der Rechner sie bekommt (QA H3): Bei importierten Inseraten mit UNBEKANNTER Fahrzeugart darf
+    der Titel die Art nicht bestimmen – sonst macht „Everest Minicamp, Camper, Wohnwagen, Motocrosshänger“ über den
+    ersten Art-Begriff einen Kastenwagen. Der Rechner (`art_schluessel(suche, art, titel)`) bleibt unverändert; er
+    bekommt eine Kopie ohne `art`/`titel`, der Titel wandert vor die Kurzbeschreibung, damit Ausstattung und Mängel
+    (Wertfaktoren) gleich erkannt werden. Ergebnis: gerechnet wird mit „Sonstige“. Vorläufige Arten bleiben (mit
+    Hinweis), alle anderen Anzeigen werden unverändert durchgereicht."""
+    if import_art(a.get("suche"))[1] != UNBEKANNT:
+        return a
+    return {**a, "art": None, "titel": None, "kurzbeschreibung": f"{a.get('titel') or ''} {a.get('kurzbeschreibung') or ''}"}
+
+
 def _datum(iso: str | None) -> str:
     return f"{iso[8:10]}.{iso[5:7]}." if iso and len(iso) >= 10 else "?"
 
@@ -58,8 +70,9 @@ def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None =
     standort = str(cfg["anschreiben"].get("plz") or "") or None
     alle = [ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()]
     duplikate = finde_duplikate(alle)
-    # Vergleichsbasis: von mehrfach eingestellten Fahrzeugen nur die aktuellste Anzeige
-    vergleich = [a for a in alle if not any((b.get("zuletzt_gesehen") or "", b["id"]) > (a.get("zuletzt_gesehen") or "", a["id"])
+    # Vergleichsbasis: von mehrfach eingestellten Fahrzeugen nur die aktuellste Anzeige – in Rechner-Sicht, damit Art
+    # und Rechner-Cache (je id) zur bewerteten Anzeige passen
+    vergleich = [fuer_rechner(a) for a in alle if not any((b.get("zuletzt_gesehen") or "", b["id"]) > (a.get("zuletzt_gesehen") or "", a["id"])
                                             for b in duplikate.get(a["id"], []))]
     zeilen = []
     for r in db.aktive():
@@ -81,7 +94,7 @@ def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None =
                              f"({STATUS.get(b0['status'], b0['status'])} am {_datum(b0.get('status_am') or b0.get('kontaktiert_am'))})")
         elif live_aelter:
             a["duplikat"] = f"doppelt eingestellt – ältere Anzeige {live_aelter[0]['id']} ist noch online"
-        b = rechner.bewerte(a, vergleich)
+        b = rechner.bewerte(fuer_rechner(a), vergleich)
         sperre = sperrgrund(a, cfg)
         # Text gibt es für jede nicht gesperrte Anzeige; „bereit“ sind nur die, deren Ampel passt.
         # `hinweise` (z. B. Fahrzeugart nicht bestätigt) sperren nichts, sie stehen sichtbar am Fahrzeug
