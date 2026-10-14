@@ -63,14 +63,14 @@ def aufzaehlung(teile: list[str]) -> str:
 # Bei unbekannter Art nennt der Text die Art, mit der vorsichtig gerechnet wurde; er beginnt immer gleich
 # (HINWEIS_ART_UNBEKANNT_ANFANG), damit Report, Handy-App und Tests ihn wiedererkennen.
 HINWEIS_ART_VORLAEUFIG = "Fahrzeugart nicht bestätigt (gerechnet mit der vorläufigen Art) – bitte prüfen"
-HINWEIS_ART_UNBEKANNT = "Fahrzeugart unbekannt (gerechnet ohne Art) – bitte prüfen"
+HINWEIS_ART_UNBEKANNT = "Fahrzeugart unbekannt (gerechnet ohne Art; Ampel höchstens gelb, Brief ohne Betrag) – bitte prüfen"
 HINWEIS_ART_UNBEKANNT_ANFANG = "Fahrzeugart unbekannt ("
 
 
 def hinweis_art_unbekannt(art: str | None = None) -> str:
     """„… (vorsichtig gerechnet als Wohnwagen) …“ bzw. ohne Art (`Sonstige`/None) HINWEIS_ART_UNBEKANNT."""
     if art and art != "Sonstige":
-        return f"Fahrzeugart unbekannt (vorsichtig gerechnet als {art}) – bitte prüfen"
+        return f"Fahrzeugart unbekannt (vorsichtig gerechnet als {art}; Ampel höchstens gelb, Brief ohne Betrag) – bitte prüfen"
     return HINWEIS_ART_UNBEKANNT
 
 
@@ -197,7 +197,9 @@ def kontext(a: dict, b, cfg: dict) -> dict:
         ez_jahr=ez, alter=alter, alters_stufe=stufe,
         km=a.get("km"), km_text=f"rund {tsd(round(a['km'], -3))} km" if a.get("km") else None,
         preis=a.get("preis"), vb=bool(a.get("vb")), ort_kurz=re.sub(r"^\d{5}\s*", "", ort) or "Ihrer Nähe",
-        mit_angebot=bool(b and b.sicherheit != "keine" and b.erstangebot), erstangebot=b.erstangebot if b else None,
+        # F14: bei unbekannter Fahrzeugart (Import) kein Betrag im Brief – er könnte z. B. für einen Wohnwagen viel zu hoch sein
+        mit_angebot=bool(b and b.sicherheit != "keine" and b.erstangebot and import_art(a.get("suche"))[1] != UNBEKANNT),
+        erstangebot=b.erstangebot if b else None,
         max_ek=b.max_ek if b else None, ampel=b.ampel if b else "grau", preisbasis=preisbasis,
         pruefpunkte=pruefpunkte, unterlagen=aufzaehlung(unterlagen[:3]),
         ausstattung=aufzaehlung(ausstattung[:3]), gepflegt=aufzaehlung(gepflegt),

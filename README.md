@@ -140,8 +140,9 @@ Hinweise zum Einlesen:
   Benachrichtigungs-Mail). Gerechnet wird so: **„nicht bestätigt“ mit der vorläufigen Art**; bei **„unbekannt“
   vorsichtig**: Der Scout rechnet ohne Art („Sonstige“) und mit jeder Art, die im Titel oder in der Kurzbeschreibung
   vorkommt, nimmt den **niedrigsten** Max-EK, zeigt die Spanne über alle Möglichkeiten und stuft die Sicherheit auf
-  „niedrig“. **Achtung:** Wohnwagen, deren Text kein Art-Wort enthält (z. B. nur „Knaus Südwind 580“), werden dabei wie
-  ein Wohnmobil gerechnet und können zu hoch bewertet sein – vor dem Anschreiben prüfen. Der Brief nennt bei nicht bestätigter oder unbekannter Art keine
+  „niedrig“. Weil Wohnwagen, deren Text kein Art-Wort enthält (z. B. nur „Knaus Südwind 580“), dabei wie ein Wohnmobil
+  gerechnet werden, gilt bei **unbekannter** Art: Ampel höchstens **gelb**, und der Brief nennt **keinen Betrag** (er
+  fragt nach Angaben). Vor dem Anschreiben die Art prüfen. Der Brief nennt bei nicht bestätigter oder unbekannter Art keine
   Fahrzeugart. Eine später eingelesene Detailseite oder ein Art-Filter bestätigt bzw. korrigiert die Art.
 - **Datenschutz:** `import/eingelesen/` enthält die vollständigen gespeicherten Seiten, auch Verkäuferangaben
   (Name, Ort, ggf. Telefonnummer). Das Programm löscht nichts automatisch – lösche die Dateien nach der Prüfung selbst.

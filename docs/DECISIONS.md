@@ -208,7 +208,7 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   nur beim Seitenimport für die Anrede in `details_json` gespeichert (keine Telefonnummer, keine Profil-ID); er steht
   danach auch im erzeugten Brief. Eine Löschfunktion folgt mit P1-14a.
 * **Folgen:** Viel mehr Fahrzeuge sind sofort anschreibbar. Max-EK kann bei falscher Art danebenliegen – der
-  Mitarbeiter prüft vor dem Absenden. Offen (F14): Wohnwagen ohne Art-Wort im Text werden wie Wohnmobile gerechnet; im
-  QA-Lauf stand ein echter Wohnwagen zunächst mit Max-EK 54.600 € statt 18.900 € auf Rang 3 – mit der vorsichtigen
-  Rechnung nur noch, wenn das Wort „Wohnwagen“ fehlt. Die übrigen Sperrgründe (gewerblich, Sperrbegriffe, Filter) folgen
+  Mitarbeiter prüft vor dem Absenden. Wohnwagen ohne Art-Wort im Text werden wie Wohnmobile gerechnet (QA: 10 der
+  Top 20 echter Daten); deshalb **Betreiberentscheidung F14 (14.10.2026): bei unbekannter Art Ampel höchstens „gelb“ und
+  Brief ohne Betrag**. Die Erkennung von Wohnwagen-Baureihen bleibt ein eigenes Paket. Die übrigen Sperrgründe (gewerblich, Sperrbegriffe, Filter) folgen
   als Hinweise in einem eigenen Paket. ADR-020 gilt nur noch für die Herkunftsregeln.

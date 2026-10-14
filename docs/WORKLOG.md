@@ -10,6 +10,10 @@ Wert „–“.
 
 ### P2-05 (Teil) – Hinweise statt Sperre, Anrede mit Verkäufername · Status: REVIEW
 
+- **F14 umgesetzt (Betreiberentscheidung 14.10.2026, Orchestrator):** Bei unbekannter Fahrzeugart Ampel höchstens
+  „gelb“ (`bewerte_anzeige`) und Brief ohne Betrag (`kontext`, `mit_angebot`); Hinweistext nennt beides. Zwei neue
+  Tests, beide Änderungen per Mutationsprobe in einer Kopie erkannt. PR #4 während der Änderung als Entwurf markiert.
+
 - **QA-Runde 7 (Stand be0afd2): FREIGABE MIT AUFLAGEN** (für den PR, nicht für den Merge). 374 passed; 18 echte Seiten
   identisch zur Agentenanalyse; nicht bestätigt ohne Hinweis 0; künstliche Cache-id in keiner Ausgabe; Rechner
   unverändert; Mutationen 24 von 28 erkannt.
