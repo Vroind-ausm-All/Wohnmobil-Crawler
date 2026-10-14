@@ -153,6 +153,19 @@ def _kopiere_db(quelle: Path, ziel: Path):
         raise SicherungsFehler(f"{quelle.name} lässt sich nicht lesen/kopieren ({e})") from e
 
 
+def _ersetze(quelle: Path, ziel: Path, versuche: int = 10, pause: float = 0.2):
+    """``os.replace`` mit kurzen Wiederholungen: Unter Windows halten Virenscanner oder Indexdienst frisch geschriebene
+    Dateien oft einen Moment fest („Zugriff verweigert“). Bleibt der Fehler, wird er weitergereicht."""
+    for versuch in range(versuche):
+        try:
+            os.replace(quelle, ziel)
+            return
+        except PermissionError:
+            if versuch == versuche - 1:
+                raise
+            time.sleep(pause)
+
+
 def _pruefe_sperre(db_pfad: Path, timeout: float):
     """Technische Sperrprüfung: Läuft noch ein *aktiver Schreibvorgang* (App, Suchlauf, geplante Aufgabe), bricht die
     Wiederherstellung ab. Eine geöffnete, gerade ruhende App erkennt sie nicht – deshalb alles vorher beenden."""
@@ -249,9 +262,9 @@ def sichere(db_pfad: str | Path, ziel_ordner: str | Path, foto_ordner: str | Pat
             _kopiere_db(db_pfad, teil_db)
             _integritaet(teil_db, f"Kopie von {db_pfad.name}")
             if foto_ordner and _zippe_fotos(Path(foto_ordner), teil_foto):
-                os.replace(teil_foto, foto_ziel)
+                _ersetze(teil_foto, foto_ziel)
                 foto_gesetzt = True
-            os.replace(teil_db, ziel)
+            _ersetze(teil_db, ziel)
         except BaseException:
             _entferne_still(teil_db)                         # nur eigene Dateien: Namen sind reserviert bzw. tragen eine Kennung
             _entferne_still(teil_foto)
@@ -378,7 +391,7 @@ def wiederherstellen(sicherung: str | Path, db_pfad: str | Path, bestaetigt: boo
         for endung in ("-wal", "-shm", "-journal"):
             _entferne_still(db_pfad.with_name(db_pfad.name + endung))
         try:
-            os.replace(teil, db_pfad)
+            _ersetze(teil, db_pfad)
         except PermissionError as e:
             raise SicherungsFehler(f"Datenbank ist noch in Benutzung ({e}). App, Suchlauf und geplante Aufgaben beenden "
                                    "und erneut versuchen.") from e

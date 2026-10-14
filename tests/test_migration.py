@@ -10,6 +10,18 @@ from wmscout.datenbank import Datenbank
 from wmscout.migrationen import AKTUELLE_VERSION, MigrationsFehler, lese_version, migriere
 from wmscout.sicherung import SicherungsFehler, sichere, sicherungen, wiederherstellen
 
+
+def _sql(pfad, befehl, *param):
+    """SQL ausführen und die Verbindung sofort schließen (unter Windows sperrt eine offene Verbindung die Datei)."""
+    con = sqlite3.connect(pfad)
+    try:
+        zeilen = con.execute(befehl, param).fetchall()
+        con.commit()
+        return zeilen
+    finally:
+        con.close()
+
+
 # Stand vor Phase 1, unabhängig von migrationen.py nachgebaut (damit der Test den Altbestand wirklich abbildet)
 SCHEMA_V2 = """
 CREATE TABLE anzeigen (
@@ -112,7 +124,7 @@ def test_v1_wird_erkannt_und_ohne_verlust_migriert(tmp_path):
     assert set(spalten_alt) <= set(nachher_spalten) and set(migrationen.NEUE_SPALTEN) <= set(nachher_spalten)
     assert zeilen(pfad, "anzeigen", ", ".join(spalten_alt)) == vorher            # alle alten Zeilen und Spalten unverändert
     assert len(zeilen(pfad, "anzeigen")) == 3
-    z = sqlite3.connect(pfad).execute("SELECT status, notiz, preis FROM anzeigen WHERE id='1'").fetchone()
+    z = _sql(pfad, "SELECT status, notiz, preis FROM anzeigen WHERE id='1'")[0]
     assert z == ("kontaktiert", "alte Notiz Müller 0171 1234567", 40000)
     assert {"nutzer", "sitzungen", "besichtigungen", "fotos", "bearbeitung", "schema_version"} <= tabellen(pfad)
     assert spaltennamen(pfad, "bearbeitung") == ["anzeige_id", "bearbeiter_id", "uebernommen_am", "kontaktiert_von", "kontaktiert_am"]
@@ -120,7 +132,7 @@ def test_v1_wird_erkannt_und_ohne_verlust_migriert(tmp_path):
     # Sicherung vor der Migration existiert, ist heil und enthält den Stand von Version 1
     kopie = sicherungen(ziel, "alt")
     assert len(kopie) == 1 and "vor-v3" in kopie[0].name
-    assert sqlite3.connect(kopie[0]).execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert _sql(kopie[0], "PRAGMA integrity_check")[0][0] == "ok"
     assert lese_version(kopie[0]) == 1 and zeilen(kopie[0], "anzeigen") == vorher
 
 
@@ -135,8 +147,8 @@ def test_v2_wird_erkannt_und_ohne_verlust_migriert(tmp_path):
     assert versionen(pfad) == [2, 3]
     for t, alt in vorher.items():
         assert zeilen(pfad, t) == alt, t                                        # inkl. kontaktiert_am, Texte, Preise, Team
-    z = sqlite3.connect(pfad).execute("SELECT kontaktiert_am, anschreiben_text, angebot_betrag, status, notiz, quelle "
-                                      "FROM anzeigen WHERE id='1'").fetchone()
+    z = _sql(pfad, "SELECT kontaktiert_am, anschreiben_text, angebot_betrag, status, notiz, quelle "
+                                      "FROM anzeigen WHERE id='1'")[0]
     assert z == ("2026-01-05T09:00:00", "Hallo Herr Müller", 36000, "kontaktiert", "alte Notiz Müller 0171 1234567", "kleinanzeigen")
     assert lese_version(sicherungen(ziel, "heute")[0]) == 2
 
@@ -153,7 +165,7 @@ def test_teilweise_ergaenzte_datenbank_gilt_als_v1_und_wird_vervollstaendigt(tmp
     assert lese_version(pfad) == 1
     assert migriere(pfad, tmp_path / "s") == [2, 3]
     assert set(migrationen.NEUE_SPALTEN) <= set(spaltennamen(pfad, "anzeigen"))
-    assert sqlite3.connect(pfad).execute("SELECT bild FROM anzeigen WHERE id='2'").fetchone() == ("b.jpg",)
+    assert _sql(pfad, "SELECT bild FROM anzeigen WHERE id='2'")[0] == ("b.jpg",)
 
 
 @pytest.mark.parametrize("baue", [baue_v1, baue_v2])
@@ -460,5 +472,5 @@ def test_f2_zwei_echte_prozesse_gleichzeitig_auf_altbestand_kein_abbruch_genau_e
         assert versionen(pfad) == [2, 3]
         assert {t: zeilen(pfad, t) for t in vorher} == vorher                                      # nichts verloren
         for s in sicherungen(ziel, "r" + str(runde)):
-            assert sqlite3.connect(s).execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+            assert _sql(s, "PRAGMA integrity_check")[0][0] == "ok"
         assert not [p for p in ziel.iterdir() if p.name.startswith(".")]                           # keine Arbeits-/Reservierungsreste

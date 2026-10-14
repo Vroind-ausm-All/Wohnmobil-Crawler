@@ -44,6 +44,9 @@ Wert „–“.
 - **Bekannte Risiken:** Windows und Netzlaufwerke nicht real geprüft; Sperrprüfung erkennt nur aktive
   Schreibvorgänge (App vorher beenden; echte Laufsperre mit P1-04); Sicherungen enthalten personenbezogene Daten
   (Löschfristen mit P1-14a).
+- **CI Windows (PR #5):** 7 Tests rot – offene SQLite-Verbindungen in Tests sperrten unter Windows die Datei, ein
+  Testordner enthielt `?`. Behoben (Tests schließen Verbindungen; `_ersetze` wiederholt `os.replace` bei kurzzeitiger
+  Sperre durch Virenscanner/Indexdienst, danach Meldung „in Benutzung“; zwei neue Tests). Lokal 184 passed.
 - **Backlog aus QA-Runde 3:** N-2 verwaiste `-journal`-Begleitdateien von Arbeitskopien; N-3 Meldung bei
   Schreibschutz; N-4 Doppelfehler im Fotoschritt; N-5 Tests für `ordner: ""`, Foto-`.teil` im Fehlerpfad,
   ZIP_DEFLATED-Fehler, CLI-Hinweis `--ohne-fotos`; N-6 `\\?\unc\` in Kleinschreibung.

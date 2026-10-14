@@ -16,6 +16,18 @@ from wmscout.datenbank import Datenbank
 from wmscout.sicherung import SicherungsFehler, oeffne_lesend, pruefe_behalten, sicherungen, sichere, wiederherstellen
 from wmscout.team import TeamSpeicher
 
+
+def _sql(pfad, befehl, *param):
+    """SQL ausführen und die Verbindung sofort schließen (unter Windows sperrt eine offene Verbindung die Datei)."""
+    con = sqlite3.connect(pfad)
+    try:
+        zeilen = con.execute(befehl, param).fetchall()
+        con.commit()
+        return zeilen
+    finally:
+        con.close()
+
+
 JPEG = b"\xff\xd8\xff\xe0" + b"0" * 100
 
 
@@ -56,7 +68,7 @@ def test_sicherung_und_wiederherstellung_identisch(bestand):
 
     kopie = sichere(pfad, ziel, fotos)
     assert kopie.is_file() and kopie.with_name(kopie.name[:-7] + ".fotos.zip").is_file()
-    assert sqlite3.connect(kopie).execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert _sql(kopie, "PRAGMA integrity_check")[0][0] == "ok"
     assert abbild(kopie) == vorher
 
     # Datenbank verändern und Fotos verlieren
@@ -90,7 +102,7 @@ def test_wiederherstellung_nach_beschaedigung_der_datenbank(bestand):
 def test_ohne_bestaetigung_keine_wiederherstellung(bestand):
     pfad, fotos, ziel = bestand
     kopie = sichere(pfad, ziel, fotos)
-    sqlite3.connect(pfad).execute("DELETE FROM anzeigen").connection.commit()
+    _sql(pfad, "DELETE FROM anzeigen")
     geaendert = abbild(pfad)
     with pytest.raises(SicherungsFehler, match="--bestaetigt"):
         wiederherstellen(kopie, pfad, bestaetigt=False, ziel_ordner=ziel, foto_ordner=fotos)
@@ -165,14 +177,14 @@ def test_cli_sichern_und_wiederherstellen(cfg, tmp_path):
     assert r.returncode == 0, r.stderr
     kopie = sicherungen(tmp_path / "sich", "anzeigen")[0]
     assert kopie.name in r.stdout
-    sqlite3.connect(cfg["ausgabe"]["datenbank"]).execute("DELETE FROM anzeigen").connection.commit()
+    _sql(cfg["ausgabe"]["datenbank"], "DELETE FROM anzeigen")
 
     r = _scout(cfg, tmp_path, "wiederherstellen", kopie.name)
     assert r.returncode != 0 and "--bestaetigt" in (r.stdout + r.stderr)
-    assert sqlite3.connect(cfg["ausgabe"]["datenbank"]).execute("SELECT COUNT(*) FROM anzeigen").fetchone()[0] == 0
+    assert _sql(cfg["ausgabe"]["datenbank"], "SELECT COUNT(*) FROM anzeigen")[0][0] == 0
     r = _scout(cfg, tmp_path, "wiederherstellen", kopie.name, "--bestaetigt")
     assert r.returncode == 0, r.stderr
-    assert sqlite3.connect(cfg["ausgabe"]["datenbank"]).execute("SELECT titel FROM anzeigen").fetchall() == [("Hymer",)]
+    assert _sql(cfg["ausgabe"]["datenbank"], "SELECT titel FROM anzeigen") == [("Hymer",)]
 
 
 # ---------- Korrekturrunde 1: K1 (Quelle darf nie verschwinden), M1-M4, N1, Mutationslücken ----------
@@ -216,7 +228,7 @@ def test_k1_aelteste_sicherung_bei_voller_aufbewahrung_wird_zurueckgespielt(best
     erg = wiederherstellen(aelteste, pfad, bestaetigt=True, ziel_ordner=ziel, foto_ordner=fotos, behalten=3)
     assert aelteste.is_file() and aelteste.with_name(aelteste.name[:-7] + ".fotos.zip").is_file()    # Quelle bleibt erhalten
     assert abbild(pfad) == stand0 and "stand0" in str(abbild(pfad)["anzeigen"])                       # und ist wirklich eingespielt
-    assert abbild(pfad)["nutzer"] and sqlite3.connect(pfad).execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert abbild(pfad)["nutzer"] and _sql(pfad, "PRAGMA integrity_check")[0][0] == "ok"
     assert erg.sicherung_vorher.is_file() and "stand2" in str(abbild(erg.sicherung_vorher)["anzeigen"])
     uebrig = sicherungen(ziel, "anzeigen")
     assert uebrig == [*liste, erg.sicherung_vorher]                                                 # 3 neueste (voll) + geschützte Quelle
@@ -342,7 +354,7 @@ def test_m2_reste_der_alten_datenbank_werden_erst_beim_austausch_entfernt(bestan
         r.write_bytes(b"rest der alten datenbank")
     wiederherstellen(kopie, pfad, bestaetigt=True, ziel_ordner=ziel)
     assert not any(r.exists() for r in reste)                                    # M12: nach dem Austausch passt kein Rest zur neuen DB
-    assert sqlite3.connect(pfad).execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert _sql(pfad, "PRAGMA integrity_check")[0][0] == "ok"
 
 
 def _foto_zip_ersetzen(kopie, eintraege: dict[str, bytes]):
@@ -410,7 +422,7 @@ def test_m4_fotoschritt_scheitert_meldet_klar_und_datenbank_bleibt_wiederhergest
     pfad, fotos, ziel = bestand
     kopie = sichere(pfad, ziel, fotos)
     vorher = abbild(pfad)
-    sqlite3.connect(pfad).execute("DELETE FROM anzeigen").connection.commit()
+    _sql(pfad, "DELETE FROM anzeigen")
     fotos_jetzt = fotos_inhalt(fotos)
     echt = pathlib.Path.rename
 
@@ -490,7 +502,7 @@ def test_n1_cli_meldet_fehler_ohne_traceback(cfg, tmp_path):
     kaputt.write_bytes(b"kein sqlite" * 300)
     r = _scout(cfg, tmp_path, "wiederherstellen", str(kaputt), "--bestaetigt")
     assert r.returncode != 0 and "Traceback" not in r.stderr and "kaputt.sqlite" in r.stderr
-    assert sqlite3.connect(cfg["ausgabe"]["datenbank"]).execute("SELECT COUNT(*) FROM anzeigen").fetchone()[0] == 1
+    assert _sql(cfg["ausgabe"]["datenbank"], "SELECT COUNT(*) FROM anzeigen")[0][0] == 1
 
 
 def test_m12_reste_einer_defekten_datenbank_werden_beim_austausch_entfernt(bestand):
@@ -592,7 +604,7 @@ def test_f2_gleiche_sekunde_zweite_sicherung_waehrend_der_ersten_bekommt_eigenen
     assert sorted(p.name for p in sicherungen(ziel, "anzeigen")) == sorted([erste.name, zweite.name])
     for k in (erste, zweite):
         assert k.with_name(k.name[:-7] + ".fotos.zip").is_file()
-        assert sqlite3.connect(k).execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert _sql(k, "PRAGMA integrity_check")[0][0] == "ok"
     assert not [p for p in ziel.iterdir() if p.name.startswith(".")]          # keine .teil-/Reservierungsreste
 
 
@@ -676,7 +688,7 @@ def test_f3_ohne_fotos_spielt_nur_die_datenbank_zurueck(bestand, tmp_path):
     kopie = sichere(pfad, ziel, fotos)
     stand = abbild(kopie)
     _zerstoere_archiv(kopie, "abgeschnitten")
-    sqlite3.connect(pfad).execute("DELETE FROM anzeigen").connection.commit()
+    _sql(pfad, "DELETE FROM anzeigen")
     fotos_vorher = fotos_inhalt(fotos)
     erg = wiederherstellen(kopie, pfad, bestaetigt=True, ziel_ordner=ziel, foto_ordner=fotos, mit_fotos=False)
     assert abbild(pfad) == stand and fotos_inhalt(fotos) == fotos_vorher
@@ -695,13 +707,13 @@ def test_f3_cli_beschaedigtes_archiv_ohne_traceback_und_ausweg_ohne_fotos(cfg, t
     assert _scout(cfg, tmp_path, "sichern").returncode == 0
     kopie = sicherungen(tmp_path / "sich", "anzeigen")[0]
     _zerstoere_archiv(kopie, "abgeschnitten")
-    sqlite3.connect(db_pfad).execute("DELETE FROM anzeigen").connection.commit()
+    _sql(db_pfad, "DELETE FROM anzeigen")
     r = _scout(cfg, tmp_path, "wiederherstellen", kopie.name, "--bestaetigt")
     assert r.returncode != 0 and "Traceback" not in r.stderr and "--ohne-fotos" in r.stderr, r.stderr
-    assert sqlite3.connect(db_pfad).execute("SELECT COUNT(*) FROM anzeigen").fetchone()[0] == 0     # nichts verändert
+    assert _sql(db_pfad, "SELECT COUNT(*) FROM anzeigen")[0][0] == 0     # nichts verändert
     r = _scout(cfg, tmp_path, "wiederherstellen", kopie.name, "--bestaetigt", "--ohne-fotos")
     assert r.returncode == 0, r.stderr
-    assert sqlite3.connect(db_pfad).execute("SELECT titel FROM anzeigen").fetchall() == [("Hymer",)]
+    assert _sql(db_pfad, "SELECT titel FROM anzeigen") == [("Hymer",)]
     assert fotos_inhalt(fotos) == {"a.jpg": JPEG} and not list(tmp_path.glob("fotos.alt-*"))
 
 
@@ -709,7 +721,7 @@ def test_f4_scheitert_schon_das_umbenennen_des_alten_fotoordners_verweist_die_me
     pfad, fotos, ziel = bestand
     kopie = sichere(pfad, ziel, fotos)
     vorher = abbild(pfad)
-    sqlite3.connect(pfad).execute("DELETE FROM anzeigen").connection.commit()
+    _sql(pfad, "DELETE FROM anzeigen")
     fotos_jetzt = fotos_inhalt(fotos)
     echt = pathlib.Path.rename
 
@@ -741,14 +753,22 @@ def test_f5_datei_uri_ohne_authority_und_prozentkodiert(pfad, erwartet):
 
 
 def test_f5_uri_funktioniert_mit_sqlite_auch_mit_doppeltem_schraegstrich_und_sonderzeichen(tmp_path):
-    ordner = tmp_path / "a b#c?d%e"
+    ordner = tmp_path / ("a b#c%e" if os.name == "nt" else "a b#c?d%e")              # „?“ ist unter Windows im Namen verboten
     ordner.mkdir()
     db = ordner / "x y.sqlite"
     sqlite3.connect(db).execute("CREATE TABLE t (a)").connection.close()
-    assert oeffne_lesend(db).execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0] == 1
+    con = oeffne_lesend(db)
+    try:
+        assert con.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0] == 1
+    finally:
+        con.close()
     doppelt = PurePosixPath("/" + db.resolve().as_posix())                       # "//tmp/..." entspricht der UNC-Form file:////server/...
     assert modul.datei_uri(doppelt).startswith("file:////")
-    assert sqlite3.connect(modul.datei_uri(doppelt, "?mode=ro"), uri=True).execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0] == 1
+    con = sqlite3.connect(modul.datei_uri(doppelt, "?mode=ro"), uri=True)
+    try:
+        assert con.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0] == 1
+    finally:
+        con.close()
     with pytest.raises(sqlite3.Error, match="authority"):                        # die bisherige Form von Path.as_uri() bei UNC
         sqlite3.connect("file://server/share/x.sqlite?mode=ro", uri=True)
 
@@ -926,3 +946,44 @@ def test_f9_rohkopie_und_reste_namen_sind_vor_dem_kopieren_belegt(bestand, monke
     monkeypatch.setattr(modul.shutil, "copy2", copy2)
     wiederherstellen(kopie, pfad, bestaetigt=True, ziel_ordner=ziel, foto_ordner=fotos)
     assert len(belegt) == 2 and all(belegt)                                           # -journal-Rest und Rohkopie
+
+
+def test_windows_kurz_gesperrte_datei_wird_nach_wiederholung_ersetzt(bestand, monkeypatch):
+    """Virenscanner/Indexdienst halten frisch geschriebene Dateien unter Windows kurz fest („Zugriff verweigert“)."""
+    pfad, fotos, ziel = bestand
+    kopie = sichere(pfad, ziel, fotos)
+    stand = abbild(kopie)
+    _sql(pfad, "DELETE FROM anzeigen")
+    echt_replace, fehler = os.replace, {"rest": 2}
+
+    def replace(quelle, ziel_):
+        if fehler["rest"] and str(ziel_) == str(pfad):
+            fehler["rest"] -= 1
+            raise PermissionError("simuliert: Zugriff verweigert")
+        return echt_replace(quelle, ziel_)
+
+    monkeypatch.setattr(modul.os, "replace", replace)
+    monkeypatch.setattr(modul.time, "sleep", lambda s: None)
+    wiederherstellen(kopie, pfad, bestaetigt=True, ziel_ordner=ziel, foto_ordner=fotos)
+    assert fehler["rest"] == 0 and abbild(pfad) == stand
+
+
+def test_windows_dauerhaft_gesperrte_datei_meldet_in_benutzung_ohne_aenderung(bestand, monkeypatch):
+    pfad, fotos, ziel = bestand
+    kopie = sichere(pfad, ziel, fotos)
+    _sql(pfad, "DELETE FROM anzeigen")
+    vorher = abbild(pfad)
+    echt_replace, versuche = os.replace, []
+
+    def replace(quelle, ziel_):
+        if str(ziel_) == str(pfad):
+            versuche.append(1)
+            raise PermissionError("simuliert: Zugriff verweigert")
+        return echt_replace(quelle, ziel_)
+
+    monkeypatch.setattr(modul.os, "replace", replace)
+    monkeypatch.setattr(modul.time, "sleep", lambda s: None)
+    with pytest.raises(SicherungsFehler, match="in Benutzung"):
+        wiederherstellen(kopie, pfad, bestaetigt=True, ziel_ordner=ziel, foto_ordner=fotos)
+    assert len(versuche) == 10 and abbild(pfad) == vorher
+    assert not list(pfad.parent.glob(".*.wiederherstellung.teil"))
