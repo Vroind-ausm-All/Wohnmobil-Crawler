@@ -194,7 +194,9 @@ def hash_datei(pfad) -> str:
 
 
 def dateien(ordner) -> set[str]:
-    return {p.relative_to(ordner).as_posix() for p in ordner.rglob("*")} if ordner.exists() else set()
+    # -wal/-shm sind Arbeitsdateien von SQLite im WAL-Modus (entstehen beim Öffnen, verschwinden mit der letzten Verbindung)
+    return ({p.relative_to(ordner).as_posix() for p in ordner.rglob("*") if not p.name.endswith(("-wal", "-shm"))}
+            if ordner.exists() else set())
 
 
 def beschaedige_index(pfad):

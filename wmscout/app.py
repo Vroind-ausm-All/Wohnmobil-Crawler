@@ -20,7 +20,7 @@ from .ausgabe import schreibe_ausgaben
 from .benachrichtigung import sende_mail
 from .bearbeitung import reservierung_tage
 from .bewertung.auswertung import bewerte_alle
-from .datenbank import Datenbank
+from .datenbank import Datenbank, wal_aktiv
 from .importer import Importer
 from .sicherung import sicherung_ordner
 from .team import lade_team_sicht
@@ -50,7 +50,7 @@ class Suchlauf:
 
     def oeffne_datenbank(self) -> Datenbank:
         """Eigene Verbindung; Sicherungsordner aus config.yaml (sicherung -> ordner), nicht der Standard neben der Datenbank."""
-        return Datenbank(self.db_pfad, sicherung_ordner(self.cfg, self.basis))
+        return Datenbank(self.db_pfad, sicherung_ordner(self.cfg, self.basis), wal=wal_aktiv(self.cfg))
 
     def starte(self) -> bool:
         if self.thread and self.thread.is_alive():

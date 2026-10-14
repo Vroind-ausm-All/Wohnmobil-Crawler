@@ -137,14 +137,17 @@ def _integritaet(pfad: Path, anzeigename: str | None = None):
 
 
 def _kopiere_db(quelle: Path, ziel: Path):
-    """Backup-API: konsistente Kopie. Die Quelle wird nur lesend geöffnet (fehlt sie, entsteht keine Datei);
-    Verbindungen werden in jedem Fall geschlossen (Windows-Dateisperren)."""
+    """Backup-API: konsistente Kopie (im WAL-Modus einschließlich der noch nicht zurückgeschriebenen Seiten aus ``-wal``).
+    Die Quelle wird nur lesend geöffnet (fehlt sie, entsteht keine Datei); Verbindungen werden in jedem Fall geschlossen
+    (Windows-Dateisperren). Die Kopie wird auf den Journalmodus DELETE gestellt: eine Sicherung ist genau eine Datei,
+    ohne ``-wal``/``-shm`` daneben (die Backup-API übernähme sonst den WAL-Modus der Quelle)."""
     try:
         src = oeffne_lesend(quelle)
         try:
             dst = sqlite3.connect(str(ziel))
             try:
                 src.backup(dst)
+                dst.execute("PRAGMA journal_mode=DELETE")
             finally:
                 dst.close()
         finally:
@@ -179,6 +182,11 @@ def _pruefe_sperre(db_pfad: Path, timeout: float):
     try:
         con.execute("BEGIN EXCLUSIVE")
         con.execute("ROLLBACK")
+        # WAL: BEGIN EXCLUSIVE übersieht Lesende. Der Checkpoint schreibt -wal in die Datenbank zurück und meldet „busy“, solange
+        # jemand liest oder schreibt – danach ist -wal leer und darf beim Austausch entfallen. Ohne WAL: wirkungslos (0, -1, -1).
+        if con.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()[0]:
+            raise SicherungsFehler("Die Datenbank ist in Benutzung (App, Suchlauf oder geplante Aufgabe läuft noch?). "
+                                   "Alles beenden und erneut versuchen. Es wurde nichts verändert.")
     except sqlite3.OperationalError as e:
         if (getattr(e, "sqlite_errorcode", 0) or 0) & 0xFF in (_SQLITE_BUSY, _SQLITE_LOCKED):
             raise SicherungsFehler("Die Datenbank ist in Benutzung (App, Suchlauf oder geplante Aufgabe läuft noch?). "

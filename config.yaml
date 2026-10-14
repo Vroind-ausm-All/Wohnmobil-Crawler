@@ -232,6 +232,7 @@ import:
 ausgabe:
   ordner: ausgabe
   datenbank: daten/anzeigen.sqlite
+  wal: true                      # SQLite-WAL: App und Suchlauf lesen/schreiben parallel; false, wenn die Datenbank auf einem Netzlaufwerk liegt
 
 # Datensicherung: python scout.py sichern / wiederherstellen <Datei> --bestaetigt
 # (automatisch auch vor jeder Datenbank-Migration). Älteste eigene Sicherungen werden gelöscht.

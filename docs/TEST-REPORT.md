@@ -4,6 +4,15 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P1-04a – WAL und Sperr-Wartezeit (14.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13) | 684 bestehende + 12 neue (`test_parallelzugriff.py`) bestanden |
+| `ruff check .` | grün |
+| Gegenprobe ohne WAL / ohne DELETE-Sicherung / ohne Checkpoint-Prüfung | 5 / 1 / 1 Tests schlagen an |
+| Windows-CI | nicht geprüft (folgt im PR) |
+
 ## T1 – Team-Übersicht Kern und API (14.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

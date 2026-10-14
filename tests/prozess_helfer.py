@@ -24,3 +24,17 @@ def arbeiter(pfad: str, nutzer_id: int, aufgaben: list, barriere, ergebnisse):
             r = f"FEHLER {type(e).__name__}: {e}"
         erg.append((r, db.con.in_transaction))
     ergebnisse.put((nutzer_id, erg))
+
+
+def schreiber(pfad: str, nr: int, anzahl: int, barriere, ergebnisse):
+    """Schreibt ``anzahl`` Treffer, nachdem alle Prozesse an der Barriere stehen; meldet (nr, 'ok') oder (nr, 'FEHLER …')."""
+    db = Datenbank(pfad)
+    try:
+        barriere.wait(60)
+        for i in range(anzahl):
+            db.speichere_treffer({"id": f"q{nr}-{i}", "url": f"u{nr}-{i}", "titel": "Hymer", "preis": 25000}, "Alkoven")
+        ergebnisse.put((nr, "ok"))
+    except Exception as e:  # noqa: BLE001 – wird vom Test als Fehler gemeldet
+        ergebnisse.put((nr, f"FEHLER {type(e).__name__}: {e}"))
+    finally:
+        db.con.close()

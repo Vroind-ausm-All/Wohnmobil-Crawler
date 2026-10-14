@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -9,6 +10,11 @@ from pathlib import Path
 
 from .bearbeitung import IN_ARBEIT, BearbeitungsKonflikt
 from .migrationen import NEUE_SPALTEN, migriere  # noqa: F401 – NEUE_SPALTEN bleibt hier importierbar (Kompatibilität)
+
+log = logging.getLogger(__name__)
+# Sekunden, die ein Zugriff auf eine von anderen gesperrte Datenbank wartet. Mit WAL warten nur noch Schreibende aufeinander
+# (kurze Transaktionen); 10 s überbrücken auch einen langsamen Datenträger, ohne die App merklich hängen zu lassen.
+STANDARD_WARTEZEIT = 10.0
 
 # Ablauf eines Ankaufs (Schlüssel → Anzeige in der App)
 STATUS = {"neu": "offen", "kontaktiert": "kontaktiert", "verhandlung": "in Verhandlung",
@@ -68,20 +74,46 @@ FELDER_UPDATE = ["url", "suche", "titel", "preis", "vb", "ort", "km", "ez_jahr",
                  "kurzbeschreibung", "gewerblich", "bild", "quelle"]
 
 
+def wal_aktiv(cfg: dict) -> bool:
+    """``ausgabe.wal`` aus config.yaml (Standard ``true``); nur echte Wahrheitswerte, damit „nein“ nicht als wahr gilt."""
+    wert = (cfg.get("ausgabe") or {}).get("wal", True)
+    if not isinstance(wert, bool):
+        raise ValueError(f"config.yaml: ausgabe -> wal muss true oder false sein, nicht {wert!r}")
+    return wert
+
+
 class Datenbank:
-    def __init__(self, pfad: str, sicherung_ordner: str | Path | None = None, timeout: float = 5.0):
+    def __init__(self, pfad: str, sicherung_ordner: str | Path | None = None, timeout: float = STANDARD_WARTEZEIT, wal: bool = True):
         """Öffnet die Datenbank; Schema und Version verwaltet ``migrationen.migriere`` (mit Sicherung vor jeder Migration).
 
         ``sicherung_ordner``: Standard ist ``sicherungen`` neben der Datenbank (``daten/sicherungen``).
         Wirft ``MigrationsFehler``, wenn die Datenbank neuer ist als dieser Code oder die Sicherung scheitert.
-        ``timeout``: Sekunden, die ein Schreibzugriff auf eine von anderen gesperrte Datenbank wartet (Standard von sqlite3).
+        ``timeout``: Sekunden, die ein Zugriff auf eine von anderen gesperrte Datenbank wartet (SQLite ``busy_timeout``).
+        ``wal``: Journalmodus WAL (``config.yaml`` -> ``ausgabe.wal``); ``False`` für Datenbanken auf Netzlaufwerken.
         """
         Path(pfad).parent.mkdir(parents=True, exist_ok=True)
         migriere(pfad, sicherung_ordner)
         # check_same_thread=False: die App bedient Anfragen nacheinander in einem Server-Thread
         self.con = sqlite3.connect(pfad, check_same_thread=False, timeout=timeout)
         self.con.row_factory = sqlite3.Row
+        self.journal_modus = self._setze_journal(wal)
         self._tiefe = 0          # >0: innerhalb von ``transaktion()`` – verschachtelte Schreibblöcke committen nicht selbst
+
+    def _setze_journal(self, wal: bool) -> str:
+        """WAL: Lesende (App, Bericht, Sicherung) und ein Schreibender (Suchlauf, Ereigniseingang) blockieren einander nicht;
+        nur Schreibende warten weiter aufeinander (``timeout``). Der Modus steht in der Datei und gilt für alle Verbindungen.
+        Gelingt die Umstellung nicht (Datenbank gerade von anderen geöffnet, Dateisystem ohne WAL), bleibt der bisherige
+        Modus – mit Warnung, ohne Abbruch. Rückgabe: tatsächlicher Modus (``wal``, ``delete``, bei ``:memory:`` ``memory``)."""
+        ziel = "wal" if wal else "delete"
+        try:
+            modus = self.con.execute(f"PRAGMA journal_mode={ziel}").fetchone()[0]
+        except sqlite3.OperationalError as e:
+            modus = self.con.execute("PRAGMA journal_mode").fetchone()[0]
+            log.warning("Journalmodus %s nicht gesetzt (%s); bleibt %s.", ziel, e, modus)
+            return modus
+        if modus not in (ziel, "memory"):
+            log.warning("Journalmodus %s nicht möglich; die Datenbank bleibt im Modus %s.", ziel, modus)
+        return modus
 
     def speichere_treffer(self, a: dict, suche: str) -> str:
         """Fügt ein oder aktualisiert. Rückgabe: 'neu', 'preis' (Preis gesenkt) oder 'bekannt'."""

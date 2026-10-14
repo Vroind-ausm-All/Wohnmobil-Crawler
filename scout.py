@@ -46,7 +46,7 @@ from wmscout.benachrichtigung import sende_mail
 from wmscout.bewertung.anschreiben import Anschreiber, euro
 from wmscout.bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids, vergleichsbasis
 from wmscout.bewertung.rechner import Rechner
-from wmscout.datenbank import STATUS, Datenbank
+from wmscout.datenbank import STATUS, Datenbank, wal_aktiv
 from wmscout.eingang import import_ordner
 from wmscout.importer import Importer
 from wmscout.migrationen import MigrationsFehler
@@ -305,7 +305,7 @@ def main():
     try:
         reservierung_tage(cfg)              # ungültiges „team“ in config.yaml ebenso sofort melden
         einstellungen(cfg, BASIS)           # ungültiges „sicherung“ in config.yaml sofort melden, nicht erst bei der Sicherung
-        db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]), str(sicherung_ordner(cfg, BASIS)))
+        db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]), str(sicherung_ordner(cfg, BASIS)), wal=wal_aktiv(cfg))
     except (MigrationsFehler, ValueError, sqlite3.Error) as e:
         sys.exit(f"Datenbank-Start abgebrochen: {e}")
     {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "rechne": cmd_rechne,
