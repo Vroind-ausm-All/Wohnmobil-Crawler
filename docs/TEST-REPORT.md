@@ -19,7 +19,9 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 | QA-Runde 6 (7f96a8e): 18 echte Seiten, Briefmatrix 1.152 Briefe + 1.152 Nachfass-Texte | Modell mehrfach: 0; Art-Wort bei nicht bestätigter Art: 0; Escaping hält; Mutationen 28 von 34 erkannt |
 | QA-Urteil Runde 6 | **ABLEHNUNG** (H1-R echte Namen zurück, H6-1 Wohnwagen als „Sonstige“ auf Rang 3) → bearbeitet |
 | Agent nach Korrektur Runde 6: 18 echte Seiten vorher/nachher | Bürstner-Wohnwagen 54.600 € (hoch, Rang 3) → 18.900 € (niedrig, Rang 22); Dethleffs-Wohnanhänger → nicht bereit; Sicherheit bei unbekannter Art: 96 niedrig, 68 keine |
-| QA-Runde 7 | nicht geprüft (steht aus) |
+| QA-Runde 7 (be0afd2): Tests, 18 echte Seiten, Hinweise, Briefe, id-Leck, Laufzeit, Mutationen | 374 passed; Hinweise konsistent in allen Ausgaben; `#als`-id 0 Treffer; 1.500 unbekannte Importe 23 s statt 6,4 s; Mutationen 24 von 28 |
+| QA-Urteil Runde 7 | **FREIGABE MIT AUFLAGEN** – A1: F14 (10 der Top 20 sind Wohnwagen ohne Art-Wort, Rechnung als „Sonstige“) vor Merge entscheiden; A2: M7-1/M7-2 → behoben |
+| Namensschutz nach M7-1 (Orchestrator) | Gegenprobe: eingefügter echter Name → Test rot; ohne → grün |
 | Browser-Klicktest Hinweiszeile, Windows, CI | nicht geprüft |
 
 ---

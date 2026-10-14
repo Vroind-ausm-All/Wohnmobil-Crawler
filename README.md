@@ -171,10 +171,11 @@ Nachrichten verschicken, und viele Verkäufer reagieren auf Massenanfragen aller
   Kontaktangaben enthalten, wenn der Verkäufer sie dort selbst schreibt.) Einzige Ausnahme beim Verkäuferkasten: der öffentliche **Profilname** des Verkäufers – nur beim **Einlesen gespeicherter Anzeigenseiten**
   (nicht im Suchlauf mit Detailabruf), abgelegt in `details_json` → `verkaeufer_name`; Kürzel, „Privater Nutzer“,
   Nummern und Adressen werden verworfen. Er dient der persönlichen Anrede im Anschreiben und steht deshalb
-  auch im erzeugten Brief: in `ausgabe/report.html`, in `ausgabe/anschreiben/<id>.txt` und – nach dem Kontakt – im
-  gespeicherten Anschreibentext der Datenbank. **Eine Lösch- oder Anonymisierungsfunktion gibt es noch nicht** (geplant als Paket P1-14a, Backlog): der Status „gelöscht“ markiert nur
-  das Inserat und entfernt den Namen **nicht** aus `details_json`. Die App ist nur auf dem eigenen Rechner erreichbar
-  (127.0.0.1).
+  auch im erzeugten Brief: in `ausgabe/report.html`, in `ausgabe/anschreiben/<id>.txt` im Anhang der
+  Benachrichtigungs-Mail (`report.html`, verlässt damit den Rechner), im Offline-Speicher der Handy-App (Fahrzeugansicht
+  mit Brief) und – nach dem Kontakt – im gespeicherten Anschreibentext der Datenbank. **Eine Lösch- oder Anonymisierungsfunktion gibt es noch nicht** (geplant als Paket P1-14a, Backlog): der Status „gelöscht“ markiert nur
+  das Inserat und entfernt den Namen **nicht** aus `details_json`. Die App selbst lauscht nur auf dem eigenen Rechner (127.0.0.1;
+  Handys über `tailscale serve`); Mail-Anhang und Handy-Speicher liegen außerhalb davon.
 - **Wenn plötzlich 0 Anzeigen gefunden werden**, hat Kleinanzeigen vermutlich das Seitenlayout
   geändert. Die App meldet das als „Seitenlayout geändert“ und legt
   die Seite als `ausgabe/diagnose_suchseite.html` ab. Alle Selektoren liegen in

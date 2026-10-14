@@ -5,7 +5,7 @@ Entwicklungsablaufs stehen im Skill, der Wartungsauftrag hat seine zehn Punkte, 
 Projektdokumenten zeigt auf eine existierende Zeile. Grenze: Ob die Zeile inhaltlich noch passt, prüft der Test nicht;
 erfasst werden nur Belege in Backticks.
 """
-import codecs
+import hashlib
 import re
 import subprocess
 from pathlib import Path
@@ -100,22 +100,49 @@ def test_belege_zeigen_auf_existierende_zeilen(dokument):
         assert geprueft > 20                                          # Belege werden tatsächlich gefunden
 
 
-# Echte Verkäufer-Profilnamen aus Originalseiten, die schon einmal im Arbeitsbaum standen (QA H1-R). Als ROT13 und als
-# Muster gespeichert, damit dieser Test nicht selbst trifft. Neue Funde hier ergänzen.
-_ECHTE_NAMEN_ROT13 = (r"\oibyxre\o", r"\o(?:ue|uree)\o\.?\f*jvr\o")
+# Echte Verkäufer-Profilnamen aus Originalseiten, die schon einmal im Arbeitsbaum standen (QA H1-R). Nur als gesalzene
+# SHA-256-Werte normalisierter Wortfolgen (1–2 Wörter, klein) gespeichert, damit die Namen nicht lesbar im Repository
+# stehen (QA M7-1). Neue Funde: hashlib.sha256((_SALZ + "wortfolge").encode()).hexdigest() ergänzen.
+_SALZ = "wmscout-h1r"
+_ECHTE_NAMEN_SHA256 = {
+    "96d20e9324977ad3e0465e00e6644967569eb95b958b005be3ccd8f5f60a17c5",
+    "4b880c8a98e9edfd6b2b08fda1f86b47d5140d61a866dcedbca7b72103d215c2",
+    "a892721fbbe33edc99f8c531bc461686acc296092bd41efad25b6a021ff85cda",
+}
+_WORT = re.compile(r"[^\W\d_]+")
+
+
+def _namens_treffer(text: str) -> list[int]:
+    """Zeilennummern, in denen eine Wortfolge (1 oder 2 Wörter) einem gespeicherten Hash entspricht."""
+    treffer = []
+    for nr, zeile in enumerate(text.splitlines(), 1):
+        woerter = [w.lower() for w in _WORT.findall(zeile)]
+        folgen = woerter + [f"{a} {b}" for a, b in zip(woerter, woerter[1:], strict=False)]
+        if any(hashlib.sha256((_SALZ + f).encode()).hexdigest() in _ECHTE_NAMEN_SHA256 for f in folgen):
+            treffer.append(nr)
+    return treffer
+
+
+def test_namensschutz_erkennt_gespeicherte_wortfolgen():
+    """Gegenprobe ohne echte Namen: ein künstlich gespeicherter Hash wird gefunden, auch über Satzzeichen hinweg."""
+    _ECHTE_NAMEN_SHA256.add(hashlib.sha256((_SALZ + "fr beispiel").encode()).hexdigest())
+    try:
+        assert _namens_treffer("x\nHallo Fr. Beispiel,\n") == [2]
+        assert _namens_treffer("Hallo Frau Beispiel") == []
+    finally:
+        _ECHTE_NAMEN_SHA256.discard(hashlib.sha256((_SALZ + "fr beispiel").encode()).hexdigest())
 
 
 def test_keine_echten_verkaeufernamen_im_repository():
     """Personenbezogene Daten aus Originalseiten gehören nicht ins Repository – Tests und Doku nutzen erfundene Namen.
-    Geprüft werden alle getrackten Dateien außer docs/ (die Projektdokumente bereinigt der Orchestrator)."""
-    muster = [re.compile(codecs.decode(m, "rot13"), re.I) for m in _ECHTE_NAMEN_ROT13]
+    Geprüft werden alle getrackten Dateien einschließlich docs/."""
     namen = subprocess.run(["git", "ls-files"], cwd=WURZEL, capture_output=True, text=True, check=True).stdout.splitlines()
     assert len(namen) > 50                                            # die Liste ist tatsächlich gefüllt
     treffer = []
     for name in namen:
         pfad = WURZEL / name
-        if name.startswith("docs/") or not pfad.is_file():
+        if not pfad.is_file() or pfad.suffix in (".png", ".jpg", ".ico", ".zip"):
             continue
         text = pfad.read_bytes().decode("utf-8", errors="ignore")
-        treffer += [f"{name}:{text.count(chr(10), 0, m.start()) + 1}" for mu in muster for m in mu.finditer(text)]
+        treffer += [f"{name}:{nr}" for nr in _namens_treffer(text)]
     assert not treffer, treffer

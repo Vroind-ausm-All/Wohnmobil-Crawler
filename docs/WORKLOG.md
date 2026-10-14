@@ -10,6 +10,18 @@ Wert „–“.
 
 ### P2-05 (Teil) – Hinweise statt Sperre, Anrede mit Verkäufername · Status: REVIEW
 
+- **QA-Runde 7 (Stand be0afd2): FREIGABE MIT AUFLAGEN** (für den PR, nicht für den Merge). 374 passed; 18 echte Seiten
+  identisch zur Agentenanalyse; nicht bestätigt ohne Hinweis 0; künstliche Cache-id in keiner Ausgabe; Rechner
+  unverändert; Mutationen 24 von 28 erkannt.
+  - **A1 / H7-1 (HOCH, Betreibervorbehalt = F14):** Wohnwagen ohne Art-Wort werden als „Sonstige“ gerechnet: 10 der
+    Top 20 der echten Daten sind Wohnwagen, Briefangebote z. B. 25.300 € statt 15.200 € (als Wohnwagen gerechnet).
+    **Kein Merge und keine produktive Nutzung des Seitenimports, bevor der Betreiber F14 entschieden hat.**
+  - A2: M7-1 (Schutztest enthielt die Namen ROT13-lesbar → gesalzene SHA-256-Werte, jetzt inkl. docs/) und M7-2
+    (README: Mail-Anhang und Handy-Offline-Speicher als Speicherorte) behoben; N7-3 (Beleg ROADMAP) festgeschrieben.
+  - Backlog: M7-3 (Laufzeit je Kandidat), N7-1 („KaufeWohnmobile“), N7-2 (Modell aus Bindestrich-Ketten), N7-4
+    (Besichtigungsbasis friert vorsichtige Art ohne Hinweis ein), N7-5 (Formulierungen); fehlende Tests:
+    Dublettenfilter in `vergleichsbasis`, `rechne --marktwert`, unbekannte Art + manueller Marktwert.
+
 - **Anlass:** Betreiberentscheidung 14.10.2026: „möglichst jedes Wohnmobil anschreiben“, Brief mit weniger
   Modellname und mit dem Profilnamen (ADR-021). Damit ist der BLOCKED-Grund (K-A als Sperr-Risiko) entfallen.
 - **Verantwortliche Agenten:** `source-integrations` (Import, Parser, Ausgaben), `acquisition-analyst` (Brief,
