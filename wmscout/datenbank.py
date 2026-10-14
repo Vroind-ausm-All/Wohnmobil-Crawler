@@ -6,29 +6,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS anzeigen (
-    id TEXT PRIMARY KEY,
-    url TEXT, suche TEXT, titel TEXT, preis INTEGER, vb INTEGER,
-    ort TEXT, km INTEGER, ez_jahr INTEGER, marke TEXT, art TEXT,
-    leistung TEXT, getriebe TEXT, kurzbeschreibung TEXT, beschreibung TEXT,
-    gewerblich INTEGER DEFAULT 0, details_json TEXT,
-    detail_geladen INTEGER DEFAULT 0,
-    erstmals_gesehen TEXT, zuletzt_gesehen TEXT,
-    preis_vorher INTEGER,
-    status TEXT DEFAULT 'neu',      -- siehe STATUS, außerdem 'gelöscht' (Anzeige offline)
-    notiz TEXT,
-    bild TEXT, kontaktiert_am TEXT, anschreiben_text TEXT,
-    preis_geaendert_am TEXT, nachgefasst_am TEXT, nachfass_anzahl INTEGER DEFAULT 0,
-    angebot_betrag INTEGER, status_am TEXT,
-    quelle TEXT                     -- Kennung der Datenquelle; NULL = kleinanzeigen (Daten vor Phase 1)
-);
-CREATE INDEX IF NOT EXISTS idx_zuletzt ON anzeigen(zuletzt_gesehen);
-"""
-# Spalten, die nach Version 1 dazugekommen sind (ältere Datenbanken werden beim Start ergänzt)
-NEUE_SPALTEN = {"bild": "TEXT", "kontaktiert_am": "TEXT", "anschreiben_text": "TEXT", "preis_geaendert_am": "TEXT",
-                "nachgefasst_am": "TEXT", "nachfass_anzahl": "INTEGER DEFAULT 0", "angebot_betrag": "INTEGER",
-                "status_am": "TEXT", "quelle": "TEXT"}
+from .migrationen import NEUE_SPALTEN, migriere  # noqa: F401 – NEUE_SPALTEN bleibt hier importierbar (Kompatibilität)
 
 # Ablauf eines Ankaufs (Schlüssel → Anzeige in der App)
 STATUS = {"neu": "offen", "kontaktiert": "kontaktiert", "verhandlung": "in Verhandlung",
@@ -89,17 +67,17 @@ FELDER_UPDATE = ["url", "suche", "titel", "preis", "vb", "ort", "km", "ez_jahr",
 
 
 class Datenbank:
-    def __init__(self, pfad: str):
+    def __init__(self, pfad: str, sicherung_ordner: str | Path | None = None):
+        """Öffnet die Datenbank; Schema und Version verwaltet ``migrationen.migriere`` (mit Sicherung vor jeder Migration).
+
+        ``sicherung_ordner``: Standard ist ``sicherungen`` neben der Datenbank (``daten/sicherungen``).
+        Wirft ``MigrationsFehler``, wenn die Datenbank neuer ist als dieser Code oder die Sicherung scheitert.
+        """
         Path(pfad).parent.mkdir(parents=True, exist_ok=True)
+        migriere(pfad, sicherung_ordner)
         # check_same_thread=False: die App bedient Anfragen nacheinander in einem Server-Thread
         self.con = sqlite3.connect(pfad, check_same_thread=False)
         self.con.row_factory = sqlite3.Row
-        self.con.executescript(SCHEMA)
-        vorhanden = {r["name"] for r in self.con.execute("PRAGMA table_info(anzeigen)")}
-        for spalte, typ in NEUE_SPALTEN.items():
-            if spalte not in vorhanden:
-                self.con.execute(f"ALTER TABLE anzeigen ADD COLUMN {spalte} {typ}")
-        self.con.commit()
 
     def speichere_treffer(self, a: dict, suche: str) -> str:
         """Fügt ein oder aktualisiert. Rückgabe: 'neu', 'preis' (Preis gesenkt) oder 'bekannt'."""

@@ -21,6 +21,7 @@ from .benachrichtigung import sende_mail
 from .bewertung.auswertung import bewerte_alle
 from .datenbank import Datenbank
 from .importer import Importer
+from .sicherung import sicherung_ordner
 from .web.api import Kontext, bearbeite
 
 log = logging.getLogger("scout")
@@ -45,6 +46,10 @@ class Suchlauf:
 
         log.addHandler(Meldungen(logging.INFO))
 
+    def oeffne_datenbank(self) -> Datenbank:
+        """Eigene Verbindung; Sicherungsordner aus config.yaml (sicherung -> ordner), nicht der Standard neben der Datenbank."""
+        return Datenbank(self.db_pfad, sicherung_ordner(self.cfg, self.basis))
+
     def starte(self) -> bool:
         if self.thread and self.thread.is_alive():
             return False
@@ -56,7 +61,7 @@ class Suchlauf:
 
     def _lauf(self):
         try:
-            db = Datenbank(self.db_pfad)
+            db = self.oeffne_datenbank()
             stat = Importer(self.cfg, db).lauf(self.cfg["suchen"])
             # wie „python scout.py lauf“: Report/CSV/Anschreiben-Dateien aktualisieren, ggf. Mail
             zeilen = bewerte_alle(self.cfg, db, self.basis, lauf_start=self.letzter_start)
@@ -99,7 +104,7 @@ class AutoSuche:
             threading.Thread(target=self._schleife, daemon=True).start()
 
     def _schleife(self):
-        db = Datenbank(self.suchlauf.db_pfad)       # eigene Verbindung für diesen Thread
+        db = self.suchlauf.oeffne_datenbank()       # eigene Verbindung für diesen Thread
         while True:
             ende = self.suchlauf.stand["ende"]
             letzter = max(filter(None, [db.letzter_lauf(), datetime.fromisoformat(ende) if ende else None]),
