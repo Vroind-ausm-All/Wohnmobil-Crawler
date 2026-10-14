@@ -274,9 +274,6 @@ def main():
 
     cfg = lade_config(args.config)
     logging_einrichten(cfg)
-    db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]))
-    {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "rechne": cmd_rechne,
-     "nutzer": cmd_nutzer, "status": cmd_status}[args.cmd](cfg, db, args)
     # Sichern/Wiederherstellen arbeiten ohne Datenbank-Start (die Datenbank darf defekt oder neuer sein)
     if args.cmd == "sichern":
         return cmd_sichern(cfg, args)
@@ -287,8 +284,8 @@ def main():
         db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]), str(sicherung_ordner(cfg, BASIS)))
     except (MigrationsFehler, ValueError, sqlite3.Error) as e:
         sys.exit(f"Datenbank-Start abgebrochen: {e}")
-    {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "rechne": cmd_rechne, "nutzer": cmd_nutzer,
-     "status": cmd_status}[args.cmd](cfg, db, args)
+    {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "rechne": cmd_rechne,
+     "nutzer": cmd_nutzer, "status": cmd_status}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":

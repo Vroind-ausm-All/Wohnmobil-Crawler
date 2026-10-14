@@ -10,6 +10,10 @@ Wert „–“.
 
 ### P2-05 (Teil) – Hinweise statt Sperre, Anrede mit Verkäufername · Status: REVIEW
 
+- **Zusammenführung mit PR #5 (14.10.2026):** Der Merge des Integrationszweigs in diesen Zweig (d31c2dc) ließ in
+  `scout.py` beide Fassungen von `main()` stehen (Datenbank-Start ohne Sicherungsordner, `import` fehlte im zweiten
+  Aufruf) → 8 CLI-Tests rot. Behoben; außerdem nutzt ein Import-Test statt `:memory:` eine Temp-Datei (der
+  Migrationsrahmen öffnet eigene Verbindungen). Danach **464 passed**, ruff grün.
 - **F14 umgesetzt (Betreiberentscheidung 14.10.2026, Orchestrator):** Bei unbekannter Fahrzeugart Ampel höchstens
   „gelb“ (`bewerte_anzeige`) und Brief ohne Betrag (`kontext`, `mit_angebot`); Hinweistext nennt beides. Zwei neue
   Tests, beide Änderungen per Mutationsprobe in einer Kopie erkannt. PR #4 während der Änderung als Entwurf markiert.
@@ -154,7 +158,7 @@ Wert „–“.
   Testdatum.
 ## Phase 1 (vorgezogen) – Datensicherung und Migrationsrahmen (14.10.2026)
 
-### P1-02 / P1-03 – Sicherung, Wiederherstellung, Migrationsrahmen · Status: REVIEW
+### P1-02 / P1-03 – Sicherung, Wiederherstellung, Migrationsrahmen · Status: DONE (PR #5 gemergt 14.10.2026)
 
 - **Phase:** 1, vorgezogen als Voraussetzung für die Team-Übersicht (Tabelle `bearbeitung`, Schema-Version 3) und
   für jede weitere Schemaänderung (Regel 3).

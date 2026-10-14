@@ -563,7 +563,7 @@ def art_der(cfg, db, ad_id):
 
 
 @pytest.mark.parametrize("camper_zuerst", [True, False])
-def test_freitextsuche_gibt_treffern_nicht_die_seitenart(cfg, db, ads, ordner, camper_zuerst):
+def test_freitextsuche_gibt_treffern_nicht_die_seitenart(cfg, db, ads, ordner, camper_zuerst, tmp_path):
     alkoven = {**ads[0], "titel": ALKOVEN_TITEL}
     vollint = {**ads[1], "titel": VOLLINT_TITEL}
     camper_nur = {**ads[2], "titel": "Wohnmobil gepflegt"}         # nennt keine Art: Hinweis der Seite
@@ -583,7 +583,7 @@ def test_freitextsuche_gibt_treffern_nicht_die_seitenart(cfg, db, ads, ordner, c
         nur_hinweis(z, VORLAEUFIG_TEXT)
     assert [art_der(cfg, db, h["id"]) for h in (alkoven, vollint)] == ["Alkoven", "Integrierter"]
     # Bewertung wie bei einem Crawler-Fund unter der richtigen Art
-    referenz = Datenbank(":memory:")
+    referenz = Datenbank(str(tmp_path / "referenz.sqlite"))                     # Datei: der Migrationsrahmen nutzt eigene Verbindungen
     for h, art in ((alkoven, "Alkoven"), (vollint, "Integrierter")):
         referenz.speichere_treffer(erkenne_seite(such_html([h]))[1][0].als_datensatz(), art)
     ek, ek_ref = max_eks(cfg, db), max_eks(cfg, referenz)
