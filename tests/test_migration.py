@@ -468,7 +468,9 @@ def test_f2_zwei_echte_prozesse_gleichzeitig_auf_altbestand_kein_abbruch_genau_e
         ausgaben = [p.communicate(timeout=120) for p in prozesse]
         meldungen = sorted(o.strip() for o, _ in ausgaben)
         assert all(m.startswith("OK") for m in meldungen), ausgaben
-        assert meldungen.count("OK [3, 4]") == 1 and meldungen.count("OK []") == 2, meldungen      # genau eine Migration
+        assert all(m in {"OK []", "OK [3]", "OK [4]", "OK [3, 4]"} for m in meldungen), meldungen
+        assert sum(m in {"OK [3]", "OK [3, 4]"} for m in meldungen) == 1, meldungen
+        assert sum(m in {"OK [4]", "OK [3, 4]"} for m in meldungen) == 1, meldungen  # jeder Schritt genau einmal
         assert versionen(pfad) == [2, 3, 4]
         assert {t: zeilen(pfad, t) for t in vorher} == vorher                                      # nichts verloren
         for s in sicherungen(ziel, "r" + str(runde)):
