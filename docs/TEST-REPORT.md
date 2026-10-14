@@ -4,7 +4,23 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
-## P2-05 (Teil) – Gespeicherte Seiten einlesen (13.10.2026) · BLOCKED
+## P2-05 (Teil) – Hinweise statt Sperre, Anrede mit Verkäufername (14.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `.venv/bin/python -m pytest -q -p no:cacheprovider` (Orchestrator, Stand fc086f3 + `scout.py`) | **326 passed** |
+| `.venv/bin/python -m ruff check .` | All checks passed! |
+| `node --check wmscout/web/static/mobil.js` (Agent) | ohne Fehler |
+| QA-Runde 5 (Stand a912c83): 18 echte Seiten, Temp-DB, Sockets gesperrt | 352 Inserate; bestätigt 2, vorläufig 186, unbekannt 164; nicht bestätigt ohne Hinweis: **0**; Sperrgrund Fahrzeugart: 0; vorwärts/rückwärts 0 Abweichungen |
+| QA-Runde 5: K-A am echten Original mit eingesetztem Filter | altads-Seiten: 0 bestätigt; Adria-Seite: 27 bestätigt |
+| QA-Runde 5: Mutationen | 26 von 29 erkannt (überlebt: `|safe`, Ziffernprüfung, eine gleichwertige) → in dieser Runde mit Tests abgedeckt |
+| Mutationen der Agenten (Kopien) | Import-Korrektur: alle erkannt (M1, M2, M4, N1, N3, N5, H2); Anschreiben: 13 von 13 |
+| QA-Urteil Runde 5 | **ABLEHNUNG** (H1–H3, M1–M4) → bearbeitet; Runde 6 **nicht geprüft** (steht aus) |
+| Browser-Klicktest Hinweiszeile, Windows, CI | nicht geprüft |
+
+---
+
+## P2-05 (Teil) – Gespeicherte Seiten einlesen (13.10.2026) · BLOCKED (aufgehoben 14.10.2026)
 
 | Prüfung | Ergebnis |
 |---|---|

@@ -6,9 +6,56 @@ Wert „–“.
 
 ---
 
+## Phase 2 (vorgezogen) – Gespeicherte Seiten einlesen, wieder aufgenommen (14.10.2026)
+
+### P2-05 (Teil) – Hinweise statt Sperre, Anrede mit Verkäufername · Status: REVIEW
+
+- **Anlass:** Betreiberentscheidung 14.10.2026: „möglichst jedes Wohnmobil anschreiben“, Brief mit weniger
+  Modellname und mit dem Profilnamen (ADR-021). Damit ist der BLOCKED-Grund (K-A als Sperr-Risiko) entfallen.
+- **Verantwortliche Agenten:** `source-integrations` (Import, Parser, Ausgaben), `acquisition-analyst` (Brief,
+  Bewertungs-Vorstufe, eigener Worktree, danach zusammengeführt), `qa-security-reviewer` (Runde 5), Orchestrator
+  (`scout.py rechne`, Doku).
+- **Zweig/Commits:** `claude/phase2-seitenimport`: 12cef17/a912c83 (Zwischenstände „ungeprüft“), 5174eef (Korrektur
+  nach QA-Runde 5), 9479b6b + fc086f3 (Anschreiben, Merge).
+- **Geänderte Dateien (Auswahl):**
+  - `wmscout/bewertung/anschreiben.py` (`hinweise`, `verkaeufer_name`, `anrede_name`, `art_bestaetigt`)
+  - `wmscout/bewertung/auswertung.py` (`fuer_rechner`, Feld `hinweise`)
+  - `vorlagen/anschreiben.txt`, `vorlagen/nachfassen.txt`
+  - `wmscout/eingang/seiten.py` (`haupttabelle_ids`, strenger Kopf), `wmscout/importer.py`, `wmscout/datenbank.py`
+    (`detail_art`, GLOB)
+  - `wmscout/quellen/kleinanzeigen/parser.py` (Profilname), `wmscout/normalisierung/person.py` (neu)
+  - `wmscout/ausgabe.py`, `wmscout/benachrichtigung.py` (Hinweise in CSV, Datei, Mail)
+  - `wmscout/web/api.py`, `wmscout/web/static/mobil.js`, `vorlagen/report.html` (gelbe Hinweiszeile)
+  - `scout.py` (`rechne` nutzt `fuer_rechner`), `README.md`
+  - Tests: `tests/test_anschreiben.py` (neu), `tests/test_seitenimport.py`, `tests/test_kleinanzeigen_echt.py`,
+    `tests/seiten/kleinanzeigen/suchseite_andere_orte.html` (neu, anonymisiert)
+- **Implementierte Funktionen:**
+  - Nicht bestätigte Fahrzeugart sperrt nicht mehr; Hinweis „Fahrzeugart nicht bestätigt/unbekannt (gerechnet …) –
+    bitte prüfen“ in allen Ausgaben.
+  - K-A behoben: Der Art-Filter bestätigt nur Treffer aus `#srchrslt-adtable`. Detailseite hat Vorrang (M-W).
+  - Brief: „Hallo <Name>,“ aus dem Profil (Hr → Herr, Kleinschreibung korrigiert), Modell nur einmal in der
+    Einleitung, danach Marke bzw. „Ihr Wohnmobil“; bei nicht bestätigter Art keine Art im Text.
+  - Bei unbekannter Art rechnet die Vorstufe ohne Titel-Art („Sonstige“), Rechner unverändert.
+  - Datenschutz: nur der Profilname, nur beim Seitenimport; keine Telefonnummern/Profil-IDs; echte Namen und Orte aus
+    den Fixtures entfernt.
+- **Tests:** `.venv/bin/python -m pytest -q -p no:cacheprovider`, `.venv/bin/python -m ruff check .`,
+  `node --check wmscout/web/static/mobil.js`, Mutationsproben der Agenten in Kopien
+- **Testergebnis (Orchestrator, Stand fc086f3 + `scout.py`-Änderung):** `326 passed`, ruff „All checks passed!“.
+  Agenten: Import-Korrektur 287 passed, Anschreiben 289 passed (getrennte Stände), Mutationen alle erkannt.
+- **Review-Ergebnis:** QA-Runde 5 (Stand a912c83): ABLEHNUNG ohne KRITISCH; K-A, H-T, M-W, N-1..N-3 bestätigt
+  behoben. Offen waren H1 (echte Profilnamen in Tests), H2 (Name gespeichert, aber ungenutzt), H3 (unbekannte Art mit
+  Titel-Art gerechnet), M1–M4, N1–N5 → alle in dieser Runde bearbeitet. QA-Runde 6: steht aus.
+- **Bekannte Risiken:**
+  - Die echten Profilnamen aus a912c83 stehen in der Historie des Arbeitszweigs (Bereinigung nur mit Freigabe des
+    Betreibers; Squash-Merge hält sie aus dem Integrationszweig).
+  - F14: „Sonstige“ rechnet höher als manche konkrete Art.
+  - N4: früher falsch bestätigte Inserate werden nicht automatisch herabgestuft.
+  - Kein Browser-Klicktest der Hinweiszeile; Windows nicht geprüft.
+- **Nächster sinnvoller Schritt:** QA-Runde 6, dann PR gegen den Integrationszweig.
+
 ## Phase 2 (vorgezogen) – Gespeicherte Seiten einlesen (13.10.2026)
 
-### P2-05 (Teil) – Gespeicherte Kleinanzeigen-Seiten einlesen · Status: BLOCKED
+### P2-05 (Teil) – Gespeicherte Kleinanzeigen-Seiten einlesen · Status: BLOCKED (aufgehoben 14.10.2026, siehe oben)
 
 - **Phase:** 2, vorgezogen. Der Betreiber hat das Paket am 13.10.2026 freigegeben, nachdem der Kleinanzeigen-Webabruf
   0 Treffer lieferte (neues Seitenlayout).

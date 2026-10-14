@@ -178,7 +178,7 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   in ignorierten Pfaden (`daten/`, `ausgabe/`, `.venv/`). Deshalb vergleicht der Orchestrator vor und nach jedem
   QA-Lauf `git rev-parse HEAD`, `git status --short --ignored` und `git stash list`.
 
-## ADR-020 – Fahrzeugart beim Seitenimport nur „bestätigt“ aus Art-Filter oder Detailseite · gilt (13.10.2026)
+## ADR-020 – Fahrzeugart beim Seitenimport nur „bestätigt“ aus Art-Filter oder Detailseite · Sperre ersetzt durch ADR-021 (14.10.2026)
 
 * **Kontext:** Bei gespeicherten Suchseiten ist die Fahrzeugart oft nur aus dem Suchbegriff oder dem Anzeigentitel zu
   erraten. Drei QA-Runden haben mit echten Seiten gezeigt, dass jedes Raten Fälle mit falscher Art erzeugt, zum
@@ -188,5 +188,22 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   nie anschreibbar (Sperrgrund mit Handlungshinweis). Die Herkunft steht in `suche`
   („Import <Art> (bestätigt|vorläufig)“, „Import (gespeicherte Seite)“); das Schema bleibt unverändert.
 * **Folgen:** Weniger Fahrzeuge sind sofort anschreibbar, dafür keine falschen Angebote. Der Betreiber sucht über den
-  Art-Filter oder liest Detailseiten ein. Offen (K-A): Der Filter darf nur die Haupttreffer bestätigen, nicht den Block
-  „Weitere Ergebnisse in anderen Orten“.
+  Art-Filter oder liest Detailseiten ein. K-A (Filter bestätigte auch „Weitere Ergebnisse in anderen Orten“) ist
+  behoben: Bestätigt werden nur Treffer aus `#srchrslt-adtable`. **Die Sperre gilt seit 14.10.2026 nicht mehr, siehe
+  ADR-021.**
+
+## ADR-021 – Jedes Fahrzeug anschreibbar: Hinweis statt Sperre bei der Fahrzeugart · gilt (14.10.2026)
+
+* **Kontext:** Der Betreiber will „möglichst jedes Wohnmobil anschreiben“ und auf Masse gehen. Die Sperre aus ADR-020
+  hielt fast alle importierten Fahrzeuge zurück (18 echte Seiten: 350 von 352 ohne bestätigte Art).
+* **Entscheidung (Betreiber, 14.10.2026):** Eine vorläufige oder unbekannte Fahrzeugart ist **kein Sperrgrund** mehr,
+  sondern ein sichtbarer **Hinweis** in Desktop-App, API, Handy-App, CSV, Anschreiben-Datei und Mail. Die
+  Herkunftsregeln aus ADR-020 bleiben und steuern den Hinweis. Der Art-Filter bestätigt nur Treffer der Haupttabelle,
+  eine Detailseite hat Vorrang vor dem Filter. Bei **unbekannter** Art rechnet die Bewertungs-Vorstufe
+  (`fuer_rechner`) ohne Titel-Art („Sonstige“), bei **vorläufiger** Art mit der vorläufigen Art. Bei nicht bestätigter
+  Art nennt der Brief keine Art. Der Profilname des Verkäufers wird nur beim Seitenimport für die Anrede in
+  `details_json` gespeichert (keine Telefonnummer, keine Profil-ID); eine Löschfunktion folgt mit P1-14a.
+* **Folgen:** Viel mehr Fahrzeuge sind sofort anschreibbar. Max-EK kann bei falscher Art danebenliegen – der
+  Mitarbeiter prüft vor dem Absenden. Offen: „Sonstige“ rechnet mit einem höheren Neupreis als z. B. „Kastenwagen“ und
+  deckt Wohnwagen/Anhänger nicht ab (Frage F14). Die übrigen Sperrgründe (gewerblich, Sperrbegriffe, Filter) folgen
+  als Hinweise in einem eigenen Paket. ADR-020 gilt nur noch für die Herkunftsregeln.

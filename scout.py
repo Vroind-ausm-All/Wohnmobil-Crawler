@@ -40,7 +40,7 @@ import yaml
 from wmscout.ausgabe import schreibe_ausgaben
 from wmscout.benachrichtigung import sende_mail
 from wmscout.bewertung.anschreiben import Anschreiber, euro
-from wmscout.bewertung.auswertung import bewerte_alle
+from wmscout.bewertung.auswertung import bewerte_alle, fuer_rechner
 from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import STATUS, Datenbank
 from wmscout.eingang import import_ordner
@@ -116,7 +116,7 @@ def cmd_rechne(cfg, db, args):
     a = ergaenze_fahrzeug({"id": "manuell", "preis": args.preis, "ez_jahr": args.ez, "km": args.km,
                            "marke": args.marke, "titel": args.titel or args.marke or "", "beschreibung": args.text,
                            "suche": args.art, "ort": args.ort, "vb": True})
-    vergleich = [ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()]
+    vergleich = [fuer_rechner(ergaenze_fahrzeug(dict(r))) for r in db.alle_mit_preis()]
     b = Rechner(cfg).bewerte(a, vergleich, marktwert_manuell=args.marktwert)
     print(f"\nFahrzeug                 : {a['fahrzeug']} ({b.art}, EZ {a['ez_jahr'] or '?'}, "
           f"{a['km'] or '?'} km)")
