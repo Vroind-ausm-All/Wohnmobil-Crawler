@@ -46,7 +46,7 @@ Einrichtung (Nutzer anlegen, Tailscale, App auf den Startbildschirm): **[docs/HA
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --marktwert 44000` | mit eigenem Marktwert (z. B. aus mobile.de oder DAT) |
 | `python scout.py nutzer anlegen Anna --rolle inhaber --telefon "+49 170 …"` | Team-Zugang für die Handy-App (auch `liste`, `passwort`, `sperren`, `entsperren`) |
 | `python scout.py sichern` | Datenbank und Fotos sichern (siehe „Datensicherung“) |
-| `python scout.py wiederherstellen <Datei> --bestaetigt` | Sicherung zurückspielen – vorher App und Suchlauf beenden |
+| `python scout.py wiederherstellen <Datei> --bestaetigt [--ohne-fotos]` | Sicherung zurückspielen – vorher App und Suchlauf beenden |
 | `python scout.py status 3531797014 kontaktiert` | Status setzen: `neu`, `kontaktiert`, `uninteressant`, `gekauft` (in der App per Klick) |
 
 ## Datensicherung
@@ -60,11 +60,21 @@ Einrichtung (Nutzer anlegen, Tailscale, App auf den Startbildschirm): **[docs/HA
 * Zurückspielen: App und Suchlauf (auch `lauf.bat`, geplante Aufgaben) beenden, dann
   `python scout.py wiederherstellen daten/sicherungen/<Datei>.sqlite --bestaetigt`. Der bisherige Stand wird vorher
   selbst gesichert, bisherige Fotos werden nur umbenannt (`fotos.alt-…`), nicht gelöscht.
+  **App vorher wirklich beenden:** Die technische Sperrprüfung erkennt nur *aktive Schreibvorgänge* (Suchlauf, gerade
+  speichernde App), nicht eine geöffnete, gerade ruhende App.
+* Ist das Foto-Archiv einer Sicherung beschädigt oder abgeschnitten, bricht das Zurückspielen ab und ändert nichts. Mit
+  `python scout.py wiederherstellen <Datei> --bestaetigt --ohne-fotos` wird dann nur die Datenbank zurückgespielt; der
+  Fotoordner bleibt unverändert.
+* **Netzlaufwerke/UNC-Pfade (`\\server\share`) sind nicht geprüft.** Datenbank, Fotos und Sicherungsordner gehören auf ein
+  lokales Laufwerk; SQLite-Dateisperren sind auf Netzfreigaben unzuverlässig.
 * Ist die Datenbank neuer als das Programm (Schemaversion), startet es nicht – bitte das Programm aktualisieren.
 * **Datenschutz:** Sicherungen (`*.sqlite`, `*.fotos.zip`), Rohkopien defekter Datenbanken (`*.defekt`, `*-reste-*`) und
   umbenannte Fotoordner (`fotos.alt-…`) enthalten personenbezogene Daten (Verkäufernamen, Telefonnummern, Anschriften,
   Notizen, Fotos). Nur dort aufbewahren, wo sie hingehören, und nach einer festgelegten Frist selbst löschen – das
   automatische Löschen/Anonymisieren folgt mit P1-14a. Das Programm löscht `.defekt`-, `-reste-`- und `fotos.alt-…`-Kopien nie.
+  Bei einem Abbruch (Absturz, Stromausfall) können Arbeitsdateien übrig bleiben: `.….teil`, `.….reserviert` im Sicherungsordner
+  sowie `.anzeigen.sqlite.….wiederherstellung.teil` und `.fotos.….wiederherstellung.teil` neben der Datenbank. Sie werden beim
+  nächsten Sichern bzw. Wiederherstellen nach über einer Stunde automatisch entfernt; bis dahin enthalten sie personenbezogene Daten.
 * Vor einer Migration angelegte Sicherungen (`…-vor-v3`) bleiben erhalten, bis eine normale Sicherung nach `behalten`
   aufräumt; beim Zurückspielen bleibt die verwendete Sicherung immer erhalten.
 

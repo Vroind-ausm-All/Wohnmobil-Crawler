@@ -6,6 +6,43 @@ Wert „–“.
 
 ---
 
+## Phase 1 (vorgezogen) – Datensicherung und Migrationsrahmen (14.10.2026)
+
+### P1-02 / P1-03 – Sicherung, Wiederherstellung, Migrationsrahmen · Status: REVIEW
+
+- **Phase:** 1, vorgezogen als Voraussetzung für die Team-Übersicht (Tabelle `bearbeitung`, Schema-Version 3) und
+  für jede weitere Schemaänderung (Regel 3).
+- **Verantwortliche Agenten:** `scout-data-engineer` (Umsetzung, zwei Korrekturrunden), `qa-security-reviewer`
+  (zwei Prüfungen), Orchestrator (Doku-Belege, Commits).
+- **Zweig/Commits:** `claude/phase1-sicherung-migration` (Worktree): 1b104ad (Umsetzung), e8b1be1 (Runde 1),
+  Korrekturrunde 2 (dieser Commit).
+- **Geänderte Dateien:**
+  - `wmscout/sicherung.py` (neu): `sichere`, `wiederherstellen` (mit `--bestaetigt`, `--ohne-fotos`), Aufbewahrung
+  - `wmscout/migrationen.py` (neu): `schema_version`, Schritte 2 und 3, `migriere`, `pruefe_wiederherstellbar`
+  - `wmscout/datenbank.py` (ruft `migriere` auf), `wmscout/team.py` (kein eigenes Schema mehr), `wmscout/app.py`
+  - `scout.py` (`sichern`, `wiederherstellen`), `config.yaml` (Abschnitt `sicherung`), `README.md`
+  - Tests: `tests/test_sicherung.py`, `tests/test_migration.py`
+- **Implementierte Funktionen:**
+  - Sicherung über die SQLite-Backup-API mit `integrity_check`, Fotos als ZIP; Aufbewahrung `behalten` aus der
+    Konfiguration; eigene und gerade verwendete Sicherungen sind vor dem Aufräumen geschützt (auch bei Uhrsprung).
+  - Wiederherstellung nur mit Bestätigung: Quelle nur lesend in eine Arbeitskopie, Prüfung (Integrität, Scout-DB,
+    Version), Sperrprüfung vor und kurz vor dem Austausch, Vorher-Sicherung, atomarer Austausch, Fotos mit Rückweg.
+  - Migrationen: Sicherung vorher (ohne Aufräumen), je Schritt eine Transaktion, idempotent, parallel startende
+    Prozesse sicher (Reservierung der Sicherungsnummer, Neuprüfung), „DB neuer als Code“ bricht verständlich ab.
+  - Windows-taugliche Datei-URIs (Laufwerk, UNC), CLI-Meldungen ohne Traceback, Typprüfung der Konfiguration.
+- **Tests:** `pytest -q -p no:cacheprovider`, `ruff check .` (Python der Haupt-`.venv`), Mutationsläufe der Agenten
+  und der QA in Kopien, QA-Reproduktionsskripte (Uhrsprung, Parallelprozesse, defektes ZIP, Sonderzeichen-Pfade)
+- **Testergebnis (Orchestrator, Worktree nach Korrekturrunde 2):** `182 passed`, ruff „All checks passed!“.
+  Agent: 55 Mutanten, nach Nachträgen alle getötet (Volllauf nach den letzten Tests nicht wiederholt).
+- **Review-Ergebnis:**
+  1. QA-Runde 1 (1b104ad): ABLEHNUNG – K1 (älteste Sicherung zurückspielen → leere DB), H1, M1–M5, N1–N4.
+  2. QA-Runde 2 (e8b1be1): FREIGABE MIT AUFLAGEN – alle Runde-1-Befunde behoben; neu Q-F1–Q-F10 (MITTEL/NIEDRIG).
+  3. Korrekturrunde 2: Q-F1–Q-F10 und fehlende Mutantentests bearbeitet; Nachprüfung durch QA steht aus.
+- **Bekannte Risiken:** Windows und Netzlaufwerke nicht real geprüft; Sperrprüfung erkennt nur aktive
+  Schreibvorgänge (App vorher beenden; echte Laufsperre mit P1-04); Sicherungen enthalten personenbezogene Daten
+  (Löschfristen mit P1-14a).
+- **Nächster sinnvoller Schritt:** QA-Nachprüfung, dann PR gegen `claude/gifted-heisenberg-d1cjlr`.
+
 ## Phase 0 – Bestandsaufnahme (13.10.2026)
 
 Zweig `claude/phase0-agentensystem` (Basis `claude/gifted-heisenberg-d1cjlr`, Commit 3f75f67).

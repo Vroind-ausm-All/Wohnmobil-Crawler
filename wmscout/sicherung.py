@@ -4,6 +4,10 @@ Sicherung über die SQLite-Backup-API (konsistent, auch bei geöffneter Datenban
 auf der Kopie. Fotos (``daten/fotos/``) kommen als ZIP daneben. Aufbewahrung: nur die letzten N eigenen Sicherungen.
 Das Datenbankschema kennt dieses Modul nicht; die Prüfung "ist das eine Scout-Datenbank?" kommt beim Wiederherstellen
 aus ``migrationen`` (nur dort, lokal importiert, um den Importzyklus zu vermeiden) oder per Parameter ``pruefung``.
+
+Grenzen: Die Sperrprüfung vor dem Zurückspielen erkennt nur *aktive Schreibvorgänge* (Suchlauf, Speichern in der App);
+eine geöffnete, gerade ruhende App bemerkt sie nicht. App, Suchlauf und geplante Aufgaben vorher beenden. Netzlaufwerke
+und UNC-Pfade sind nicht geprüft (SQLite-Dateisperren sind dort unzuverlässig).
 """
 from __future__ import annotations
 
@@ -12,11 +16,14 @@ import re
 import shutil
 import sqlite3
 import time
+import uuid
 import zipfile
+import zlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePath, PureWindowsPath
+from urllib.parse import quote_from_bytes
 
 STANDARD_BEHALTEN = 10
 TEIL_MAX_ALTER = 3600            # Sekunden: liegen gebliebene .teil-Dateien älter als das werden beim Sichern aufgeräumt
@@ -44,19 +51,54 @@ def pruefe_behalten(wert) -> int:
     return wert
 
 
+def _abschnitt(cfg: dict) -> dict:
+    abschnitt = cfg.get("sicherung")
+    if abschnitt is None:
+        return {}
+    if not isinstance(abschnitt, dict):
+        raise ValueError(f"Ungültiger Abschnitt „sicherung“ in config.yaml: {abschnitt!r} – erwartet werden die Einträge "
+                         "„ordner“ (Text) und „behalten“ (ganze Zahl ab 1)")
+    return abschnitt
+
+
 def sicherung_ordner(cfg: dict, basis: Path) -> Path:
-    """Sicherungsordner aus ``config.yaml`` (Abschnitt ``sicherung``); relative Angaben gelten ab ``basis``."""
-    return basis / ((cfg.get("sicherung") or {}).get("ordner") or "daten/sicherungen")
+    """Sicherungsordner aus ``config.yaml`` (Abschnitt ``sicherung``); relative Angaben gelten ab ``basis``.
+    ``ValueError`` bei falschen Typen."""
+    ordner = _abschnitt(cfg).get("ordner")
+    if ordner is None or ordner == "":
+        ordner = "daten/sicherungen"
+    if not isinstance(ordner, str):
+        raise ValueError(f"Ungültiger Sicherungsordner: {ordner!r} – erwartet wird ein Pfad als Text (config.yaml -> sicherung -> ordner)")
+    return basis / ordner
 
 
 def einstellungen(cfg: dict, basis: Path) -> tuple[Path, int]:
-    """Sicherungsordner und (geprüfte) Aufbewahrung aus ``config.yaml``; ``ValueError`` bei ungültigem ``behalten``."""
-    return sicherung_ordner(cfg, basis), pruefe_behalten((cfg.get("sicherung") or {}).get("behalten"))
+    """Sicherungsordner und (geprüfte) Aufbewahrung aus ``config.yaml``; ``ValueError`` bei ungültigen Angaben."""
+    return sicherung_ordner(cfg, basis), pruefe_behalten(_abschnitt(cfg).get("behalten"))
+
+
+def datei_uri(pfad: PurePath, abfrage: str = "") -> str:
+    """SQLite-URI ohne Authority aus einem absoluten Pfad (POSIX oder Windows), Sonderzeichen prozentkodiert.
+
+    Laufwerk ``C:\\Daten\\a b.sqlite`` -> ``file:///C:/Daten/a%20b.sqlite``; UNC ``\\\\server\\share\\x.sqlite`` ->
+    ``file:////server/share/x.sqlite`` (``Path.as_uri()`` ergäbe ``file://server/...``; SQLite lehnt das als Authority ab).
+    """
+    if isinstance(pfad, PureWindowsPath):
+        text = str(pfad)
+        if text.startswith("\\\\?\\UNC\\"):             # \\?\UNC\server\share (resolve() bei langen Pfaden)
+            text = "\\\\" + text[8:]
+        elif text.startswith("\\\\?\\"):
+            text = text[4:]
+        posix = PureWindowsPath(text).as_posix()
+        teil = posix if posix.startswith("//") else "/" + posix.lstrip("/")
+    else:
+        teil = pfad.as_posix()
+    return "file://" + quote_from_bytes(teil.encode("utf-8", "surrogateescape"), safe="/:") + abfrage
 
 
 def oeffne_lesend(pfad: str | Path, timeout: float = 30) -> sqlite3.Connection:
     """Nur lesen (``mode=ro``): legt nie eine Datei an, auch wenn der Pfad nicht (mehr) existiert."""
-    return sqlite3.connect(f"{Path(pfad).resolve().as_uri()}?mode=ro", uri=True, timeout=timeout)
+    return sqlite3.connect(datei_uri(Path(pfad).resolve(), "?mode=ro"), uri=True, timeout=timeout)
 
 
 def _muster(stem: str) -> re.Pattern:
@@ -65,7 +107,13 @@ def _muster(stem: str) -> re.Pattern:
 
 
 def _teil_muster(stem: str) -> re.Pattern:
-    return re.compile(rf"^\.{re.escape(stem)}-sicherung-\d{{8}}-\d{{6}}(?:_\d+)?(?:-[A-Za-z0-9-]+)?\.(?:sqlite|fotos)\.teil$")
+    # .teil-Arbeitsdateien (mit Kennung <PID>-<Zufall>, ältere ohne) und Namensreservierungen
+    return re.compile(rf"^\.{re.escape(stem)}-sicherung-\d{{8}}-\d{{6}}(?:_\d+)?(?:-[A-Za-z0-9-]+)?(?:\.\d+-[0-9a-f]{{8}})?"
+                      rf"\.(?:(?:sqlite|fotos)\.teil|reserviert)$")
+
+
+def _belegt_muster(stem: str) -> re.Pattern:
+    return re.compile(rf"^{re.escape(stem)}-sicherung-(\d{{8}}-\d{{6}})(?:_(\d+))?(?:-[A-Za-z0-9-]+)?\.(?:sqlite|fotos\.zip)$")
 
 
 def _reihenfolge(muster: re.Pattern, ordner: Path) -> list[Path]:
@@ -106,13 +154,15 @@ def _kopiere_db(quelle: Path, ziel: Path):
 
 
 def _pruefe_sperre(db_pfad: Path, timeout: float):
-    """Technische Sperrprüfung: Läuft noch ein Schreiber (App, Suchlauf, geplante Aufgabe), bricht die Wiederherstellung ab."""
+    """Technische Sperrprüfung: Läuft noch ein *aktiver Schreibvorgang* (App, Suchlauf, geplante Aufgabe), bricht die
+    Wiederherstellung ab. Eine geöffnete, gerade ruhende App erkennt sie nicht – deshalb alles vorher beenden."""
     if not db_pfad.is_file():
         return
     try:
-        con = sqlite3.connect(f"{db_pfad.resolve().as_uri()}?mode=rw", uri=True, timeout=timeout, isolation_level=None)
-    except sqlite3.Error:
-        return
+        con = sqlite3.connect(datei_uri(db_pfad.resolve(), "?mode=rw"), uri=True, timeout=timeout, isolation_level=None)
+    except sqlite3.Error as e:          # nicht still überspringen: sonst bliebe unbemerkt, dass nicht geprüft wurde
+        raise SicherungsFehler(f"Die Sperrprüfung der Datenbank {db_pfad.name} ist nicht möglich ({e}). "
+                               "Abgebrochen; es wurde nichts verändert.") from e
     try:
         con.execute("BEGIN EXCLUSIVE")
         con.execute("ROLLBACK")
@@ -120,6 +170,8 @@ def _pruefe_sperre(db_pfad: Path, timeout: float):
         if (getattr(e, "sqlite_errorcode", 0) or 0) & 0xFF in (_SQLITE_BUSY, _SQLITE_LOCKED):
             raise SicherungsFehler("Die Datenbank ist in Benutzung (App, Suchlauf oder geplante Aufgabe läuft noch?). "
                                    "Alles beenden und erneut versuchen. Es wurde nichts verändert.") from e
+        raise SicherungsFehler(f"Die Sperrprüfung der Datenbank {db_pfad.name} ist nicht möglich ({e}). "
+                               "Abgebrochen; es wurde nichts verändert.") from e
     except sqlite3.DatabaseError:
         pass                            # defekte Datei: kein Sperrproblem, wird beim Sichern/Austausch behandelt
     finally:
@@ -143,12 +195,39 @@ def _entferne_still(pfad: Path):
         pass
 
 
+def _kennung() -> str:
+    return f"{os.getpid()}-{uuid.uuid4().hex[:8]}"
+
+
+def _reserviere(ordner: Path, stem: str, zeit: str) -> tuple[int, Path]:
+    """Reserviert exklusiv (``O_EXCL``) die nächste freie Nummer für Sicherungen dieser Sekunde.
+
+    Zwei Prozesse (App + geplante Aufgabe) in derselben Sekunde bekommen so verschiedene Namen und überschreiben einander nie.
+    Erst nach der Reservierung wird geprüft, ob die Nummer schon von einer fertigen Sicherung belegt ist.
+    """
+    muster = _belegt_muster(stem)
+    # fortlaufend über der größten vorhandenen Nummer (gelöschte Nummern werden nicht wiederverwendet: die Reihenfolge bleibt gültig)
+    n = max((int(m.group(2) or 1) for p in ordner.iterdir() if (m := muster.match(p.name)) and m.group(1) == zeit), default=0)
+    while True:
+        n += 1
+        reservierung = ordner / f".{stem}-sicherung-{zeit}{f'_{n}' if n > 1 else ''}.reserviert"
+        try:
+            os.close(os.open(reservierung, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+        except FileExistsError:
+            continue
+        if any((m := muster.match(p.name)) and m.group(1) == zeit and int(m.group(2) or 1) == n for p in ordner.iterdir()):
+            _entferne_still(reservierung)
+            continue
+        return n, reservierung
+
+
 def sichere(db_pfad: str | Path, ziel_ordner: str | Path, foto_ordner: str | Path | None = None,
             behalten: int = STANDARD_BEHALTEN, zusatz: str = "", aufraeumen: bool = True) -> Path:
-    """Legt ``<db>-sicherung-<Zeit>[-zusatz].sqlite`` (+ ``.fotos.zip``) im Zielordner an und gibt den DB-Pfad zurück.
+    """Legt ``<db>-sicherung-<Zeit>[_Nr][-zusatz].sqlite`` (+ ``.fotos.zip``) im Zielordner an und gibt den DB-Pfad zurück.
 
     Wirft ``SicherungsFehler``, wenn die Kopie die Integritätsprüfung nicht besteht (Kopie wird dann verworfen).
-    Mit ``aufraeumen`` bleiben danach nur die letzten ``behalten`` Sicherungen dieser Datenbank erhalten.
+    Mit ``aufraeumen`` bleiben danach nur die letzten ``behalten`` Sicherungen dieser Datenbank erhalten; die gerade
+    angelegte Sicherung wird dabei nie gelöscht (auch nicht bei zurückgestellter Systemuhr).
     """
     db_pfad, ziel_ordner = Path(db_pfad), Path(ziel_ordner)
     behalten = pruefe_behalten(behalten)
@@ -159,27 +238,30 @@ def sichere(db_pfad: str | Path, ziel_ordner: str | Path, foto_ordner: str | Pat
     zusatz = _ZUSATZ.sub("-", zusatz).strip("-")
     zeit = datetime.now().strftime("%Y%m%d-%H%M%S")
     nachsatz = f"-{zusatz}" if zusatz else ""
-    # mehrere Sicherungen in derselben Sekunde: Zähler fortlaufend über dem größten vorhandenen
-    gleiche = [m for p in ziel_ordner.iterdir() if (m := _muster(db_pfad.stem).match(p.name)) and m.group(1) == zeit]
-    basis = f"{db_pfad.stem}-sicherung-{zeit}" + (f"_{max(int(m.group(2) or 1) for m in gleiche) + 1}" if gleiche else "") + nachsatz
-    ziel, foto_ziel = ziel_ordner / f"{basis}.sqlite", ziel_ordner / f"{basis}.fotos.zip"
-    teil_db, teil_foto = ziel_ordner / f".{basis}.sqlite.teil", ziel_ordner / f".{basis}.fotos.teil"
+    nummer, reservierung = _reserviere(ziel_ordner, db_pfad.stem, zeit)
     try:
-        _kopiere_db(db_pfad, teil_db)
-        _integritaet(teil_db, f"Kopie von {db_pfad.name}")
-        if foto_ordner and _zippe_fotos(Path(foto_ordner), teil_foto):
-            os.replace(teil_foto, foto_ziel)
-        os.replace(teil_db, ziel)
-    except BaseException as e:
-        _entferne_still(teil_db)
-        _entferne_still(teil_foto)
-        if not ziel.exists():
-            _entferne_still(foto_ziel)
-        if isinstance(e, sqlite3.Error):
-            raise SicherungsFehler(f"Datenbank {db_pfad.name} lässt sich nicht sichern ({e}). Es wurde keine Kopie angelegt.") from e
-        raise
+        basis = f"{db_pfad.stem}-sicherung-{zeit}" + (f"_{nummer}" if nummer > 1 else "") + nachsatz
+        ziel, foto_ziel = ziel_ordner / f"{basis}.sqlite", ziel_ordner / f"{basis}.fotos.zip"
+        kennung = _kennung()
+        teil_db, teil_foto = ziel_ordner / f".{basis}.{kennung}.sqlite.teil", ziel_ordner / f".{basis}.{kennung}.fotos.teil"
+        foto_gesetzt = False
+        try:
+            _kopiere_db(db_pfad, teil_db)
+            _integritaet(teil_db, f"Kopie von {db_pfad.name}")
+            if foto_ordner and _zippe_fotos(Path(foto_ordner), teil_foto):
+                os.replace(teil_foto, foto_ziel)
+                foto_gesetzt = True
+            os.replace(teil_db, ziel)
+        except BaseException:
+            _entferne_still(teil_db)                         # nur eigene Dateien: Namen sind reserviert bzw. tragen eine Kennung
+            _entferne_still(teil_foto)
+            if foto_gesetzt and not ziel.exists():
+                _entferne_still(foto_ziel)
+            raise
+    finally:
+        _entferne_still(reservierung)
     if aufraeumen:
-        _raeume_auf(ziel_ordner, db_pfad.stem, behalten)
+        _raeume_auf(ziel_ordner, db_pfad.stem, behalten, geschuetzt=(ziel,))
     return ziel
 
 
@@ -214,27 +296,34 @@ def sicherungen(ordner: str | Path, db_stem: str) -> list[Path]:
 
 
 def _entpacke_sicher(zip_pfad: Path, ziel: Path):
+    """Entpackt das Foto-Archiv nach ``ziel``; Zip-Slip und beschädigte/abgeschnittene Archive werden als ``SicherungsFehler`` gemeldet.
+    Die CRC-Prüfung der Einträge erledigt das Entpacken selbst."""
     ziel_abs = ziel.resolve()
-    with zipfile.ZipFile(zip_pfad) as z:
-        if z.testzip() is not None:
-            raise SicherungsFehler(f"Foto-Archiv {zip_pfad.name} ist beschädigt")
-        for info in z.infolist():
-            ziel_datei = (ziel / info.filename).resolve()
-            if ziel_abs != ziel_datei and ziel_abs not in ziel_datei.parents:
-                raise SicherungsFehler(f"Foto-Archiv {zip_pfad.name} enthält unzulässige Pfade")
-        z.extractall(ziel)
+    try:
+        with zipfile.ZipFile(zip_pfad) as z:
+            for info in z.infolist():
+                ziel_datei = (ziel / info.filename).resolve()
+                if ziel_abs != ziel_datei and ziel_abs not in ziel_datei.parents:
+                    raise SicherungsFehler(f"Foto-Archiv {zip_pfad.name} enthält unzulässige Pfade")
+            z.extractall(ziel)
+    except (zipfile.BadZipFile, zipfile.LargeZipFile, EOFError, zlib.error, NotImplementedError) as e:
+        raise SicherungsFehler(f"Foto-Archiv {zip_pfad.name} ist beschädigt oder unvollständig ({e}). Nur die Datenbank "
+                               "lässt sich mit der Option --ohne-fotos zurückspielen (der Fotoordner bleibt dann unverändert). "
+                               "Es wurde nichts verändert.") from e
 
 
 def wiederherstellen(sicherung: str | Path, db_pfad: str | Path, bestaetigt: bool = False,
                      ziel_ordner: str | Path | None = None, foto_ordner: str | Path | None = None,
                      behalten: int = STANDARD_BEHALTEN, pruefung: Callable[[Path], None] | None = None,
-                     sperr_timeout: float = 2.0) -> Wiederherstellung:
-    """Spielt eine Sicherung zurück. Nur mit ``bestaetigt=True`` (App und Suchlauf müssen beendet sein).
+                     sperr_timeout: float = 2.0, mit_fotos: bool = True) -> Wiederherstellung:
+    """Spielt eine Sicherung zurück. Nur mit ``bestaetigt=True`` (App und Suchlauf müssen beendet sein; die Sperrprüfung
+    erkennt nur aktive Schreibvorgänge, keine ruhende App).
 
     Reihenfolge: Quelle in eine Arbeitskopie neben der Datenbank kopieren, prüfen (Integrität, Scout-Datenbank,
     Version) und Fotos entpacken -> Sperrprüfung -> Stand vor der Wiederherstellung sichern (ohne Aufräumen) ->
     Datenbank atomar austauschen -> Fotoordner austauschen -> erst jetzt Aufbewahrung (die Quelle bleibt immer erhalten).
     Bei jedem Fehler vor dem Austausch bleibt die bestehende Datenbank unverändert.
+    Mit ``mit_fotos=False`` wird nur die Datenbank zurückgespielt (Ausweg bei beschädigtem Foto-Archiv); der Fotoordner bleibt.
     """
     sicherung, db_pfad = Path(sicherung), Path(db_pfad)
     behalten = pruefe_behalten(behalten)
@@ -247,15 +336,17 @@ def wiederherstellen(sicherung: str | Path, db_pfad: str | Path, bestaetigt: boo
         from .migrationen import pruefe_wiederherstellbar as pruefung
     ziel_ordner = Path(ziel_ordner) if ziel_ordner else sicherung.parent
     db_pfad.parent.mkdir(parents=True, exist_ok=True)
-    teil = db_pfad.with_name(f".{db_pfad.name}.wiederherstellung.teil")
+    kennung = _kennung()                 # eindeutige Arbeitskopien: gleichzeitige Wiederherstellungen stören einander nicht
+    teil = db_pfad.with_name(f".{db_pfad.name}.{kennung}.wiederherstellung.teil")
     foto_zip = sicherung.with_name(sicherung.name[: -len(".sqlite")] + ".fotos.zip")
     foto_ordner = Path(foto_ordner) if foto_ordner else None
-    neu = foto_ordner.with_name(f".{foto_ordner.name}.wiederherstellung.teil") if foto_ordner and foto_zip.is_file() else None
+    neu = (foto_ordner.with_name(f".{foto_ordner.name}.{kennung}.wiederherstellung.teil")
+           if mit_fotos and foto_ordner and foto_zip.is_file() else None)
+    _raeume_wiederherstellungsreste(db_pfad, foto_ordner)
 
     vorher = None
     try:
         # 1. Quelle zuerst in eine Arbeitskopie (nur lesend), dann prüfen – ab hier hängt nichts mehr von der Quelldatei ab
-        _entferne_still(teil)
         _kopiere_db(sicherung, teil)
         _integritaet(teil, sicherung.name)
         pruefung(teil)
@@ -274,9 +365,14 @@ def wiederherstellen(sicherung: str | Path, db_pfad: str | Path, bestaetigt: boo
                 vorher = sichere(db_pfad, ziel_ordner, foto_ordner, behalten, zusatz="vor-wiederherstellung", aufraeumen=False)
             except (SicherungsFehler, sqlite3.Error):
                 # Defekte Datenbank: Rohkopie behalten (außerhalb der Aufbewahrungsregel), damit nichts verloren geht
-                vorher = ziel_ordner / f"{db_pfad.stem}-defekt-{datetime.now().strftime('%Y%m%d-%H%M%S')}.sqlite.defekt"
                 ziel_ordner.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(db_pfad, vorher)
+                vorher = _freier_name(ziel_ordner / f"{db_pfad.stem}-defekt-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+                                      ".sqlite.defekt", datei=True)
+                try:
+                    shutil.copy2(db_pfad, vorher)
+                except BaseException:
+                    _entferne_still(vorher)
+                    raise
             _pruefe_sperre(db_pfad, sperr_timeout)
         # 5. Austausch; Reste der alten Datenbank dürfen nicht zur neuen passen (erst jetzt, nach erfolgreicher Sperrprüfung)
         for endung in ("-wal", "-shm", "-journal"):
@@ -296,15 +392,17 @@ def wiederherstellen(sicherung: str | Path, db_pfad: str | Path, bestaetigt: boo
     if neu is not None:
         try:
             if foto_ordner.exists():
-                alt = _freier_name(foto_ordner.with_name(f"{foto_ordner.name}.alt-{datetime.now().strftime('%Y%m%d-%H%M%S')}"))
-                foto_ordner.rename(alt)
+                ziel_alt = _freier_name(foto_ordner.with_name(f"{foto_ordner.name}.alt-{datetime.now().strftime('%Y%m%d-%H%M%S')}"))
+                foto_ordner.rename(ziel_alt)
+                alt = ziel_alt                  # erst nach gelungenem Umbenennen: sonst verwiese die Meldung auf einen fehlenden Ordner
             neu.rename(foto_ordner)
             fotos = True
         except OSError as e:
             raise SicherungsFehler(_fotofehler(e, foto_ordner, alt, neu, foto_zip, vorher)) from e
     try:
         if ziel_ordner.is_dir():
-            _raeume_auf(ziel_ordner, db_pfad.stem, behalten, geschuetzt=(sicherung,))
+            # Quelle und Stand davor nie löschen (bei zurückgestellter Systemuhr wäre "neueste" sonst falsch einsortiert)
+            _raeume_auf(ziel_ordner, db_pfad.stem, behalten, geschuetzt=tuple(g for g in (sicherung, vorher) if g))
     except OSError:
         pass
     return Wiederherstellung(vorher, fotos, alt)
@@ -317,16 +415,48 @@ def _hebe_reste_auf(db_pfad: Path, ziel_ordner: Path):
         ziel_ordner.mkdir(parents=True, exist_ok=True)
         zeit = datetime.now().strftime("%Y%m%d-%H%M%S")
         for r in reste:
-            shutil.copy2(r, _freier_name(ziel_ordner / f"{db_pfad.stem}-reste-{zeit}{r.name[len(db_pfad.name):]}"))
+            shutil.copy2(r, _freier_name(ziel_ordner / f"{db_pfad.stem}-reste-{zeit}", r.name[len(db_pfad.name):], datei=True))
 
 
-def _freier_name(pfad: Path) -> Path:
-    """Hängt bei Namensgleichheit (zwei Wiederherstellungen in derselben Sekunde) einen Zähler an; nichts wird überschrieben."""
-    kandidat, n = pfad, 1
-    while kandidat.exists():
+def _freier_name(pfad: Path, endung: str = "", datei: bool = False) -> Path:
+    """Hängt bei Namensgleichheit (zwei Vorgänge in derselben Sekunde) einen Zähler vor die ``endung`` an; nichts wird überschrieben.
+    Mit ``datei=True`` wird der Name atomar (``O_EXCL``) durch eine leere Datei belegt, die der Aufrufer dann überschreibt."""
+    n = 1
+    while True:
+        kandidat = pfad.with_name(pfad.name + (f"_{n}" if n > 1 else "") + endung)
         n += 1
-        kandidat = pfad.with_name(f"{pfad.name}_{n}")
-    return kandidat
+        if not datei:
+            if not kandidat.exists():
+                return kandidat
+            continue
+        try:
+            os.close(os.open(kandidat, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            return kandidat
+        except FileExistsError:
+            continue
+
+
+def _raeume_wiederherstellungsreste(db_pfad: Path, foto_ordner: Path | None):
+    """Entfernt liegen gebliebene Arbeitskopien früherer, abgebrochener Wiederherstellungen (älter als ``TEIL_MAX_ALTER``);
+    frische gehören vielleicht zu einer laufenden Wiederherstellung."""
+    grenze = time.time() - TEIL_MAX_ALTER
+    muster = [(db_pfad.parent, re.compile(rf"^\.{re.escape(db_pfad.name)}(?:\.\d+-[0-9a-f]{{8}})?\.wiederherstellung\.teil$"))]
+    if foto_ordner is not None:
+        muster.append((foto_ordner.parent, re.compile(rf"^\.{re.escape(foto_ordner.name)}(?:\.\d+-[0-9a-f]{{8}})?\.wiederherstellung\.teil$")))
+    for ordner, m in muster:
+        try:
+            kandidaten = [p for p in ordner.iterdir() if m.match(p.name)]
+        except OSError:
+            continue
+        for p in kandidaten:
+            try:
+                if p.stat().st_mtime < grenze:
+                    if p.is_dir():
+                        shutil.rmtree(p, ignore_errors=True)
+                    else:
+                        _entferne_still(p)
+            except OSError:
+                pass
 
 
 def _fotofehler(e: OSError, foto_ordner: Path, alt: Path | None, neu: Path, foto_zip: Path, vorher: Path | None) -> str:
@@ -341,7 +471,8 @@ def _fotofehler(e: OSError, foto_ordner: Path, alt: Path | None, neu: Path, foto
         shutil.rmtree(neu, ignore_errors=True)
         wo = f"Die bisherigen Fotos liegen unverändert in {foto_ordner}." if foto_ordner.exists() else "Der Fotoordner blieb unverändert."
     else:
-        wo = f"Der alte Stand der Fotos liegt in {alt}; die Fotos der Sicherung liegen entpackt in {neu} (Archiv: {foto_zip})."
+        wo = (f"Der alte Stand der Fotos liegt in {alt}; die Fotos der Sicherung liegen entpackt in {neu} (Archiv: {foto_zip}; "
+              "der entpackte Ordner wird bei der nächsten Wiederherstellung nach über einer Stunde entfernt).")
     davor = f" Stand der Datenbank davor: {vorher}." if vorher else ""
     return (f"Datenbank wiederhergestellt, Fotos NICHT ({e}). {wo} Die Fotos der Sicherung lassen sich später aus "
             f"{foto_zip.name} nachholen.{davor}")

@@ -8,7 +8,7 @@ from tests.test_datenbank import SCHEMA_V1
 from wmscout import migrationen
 from wmscout.datenbank import Datenbank
 from wmscout.migrationen import AKTUELLE_VERSION, MigrationsFehler, lese_version, migriere
-from wmscout.sicherung import sichere, sicherungen, wiederherstellen
+from wmscout.sicherung import SicherungsFehler, sichere, sicherungen, wiederherstellen
 
 # Stand vor Phase 1, unabhängig von migrationen.py nachgebaut (damit der Test den Altbestand wirklich abbildet)
 SCHEMA_V2 = """
@@ -378,3 +378,87 @@ def test_n3_app_nutzt_sicherungsordner_aus_der_konfiguration(cfg, tmp_path):
     Suchlauf(cfg, cfg["ausgabe"]["datenbank"], tmp_path).oeffne_datenbank().con.close()
     assert len(sicherungen(tmp_path / "eigene-sicherungen", "anzeigen")) == 1       # nicht daten/sicherungen neben der Datenbank
     assert not (tmp_path / "sicherungen").exists()
+
+
+# ---------- Korrekturrunde 2 ----------
+
+@pytest.mark.parametrize("zusatz", [1])
+def test_q24_q25_schemaversion_knapp_ueber_dem_code_wird_bei_wiederherstellung_und_start_abgewiesen(tmp_path, zusatz):
+    pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
+    baue_v2(pfad)
+    migriere(pfad, ziel)
+    neu = AKTUELLE_VERSION + zusatz
+    kopie = sichere(pfad, ziel)
+    fest_sicherung = pruefsumme(kopie)
+    for datei in (pfad, kopie):
+        con = sqlite3.connect(datei)
+        con.execute("INSERT INTO schema_version VALUES (?, '2030-01-01T00:00:00')", (neu,))
+        con.commit()
+        con.close()
+    leer = tmp_path / "ziel.sqlite"
+    baue_v2(leer)
+    fest = pruefsumme(leer)
+    with pytest.raises(SicherungsFehler, match=f"Schemaversion {neu}"):                # Wiederherstellung
+        wiederherstellen(kopie, leer, bestaetigt=True, ziel_ordner=ziel)
+    assert pruefsumme(leer) == fest
+    fest_live = pruefsumme(pfad)
+    with pytest.raises(MigrationsFehler, match=f"Schemaversion {neu}"):                # Start
+        Datenbank(str(pfad), str(ziel))
+    assert pruefsumme(pfad) == fest_live and pruefsumme(kopie) != fest_sicherung       # (Kopie wurde absichtlich verändert)
+
+
+def test_q23_parallel_angelegte_aeltere_datenbank_wird_neu_beurteilt_und_migriert(tmp_path, monkeypatch):
+    """Ein zweiter Prozess (ältere Programmversion) legt die Datenbank gerade im Stand v2 an: nicht einfach "fertig" melden."""
+    pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
+
+    def anderer_prozess_war_schneller(con):
+        baue_v2(pfad)
+        return False
+
+    monkeypatch.setattr(migrationen, "_neu_anlegen", anderer_prozess_war_schneller)
+    assert migriere(pfad, ziel) == [AKTUELLE_VERSION]
+    assert lese_version(pfad) == AKTUELLE_VERSION and versionen(pfad) == [2, 3]
+    assert len(zeilen(pfad, "anzeigen")) == len(ZEILEN_V1) and len(sicherungen(ziel, "db")) == 1
+
+
+def test_f2_sicherungsfehler_aber_anderer_prozess_hat_schon_migriert_ist_kein_fehler(tmp_path, monkeypatch):
+    pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
+    baue_v2(pfad)
+    echt = migrationen.sichere
+
+    def anderer_prozess_migriert_dann_scheitert_die_sicherung(*a, **k):
+        monkeypatch.setattr(migrationen, "sichere", echt)
+        assert migriere(pfad, ziel) == [AKTUELLE_VERSION]
+        raise SicherungsFehler("simuliert: Namenskonflikt")
+
+    monkeypatch.setattr(migrationen, "sichere", anderer_prozess_migriert_dann_scheitert_die_sicherung)
+    assert migriere(pfad, ziel) == []
+    assert versionen(pfad) == [2, 3] and len(zeilen(pfad, "anzeigen")) == len(ZEILEN_V1)
+
+
+def test_f2_zwei_echte_prozesse_gleichzeitig_auf_altbestand_kein_abbruch_genau_eine_migration(tmp_path):
+    import subprocess
+    import sys
+    import time
+    from pathlib import Path
+    code = ("import sys, time\nfrom wmscout.migrationen import migriere\n"
+            "while time.time() < float(sys.argv[3]): pass\n"
+            "try:\n    print('OK', migriere(sys.argv[1], sys.argv[2]))\n"
+            "except Exception as e:\n    print('FEHLER', e)\n")
+    wurzel = Path(__file__).resolve().parent.parent
+    for runde in range(3):
+        pfad, ziel = tmp_path / f"r{runde}.sqlite", tmp_path / f"sich{runde}"
+        baue_v2(pfad)
+        vorher = {t: zeilen(pfad, t) for t in ("anzeigen", "nutzer", "sitzungen", "besichtigungen", "fotos")}
+        start = str(time.time() + 1.5)
+        prozesse = [subprocess.Popen([sys.executable, "-c", code, str(pfad), str(ziel), start], cwd=wurzel, text=True,
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE) for _ in range(3)]
+        ausgaben = [p.communicate(timeout=120) for p in prozesse]
+        meldungen = sorted(o.strip() for o, _ in ausgaben)
+        assert all(m.startswith("OK") for m in meldungen), ausgaben
+        assert meldungen.count("OK [3]") == 1 and meldungen.count("OK []") == 2, meldungen      # genau eine Migration
+        assert versionen(pfad) == [2, 3]
+        assert {t: zeilen(pfad, t) for t in vorher} == vorher                                      # nichts verloren
+        for s in sicherungen(ziel, "r" + str(runde)):
+            assert sqlite3.connect(s).execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert not [p for p in ziel.iterdir() if p.name.startswith(".")]                           # keine Arbeits-/Reservierungsreste

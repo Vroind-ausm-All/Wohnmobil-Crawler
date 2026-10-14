@@ -141,8 +141,9 @@ def pruefe_wiederherstellbar(pfad: str | Path):
                                "Bitte das Programm aktualisieren. Es wurde nichts verändert.")
 
 
-def _fuehre_aus(con: sqlite3.Connection, version: int, erkannt: int):
-    """Ein Schritt in einer Transaktion; Zeilenzahl von anzeigen und Team-Tabellen darf sich dabei nicht ändern."""
+def _fuehre_aus(con: sqlite3.Connection, version: int, erkannt: int) -> bool:
+    """Ein Schritt in einer Transaktion; Zeilenzahl von anzeigen und Team-Tabellen darf sich dabei nicht ändern.
+    Rückgabe False: Ein anderer Prozess hatte den Schritt schon erledigt, hier wurde nichts getan."""
     con.execute("BEGIN IMMEDIATE")
     try:
         # Zweiter Prozess war schneller? Dann ist der Schritt schon erledigt (Idempotenz auch bei Wettlauf).
@@ -150,7 +151,7 @@ def _fuehre_aus(con: sqlite3.Connection, version: int, erkannt: int):
             aktuell = con.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] or 0
             if aktuell >= version:
                 con.execute("ROLLBACK")
-                return
+                return False
         else:
             con.execute(_SCHEMA_VERSION)
             if erkannt >= 1:       # Ausgangsstand von Altbeständen festhalten (Herkunft nachvollziehbar)
@@ -162,6 +163,7 @@ def _fuehre_aus(con: sqlite3.Connection, version: int, erkannt: int):
             raise MigrationsFehler(f"Zeilenzahl hat sich bei Schritt {version} geändert: {vorher} -> {nachher}")
         con.execute("INSERT OR REPLACE INTO schema_version VALUES (?,?)", (version, _jetzt()))
         con.execute("COMMIT")
+        return True
     except BaseException:
         if con.in_transaction:
             con.execute("ROLLBACK")
@@ -195,6 +197,13 @@ def _neu_anlegen(con: sqlite3.Connection) -> bool:
         if con.in_transaction:
             con.execute("ROLLBACK")
         raise
+
+
+def _inzwischen_aktuell(db_pfad: Path) -> bool:
+    try:
+        return lese_version(db_pfad) >= AKTUELLE_VERSION
+    except (sqlite3.Error, MigrationsFehler):
+        return False
 
 
 def migriere(db_pfad: str | Path, sicherung_ordner: str | Path | None = None) -> list[int]:
@@ -232,17 +241,20 @@ def migriere(db_pfad: str | Path, sicherung_ordner: str | Path | None = None) ->
         try:
             kopie = sichere(db_pfad, sicherung_ordner, zusatz=f"vor-v{offen[-1]}", aufraeumen=False)
         except (SicherungsFehler, OSError, sqlite3.Error) as e:
+            if _inzwischen_aktuell(db_pfad):          # ein anderer Prozess (App + geplante Aufgabe) hat in der Zwischenzeit migriert
+                return []
             raise MigrationsFehler(f"Migration abgebrochen: Die Sicherung vor der Migration ist fehlgeschlagen ({e}). "
                                    "Die Datenbank wurde nicht verändert.") from e
         con = sqlite3.connect(str(db_pfad), timeout=30, isolation_level=None)
         erledigt = []
         for v in offen:
             try:
-                _fuehre_aus(con, v, erkannt)
+                ausgefuehrt = _fuehre_aus(con, v, erkannt)
             except Exception as e:  # noqa: BLE001 – Rollback ist erfolgt; verständliche Meldung mit Rückweg
                 raise MigrationsFehler(f"Migration auf Version {v} fehlgeschlagen und zurückgerollt: {e}. "
                                        f"Sicherung vor der Migration: {kopie}") from e
-            erledigt.append(v)
+            if ausgefuehrt:
+                erledigt.append(v)
         return erledigt
     finally:
         con.close()

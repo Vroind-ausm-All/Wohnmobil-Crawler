@@ -7,7 +7,7 @@
   python scout.py rechne --preis 32900 --ez 2016 --km 98000 --titel "Knaus Sky TI 650 MEG" [--anschreiben]
   python scout.py nutzer anlegen <Name> [--rolle inhaber]   Team-Zugang für Handy-App anlegen
   python scout.py sichern                   Datenbank (und Fotos) sichern -> daten/sicherungen
-  python scout.py wiederherstellen <Datei> --bestaetigt   Sicherung zurückspielen (App und Suchlauf vorher beenden)
+  python scout.py wiederherstellen <Datei> --bestaetigt [--ohne-fotos]   Sicherung zurückspielen (App und Suchlauf vorher beenden)
   python scout.py status <ID> kontaktiert   Status setzen (neu|kontaktiert|verhandlung|besichtigung|gekauft|abgesagt|uninteressant)
 """
 from __future__ import annotations
@@ -145,12 +145,15 @@ def cmd_wiederherstellen(cfg, args):
         ordner, behalten = einstellungen(cfg, BASIS)
         if not quelle.is_file() and (ordner / args.datei).is_file():
             quelle = ordner / args.datei
-        erg = wiederherstellen(quelle, BASIS / cfg["ausgabe"]["datenbank"], args.bestaetigt, ordner, foto_ordner(cfg), behalten)
+        erg = wiederherstellen(quelle, BASIS / cfg["ausgabe"]["datenbank"], args.bestaetigt, ordner, foto_ordner(cfg), behalten,
+                              mit_fotos=not args.ohne_fotos)
     except (SicherungsFehler, MigrationsFehler, ValueError, sqlite3.Error, OSError) as e:
         sys.exit(f"Wiederherstellung fehlgeschlagen: {e}")
     print(f"Wiederhergestellt aus {quelle}.")
     if erg.sicherung_vorher:
         print(f"Stand davor gesichert in: {erg.sicherung_vorher}")
+    if args.ohne_fotos:
+        print("Nur die Datenbank wurde zurückgespielt; der Fotoordner blieb unverändert.")
     if erg.fotos_wiederhergestellt:
         print("Fotos wiederhergestellt." + (f" Bisherige Fotos liegen unverändert in: {erg.alter_fotoordner}" if erg.alter_fotoordner else ""))
     print("Beim nächsten Start wird die Datenbank bei Bedarf auf die aktuelle Version gebracht (mit eigener Sicherung).")
@@ -229,6 +232,8 @@ def main():
     w = sub.add_parser("wiederherstellen", help="Sicherung zurückspielen (App und Suchlauf vorher beenden)")
     w.add_argument("datei", help="Sicherungsdatei (.sqlite), auch nur der Dateiname aus dem Sicherungsordner")
     w.add_argument("--bestaetigt", action="store_true", help="bestätigt: App und Suchlauf sind beendet")
+    w.add_argument("--ohne-fotos", action="store_true",
+                   help="nur die Datenbank zurückspielen, Fotoordner unverändert lassen (z. B. bei beschädigtem Foto-Archiv)")
     args = p.parse_args()
 
     cfg = lade_config(args.config)

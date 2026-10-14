@@ -4,6 +4,22 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P1-02 / P1-03 – Datensicherung und Migrationsrahmen (14.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q -p no:cacheprovider` (Orchestrator, Worktree nach Korrekturrunde 2) | **182 passed** |
+| `ruff check .` | All checks passed! |
+| QA-Runde 1 (1b104ad): Nachbau „älteste Sicherung bei voller Aufbewahrung“ | **leere DB** (K1) → ABLEHNUNG |
+| QA-Runde 2 (e8b1be1): K1/H1/Zip-Slip/paralleles Neuanlegen nachgebaut | behoben (Quelle bleibt, 15 → 16 Sicherungen, 3× abgewiesen, 0 Fehler) |
+| QA-Runde 2: Uhrsprung, 2 Prozesse auf Altbestand, abgeschnittenes ZIP, UNC-URI | Befunde Q-F1–Q-F5 reproduziert → FREIGABE MIT AUFLAGEN |
+| Agent nach Korrekturrunde 2: QA-Skripte s4/s7/s9/s5/s1 | Sicherungen bleiben; 10 Runden à 2 Prozesse 0 Fehler; kein Traceback |
+| Migration v1-Altbestand (QA, 203 Zeilen) | ohne Verlust, Sicherung = Altstand, zweiter Lauf ändert nichts |
+| Windows, Netzlaufwerke, CI | nicht geprüft |
+| QA-Nachprüfung der Korrekturrunde 2 | nicht geprüft (steht aus) |
+
+---
+
 ## Phase 0 – Bestandsaufnahme (13.10.2026)
 
 Prüfer: Orchestrator und Agent `qa-security-reviewer` (unabhängig; ohne Edit/Write, `Bash` nur per Prompt auf
