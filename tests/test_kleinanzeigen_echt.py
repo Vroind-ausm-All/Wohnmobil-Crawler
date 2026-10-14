@@ -1,0 +1,517 @@
+"""Kleinanzeigen-Seiten im neuen Layout (P2-05, Teil 2): Testdaten stammen aus echten, vom Betreiber am 13.10.2026 im
+Browser gespeicherten Seiten (anonymisiert und gekürzt, siehe tests/seiten/kleinanzeigen/).
+
+Grenze: Die Dateien sind ein Ausschnitt (6 Treffer, 1 Anzeigenseite). Andere Kategorien/Sonderfälle der Live-Seite
+(z. B. Neufahrzeug-Karussells, Werbeblöcke) sind hier nicht abgedeckt.
+"""
+import json
+import re
+import shutil
+from pathlib import Path
+
+import pytest
+from bs4 import BeautifulSoup
+
+from tests.daten import BASIS, detail_html
+from tests.test_seitenimport import KeinNetz
+from wmscout.bewertung.anschreiben import HINWEIS_ART_UNBEKANNT, HINWEIS_ART_VORLAEUFIG, verkaeufer_name
+from wmscout.bewertung.auswertung import bewerte_alle
+from wmscout.datenbank import IMPORT_SUCHE, Datenbank
+from wmscout.eingang import SuchseitenArt, erkenne_seite, fahrzeugart_der_suchseite, haupttabelle_ids
+from wmscout.eingang.seiten import _kopf
+from wmscout.importer import Importer
+from wmscout.quellen.kleinanzeigen import KleinanzeigenQuelle
+from wmscout.quellen.kleinanzeigen.parser import ez_aus_text, parse_detailseite, parse_suchseite
+from wmscout.normalisierung.fahrzeug import ist_basismarke, marke_aus_text, normalisiere_marke
+from wmscout.normalisierung.person import profilname
+
+DATEN = Path(__file__).resolve().parent / "seiten" / "kleinanzeigen"
+TEST_BILD = "https://img.kleinanzeigen.de/api/v1/prod-ads/images/test.jpg"
+DETAIL_ID = "3900000010"
+AEHNLICH = ("3900000011", "3900000012")           # „ähnliche Anzeigen“ auf der Detailseite
+
+
+@pytest.fixture(scope="module")
+def such():
+    return (DATEN / "suchseite.html").read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def detail():
+    return (DATEN / "detailseite.html").read_text(encoding="utf-8")
+
+
+def nach_id(treffer):
+    return {t["id"]: t for t in treffer}
+
+
+# ---------- Trefferliste ----------
+def test_suchseite_alle_artikel_mit_pflichtfeldern(such):
+    treffer = parse_suchseite(such)
+    artikel = BeautifulSoup(such, "html.parser").select("article[data-adid]")
+    assert len(artikel) == 6 and [t["id"] for t in treffer] == [a["data-adid"] for a in artikel]
+    for t in treffer:
+        assert t["url"].startswith("https://www.kleinanzeigen.de/s-anzeige/") and t["id"] in t["url"]
+        assert t["titel"] and t["preis"] and re.match(r"^\d{5} \S", t["ort"])
+        assert t["bild"] == TEST_BILD                       # direkte http-Adresse bzw. Rückfall auf ld+json
+        assert t["ist_gesuch"] is False
+
+
+def test_suchseite_felder_im_einzelnen(such):
+    t = nach_id(parse_suchseite(such))
+    pro_und_top = t["3900000001"]
+    assert (pro_und_top["preis"], pro_und_top["vb"], pro_und_top["ez_jahr"]) == (63990, False, 2025)
+    assert pro_und_top["gewerblich"] is True and pro_und_top["ort"] == "71111 Beispielstadt"
+
+    top = t["3900000002"]                                   # nur „TOP“ (bezahlte Hervorhebung) – kein Händlerhinweis
+    assert top["gewerblich"] is False
+    assert (top["preis"], top["vb"]) == (34999, True)       # nicht der durchgestrichene Altpreis 37.500 €
+    assert (top["ez_jahr"], top["km"], top["ort"]) == (2012, 98004, "72222 Musterdorf")
+    assert top["marke"] == "Knaus"
+
+    pro = t["3900000003"]
+    assert pro["gewerblich"] is True and pro["ez_jahr"] == 2021 and pro["marke"] == "Sunlight"
+    assert pro["datum"] == "Heute, 21:16"
+
+    privat = t["3900000004"]
+    assert privat["gewerblich"] is False and privat["ez_jahr"] == 2026 and privat["preis"] == 58498
+    assert t["3900000005"]["km"] == 4000
+
+    ohne_link = t["3900000006"]                             # Titel ohne Link (span in der Überschrift)
+    assert ohne_link["titel"].startswith("Eurom Klima Anlage") and ohne_link["preis"] == 200
+    assert ohne_link["ez_jahr"] is None and ohne_link["gewerblich"] is False
+    assert "3900000006" in ohne_link["url"]
+
+
+def test_durchgestrichener_altpreis_vor_dem_aktuellen_preis(such):
+    """Steht der durchgestrichene Preis im Markup vor dem aktuellen, gilt trotzdem der aktuelle."""
+    tausch = re.compile(r'(<p class="(?:(?!line-through)[^"])*">[^<]*€(?: VB)?</p>)(<p class="[^"]*line-through[^"]*">[^<]*€</p>)')
+    umgestellt, anzahl = tausch.subn(r"\2\1", such)
+    assert anzahl == 2
+    assert umgestellt.index("37.500 €") < umgestellt.index("34.999 €")
+    t = nach_id(parse_suchseite(umgestellt))
+    assert (t["3900000002"]["preis"], t["3900000002"]["vb"]) == (34999, True)
+    assert t["3900000001"]["preis"] == 63990
+    assert sorted(x["preis"] for x in parse_suchseite(umgestellt)) == sorted(x["preis"] for x in parse_suchseite(such))
+
+
+def test_suchseite_bild_nur_http_und_ld_json_rueckfall(such):
+    # lokale Bilddatei (Browser-Speicherung) wird nicht übernommen; ld+json liefert die Adresse
+    ohne_ld = re.sub(r'<script type="application/ld\+json">.*?</script>', "", such, flags=re.S)
+    bilder = {t["id"]: t["bild"] for t in parse_suchseite(ohne_ld)}
+    assert bilder["3900000001"] == TEST_BILD                # hier steht eine http-Adresse im Bild
+    assert bilder["3900000002"] is None                     # nur lokaler Pfad, kein Rückfall mehr
+    assert parse_suchseite(such)[1]["bild"] == TEST_BILD
+
+
+def test_ld_json_zuordnung_ueber_bild_uuid():
+    html = """<html><body><article data-adid="3500000001" data-href="/s-anzeige/x/3500000001-220-1">
+      <img src="seite_files/11111111-2222-3333-4444-555555555555_002_ab.avif" alt="x">
+      <h3><a href="/s-anzeige/x/3500000001-220-1">Gleicher Titel</a></h3><p>Text</p>
+      <div class="flex"><p class="text-title3">1.000 €</p></div><span>10115 Berlin</span></article>
+      <article data-adid="3500000002" data-href="/s-anzeige/y/3500000002-220-1">
+      <img src="seite_files/66666666-7777-8888-9999-000000000000_002_ab.avif" alt="y">
+      <h3><a href="/s-anzeige/y/3500000002-220-1">Gleicher Titel</a></h3><p>Text</p>
+      <div class="flex"><p class="text-title3">2.000 €</p></div><span>10115 Berlin</span></article>
+      <script type="application/ld+json">{"title":"Gleicher Titel","contentUrl":"https://img.kleinanzeigen.de/api/v1/prod-ads/images/66/66666666-7777-8888-9999-000000000000?rule=x","@type":"ImageObject"}</script>
+      <script type="application/ld+json">{"title":"Gleicher Titel","contentUrl":"https://img.kleinanzeigen.de/api/v1/prod-ads/images/11/11111111-2222-3333-4444-555555555555?rule=x","@type":"ImageObject"}</script>
+      <script type="application/ld+json">kaputt {</script></body></html>"""
+    bilder = {t["id"]: t["bild"] for t in parse_suchseite(html)}
+    assert bilder["3500000001"].endswith("11111111-2222-3333-4444-555555555555?rule=x")
+    assert bilder["3500000002"].endswith("66666666-7777-8888-9999-000000000000?rule=x")
+
+
+def test_gesuch_tag_wird_erkannt(such):
+    gesuch = such.replace("EZ 08/2012", "Gesuch", 1)
+    t = nach_id(parse_suchseite(gesuch))
+    assert t["3900000002"]["ist_gesuch"] is True and t["3900000001"]["ist_gesuch"] is False
+    art, inserate = erkenne_seite(gesuch)
+    assert art == "suche" and len(inserate) == 5 and "3900000002" not in {i.anzeigen_id for i in inserate}
+
+
+def test_ez_aus_text_formen():
+    assert ez_aus_text("Erstzulassung Juli 2021") == 2021
+    assert ez_aus_text("Erstzulassung März 2019") == 2019
+    assert ez_aus_text("Erstzulassung: 2009 Kraftstoff: Benzin") == 2009
+    assert ez_aus_text("Erstzulassung 07/2021") == 2021
+    assert ez_aus_text("EZ 03/2019") == 2019
+    assert ez_aus_text("Zulassung ohne Jahr") is None
+
+
+# ---------- Anzeigenseite ----------
+def test_detailseite_felder(detail):
+    d = parse_detailseite(detail)
+    assert d["titel"] == "Sunlight Cliff 640 Testfahrzeug | Klima | Fahrradträger | 1. Hd"
+    assert (d["preis"], d["vb"]) == (47300, True)
+    assert (d["km"], d["ez_jahr"], d["marke"], d["art"]) == (41200, 2021, "Sunlight", "Kastenwagen")
+    assert d["anzeigen_id"] == DETAIL_ID
+    assert d["gewerblich"] is False                         # „Privater Nutzer“; PRO-Links gibt es nur bei ähnlichen Anzeigen
+    assert d["ort"] == "71111 Beispielstadt am Test"        # ohne Bundesland, wie in der Trefferliste
+    assert d["details"] == {"Art": "Kastenwagen", "Marke": "Sunlight", "Kilometerstand": "41.200 km",
+                            "Erstzulassung": "Juli 2021"}
+    assert "Testbeschreibung" in d["beschreibung"]
+
+
+def test_detailseite_gewerblich_nur_aus_verkaeuferbereich(detail):
+    haendler = detail.replace("Privater Nutzer", "Gewerblicher Nutzer")
+    assert parse_detailseite(haendler)["gewerblich"] is True
+    pro_aehnlich = detail.replace("</section>", '<article data-adid="3500000009"><a href="/pro/x">PRO</a></article></section>')
+    assert parse_detailseite(pro_aehnlich)["gewerblich"] is False
+    pro_verkaeufer = detail.replace("</body>", '<a href="https://www.kleinanzeigen.de/pro/shop">Shop</a></body>')
+    assert parse_detailseite(pro_verkaeufer)["gewerblich"] is True
+
+
+HYMER_TITEL = "Hymer-Mobil Mercedes-Benz Bj 1981 H-Kennzeichen Heckbad S-Klasse"
+
+
+def test_basismarke_mit_leerzeichen_und_bindestrich():
+    for schreibweise in ("Mercedes Benz", "Mercedes-Benz", "mercedes  benz", "MERCEDES-BENZ"):
+        assert normalisiere_marke(schreibweise) == "Mercedes" and ist_basismarke(normalisiere_marke(schreibweise))
+    assert normalisiere_marke("Eura-Mobil") == "Eura Mobil" and normalisiere_marke("Mc Louis") == "McLouis"
+    assert normalisiere_marke("Unbekannt GmbH") == "Unbekannt GmbH"
+    assert marke_aus_text(HYMER_TITEL) == "Hymer" and marke_aus_text("Hymer Mobil Mercedes Benz") == "Hymer"
+    assert marke_aus_text("Mercedes Benz Sprinter Camper") == "Mercedes"
+
+
+def test_detailseite_hymer_mobil_auf_mercedes_benz_fahrgestell(detail):
+    """Echter Fall: Feld „Marke“ = „Mercedes Benz“ (Fahrgestell), der Titel nennt den Aufbauhersteller Hymer."""
+    html = detail.replace("Sunlight Cliff 640 Testfahrzeug | Klima | Fahrradträger | 1. Hd", HYMER_TITEL)
+    html = html.replace('itemprop="brand">Sunlight<', 'itemprop="brand">Mercedes Benz<')
+    assert parse_detailseite(html)["marke"] == "Hymer"
+    kein_hersteller = html.replace(HYMER_TITEL, "Wohnmobil Bj 1981 H-Kennzeichen").replace("Sunlight", "Aufbau").replace("Fiat Ducato", "Diesel")
+    assert parse_detailseite(kein_hersteller)["marke"] == "Mercedes"        # nur das Fahrgestell bekannt
+
+
+def test_altes_detailformat_hat_keine_anzeigen_id(ads):
+    d = parse_detailseite(detail_html(ads[0]))
+    assert d["anzeigen_id"] is None and d["km"] == ads[0]["km"]
+
+
+def test_canonical_steht_wie_im_original_im_body(detail):
+    """Im Original steht <meta rel="canonical"> hinter </head> im <body> – der praxisrelevante Weg wird getestet."""
+    assert detail.index("</head>") < detail.index('rel="canonical"') and 'rel="canonical"' not in _kopf(detail)
+    art, inserate = erkenne_seite(detail)
+    assert art == "detail" and [i.anzeigen_id for i in inserate] == [DETAIL_ID]
+    assert inserate[0].url == f"https://www.kleinanzeigen.de/s-anzeige/sunlight-cliff-640-beispiel/{DETAIL_ID}-220-1010"
+    # auch wenn die Seite unten „ähnliche Anzeigen“ trägt und keinerlei Adresse im Kopf steht
+    assert [i.anzeigen_id for i in erkenne_seite(detail.replace(DETAIL_ID, "3900000077"))[1]] == ["3900000077"]
+
+
+def test_kopf_ohne_head_ende_und_body():
+    assert _kopf("<html><head><title>x</title></head><body>Rest</body></html>") == "<html><head><title>x</title>"
+    assert _kopf("<html><head><title>x</title><body>Rest") == "<html><head><title>x</title>"      # nur <body>
+    langer = "<html><title>x</title>" + "a" * 150_000
+    assert _kopf(langer) == langer[:100_000]                                                      # beides fehlt
+
+
+def test_erkennung_detailseite_nur_die_eigene_anzeige(detail):
+    art, inserate = erkenne_seite(detail)
+    assert art == "detail" and [i.anzeigen_id for i in inserate] == [DETAIL_ID]
+    i = inserate[0]
+    assert i.url == ("https://www.kleinanzeigen.de/s-anzeige/sunlight-cliff-640-beispiel/"
+                     f"{DETAIL_ID}-220-1010")
+    assert (i.preis, i.km, i.ez_jahr, i.marke, i.art, i.gewerblich) == (47300, 41200, 2021, "Sunlight", "Kastenwagen", False)
+
+
+def test_detailseite_ohne_canonical_nutzt_anzeigen_id_kasten(detail):
+    ohne_meta = re.sub(r'<meta rel="canonical"[^>]*>', "", detail)
+    # Die Seite selbst nennt ihre Adresse noch in einem Link/JSON-Block – der gehört zur ID und wird genommen
+    art, inserate = erkenne_seite(ohne_meta)
+    assert art == "detail" and inserate[0].anzeigen_id == DETAIL_ID
+    assert inserate[0].url.endswith(f"/{DETAIL_ID}-220-1010")
+    # Ganz ohne Adresse: Ersatz-URL aus der ID
+    ohne_alles = re.sub(r"<script[^>]*>.*?</script>", "", ohne_meta, flags=re.S)
+    art, inserate = erkenne_seite(ohne_alles)
+    assert art == "detail" and inserate[0].anzeigen_id == DETAIL_ID
+    assert inserate[0].url == f"https://www.kleinanzeigen.de/s-anzeige/{DETAIL_ID}"
+    # Weder Adresse noch ID-Kasten: bleibt „detail_ohne_id“
+    ohne_id = re.sub(r'<div[^>]*id="viewad-ad-id-box".*?</div></div>', "", ohne_alles, flags=re.S)
+    assert erkenne_seite(ohne_id) == ("detail_ohne_id", [])
+
+
+def test_adapter_details_mit_neuem_feld(cfg, detail):
+    class Abruf:
+        def hole(self, url):
+            return detail
+
+    q = KleinanzeigenQuelle(cfg, Abruf())
+    i = q.details(f"https://www.kleinanzeigen.de/s-anzeige/x/{DETAIL_ID}-220-1010")
+    assert i.anzeigen_id == DETAIL_ID and i.km == 41200 and i.ez_jahr == 2021
+    assert q.details("https://www.kleinanzeigen.de/s-anzeige/x").anzeigen_id == DETAIL_ID   # URL ohne ID → Kasten
+    # steht eine ID in der abgerufenen URL, hat sie Vorrang vor der ID auf der Seite
+    i = q.details("https://www.kleinanzeigen.de/s-anzeige/x/3900000099-220-1")
+    assert i.anzeigen_id == "3900000099" and i.url.endswith("/3900000099-220-1")
+
+
+# ---------- Fahrzeugart der Suchseite (echte canonical-Adressen) ----------
+@pytest.mark.parametrize("canonical, erwartet", [
+    ("https://www.kleinanzeigen.de/s-wohnwagen-mobile/teilintegriert/k0c220", "Teilintegrierter"),
+    ("https://www.kleinanzeigen.de/s-wohnwagen-mobile/kastenwagen/k0c220", "Kastenwagen"),
+    ("https://www.kleinanzeigen.de/s-wohnwagen-mobile/camper/k0c220", "Kastenwagen"),
+    ("https://www.kleinanzeigen.de/s-wohnwagen-mobile/campingbus/k0c220", "Kastenwagen"),
+    ("https://www.kleinanzeigen.de/s-wohnwagen-mobile/alkoven/k0c220", "Alkoven"),
+    ("https://www.kleinanzeigen.de/s-wohnwagen-mobile/reisemobil/k0c220", None),
+    ("https://www.kleinanzeigen.de/s-wohnwagen-mobile/hymer/k0c220", None),
+    ("https://www.kleinanzeigen.de/s-knaus/k0", None),
+    ("https://www.kleinanzeigen.de/s-wohnwagen-mobile/70191/wohnmobil/k0c220l9293", None),
+    ("https://www.kleinanzeigen.de/s-70191/sortierung:entfernung/anbieter:privat/wohnmobil-640/k0l9293r1000", None),
+])
+def test_stichwort_im_suchpfad_ist_nur_ein_hinweis(canonical, erwartet):
+    """k0c220 ist eine Freitextsuche (Stichwort im Pfad), kein Art-Filter – daraus entsteht nie eine Filter-Art."""
+    html = (f'<html><head><title>Treffer | kleinanzeigen.de</title><link href="{canonical}" rel="canonical"/>'
+            '<meta content="https://www.kleinanzeigen.de/s-suchen.html" property="og:url"/></head><body></body></html>')
+    assert fahrzeugart_der_suchseite(html) == SuchseitenArt(filter=None, hinweis=erwartet)
+
+
+def test_fahrzeugart_der_testsuchseite(such):
+    assert fahrzeugart_der_suchseite(such) == SuchseitenArt(filter=None, hinweis="Teilintegrierter")
+
+
+def test_art_filter_in_echter_adresse():
+    url = "https://www.kleinanzeigen.de/s-wohnwagen-mobile/anbieter:privat/c220+wohnwagen_mobile.art_s:{}"
+    for wert, art in (("alkoven", "Alkoven"), ("teilintegrierter", "Teilintegrierter"), ("kastenwagen", "Kastenwagen")):
+        html = f'<html><head><link href="{url.format(wert)}" rel="canonical"/></head><body></body></html>'
+        assert fahrzeugart_der_suchseite(html) == SuchseitenArt(filter=art, hinweis=None)
+    # „andere“ oder mehrere Arten gleichzeitig: keine einzelne Art für die Treffer
+    for wert in ("andere", "alkoven,kastenwagen", "alkoven,andere"):
+        html = f'<html><head><link href="{url.format(wert)}" rel="canonical"/></head><body></body></html>'
+        assert fahrzeugart_der_suchseite(html) == SuchseitenArt()
+
+
+# ---------- Import ----------
+@pytest.fixture
+def ordner(cfg, tmp_path):
+    o = tmp_path / "import"
+    o.mkdir()
+    cfg["import"] = {"ordner": str(o)}
+    return o
+
+
+def test_import_beider_seiten(cfg, db: Datenbank, ordner):
+    shutil.copy(DATEN / "suchseite.html", ordner / "suchseite.html")
+    shutil.copy(DATEN / "detailseite.html", ordner / "detailseite.html")
+    netz = KeinNetz()
+    stat = Importer(cfg, db, abruf=netz).importiere_seiten(ordner)
+    assert stat["fehler"] == [] and netz.abrufe == []
+    assert (stat["dateien"], stat["suchseiten"], stat["detailseiten"], stat["unbekannt"], stat["fehlerhaft"]) == (2, 1, 1, 0, 0)
+    assert (stat["neu"], stat["details"]) == (7, 1)
+    assert not (ordner / "nicht_erkannt").exists()
+
+    zeilen = {z["id"]: z for z in db.con.execute("SELECT * FROM anzeigen")}
+    assert len(zeilen) == 7                                  # 6 Treffer + die Anzeige selbst
+    assert not set(AEHNLICH) & set(zeilen)                   # „ähnliche Anzeigen“ der Detailseite werden nicht importiert
+    for ad_id, z in zeilen.items():
+        if ad_id != DETAIL_ID:
+            assert z["suche"] == "Import Teilintegrierter (vorläufig)" and z["detail_geladen"] == 0 and z["bild"] == TEST_BILD
+    assert zeilen["3900000001"]["gewerblich"] == 1 and zeilen["3900000002"]["gewerblich"] == 0
+    d = zeilen[DETAIL_ID]
+    assert d["detail_geladen"] == 1 and d["suche"] == "Import Kastenwagen (bestätigt)"       # Art aus der Anzeigenseite selbst
+    assert (d["preis"], d["km"], d["ez_jahr"], d["marke"], d["art"]) == (47300, 41200, 2021, "Sunlight", "Kastenwagen")
+    assert d["ort"] == "71111 Beispielstadt am Test" and d["vb"] == 1
+
+
+def test_import_detailseite_ergaenzt_bekanntes_inserat(cfg, db: Datenbank, ordner, such, detail):
+    # dieselbe Anzeige zuerst aus einer Trefferliste, dann als Anzeigenseite → ein Datensatz, Details ergänzt
+    liste = such.replace("3900000002", DETAIL_ID)
+    (ordner / "liste.html").write_text(liste, encoding="utf-8")
+    Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
+    (ordner / "anzeige.html").write_text(detail, encoding="utf-8")
+    stat = Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
+    assert (stat["detailseiten"], stat["neu"], stat["bekannt"]) == (1, 0, 1)
+    z = db.con.execute("SELECT * FROM anzeigen WHERE id=?", (DETAIL_ID,)).fetchone()
+    # die Anzeigenseite nennt die Art selbst (Kastenwagen) und korrigiert den Seitenhinweis „Teilintegriert“
+    assert z["suche"] == "Import Kastenwagen (bestätigt)" and z["detail_geladen"] == 1 and z["km"] == 41200
+    assert db.con.execute("SELECT COUNT(*) FROM anzeigen").fetchone()[0] == 6
+
+
+# ---------- QA K-A: „Weitere Ergebnisse in anderen Orten“ bestätigen den Art-Filter nicht ----------
+@pytest.fixture(scope="module")
+def andere_orte():
+    """Gekürzt/anonymisiert aus dem Original „Wohnmobil, Wohnmobile & Wohnwagen gebraucht in 70191“: kein Treffer in der
+    Haupttabelle, nur `#srchrslt-adtable-altads`; die Adresse ist auf einen Art-Filter (art_s:teilintegrierter) gesetzt."""
+    return (DATEN / "suchseite_andere_orte.html").read_text(encoding="utf-8")
+
+
+ANDERE_ORTE = ("3900000021", "3900000022", "3900000023")
+
+
+def suche_von(db, ad_id):
+    return db.con.execute("SELECT suche FROM anzeigen WHERE id=?", (ad_id,)).fetchone()["suche"]
+
+
+def test_andere_orte_fixture_hat_filter_aber_keine_haupttabelle(andere_orte):
+    assert fahrzeugart_der_suchseite(andere_orte) == SuchseitenArt(filter="Teilintegrierter")
+    art, inserate = erkenne_seite(andere_orte)
+    assert art == "suche" and [i.anzeigen_id for i in inserate] == list(ANDERE_ORTE)
+    assert haupttabelle_ids(andere_orte) == set()
+    assert BeautifulSoup(andere_orte, "html.parser").select_one("#srchrslt-adtable-altads") is not None
+
+
+def test_andere_orte_gelten_wie_seite_ohne_filter_und_ohne_hinweis(cfg, db, ordner, andere_orte):
+    (ordner / "andere_orte.html").write_text(andere_orte, encoding="utf-8")
+    stat = Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
+    assert stat["fehler"] == [] and stat["neu"] == 3
+    # Titel nennt genau eine Art → vorläufig; sonst unbekannt – nie „Teilintegrierter (bestätigt)“ durch den Filter der Adresse
+    assert suche_von(db, "3900000021") == IMPORT_SUCHE                                 # „Wohnmobil Beispiel 600 gepflegt“
+    assert suche_von(db, "3900000022") == "Import Alkoven (vorläufig)"                  # „Hymer Alkoven Beispiel“
+    assert suche_von(db, "3900000023") == "Import Wohnwagen (vorläufig)"                # „Wohnwagen Beispiel 450“
+    hinweise_je_id = {z["a"]["id"]: z["hinweise"] for z in bewerte_alle(cfg, db, BASIS)}
+    assert hinweise_je_id == {"3900000021": [HINWEIS_ART_UNBEKANNT], "3900000022": [HINWEIS_ART_VORLAEUFIG],
+                              "3900000023": [HINWEIS_ART_VORLAEUFIG]}
+
+
+def test_haupttabelle_bestaetigt_andere_orte_nicht(cfg, db, ordner, andere_orte, such):
+    """Dieselbe Seite mit zwei Treffern in der Haupttabelle (aus der Testsuchseite) und den drei „anderen Orten“."""
+    haupt = re.search(r'<ul id="srchrslt-adtable">.*?</ul>', such, re.S).group(0)
+    gemischt = andere_orte.replace('<ul id="srchrslt-adtable-altads">', haupt + '\n<ul id="srchrslt-adtable-altads">')
+    assert haupttabelle_ids(gemischt) == {t["id"] for t in parse_suchseite(haupt)} and len(haupttabelle_ids(gemischt)) == 6
+    # ein Artikel außerhalb beider Listen (z. B. ein Werbeblock) zählt ebenfalls nicht
+    fremd = '<div id="werbung"><article data-adid="3900000029" data-href="/s-anzeige/x/3900000029-220-1">' \
+            '<h3><a href="/s-anzeige/x/3900000029-220-1">Beispiel Wohnmobil</a></h3><p>5.000 €</p></article></div>'
+    gemischt = gemischt.replace("</main>", fremd + "</main>")
+    (ordner / "gemischt.html").write_text(gemischt, encoding="utf-8")
+    stat = Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
+    assert stat["fehler"] == []
+    haupt_ids = haupttabelle_ids(gemischt)
+    for ad_id in haupt_ids:
+        assert suche_von(db, ad_id) == "Import Teilintegrierter (bestätigt)", ad_id          # Filter gilt für die Haupttabelle
+    assert suche_von(db, "3900000021") == IMPORT_SUCHE and suche_von(db, "3900000022") == "Import Alkoven (vorläufig)"
+    assert suche_von(db, "3900000029") != "Import Teilintegrierter (bestätigt)"
+    assert "(bestätigt)" not in suche_von(db, "3900000029")
+
+
+# ---------- Verkäufername für die persönliche Anrede ----------
+def test_verkaeufername_aus_detailseite(detail):
+    d = parse_detailseite(detail)
+    assert d["verkaeufer_name"] == "Max Muster"               # aria-label „Profil von Max Muster“; Kürzel „MM“ wird übergangen
+    assert "Max Muster" not in json.dumps(d["details"])       # parse_detailseite liefert den Namen getrennt von den Merkmalen
+
+
+@pytest.mark.parametrize("ersetzung, erwartet", [
+    ({}, "Max Muster"),
+    ({'aria-label="Profil von Max Muster"': 'aria-label="Profil von Erika Beispiel"'}, "Erika Beispiel"),
+    ({'aria-label="Profil von Max Muster"': ""}, "Max Muster"),                              # ohne aria-label: Namenslink
+    ({'aria-label="Profil von Max Muster"': "", ">Max Muster</a>": ">anton</a>"}, "anton"),
+    ({'aria-label="Profil von Max Muster"': 'aria-label="Profil von QX"', ">Max Muster</a>": ">QX</a>"}, None),   # nur Kürzel
+    ({'aria-label="Profil von Max Muster"': "", ">Max Muster</a>": ">Privater Nutzer</a>"}, None),
+    ({'aria-label="Profil von Max Muster"': "", ">Max Muster</a>": ">Aktiv seit 26.05.2011</a>"}, None),
+    ({'aria-label="Profil von Max Muster"': "", ">Max Muster</a>": ">TOP Zufriedenheit</a>"}, None),
+    ({'aria-label="Profil von Max Muster"': 'aria-label="Profil von 0171 1234567"', ">Max Muster</a>": ">0171 1234567</a>"}, None),
+])
+def test_verkaeufername_varianten(detail, ersetzung, erwartet):
+    html = detail
+    for alt, neu in ersetzung.items():
+        assert alt in html
+        html = html.replace(alt, neu)
+    assert parse_detailseite(html)["verkaeufer_name"] == erwartet
+
+
+def test_verkaeufername_altes_layout_und_fehlender_kasten(ads):
+    # altes Layout: Link im Element .userprofile-vip
+    alt = detail_html(ads[0]).replace('<span class="userprofile-vip">Privater Nutzer</span>',
+                                      '<span class="userprofile-vip"><a href="/s-bestandsliste.html?userId=1">Erika Beispiel</a></span>')
+    assert parse_detailseite(alt)["verkaeufer_name"] == "Erika Beispiel"
+    assert parse_detailseite(detail_html(ads[0]))["verkaeufer_name"] is None            # nur „Privater Nutzer“
+    assert parse_detailseite("<html><body><h1 id='viewad-title'>x</h1></body></html>")["verkaeufer_name"] is None
+
+
+@pytest.mark.parametrize("text, erwartet", [
+    ("Max Muster", "Max Muster"), ("  anton ", "anton"), ("Fr Beispiel", "Fr Beispiel"), ("Anna-Lena", "Anna-Lena"),
+    ("QX", None), ("Z", None), ("", None), (None, None), ("5.0", None), ("( 1 )", None),
+    ("Privater Nutzer", None), ("Gewerblicher Nutzer", None), ("Aktiv seit 04.05.2024", None), ("SUPER", None),
+    ("TOP Zufriedenheit", None), ("Besonders freundlich", None), ("Zuverlässig", None),
+    ("max@example.org", None), ("https://x.example/p", None), ("0171 1234567", None), ("x" * 80, None),
+    # M4: Buchstaben plus gegliederte Nummer bzw. Adresse
+    ("Max 0171 123 4567", None), ("Max 0171/1234567", None), ("Max 123", None), ("Max Muster 2", None), ("Müller 70191", None),
+    ("Familie Müller Hauptstr. 5", None), ("Familie Müller Hauptstr.", None), ("Lindenstraße", None), ("Hans Lindenstrasse 12", None),
+    ("Rosenweg 7", None), ("Am Kirchplatz", None), ("Beispielallee", None),
+    ("Hans Weg", "Hans Weg"), ("Strasser", "Strasser"), ("Fritz Straßer", "Fritz Straßer"), ("Mehmet Özdemir", "Mehmet Özdemir"),
+    # N5: Link- und Schaltflächentexte sind keine Namen
+    ("Anzeigen des Anbieters", None), ("Alle Anzeigen", None), ("Profil ansehen", None), ("Zum Profil", None), ("Folgen", None),
+    ("Feedback geben", None), ("Mehr anzeigen", None), ("Nachricht schreiben", None), ("Weitere Anzeigen des Nutzers", None),
+])
+def test_profilname(text, erwartet):
+    assert profilname(text) == erwartet
+
+
+def test_import_speichert_nur_den_namen(cfg, db, ordner, detail, such):
+    (ordner / "anzeige.html").write_text(detail, encoding="utf-8")
+    (ordner / "liste.html").write_text(such, encoding="utf-8")
+    assert Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)["fehler"] == []
+    z = db.con.execute("SELECT * FROM anzeigen WHERE id=?", (DETAIL_ID,)).fetchone()
+    assert json.loads(z["details_json"])["verkaeufer_name"] == "Max Muster"
+    assert verkaeufer_name(dict(z)) == "Max Muster"
+    assert set(json.loads(z["details_json"])) == {"Art", "Marke", "Kilometerstand", "Erstzulassung", "verkaeufer_name"}
+    # keine Profil-ID, Nummer oder Adresse irgendwo in der Zeile; der Name nur in details_json
+    zeile_text = json.dumps(dict(z), ensure_ascii=False, default=str)
+    assert "1234567" not in zeile_text and "userId" not in zeile_text
+    assert [k for k, v in dict(z).items() if "Muster" in str(v)] == ["details_json"]
+    # Suchseiten zeigen keinen Personennamen
+    for r in db.con.execute("SELECT * FROM anzeigen WHERE id != ?", (DETAIL_ID,)):
+        assert verkaeufer_name(dict(r)) is None and "verkaeufer_name" not in (r["details_json"] or "")
+
+
+def test_verkaeufer_name_hilfsfunktion_ist_robust():
+    assert verkaeufer_name({}) is None and verkaeufer_name({"details_json": None}) is None
+    assert verkaeufer_name({"details_json": "kein json"}) is None and verkaeufer_name({"details_json": "[1]"}) is None
+    assert verkaeufer_name({"details_json": json.dumps({"verkaeufer_name": "QX"})}) is None
+    assert verkaeufer_name({"details_json": json.dumps({"verkaeufer_name": 42})}) is None
+    assert verkaeufer_name({"details_json": json.dumps({"Art": "Alkoven"})}) is None
+    assert verkaeufer_name({"details_json": json.dumps({"verkaeufer_name": "Max Muster"})}) == "Max Muster"
+
+
+def test_adapter_speichert_den_namen_nicht_beim_detailabruf(cfg, detail):
+    """Der Verkäufername wird nur beim Import gespeicherter Seiten abgelegt – nicht im Crawler-Pfad (H2)."""
+    class Abruf:
+        def hole(self, url):
+            return detail
+
+    i = KleinanzeigenQuelle(cfg, Abruf()).details(f"https://www.kleinanzeigen.de/s-anzeige/x/{DETAIL_ID}-220-1010")
+    assert "verkaeufer_name" not in i.details and "Max Muster" not in json.dumps(i.als_datensatz(), default=str)
+    assert i.titel and i.details       # sonst unverändert ausgewertet
+
+
+@pytest.mark.parametrize("linktext", ["Anzeigen des Anbieters", "Alle Anzeigen", "Profil ansehen", "Folgen", "Feedback geben"])
+def test_verkaeufername_ignoriert_linktexte_ohne_aria_label(detail, linktext):
+    """N5: Ohne aria-label wurde der Text des ersten userId-Links genommen – Navigationstexte sind aber keine Namen."""
+    html = detail.replace('aria-label="Profil von Max Muster"', "").replace(">Max Muster</a>", f">{linktext}</a>")
+    assert linktext in html and parse_detailseite(html)["verkaeufer_name"] is None
+    # steht der echte Name als weiterer Link dahinter, gilt er
+    nach = html.replace(f">{linktext}</a>", f">{linktext}</a><a href=\"/s-bestandsliste.html?userId=7\">Erika Beispiel</a>", 1)
+    assert parse_detailseite(nach)["verkaeufer_name"] == "Erika Beispiel"
+
+
+# ---------- M1: Kontaktkasten allein ist keine erkannte Anzeigenseite ----------
+KONTAKT_NUR = ('<div id="viewad-contact"><a aria-label="Profil von Erika Beispiel" href="/s-bestandsliste.html?userId=7">'
+               'Erika Beispiel</a></div>')
+
+
+@pytest.mark.parametrize("seite", [
+    '<html><head><link rel="canonical" href="https://www.kleinanzeigen.de/s-anzeige/x/3900000099-220-1">'
+    f'</head><body>{KONTAKT_NUR}</body></html>',
+    f'<html><head></head><body><meta rel="canonical" href="https://www.kleinanzeigen.de/s-anzeige/x/3900000099-220-1">{KONTAKT_NUR}</body></html>',
+])
+def test_nur_kontaktkasten_ist_keine_detailseite(cfg, db, tmp_path, seite):
+    assert parse_detailseite(seite)["verkaeufer_name"] == "Erika Beispiel"
+    assert erkenne_seite(seite) == ("unbekannt", [])                      # früher: „detail“ mit dem Namen als einzigem Inhalt
+    ordner = tmp_path / "import"
+    ordner.mkdir()
+    cfg["import"] = {"ordner": str(ordner)}
+    (ordner / "x.html").write_text(seite, encoding="utf-8")
+    stat = Importer(cfg, db, abruf=KeinNetz()).importiere_seiten(ordner)
+    assert (stat["unbekannt"], stat["detailseiten"], stat["neu"]) == (1, 0, 0) and len(stat["fehler"]) == 1
+    assert (ordner / "nicht_erkannt" / "x.html").exists() and not (ordner / "x.html").exists()
+    assert db.con.execute("SELECT COUNT(*) FROM anzeigen").fetchone()[0] == 0
+
+
+def test_detailseite_mit_titel_und_kasten_bleibt_erkannt_und_leer_hat_keinen_namen(detail):
+    art, inserate = erkenne_seite(detail)
+    assert art == "detail" and inserate[0].details["verkaeufer_name"] == "Max Muster"
+    # Layout-Prüfung des Suchlaufs: Seite nur mit Kontaktkasten bleibt „leer“ (kein Titel, keine Merkmale)
+    class Abruf:
+        def hole(self, url):
+            return f"<html><body>{KONTAKT_NUR}</body></html>"
+
+    cfg_min = {"crawler": {"max_seiten_pro_suche": 1}}
+    leer = KleinanzeigenQuelle(cfg_min, Abruf()).details(f"https://www.kleinanzeigen.de/s-anzeige/x/{DETAIL_ID}-220-1010")
+    assert not leer.titel and not leer.details

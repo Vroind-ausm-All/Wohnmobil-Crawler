@@ -41,6 +41,7 @@ Einrichtung (Nutzer anlegen, Tailscale, App auf den Startbildschirm): **[docs/HA
 |---|---|
 | `python scout.py app` | Browser-App: Wohnmobile anklicken, anschreiben, Status und Notizen speichern, Suchlauf starten |
 | `python scout.py lauf` | Crawlen → bewerten → Report, CSV, Anschreiben (+ Mail, falls aktiv) |
+| `python scout.py import` | Im Browser gespeicherte Kleinanzeigen-Seiten aus dem Ordner `import/` einlesen, bewerten, Report erzeugen (ohne Internet; anderer Ordner: `--ordner PFAD`) |
 | `python scout.py report` | Report neu erzeugen, z. B. nach Änderung der Kosten in `config.yaml` (ohne Internet) |
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --titel "Knaus Sky TI 650 MEG" --anschreiben` | Einzelfahrzeug durchrechnen und Anschreiben ausgeben (auch für Anfragen außerhalb von Kleinanzeigen; `--text` mit der Beschreibung berücksichtigt Ausstattung/Mängel) |
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --marktwert 44000` | mit eigenem Marktwert (z. B. aus mobile.de oder DAT) |
@@ -150,6 +151,36 @@ Du bekommst dann nur eine Mail, wenn neue Treffer mit Anschreiben dabei sind.
    Text; „Rückgängig“ im Hinweis unten).
 4. Auf Kleinanzeigen **„Nachricht schreiben“** → `Strg`+`V` → Senden.
 
+**Gespeicherte Seiten einlesen:** Öffne eine Suchergebnisseite oder eine einzelne Anzeige auf Kleinanzeigen
+ganz normal im Browser, drücke `Strg`+`S` und speichere sie als „Webseite, nur HTML“ in den Ordner `import`
+im Programmordner. Dann in der App auf **„⤓ Gespeicherte Seiten einlesen“** klicken (oder `python scout.py import`).
+Neue Fahrzeuge erscheinen sofort in der Liste; das Programm ruft dafür nichts selbst aus dem Internet ab.
+Eingelesene Dateien wandern nach `import/eingelesen/<Datum>/`, nicht erkannte nach `import/nicht_erkannt/`.
+
+Hinweise zum Einlesen:
+- Je Klick werden höchstens 25 Dateien (bzw. etwa 20 Sekunden lang) gelesen; den Rest liest der nächste Klick.
+  Dateien über 20 MB werden nicht gelesen (sie bleiben liegen).
+- Die Fahrzeugart (z. B. Teilintegrierter) bestimmt, wie der Scout den Wert rechnet. **Bestätigt** ist sie bei einer
+  Suche über den Art-Filter von Kleinanzeigen (linke Spalte; er gilt nur für die Treffer der eigentlichen Trefferliste,
+  nicht für „Weitere Ergebnisse in anderen Orten“) oder wenn die Detailseite der Anzeige mit eingelesen wird (die
+  Detailseite hat Vorrang vor dem Filter). Eine Art, die nur aus dem Titel oder einem Suchwort (z. B. „Camper“) geraten
+  wurde, ist **vorläufig**; widersprechen sich zwei Hinweise, ist die Art **unbekannt**. Angeschrieben werden kann in
+  jedem Fall (Betreiberentscheidung 14.10.2026) – das Fahrzeug trägt aber eine gelbe Hinweiszeile, z. B. „Fahrzeugart
+  nicht bestätigt (gerechnet mit der vorläufigen Art) – bitte prüfen“ oder „Fahrzeugart unbekannt (vorsichtig gerechnet
+  als Wohnwagen) – bitte prüfen“ (auch in CSV-Spalte „Hinweise“, im Kopf der Anschreiben-Textdatei und in der
+  Benachrichtigungs-Mail). Gerechnet wird so: **„nicht bestätigt“ mit der vorläufigen Art**; bei **„unbekannt“
+  vorsichtig**: Der Scout rechnet ohne Art („Sonstige“) und mit jeder Art, die im Titel oder in der Kurzbeschreibung
+  vorkommt, nimmt den **niedrigsten** Max-EK, zeigt die Spanne über alle Möglichkeiten und stuft die Sicherheit auf
+  „niedrig“. Weil Wohnwagen, deren Text kein Art-Wort enthält (z. B. nur „Knaus Südwind 580“), dabei wie ein Wohnmobil
+  gerechnet werden, gilt bei **unbekannter** Art: Ampel höchstens **gelb**, und der Brief nennt **keinen Betrag** (er
+  fragt nach Angaben). Vor dem Anschreiben die Art prüfen. Der Brief nennt bei nicht bestätigter oder unbekannter Art keine
+  Fahrzeugart. Eine später eingelesene Detailseite oder ein Art-Filter bestätigt bzw. korrigiert die Art.
+- **Datenschutz:** `import/eingelesen/` enthält die vollständigen gespeicherten Seiten, auch Verkäuferangaben
+  (Name, Ort, ggf. Telefonnummer). Das Programm löscht nichts automatisch – lösche die Dateien nach der Prüfung selbst.
+  Speichere Seiten möglichst nicht angemeldet, damit keine Kontodaten in der Datei landen.
+- Beim Einlesen einer alten gespeicherten Seite gilt die Anzeige als „zuletzt gesehen: heute“, auch wenn sie
+  inzwischen gelöscht oder verkauft sein kann. Lies deshalb möglichst frisch gespeicherte Seiten ein.
+
 Status (offen / kontaktiert / uninteressant / gekauft) und Notizen setzt du im Fahrzeugfenster. Unter
 „Kontaktiert“ findest du alle angeschriebenen Fahrzeuge mit dem Text, den du geschickt hast.
 
@@ -167,8 +198,16 @@ Nachrichten verschicken, und viele Verkäufer reagieren auf Massenanfragen aller
   Verantwortung.
 - **Händleranfragen**: Anzeigen mit „keine Händler“ o. ä. werden automatisch ausgefiltert
   (Liste unter `filter → sperrbegriffe`). Das Anschreiben nennt dich offen als gewerblichen Ankäufer.
-- **Datenschutz**: Gespeichert werden nur Anzeigendaten, keine Kontaktdaten der Verkäufer. Die App ist
-  nur auf dem eigenen Rechner erreichbar (127.0.0.1).
+- **Datenschutz**: Gespeichert werden Anzeigendaten; aus dem Verkäuferkasten werden keine Telefonnummern, Adressen oder
+  Profil-IDs übernommen. (Der Freitext der Anzeige – Titel, Beschreibung – wird unverändert gespeichert und kann
+  Kontaktangaben enthalten, wenn der Verkäufer sie dort selbst schreibt.) Einzige Ausnahme beim Verkäuferkasten: der öffentliche **Profilname** des Verkäufers – nur beim **Einlesen gespeicherter Anzeigenseiten**
+  (nicht im Suchlauf mit Detailabruf), abgelegt in `details_json` → `verkaeufer_name`; Kürzel, „Privater Nutzer“,
+  Nummern und Adressen werden verworfen. Er dient der persönlichen Anrede im Anschreiben und steht deshalb
+  auch im erzeugten Brief: in `ausgabe/report.html`, in `ausgabe/anschreiben/<id>.txt` im Anhang der
+  Benachrichtigungs-Mail (`report.html`, verlässt damit den Rechner), im Offline-Speicher der Handy-App (Fahrzeugansicht
+  mit Brief) und – nach dem Kontakt – im gespeicherten Anschreibentext der Datenbank. **Eine Lösch- oder Anonymisierungsfunktion gibt es noch nicht** (geplant als Paket P1-14a, Backlog): der Status „gelöscht“ markiert nur
+  das Inserat und entfernt den Namen **nicht** aus `details_json`. Die App selbst lauscht nur auf dem eigenen Rechner (127.0.0.1;
+  Handys über `tailscale serve`); Mail-Anhang und Handy-Speicher liegen außerhalb davon.
 - **Wenn plötzlich 0 Anzeigen gefunden werden**, hat Kleinanzeigen vermutlich das Seitenlayout
   geändert. Die App meldet das als „Seitenlayout geändert“ und legt
   die Seite als `ausgabe/diagnose_suchseite.html` ab. Alle Selektoren liegen in

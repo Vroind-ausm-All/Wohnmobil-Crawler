@@ -66,5 +66,6 @@ class KleinanzeigenQuelle(Quelle):
                 raise InseratNichtGefunden(url) from e
             raise
         d = parse_detailseite(html)
-        d.pop("verkaeufer_name", None)
-        return Inserat(quelle=self.kennung, anzeigen_id=anzeigen_id_aus_url(url) or "", url=url, **d)
+        d.pop("verkaeufer_name", None)                  # der Name wird nur beim Import gespeicherter Seiten abgelegt (README, Datenschutz)
+        id_aus_seite = d.pop("anzeigen_id", None)         # Kasten „Anzeigen-ID“ – nur Ersatz, die URL gilt zuerst
+        return Inserat(quelle=self.kennung, anzeigen_id=anzeigen_id_aus_url(url) or id_aus_seite or "", url=url, **d)

@@ -66,6 +66,7 @@ kbd{font:12px ui-monospace,monospace;padding:1px 5px;border:1px solid var(--line
 .zahlen .betont b{color:var(--akzent)}
 .karte-fuss{display:flex;gap:8px;align-items:center;margin-top:auto;padding-top:6px}
 .sperre{color:var(--rot);font-size:13px;margin:0}
+.hinweiszeile{background:var(--gelb-bg);color:var(--gelb);font-size:13px;margin:0 0 6px;padding:4px 8px;border-radius:8px}
 .btn{font:inherit;font-size:14px;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);
   text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .btn:hover{border-color:var(--akzent)}
@@ -136,6 +137,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <div class="suchlauf">
       <span id="suchstatus" class="hinweis" aria-live="polite"></span>
       <button id="glocke" class="btn" title="Browser-Hinweis bei neuen Treffern" hidden>🔔 Hinweise an</button>
+      <button id="einlesen" class="btn" title="Im Browser gespeicherte Kleinanzeigen-Seiten (Strg+S) einlesen – ohne Internetabruf">⤓ Gespeicherte Seiten einlesen</button>
       <button id="suchen" class="btn">↻ Neue Anzeigen suchen</button>
     </div>
     {% endif %}
@@ -184,7 +186,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
          data-neu="{{ 1 if z.neu else 0 }}" data-bereit="{{ 1 if z.bereit else 0 }}" data-status="{{ a.status or 'neu' }}"
          data-verh="{{ b.verhaeltnis or 99 }}" data-pot="{{ b.potenzial or -999999 }}" data-preis="{{ a.preis or 0 }}"
          data-zeit="{{ a.erstmals_gesehen }}" data-entf="{{ a.entfernung_km if a.entfernung_km is not none else 99999 }}"
-         data-tage="{{ a.tage_online or 0 }}" data-nachfassen="{{ 1 if z.nachfassen else 0 }}" data-erst="{{ b.erstangebot or 0 }}"
+         data-tage="{{ a.tage_online or 0 }}" data-nachfassen="{{ 1 if z.nachfassen else 0 }}" data-erst="{{ z.brief_betrag or 0 }}"
          data-text="{{ (a.fahrzeug ~ ' ' ~ a.titel ~ ' ' ~ (a.marke or '') ~ ' ' ~ (a.ort or '') ~ ' ' ~ (a.ez_jahr or '')) | lower }}">
       <div class="streif"></div>
       <div class="bild">
@@ -209,6 +211,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
           <div class="betont"><span>Erstangebot</span><b>{{ b.erstangebot | euro if b.sicherheit != 'keine' else '–' }}</b></div>
           <div><span>Max-EK</span><b>{{ b.max_ek | euro if b.sicherheit != 'keine' else '–' }}</b></div>
         </div>
+        {% for h in z.hinweise %}<p class="hinweiszeile">⚠ {{ h }}</p>{% endfor %}
         {% if z.nachfassen %}<p class="sperre" style="color:var(--gelb)">Nachfassen: {{ z.nachfassen }}</p>
         {% elif z.sperre and not a.anschreiben_text %}<p class="sperre">Kein Anschreiben: {{ z.sperre }}</p>{% endif %}
         <div class="karte-fuss">
@@ -261,7 +264,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
             <tr><td>− Ziel-Marge (netto)</td><td>{{ b.ziel_marge | euro }}</td></tr>
             <tr><td>− {{ ust_label }}</td><td>{{ z.ust | euro }}</td></tr>
             <tr class="summe"><td>Max. Einkaufspreis</td><td>{{ b.max_ek | euro }}</td></tr>
-            <tr class="angebot"><td>Erstangebot (im Anschreiben)</td><td>{{ b.erstangebot | euro }}</td></tr>
+            <tr class="angebot"><td>{{ "Erstangebot (im Anschreiben)" if z.brief_betrag else "Erstangebot (rechnerisch, nicht im Anschreiben)" }}</td><td>{{ b.erstangebot | euro }}</td></tr>
             <tr><td>Gewinn bei Kauf zum Wunschpreis</td><td>{{ b.potenzial | euro }}</td></tr>
           </table>
           <p class="fair"><b>Fair-Check:</b> Erstangebot = {{ b.fair_anteil | anteil }}, Max-EK = {{ b.max_anteil | anteil }} vom Marktwert privat.
@@ -276,6 +279,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
           <div class="aktionen"><button class="btn primaer" data-nachfassen-senden>↻ Kopieren &amp; Anzeige öffnen</button></div>
         </div>
         {% endif %}
+        {% for h in z.hinweise %}<p class="hinweiszeile">⚠ {{ h }}</p>{% endfor %}
         <h3>Anschreiben</h3>
         {% if z.brief %}
           {% if not z.bereit %}<p class="warn" style="margin:0 0 8px">Ampel {{ AMPEL[b.ampel] }}: Das Erstangebot liegt deutlich unter dem Wunschpreis – nur senden, wenn du es trotzdem versuchen willst.</p>{% endif %}
@@ -384,12 +388,12 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     return ok;
   }
   var toastTimer;
-  function toast(text, rueckgaengig){
+  function toast(text, rueckgaengig, dauer){
     var t = document.getElementById('toast'), b = document.getElementById('toast-zurueck');
     document.getElementById('toast-text').textContent = text;
     b.hidden = !rueckgaengig; b.onclick = function(){ rueckgaengig(); t.classList.remove('zeigen'); };
     t.classList.add('zeigen'); clearTimeout(toastTimer);
-    toastTimer = setTimeout(function(){ t.classList.remove('zeigen'); }, rueckgaengig ? 9000 : 5000);
+    toastTimer = setTimeout(function(){ t.classList.remove('zeigen'); }, rueckgaengig ? 9000 : (dauer || 5000));
   }
   var HINWEIS = '  Auf Kleinanzeigen „Nachricht schreiben“ klicken, Strg+V, senden.';
   function senden(id, text, danach){
@@ -589,6 +593,41 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     knopf.onclick = function(){
       post('/api/suchlauf', {}).then(function(){ manuell = true; knopf.disabled = true; knopf.textContent = 'Suche läuft …'; plane(1000); },
                                     function(){ toast('Suchlauf konnte nicht gestartet werden'); });
+    };
+    // Gespeicherte Seiten (Strg+S) aus dem Import-Ordner einlesen – der Server ruft dabei nichts aus dem Internet ab
+    var einlesen = document.getElementById('einlesen');
+    var mehrzahl = function(n, eins, viele){ return n + ' ' + (n === 1 ? eins : viele); };
+    einlesen.onclick = function(){
+      einlesen.disabled = true; einlesen.textContent = 'Wird eingelesen …';
+      var fertig = function(){ einlesen.disabled = false; einlesen.textContent = '⤓ Gespeicherte Seiten einlesen'; };
+      fetch('/api/import', {method:'POST', headers:{'Content-Type':'application/json','X-Scout-Token':APP.token}, body:'{}'})
+        .then(function(r){ return r.json().then(function(d){ if(!r.ok) throw new Error(d.fehler || r.status); return d; }); })
+        .then(function(s){
+          if(!s.dateien){
+            fertig();
+            toast('Keine gespeicherten Seiten gefunden in ' + s.ordner + ' – Seite in Kleinanzeigen mit Strg+S als „Webseite, nur HTML“ in diesen Ordner speichern.');
+            return;
+          }
+          var gelesen = s.dateien - s.unbekannt - s.fehlerhaft;
+          var text = mehrzahl(gelesen, 'Seite', 'Seiten') + ' eingelesen: ' + s.neu + ' neu, '
+                     + mehrzahl(s.preis, 'Preissenkung', 'Preissenkungen') + ', ' + s.bekannt + ' bekannt';
+          if(s.details) text += ', ' + s.details + ' mit Details';
+          if(s.unbekannt) text += ' · ' + mehrzahl(s.unbekannt, 'Seite', 'Seiten') + ' nicht erkannt (verschoben nach nicht_erkannt/)';
+          if(s.fehlerhaft) text += ' · ' + mehrzahl(s.fehlerhaft, 'Datei', 'Dateien') + ' nicht lesbar (bleiben liegen)';
+          if(s.fehler.length > s.unbekannt + s.fehlerhaft) text += ' · ' + (s.fehler.length - s.unbekannt - s.fehlerhaft) + ' mit Hinweis zum Verschieben';
+          if(s.uebrig) text += ' · ' + s.uebrig + ' weitere beim nächsten Klick';
+          if(s.fehler.length){
+            text += ' – ' + s.fehler.slice(0, 2).join(' | ') + (s.fehler.length > 2 ? ' | … (alle in ausgabe/scout.log)' : '');
+          }
+          if(s.fehler.length){                         // Meldungen lesbar lassen: nicht automatisch neu laden
+            fertig();
+            toast(text + ' – zum Aktualisieren der Liste die Seite neu laden (F5).', null, 20000);
+            return;
+          }
+          toast(text + ' – Liste wird neu geladen.');
+          setTimeout(function(){ location.reload(); }, 4000);
+        })
+        .catch(function(e){ fertig(); toast('Einlesen fehlgeschlagen: ' + e.message); });
     };
     if('Notification' in window && Notification.permission === 'default'){
       glocke.hidden = false;

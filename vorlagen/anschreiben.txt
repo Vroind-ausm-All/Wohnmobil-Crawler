@@ -1,25 +1,32 @@
 {# Jinja2-Vorlage für das Anschreiben. Dieser Kommentarblock erscheint nicht im Text.
    Verfügbare Felder:
-     fahrzeug      „Knaus Sky TI 650 MEG“ bzw. „Knaus-Wohnmobil“ (Marke + erkanntes Modell)
+     anrede        Begrüßung mit Komma: mit Profilnamen des Verkäufers (vorsichtig aufbereitet, z. B. „anton“ → „Anton“,
+                   „Hr Beispiel“ → „Herr Beispiel“) oder ohne Namen; name = aufbereiteter Name oder leer
+     fahrzeug      „Knaus Sky TI 650 MEG“ bzw. „Knaus-Wohnmobil“ (Marke + erkanntes Modell) – möglichst nur EINMAL
+                   nennen: erkannte Modelle sind nicht immer richtig zerlegt
+     zum_fahrzeug  „zum Knaus Sky TI 650 MEG“ bzw. ohne Marke/Modell „zu Ihrem Wohnmobil“ / „zu Ihrem Kastenwagen“
+     ihr_fahrzeug  „Ihr Teilintegrierter von Knaus“ / „Ihr Wohnmobil von Hobby“ (Art + Marke, ohne Modell) bzw. ohne
+                   Marke „Ihr Kastenwagen“ / „Ihr Wohnmobil“ – für jede weitere Nennung
      marke, modell, titel (Anzeigentitel), art („Teilintegrierter“), art_plural („Teilintegrierte“)
+                   art/art_plural sind neutral („Wohnmobil“/„Wohnmobile“), wenn die Fahrzeugart nicht bestätigt ist
      ez_jahr, alter, alters_stufe (jung | mittel | aelter | alt | unbekannt), km, km_text („rund 85.000 km“)
      preis (Wunschpreis), vb (True/False), ort_kurz
      mit_angebot   False, wenn keine Bewertung möglich war (z. B. EZ fehlt) → Text ohne Betrag
      erstangebot, max_ek, ampel (gruen | gelb | rot), preisbasis („an vergleichbaren Angeboten …“)
-     pruefpunkte   Satz, worauf es bei diesem Baujahr ankommt
+     pruefpunkte   Satz, worauf es bei diesem Baujahr ankommt – leer ohne EZ
      unterlagen    gewünschte Fotos/Unterlagen passend zum Alter
      ausstattung   erkannte Ausstattung („Markise, Solaranlage und Rückfahrkamera“) – kann leer sein
      gepflegt      erkannte Pflegenachweise („Scheckheft und Dichtigkeitsprüfung“) – kann leer sein
      firma, ansprechpartner, telefon, firmen_ort
 -#}
-Hallo,
+{{ anrede }}
 
-ich habe Ihr Inserat zum {{ fahrzeug }}{% if ez_jahr %} (EZ {{ ez_jahr }}{% if km_text %}, {{ km_text }}{% endif %}){% endif %} gesehen und habe ernsthaftes Interesse. Damit Sie gleich Bescheid wissen: Ich schreibe Ihnen als gewerblicher Ankäufer ({{ firma }}, {{ firmen_ort }}).
+ich habe Ihr Inserat {{ zum_fahrzeug }}{% if ez_jahr %} (EZ {{ ez_jahr }}{% if km_text %}, {{ km_text }}{% endif %}){% endif %} gesehen und interessiere mich ernsthaft dafür. Damit Sie gleich Bescheid wissen: Ich schreibe Ihnen als gewerblicher Ankäufer ({{ firma }}, {{ firmen_ort }}).
 
-{% if ez_jahr %}
-{% if modell %}Ein {{ fahrzeug }} aus {{ ez_jahr }}{% elif marke %}Ein {{ art }} von {{ marke }} aus {{ ez_jahr }}{% else %}Ein {{ art }} aus {{ ez_jahr }}{% endif %} passt gut zu dem, was unsere Kunden suchen.{% if ausstattung %} Die Ausstattung mit {{ ausstattung }} ist für uns ein klares Plus.{% endif %}{% if gepflegt %} Schön, dass Sie {{ gepflegt }} erwähnen – das spricht für ein gepflegtes Fahrzeug.{% endif %}
+{{ ihr_fahrzeug }} passt gut zu dem, was unsere Kunden suchen.{% if ausstattung %} Die Ausstattung mit {{ ausstattung }} ist für uns ein klares Plus.{% endif %}{% if gepflegt %} Schön, dass Sie {{ gepflegt }} erwähnen – das spricht für ein gepflegtes Fahrzeug.{% endif %}
 
 
+{% if pruefpunkte %}
 {{ pruefpunkte }}
 {% endif %}
 

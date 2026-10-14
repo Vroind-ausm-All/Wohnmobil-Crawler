@@ -25,7 +25,7 @@ BASIS_MARKEN = ["Volkswagen", "Mercedes", "Fiat", "Ford", "Citroën", "Peugeot",
 
 ALIASE = {
     "buerstner": "Bürstner", "burstner": "Bürstner", "poessl": "Pössl", "possl": "Pössl",
-    "vw": "Volkswagen", "mercedes-benz": "Mercedes", "citroen": "Citroën", "eura": "Eura Mobil",
+    "vw": "Volkswagen", "mercedes-benz": "Mercedes", "mercedes benz": "Mercedes", "citroen": "Citroën", "eura": "Eura Mobil",
     "euramobil": "Eura Mobil", "niesmann+bischoff": "Niesmann", "n+b": "Niesmann", "hymercar": "Hymer",
     "rollerteam": "Roller Team", "mc louis": "McLouis",
 }
@@ -128,14 +128,21 @@ _AUFBAU_MUSTER = [(m, _muster(m)) for m in MARKEN] + [(z, mu) for z, mu in _ALIA
 _BASIS_MUSTER = [(m, _muster(m)) for m in BASIS_MARKEN] + [(z, mu) for z, mu in _ALIAS_MUSTER if z in BASIS_MARKEN]
 
 
+def _schluessel(name: str) -> str:
+    """Vergleichsform einer Marke: klein, ohne Leerzeichen/Bindestriche („Mercedes Benz“ = „Mercedes-Benz“)."""
+    return re.sub(r"[\s-]+", "", name.lower())
+
+
+_MARKEN_NACH_SCHLUESSEL = {_schluessel(m): m for m in MARKEN + BASIS_MARKEN}
+_ALIAS_NACH_SCHLUESSEL = {_schluessel(a): z for a, z in ALIASE.items()}
+
+
 def normalisiere_marke(name: str | None) -> str | None:
     if not name:
         return None
     n = name.strip()
-    for m in MARKEN + BASIS_MARKEN:
-        if m.lower() == n.lower():
-            return m
-    return ALIASE.get(n.lower(), n)
+    k = _schluessel(n)
+    return _MARKEN_NACH_SCHLUESSEL.get(k) or _ALIAS_NACH_SCHLUESSEL.get(k) or n
 
 
 def ist_basismarke(marke: str | None) -> bool:
@@ -206,6 +213,19 @@ def art_schluessel(*quellen: str | None) -> str:
             if begriff in ql:
                 return schluessel
     return "Sonstige"
+
+
+_TEILINT_WORT = re.compile(r"\w*teil(?:int|[\s-]*integr)\w*", re.I)
+
+
+def arten_im_text(text: str | None) -> set[str]:
+    """ALLE Fahrzeugarten, die ein Text nennt (anders als `art_schluessel`, wo der erste Treffer gewinnt).
+
+    Gleiche Suchbegriffe wie `ART_SCHLUESSEL` (auch Wortteile: „Caravaning“, „Integralkoffer“ – im Zweifel lieber eine
+    Art zu viel, dann ist der Text mehrdeutig). „Teilintegrierter“ zählt nur als Teilintegrierter, nicht zusätzlich
+    als Integrierter. Dient dazu, Arten aus Titeln nur zu übernehmen, wenn der Titel genau eine nennt."""
+    ql = _TEILINT_WORT.sub(" teilint ", (text or "").lower())
+    return {schluessel for begriff, schluessel in ART_SCHLUESSEL if begriff in ql}
 
 
 def fahrzeug_bezeichnung(marke: str | None, modell: str | None) -> str:

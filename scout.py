@@ -4,6 +4,7 @@
   python scout.py app                       Browser-App: Wohnmobile anklicken und anschreiben
   python scout.py lauf                      Crawlen + bewerten + Report (+ Mail)
   python scout.py report                    Nur Report neu erzeugen (ohne Internet)
+  python scout.py import [--ordner PFAD]    Im Browser gespeicherte Kleinanzeigen-Seiten einlesen (ohne Internet)
   python scout.py rechne --preis 32900 --ez 2016 --km 98000 --titel "Knaus Sky TI 650 MEG" [--anschreiben]
   python scout.py nutzer anlegen <Name> [--rolle inhaber]   Team-Zugang für Handy-App anlegen
   python scout.py sichern                   Datenbank (und Fotos) sichern -> daten/sicherungen
@@ -42,9 +43,10 @@ import yaml
 from wmscout.ausgabe import schreibe_ausgaben
 from wmscout.benachrichtigung import sende_mail
 from wmscout.bewertung.anschreiben import Anschreiber, euro
-from wmscout.bewertung.auswertung import bewerte_alle
+from wmscout.bewertung.auswertung import bewerte_alle, bewerte_anzeige, vergleichsbasis
 from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import STATUS, Datenbank
+from wmscout.eingang import import_ordner
 from wmscout.importer import Importer
 from wmscout.migrationen import MigrationsFehler
 from wmscout.normalisierung.fahrzeug import ergaenze_fahrzeug
@@ -78,6 +80,37 @@ def cmd_lauf(cfg, db, args):
     sende_mail(cfg, zeilen, erg)
 
 
+def _anzahl(n: int, einzahl: str, mehrzahl: str) -> str:
+    return f"{n} {einzahl if n == 1 else mehrzahl}"
+
+
+def cmd_import(cfg, db, args):
+    ordner = Path(args.ordner).expanduser().resolve() if args.ordner else import_ordner(cfg)
+    if not ordner.is_dir():
+        ordner.mkdir(parents=True, exist_ok=True)
+        print(f"Import-Ordner angelegt: {ordner}")
+    print(f"Gespeicherte Seiten einlesen aus: {ordner}")
+    start = datetime.now().isoformat(timespec="seconds")
+    stat = Importer(cfg, db).importiere_seiten(ordner)
+    if not stat["dateien"]:
+        print("Keine gespeicherten Seiten gefunden (.html/.htm).\n"
+              "So geht's: Suchergebnis- oder Anzeigenseite in Kleinanzeigen öffnen, Strg+S drücken und als "
+              "„Webseite, nur HTML“ in diesen Ordner speichern. Danach diesen Befehl erneut ausführen.")
+        return
+    print(f"{_anzahl(stat['dateien'], 'Datei', 'Dateien')} gelesen: {_anzahl(stat['suchseiten'], 'Suchseite', 'Suchseiten')}, "
+          f"{_anzahl(stat['detailseiten'], 'Detailseite', 'Detailseiten')}, {stat['unbekannt']} nicht erkannt")
+    print(f"Ergebnis: {_anzahl(stat['neu'], 'neue Anzeige', 'neue Anzeigen')}, "
+          f"{_anzahl(stat['preis'], 'Preissenkung', 'Preissenkungen')}, {stat['bekannt']} schon bekannt, "
+          f"{stat['details']} mit Details")
+    if stat["dateien"] > stat["unbekannt"]:
+        print(f"Eingelesene Dateien liegen jetzt in: {ordner / 'eingelesen'}")
+    if stat["fehler"]:
+        print("Bitte prüfen:\n" + "\n".join(f"  - {f}" for f in stat["fehler"]))
+    zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
+    erg = schreibe_ausgaben(cfg, zeilen, BASIS)
+    print(f"Report: {erg['html']}  ({erg['zaehl']})")
+
+
 def cmd_report(cfg, db, args):
     zeilen = bewerte_alle(cfg, db, BASIS)
     erg = schreibe_ausgaben(cfg, zeilen, BASIS)
@@ -88,8 +121,9 @@ def cmd_rechne(cfg, db, args):
     a = ergaenze_fahrzeug({"id": "manuell", "preis": args.preis, "ez_jahr": args.ez, "km": args.km,
                            "marke": args.marke, "titel": args.titel or args.marke or "", "beschreibung": args.text,
                            "suche": args.art, "ort": args.ort, "vb": True})
-    vergleich = [ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()]
-    b = Rechner(cfg).bewerte(a, vergleich, marktwert_manuell=args.marktwert)
+    # gleiche Vergleichsbasis und Bewertung wie bewerte_alle (Rechner-Sicht, ohne ältere Dubletten; M6-2)
+    vergleich = vergleichsbasis([ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()])
+    b = bewerte_anzeige(Rechner(cfg), a, vergleich, marktwert_manuell=args.marktwert)
     print(f"\nFahrzeug                 : {a['fahrzeug']} ({b.art}, EZ {a['ez_jahr'] or '?'}, "
           f"{a['km'] or '?'} km)")
     if b.modellwert:
@@ -207,6 +241,8 @@ def main():
     a.add_argument("--kein-browser", action="store_true", help="Browser nicht automatisch öffnen")
     sub.add_parser("lauf", help="crawlen, bewerten, Report erzeugen")
     sub.add_parser("report", help="Report aus vorhandenen Daten neu erzeugen")
+    im = sub.add_parser("import", help="im Browser gespeicherte Kleinanzeigen-Seiten einlesen (ohne Internet)")
+    im.add_argument("--ordner", help="Ordner mit den gespeicherten Seiten (Standard: config.yaml → import → ordner)")
     r = sub.add_parser("rechne", help="Einzelfahrzeug durchrechnen")
     r.add_argument("--preis", type=int, help="Angebotspreis des Verkäufers")
     r.add_argument("--ez", type=int, help="Erstzulassungsjahr")
@@ -248,8 +284,8 @@ def main():
         db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]), str(sicherung_ordner(cfg, BASIS)))
     except (MigrationsFehler, ValueError, sqlite3.Error) as e:
         sys.exit(f"Datenbank-Start abgebrochen: {e}")
-    {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "rechne": cmd_rechne, "nutzer": cmd_nutzer,
-     "status": cmd_status}[args.cmd](cfg, db, args)
+    {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "rechne": cmd_rechne,
+     "nutzer": cmd_nutzer, "status": cmd_status}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":

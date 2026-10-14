@@ -6,9 +6,164 @@ Wert „–“.
 
 ---
 
+## Phase 2 (vorgezogen) – Gespeicherte Seiten einlesen, wieder aufgenommen (14.10.2026)
+
+### P2-05 (Teil) – Hinweise statt Sperre, Anrede mit Verkäufername · Status: REVIEW
+
+- **Zusammenführung mit PR #5 (14.10.2026):** Der Merge des Integrationszweigs in diesen Zweig (d31c2dc) ließ in
+  `scout.py` beide Fassungen von `main()` stehen (Datenbank-Start ohne Sicherungsordner, `import` fehlte im zweiten
+  Aufruf) → 8 CLI-Tests rot. Behoben; außerdem nutzt ein Import-Test statt `:memory:` eine Temp-Datei (der
+  Migrationsrahmen öffnet eigene Verbindungen). Danach **464 passed**, ruff grün.
+- **Nachfassen ohne Betrag (QA P2-05b, Befund Q2-H1, gilt schon für F14):** Nannte der Erstbrief keinen Betrag, nannte
+  das Nachfassen trotzdem „Mein Angebot über … steht weiterhin“, und Desktop/Handy speicherten beim Kontakt das
+  rechnerische Erstangebot als `angebot_betrag`. Jetzt eine Regel `betrag_im_brief` für Brief, Nachfassen, Zeile
+  (`brief_betrag`), API und Handy; Report beschriftet „rechnerisch, nicht im Anschreiben“. Zwei Tests, beide Mutationen
+  erkannt; **465 passed**.
+- **F14 umgesetzt (Betreiberentscheidung 14.10.2026, Orchestrator):** Bei unbekannter Fahrzeugart Ampel höchstens
+  „gelb“ (`bewerte_anzeige`) und Brief ohne Betrag (`kontext`, `mit_angebot`); Hinweistext nennt beides. Zwei neue
+  Tests, beide Änderungen per Mutationsprobe in einer Kopie erkannt. PR #4 während der Änderung als Entwurf markiert.
+
+- **QA-Runde 7 (Stand be0afd2): FREIGABE MIT AUFLAGEN** (für den PR, nicht für den Merge). 374 passed; 18 echte Seiten
+  identisch zur Agentenanalyse; nicht bestätigt ohne Hinweis 0; künstliche Cache-id in keiner Ausgabe; Rechner
+  unverändert; Mutationen 24 von 28 erkannt.
+  - **A1 / H7-1 (HOCH, Betreibervorbehalt = F14):** Wohnwagen ohne Art-Wort werden als „Sonstige“ gerechnet: 10 der
+    Top 20 der echten Daten sind Wohnwagen, Briefangebote z. B. 25.300 € statt 15.200 € (als Wohnwagen gerechnet).
+    **Kein Merge und keine produktive Nutzung des Seitenimports, bevor der Betreiber F14 entschieden hat.**
+  - A2: M7-1 (Schutztest enthielt die Namen ROT13-lesbar → gesalzene SHA-256-Werte, jetzt inkl. docs/) und M7-2
+    (README: Mail-Anhang und Handy-Offline-Speicher als Speicherorte) behoben; N7-3 (Beleg ROADMAP) festgeschrieben.
+  - Backlog: M7-3 (Laufzeit je Kandidat), N7-1 („KaufeWohnmobile“), N7-2 (Modell aus Bindestrich-Ketten), N7-4
+    (Besichtigungsbasis friert vorsichtige Art ohne Hinweis ein), N7-5 (Formulierungen); fehlende Tests:
+    Dublettenfilter in `vergleichsbasis`, `rechne --marktwert`, unbekannte Art + manueller Marktwert.
+
+- **Anlass:** Betreiberentscheidung 14.10.2026: „möglichst jedes Wohnmobil anschreiben“, Brief mit weniger
+  Modellname und mit dem Profilnamen (ADR-021). Damit ist der BLOCKED-Grund (K-A als Sperr-Risiko) entfallen.
+- **Verantwortliche Agenten:** `source-integrations` (Import, Parser, Ausgaben), `acquisition-analyst` (Brief,
+  Bewertungs-Vorstufe, eigener Worktree, danach zusammengeführt), `qa-security-reviewer` (Runde 5), Orchestrator
+  (`scout.py rechne`, Doku).
+- **Zweig/Commits:** `claude/phase2-seitenimport`: 12cef17/a912c83/bcdb68b (Zwischenstände „ungeprüft“), 5174eef
+  (Korrektur nach QA-Runde 5), 9479b6b + fc086f3 (Anschreiben, Merge), 7f96a8e (Doku), Korrektur nach QA-Runde 6.
+- **Geänderte Dateien (Auswahl):**
+  - `wmscout/bewertung/anschreiben.py` (`hinweise`, `verkaeufer_name`, `anrede_name`, `art_bestaetigt`)
+  - `wmscout/bewertung/auswertung.py` (`fuer_rechner`, Feld `hinweise`)
+  - `vorlagen/anschreiben.txt`, `vorlagen/nachfassen.txt`
+  - `wmscout/eingang/seiten.py` (`haupttabelle_ids`, strenger Kopf), `wmscout/importer.py`, `wmscout/datenbank.py`
+    (`detail_art`, GLOB)
+  - `wmscout/quellen/kleinanzeigen/parser.py` (Profilname), `wmscout/normalisierung/person.py` (neu)
+  - `wmscout/ausgabe.py`, `wmscout/benachrichtigung.py` (Hinweise in CSV, Datei, Mail)
+  - `wmscout/web/api.py`, `wmscout/web/static/mobil.js`, `vorlagen/report.html` (gelbe Hinweiszeile)
+  - `scout.py` (`rechne` nutzt `fuer_rechner`), `README.md`
+  - Tests: `tests/test_anschreiben.py` (neu), `tests/test_seitenimport.py`, `tests/test_kleinanzeigen_echt.py`,
+    `tests/seiten/kleinanzeigen/suchseite_andere_orte.html` (neu, anonymisiert)
+- **Implementierte Funktionen:**
+  - Nicht bestätigte Fahrzeugart sperrt nicht mehr; Hinweis „Fahrzeugart nicht bestätigt/unbekannt (gerechnet …) –
+    bitte prüfen“ in allen Ausgaben.
+  - K-A behoben: Der Art-Filter bestätigt nur Treffer aus `#srchrslt-adtable`. Detailseite hat Vorrang (M-W).
+  - Brief: „Hallo <Name>,“ aus dem Profil (Hr → Herr, Kleinschreibung korrigiert), Modell nur einmal in der
+    Einleitung, danach Marke bzw. „Ihr Wohnmobil“; bei nicht bestätigter Art keine Art im Text.
+  - Bei unbekannter Art rechnet die Vorstufe vorsichtig: niedrigster Max-EK über „ohne Art“ und die Art-Wörter im
+    Text, Spanne über alle Kandidaten, Sicherheit „niedrig“; Rechner unverändert. `scout.py rechne` nutzt dieselbe
+    Logik (`vergleichsbasis`, `bewerte_anzeige`).
+  - Brief markenneutral „Ihr <Art> von <Marke>“ (statt „Ihr Hobby …“).
+  - Datenschutz: nur der Profilname, nur beim Seitenimport; Zeichen-Whitelist, keine Ziffern/Adressen/Füllwörter;
+    keine Telefonnummern/Profil-IDs. Echte Namen und Orte aus Fixtures, Tests und Vorlagen entfernt; ein Test
+    (`test_keine_echten_verkaeufernamen_im_repository`) verhindert ihre Rückkehr.
+- **Tests:** `.venv/bin/python -m pytest -q -p no:cacheprovider`, `.venv/bin/python -m ruff check .`,
+  `node --check wmscout/web/static/mobil.js`, Mutationsproben der Agenten in Kopien
+- **Testergebnis (Orchestrator):** Stand 7f96a8e `326 passed`; nach Korrektur Runde 6 (bcdb68b) **`374 passed`**,
+  ruff „All checks passed!“. Mutationsproben der Agenten in Kopien: alle erkannt (Runde 6: 17 von 17).
+- **Review-Ergebnis:** QA-Runde 5 (Stand a912c83): ABLEHNUNG ohne KRITISCH; K-A, H-T, M-W, N-1..N-3 bestätigt
+  behoben. Offen waren H1 (echte Profilnamen in Tests), H2 (Name gespeichert, aber ungenutzt), H3 (unbekannte Art mit
+  Titel-Art gerechnet), M1–M4, N1–N5 → bearbeitet. QA-Runde 6 (Stand 7f96a8e): ABLEHNUNG ohne KRITISCH – H1-R (die
+  echten Namen kamen über den parallelen Anschreiben-Worktree zurück: der Orchestrator hatte sie dem Agenten als
+  Beispiel genannt), H6-1 (unbekannte Art als „Sonstige“: echter Wohnwagen mit Max-EK 54.600 € statt 18.900 € auf
+  Rang 3), M6-1..M6-3, N6-1..N6-5 → in Korrekturrunde 2 bearbeitet. QA-Runde 7: steht aus.
+- **Bekannte Risiken:**
+  - Die echten Profilnamen aus a912c83 stehen in der Historie des Arbeitszweigs (Bereinigung nur mit Freigabe des
+    Betreibers; Squash-Merge hält sie aus dem Integrationszweig).
+  - F14: Wohnwagen ohne Art-Wort im Text werden wie Wohnmobile gerechnet (zu hoher Max-EK, teils „grün“).
+  - Max-EK 0 ergibt Ampel „grau“ (bestehendes Rechnerverhalten).
+  - N4: früher falsch bestätigte Inserate werden nicht automatisch herabgestuft.
+  - Kein Browser-Klicktest der Hinweiszeile; Windows nicht geprüft.
+- **Nächster sinnvoller Schritt:** QA-Runde 7 (letzte erlaubte Runde nach Wiederaufnahme), dann PR gegen den
+  Integrationszweig; Betreiberentscheidung F14.
+
+## Phase 2 (vorgezogen) – Gespeicherte Seiten einlesen (13.10.2026)
+
+### P2-05 (Teil) – Gespeicherte Kleinanzeigen-Seiten einlesen · Status: BLOCKED (aufgehoben 14.10.2026, siehe oben)
+
+- **Phase:** 2, vorgezogen. Der Betreiber hat das Paket am 13.10.2026 freigegeben, nachdem der Kleinanzeigen-Webabruf
+  0 Treffer lieferte (neues Seitenlayout).
+- **Verantwortlicher Agent:**
+  - `source-integrations`: Umsetzung; die erste Fassung lief als eingebauter Agent nach Definition, danach als
+    Projekt-Agent.
+  - `qa-security-reviewer`: vier Prüfungen.
+- **Zweig/Commits:** `claude/phase2-seitenimport`: 796eda6 (Umsetzung), 8c212c2 (Runde 1), 981398e (echte Seiten),
+  fd9c580 (Runde 2), 9b2396d (Runde 3). Die Zwischenstände 6df53c1/a83fe4f sind als „ungeprüft“ markiert.
+  Kein PR, weil BLOCKED.
+- **Geänderte Dateien:**
+  - `wmscout/eingang/` (neu)
+  - `wmscout/importer.py`
+  - `wmscout/datenbank.py` (`ohne_details`-Filter, Import-Suchwerte; keine Schemaänderung)
+  - `wmscout/quellen/kleinanzeigen/parser.py` (neues Layout, Detailliste, Anzeigen-ID)
+  - `wmscout/quellen/kleinanzeigen/adapter.py`
+  - `wmscout/normalisierung/fahrzeug.py` (Basismarken-Normalisierung, `arten_im_text`)
+  - `wmscout/bewertung/anschreiben.py` (Sperrgrund Fahrzeugart)
+  - `wmscout/web/api.py` (`POST /api/import`)
+  - `vorlagen/report.html` (Knopf, Meldungen)
+  - `scout.py` (`import`)
+  - `config.yaml` (`import.ordner`)
+  - `.gitignore`, `README.md`
+  - Tests: `tests/test_seitenimport.py`, `tests/test_kleinanzeigen_echt.py`, `tests/seiten/kleinanzeigen/*.html`
+    (anonymisiert, IDs/Orte verfremdet)
+- **Implementierte Funktionen:**
+  - Im Browser gespeicherte Such- und Detailseiten aus `import/` einlesen. Das geht per Knopf, per
+    `scout.py import` und über die API.
+  - Kein Netzabruf, auch später kein automatisches Nachladen von Detailseiten (ADR-010).
+  - Dateien wandern nach `eingelesen/<Datum>/` bzw. `nicht_erkannt/`.
+  - Grenzen: 25 Dateien bzw. 20 s je Klick, 20 MB je Datei.
+  - Fahrzeugart nur aus Art-Filter oder Detailseite gilt als bestätigt und ist anschreibbar. Titel und Suchbegriff
+    gelten als vorläufig und werden gesperrt (ADR-020).
+- **Tests:**
+  - `.venv/bin/python -m pytest -q`
+  - `.venv/bin/python -m ruff check .`
+  - Klicktest (Chromium headless)
+  - Lauf mit den 18 echten, vom Betreiber gespeicherten Seiten (Temp-DB, Netz gesperrt)
+  - Mutationsproben (QA)
+- **Testergebnis:**
+  - `194 passed`, ruff „All checks passed!“.
+  - Klicktest: Knopf, Meldung und Neuladen funktionieren, keine JS-Fehler (Stand 796eda6).
+  - 18 echte Seiten: 16 Such- und 2 Detailseiten, 0 nicht erkannt, 352 neu, 42 bekannt.
+  - Arten: bestätigt 2, vorläufig 186, unbekannt 164; bereit 0; „nicht bestätigt und bereit“ 0.
+  - Reihenfolge vorwärts/rückwärts: 0 Abweichungen.
+  - Windows: nicht geprüft (CI läuft beim Push; noch nicht ausgewertet).
+- **Review-Ergebnis:** Vier QA-Prüfungen, alle ABLEHNUNG. Die Befunde der jeweils vorigen Runde waren jedes Mal behoben.
+  1. K1 (Fahrzeugart ging verloren), H1, M1–M4 → behoben in Runde 1.
+  2. K1-R (Stichwort der Suchseite galt als Fahrzeugart), K1-D, M6, M7 → behoben in Runde 2.
+  3. K-T (Titel mit mehreren Arten) und R-O (Reihenfolge) → behoben in Runde 3 mit der Regel „nur bestätigte Art“.
+  4. **K-A (KRITISCH, offen):** Der Art-Filter einer Suchseite würde auch die Anzeigen im Block „Weitere Ergebnisse
+     in anderen Orten“ (`#srchrslt-adtable-altads`) bestätigen. Diese Anzeigen ignorieren Filter und Kategorie.
+     Belegt mit einem echten Original und eingesetztem Filter: „Citroen Campster“ wäre als Teilintegrierter
+     anschreibbar, mit einem Max-EK von 37.300 € statt 31.100 €.
+  - Weitere offene Befunde: H-T (fehlender Test für die Garantie „Detailseite ohne Art bestätigt nicht“), M-W (zwei
+    bestätigte Quellen widersprechen sich), N-1 bis N-3.
+- **Bekannte Risiken:**
+  - Nicht belegt ist, ob echte, mit Art-Filter gespeicherte Seiten `art_s:` in canonical/og:url tragen. Unter den
+    18 Originalen ist keine Filterseite. Fehlt `art_s:`, ist nur über Detailseiten etwas anschreibbar.
+  - Der Betreiber nutzt die Vorabversion bereits. Ältere Zweigstände konnten falsche Arten erzeugen; erneutes Einlesen
+    mit dem aktuellen Stand sperrt sie (M-A).
+- **Grund für BLOCKED:** Laut Skill `scout-cycle` sind höchstens 3 Korrekturrunden je Paket erlaubt; nach der dritten
+  ist ein KRITISCH-Befund offen.
+- **Nötige Entscheidung des Betreibers:**
+  - (a) Eine 4. Runde ausnahmsweise erlauben, nur für K-A, H-T und M-W. Vorschlag: Der Filter bestätigt nur Anzeigen
+    aus der Haupttabelle `#srchrslt-adtable`, und eine echte Filterseite wird geliefert.
+  - (b) Übergangsweise nur Detailseiten als Bestätigung zulassen. Dann ist K-A ausgeschlossen, braucht aber ebenfalls
+    eine kleine Runde.
+  - (c) Den Stand ohne PR liegen lassen.
+- **Nächster sinnvoller Schritt:** Entscheidung des Betreibers sowie eine mit Art-Filter gespeicherte Ergebnisseite als
+  Testdatum.
 ## Phase 1 (vorgezogen) – Datensicherung und Migrationsrahmen (14.10.2026)
 
-### P1-02 / P1-03 – Sicherung, Wiederherstellung, Migrationsrahmen · Status: REVIEW
+### P1-02 / P1-03 – Sicherung, Wiederherstellung, Migrationsrahmen · Status: DONE (PR #5 gemergt 14.10.2026)
 
 - **Phase:** 1, vorgezogen als Voraussetzung für die Team-Übersicht (Tabelle `bearbeitung`, Schema-Version 3) und
   für jede weitere Schemaänderung (Regel 3).
