@@ -212,7 +212,7 @@
           return '<option value="' + n.id + '"' + (n.id === ich.id ? " selected" : "") + ">" + esc(n.name) + "</option>";
         }).join("") : '<option value="">ich</option>') + "</select></label>" +
         '<button class="knopf primaer voll" style="margin-top:12px" data-aktion="planen">Besichtigung planen</button></div>';
-      inhalt.dataset.id = f.id; inhalt.dataset.url = f.url; inhalt.dataset.erst = f.erstangebot || "";
+      inhalt.dataset.id = f.id; inhalt.dataset.url = f.url; inhalt.dataset.erst = f.brief_betrag || "";
       inhalt.dataset.nfbetrag = f.nachfass_betrag || "";
       document.getElementById("notiz").onchange = function (e) { api("/api/notiz", { id: f.id, notiz: e.target.value }).then(function () { toast("Notiz gespeichert"); }); };
     });

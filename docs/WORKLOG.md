@@ -14,6 +14,11 @@ Wert „–“.
   `scout.py` beide Fassungen von `main()` stehen (Datenbank-Start ohne Sicherungsordner, `import` fehlte im zweiten
   Aufruf) → 8 CLI-Tests rot. Behoben; außerdem nutzt ein Import-Test statt `:memory:` eine Temp-Datei (der
   Migrationsrahmen öffnet eigene Verbindungen). Danach **464 passed**, ruff grün.
+- **Nachfassen ohne Betrag (QA P2-05b, Befund Q2-H1, gilt schon für F14):** Nannte der Erstbrief keinen Betrag, nannte
+  das Nachfassen trotzdem „Mein Angebot über … steht weiterhin“, und Desktop/Handy speicherten beim Kontakt das
+  rechnerische Erstangebot als `angebot_betrag`. Jetzt eine Regel `betrag_im_brief` für Brief, Nachfassen, Zeile
+  (`brief_betrag`), API und Handy; Report beschriftet „rechnerisch, nicht im Anschreiben“. Zwei Tests, beide Mutationen
+  erkannt; **465 passed**.
 - **F14 umgesetzt (Betreiberentscheidung 14.10.2026, Orchestrator):** Bei unbekannter Fahrzeugart Ampel höchstens
   „gelb“ (`bewerte_anzeige`) und Brief ohne Betrag (`kontext`, `mit_angebot`); Hinweistext nennt beides. Zwei neue
   Tests, beide Änderungen per Mutationsprobe in einer Kopie erkannt. PR #4 während der Änderung als Entwurf markiert.

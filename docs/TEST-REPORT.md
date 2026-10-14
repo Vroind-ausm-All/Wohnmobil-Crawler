@@ -22,6 +22,7 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 | QA-Runde 7 (be0afd2): Tests, 18 echte Seiten, Hinweise, Briefe, id-Leck, Laufzeit, Mutationen | 374 passed; Hinweise konsistent in allen Ausgaben; `#als`-id 0 Treffer; 1.500 unbekannte Importe 23 s statt 6,4 s; Mutationen 24 von 28 |
 | QA-Urteil Runde 7 | **FREIGABE MIT AUFLAGEN** – A1: F14 (10 der Top 20 sind Wohnwagen ohne Art-Wort, Rechnung als „Sonstige“) vor Merge entscheiden; A2: M7-1/M7-2 → behoben |
 | Namensschutz nach M7-1 (Orchestrator) | Gegenprobe: eingefügter echter Name → Test rot; ohne → grün |
+| Q2-H1 (Nachfassen/gespeicherter Betrag ohne Betrag im Brief) | 2 Tests, Mutationen erkannt; **465 passed**, ruff grün |
 | Nach Zusammenführung mit PR #5 (Datensicherung) | zunächst 8 failed (doppelte `main()` in `scout.py`, `:memory:`-Test) → behoben: **464 passed**, ruff grün |
 | F14 (Orchestrator): Ampel höchstens gelb, Brief ohne Betrag bei unbekannter Art | **377 passed** (vor Zusammenführung); Mutationen „Ampel nicht gedeckelt“ und „Betrag trotzdem“ jeweils von einem Test erkannt |
 | Browser-Klicktest Hinweiszeile, Windows, CI | nicht geprüft |

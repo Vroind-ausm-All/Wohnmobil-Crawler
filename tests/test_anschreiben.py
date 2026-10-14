@@ -8,7 +8,7 @@ from datetime import date
 import pytest
 
 from tests.daten import BASIS, lade_cfg
-from wmscout.bewertung.anschreiben import (HINWEIS_ART_UNBEKANNT, HINWEIS_ART_VORLAEUFIG, Anschreiber, anrede_name,
+from wmscout.bewertung.anschreiben import (HINWEIS_ART_UNBEKANNT, HINWEIS_ART_VORLAEUFIG, Anschreiber, anrede_name, betrag_im_brief,
                                            hinweis_art_unbekannt, hinweise, kontext)
 from wmscout.bewertung.auswertung import bewerte_alle, bewerte_anzeige, fuer_rechner, kandidaten_arten, vergleichsbasis
 from wmscout.bewertung.rechner import Rechner
@@ -378,3 +378,20 @@ def test_f14_rot_und_grau_bleiben_unveraendert():
     a = imp(99, "Beispiel Südwind 580", 90000)                                  # weit über Markt
     b = bewerte_anzeige(Rechner(cfg), a, vergleichsbasis(alle))
     assert b.ampel == "rot"
+
+
+def test_q2h1_nachfassen_ohne_betrag_wenn_der_brief_keinen_nannte():
+    """QA Q2-H1: Nennt der Erstbrief keinen Betrag (F14: Art unbekannt), darf auch das Nachfassen keinen nennen
+    („Mein Angebot über … steht weiterhin“ wäre falsch und zu hoch). Gegenprobe: bestätigte Art nennt ihn."""
+    cfg = copy.deepcopy(CFG)
+    alle = [imp(i, "Beispiel 450", 33800) for i in range(10)]
+    vergleich = vergleichsbasis(alle)
+    a = {**imp(99, "Beispiel Südwind 580", 12000), "status": "kontaktiert", "kontaktiert_am": "2026-10-01T10:00:00"}
+    b = bewerte_anzeige(Rechner(cfg), a, vergleich)
+    assert b.erstangebot and betrag_im_brief(a, b) is None
+    text, betrag = Anschreiber(cfg, BASIS).nachfass(a, b)
+    assert betrag is None and "€" not in text and "steht weiterhin" not in text
+    best = {**a, "suche": "Import Teilintegrierter (bestätigt)", "art": "Teilintegrierter"}
+    bb = bewerte_anzeige(Rechner(cfg), best, vergleich)
+    text_b, betrag_b = Anschreiber(cfg, BASIS).nachfass(best, bb)
+    assert betrag_im_brief(best, bb) == bb.erstangebot and betrag_b == bb.erstangebot and "€" in text_b
