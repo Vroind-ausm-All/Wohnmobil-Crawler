@@ -84,3 +84,17 @@ def test_ort_kurz_entfernt_nur_plz_und_auslandskennung():
     for ort, erwartet in (("70173 Stuttgart", "Stuttgart"), ("12345 XY", "XY"), ("NL-7595XP Beispieldorf", "Beispieldorf"),
                           ("SE-123 45 Beispielstadt", "Beispielstadt"), ("", "Ihrer Nähe")):
         assert kontext({"ort": ort, "titel": "x"}, None, cfg)["ort_kurz"] == erwartet, ort
+
+
+def test_ausland_nachfassen_und_gespeicherter_betrag_ohne_betrag(cfg, orte):
+    """QA Q2-H1: Ohne Betrag im Brief nennt auch das Nachfassen keinen und es wird keiner gespeichert (`brief_betrag`)."""
+    from wmscout.bewertung.anschreiben import Anschreiber, betrag_im_brief
+    schreiber = Anschreiber(cfg, BASIS)
+    for ort in ("FR-75001 Paris", "SE-123 45 Beispielstadt"):
+        z = orte[ort]
+        a = {**z["a"], "status": "kontaktiert", "kontaktiert_am": "2026-10-01T10:00:00"}
+        assert z["b"].erstangebot and z["brief_betrag"] is None and betrag_im_brief(a, z["b"]) is None, ort
+        text, betrag = schreiber.nachfass(a, z["b"])
+        assert betrag is None and "€" not in text, ort
+    inland = orte["70173 Stuttgart"]
+    assert inland["brief_betrag"] == inland["b"].erstangebot
