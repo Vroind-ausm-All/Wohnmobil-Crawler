@@ -45,7 +45,22 @@ Einrichtung (Nutzer anlegen, Tailscale, App auf den Startbildschirm): **[docs/HA
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --titel "Knaus Sky TI 650 MEG" --anschreiben` | Einzelfahrzeug durchrechnen und Anschreiben ausgeben (auch für Anfragen außerhalb von Kleinanzeigen; `--text` mit der Beschreibung berücksichtigt Ausstattung/Mängel) |
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --marktwert 44000` | mit eigenem Marktwert (z. B. aus mobile.de oder DAT) |
 | `python scout.py nutzer anlegen Anna --rolle inhaber --telefon "+49 170 …"` | Team-Zugang für die Handy-App (auch `liste`, `passwort`, `sperren`, `entsperren`) |
+| `python scout.py sichern` | Datenbank und Fotos sichern (siehe „Datensicherung“) |
+| `python scout.py wiederherstellen <Datei> --bestaetigt` | Sicherung zurückspielen – vorher App und Suchlauf beenden |
 | `python scout.py status 3531797014 kontaktiert` | Status setzen: `neu`, `kontaktiert`, `uninteressant`, `gekauft` (in der App per Klick) |
+
+## Datensicherung
+
+* `python scout.py sichern` legt eine geprüfte Kopie der Datenbank (SQLite-Backup, `integrity_check`) in
+  `daten/sicherungen/` ab, die Fotos (`daten/fotos/`) als ZIP daneben. Es bleiben die letzten 10 Sicherungen erhalten
+  (`config.yaml` → `sicherung`: `ordner`, `behalten`); andere Dateien im Ordner werden nie gelöscht.
+* **Vor jedem Update sichern** – und die Sicherungen gelegentlich auf ein anderes Laufwerk oder einen USB-Stick kopieren.
+  Vor jeder Datenbank-Migration (neue Programmversion mit Schemaänderung) wird automatisch gesichert; ohne gelungene
+  Sicherung wird nicht migriert.
+* Zurückspielen: App und Suchlauf (auch `lauf.bat`, geplante Aufgaben) beenden, dann
+  `python scout.py wiederherstellen daten/sicherungen/<Datei>.sqlite --bestaetigt`. Der bisherige Stand wird vorher
+  selbst gesichert, bisherige Fotos werden nur umbenannt (`fotos.alt-…`), nicht gelöscht.
+* Ist die Datenbank neuer als das Programm (Schemaversion), startet es nicht – bitte das Programm aktualisieren.
 
 ## So rechnet der Einkaufspreis-Rechner (faire Bewertung)
 
@@ -172,7 +187,9 @@ wmscout/
   netz.py                     höflicher HTTP-Abruf (Pausen, Sperrerkennung)
   importer.py                 Suchlauf: Quellen → Datenbank, Detailabrufe, Layout-Diagnose
   normalisierung/             Marke/Modell/Art (fahrzeug.py), PLZ/Entfernung (geo.py, plz_de.csv)
-  datenbank.py                SQLite, Status, automatische Spalten-Migration
+  datenbank.py                SQLite, Status (Schema und Version: migrationen.py)
+  migrationen.py              nummerierte, idempotente Schema-Migrationen mit schema_version und Sicherung vorher
+  sicherung.py                Sichern/Wiederherstellen (Backup-API, integrity_check, Fotos, Aufbewahrung)
   bewertung/                  rechner.py (Marktwert, Händler-EK), anschreiben.py, auswertung.py
                               (Dubletten, Nachfassen, Bewertung aller Inserate)
   ausgabe.py                  HTML-Report, CSV, Anschreiben-Dateien
@@ -189,6 +206,7 @@ tests/                        pytest, komplett ohne Internet (nachgebautes Marku
 
 ausgabe/                      report.html, anzeigen_bewertet.csv, anschreiben/*.txt, scout.log
 daten/anzeigen.sqlite         gesammelte Anzeigen (Grundlage für die Vergleichspreise)
+daten/sicherungen/            Sicherungen der Datenbank (+ Fotos als ZIP)
 ```
 
 **Tests ausführen:** einmalig `.venv\Scripts\python -m pip install -r requirements-dev.txt` (macOS/Linux:

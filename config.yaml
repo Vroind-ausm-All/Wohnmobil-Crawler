@@ -220,6 +220,12 @@ ausgabe:
   ordner: ausgabe
   datenbank: daten/anzeigen.sqlite
 
+# Datensicherung: python scout.py sichern / wiederherstellen <Datei> --bestaetigt
+# (automatisch auch vor jeder Datenbank-Migration). Älteste eigene Sicherungen werden gelöscht.
+sicherung:
+  ordner: daten/sicherungen
+  behalten: 10                   # so viele Sicherungen bleiben erhalten
+
 email:
   aktiv: false
   smtp_server: smtp.gmail.com

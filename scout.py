@@ -6,6 +6,8 @@
   python scout.py report                    Nur Report neu erzeugen (ohne Internet)
   python scout.py rechne --preis 32900 --ez 2016 --km 98000 --titel "Knaus Sky TI 650 MEG" [--anschreiben]
   python scout.py nutzer anlegen <Name> [--rolle inhaber]   Team-Zugang für Handy-App anlegen
+  python scout.py sichern                   Datenbank (und Fotos) sichern -> daten/sicherungen
+  python scout.py wiederherstellen <Datei> --bestaetigt   Sicherung zurückspielen (App und Suchlauf vorher beenden)
   python scout.py status <ID> kontaktiert   Status setzen (neu|kontaktiert|verhandlung|besichtigung|gekauft|abgesagt|uninteressant)
 """
 from __future__ import annotations
@@ -43,7 +45,9 @@ from wmscout.bewertung.auswertung import bewerte_alle
 from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import STATUS, Datenbank
 from wmscout.importer import Importer
+from wmscout.migrationen import MigrationsFehler
 from wmscout.normalisierung.fahrzeug import ergaenze_fahrzeug
+from wmscout.sicherung import STANDARD_BEHALTEN, SicherungsFehler, sichere, wiederherstellen
 from wmscout.team import ROLLEN, TeamSpeicher
 
 BASIS = Path(__file__).resolve().parent
@@ -122,6 +126,42 @@ def foto_ordner(cfg) -> Path:
     return (BASIS / cfg["ausgabe"]["datenbank"]).parent / "fotos"
 
 
+def sicherung_ordner(cfg) -> Path:
+    return BASIS / ((cfg.get("sicherung") or {}).get("ordner") or "daten/sicherungen")
+
+
+def sicherung_behalten(cfg) -> int:
+    return int((cfg.get("sicherung") or {}).get("behalten") or STANDARD_BEHALTEN)
+
+
+def cmd_sichern(cfg, args):
+    db_pfad = BASIS / cfg["ausgabe"]["datenbank"]
+    try:
+        ziel = sichere(db_pfad, sicherung_ordner(cfg), foto_ordner(cfg), sicherung_behalten(cfg))
+    except (SicherungsFehler, OSError) as e:
+        sys.exit(f"Sicherung fehlgeschlagen: {e}")
+    print(f"Sicherung angelegt und geprüft: {ziel}")
+    if ziel.with_name(ziel.name[:-len('.sqlite')] + ".fotos.zip").exists():
+        print("Fotos gesichert in:             " + ziel.with_name(ziel.name[:-len('.sqlite')] + ".fotos.zip").name)
+
+
+def cmd_wiederherstellen(cfg, args):
+    quelle = Path(args.datei)
+    if not quelle.is_file() and (sicherung_ordner(cfg) / args.datei).is_file():
+        quelle = sicherung_ordner(cfg) / args.datei
+    try:
+        erg = wiederherstellen(quelle, BASIS / cfg["ausgabe"]["datenbank"], args.bestaetigt, sicherung_ordner(cfg),
+                               foto_ordner(cfg), sicherung_behalten(cfg))
+    except (SicherungsFehler, OSError) as e:
+        sys.exit(f"{e}")
+    print(f"Wiederhergestellt aus {quelle}.")
+    if erg.sicherung_vorher:
+        print(f"Stand davor gesichert in: {erg.sicherung_vorher}")
+    if erg.fotos_wiederhergestellt:
+        print("Fotos wiederhergestellt." + (f" Bisherige Fotos liegen unverändert in: {erg.alter_fotoordner}" if erg.alter_fotoordner else ""))
+    print("Beim nächsten Start wird die Datenbank bei Bedarf auf die aktuelle Version gebracht (mit eigener Sicherung).")
+
+
 def _passwort_abfragen(name: str) -> str:
     import getpass
     while True:
@@ -191,11 +231,23 @@ def main():
     s.add_argument("id")
     s.add_argument("status", choices=list(STATUS))
     s.add_argument("--notiz")
+    sub.add_parser("sichern", help="Datenbank und Fotos sichern (Ordner: config.yaml -> sicherung)")
+    w = sub.add_parser("wiederherstellen", help="Sicherung zurückspielen (App und Suchlauf vorher beenden)")
+    w.add_argument("datei", help="Sicherungsdatei (.sqlite), auch nur der Dateiname aus dem Sicherungsordner")
+    w.add_argument("--bestaetigt", action="store_true", help="bestätigt: App und Suchlauf sind beendet")
     args = p.parse_args()
 
     cfg = lade_config(args.config)
     logging_einrichten(cfg)
-    db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]))
+    # Sichern/Wiederherstellen arbeiten ohne Datenbank-Start (die Datenbank darf defekt oder neuer sein)
+    if args.cmd == "sichern":
+        return cmd_sichern(cfg, args)
+    if args.cmd == "wiederherstellen":
+        return cmd_wiederherstellen(cfg, args)
+    try:
+        db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]), str(sicherung_ordner(cfg)))
+    except MigrationsFehler as e:
+        sys.exit(f"Datenbank-Start abgebrochen: {e}")
     {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "rechne": cmd_rechne, "nutzer": cmd_nutzer,
      "status": cmd_status}[args.cmd](cfg, db, args)
 

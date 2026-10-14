@@ -72,7 +72,7 @@ Bestätigung der Architektur-Risiken durch die QA:
 | ID | Stufe | Befund | Beleg | Paket |
 |---|---|---|---|---|
 | R1 | KRITISCH | Nicht freigegebene Quelle (Kleinanzeigen) läuft standardmäßig und per Auto-Suche alle 3 h; Detailabruf ohne Freigabeprüfung (R19) | `config.yaml:196`; `importer.py:39-40`; `importer.py:78-100` | P1-01a |
-| R3 | KRITISCH | Keine Backups, keine Schemaversion; blockiert jede Migration | `datenbank.py:49-53` | P1-02, P1-03 |
+| R3 | KRITISCH | Keine Backups, keine Schemaversion; blockiert jede Migration (behoben mit P1-02/P1-03, `wmscout/migrationen.py`) | – | P1-02, P1-03 |
 | Q1 | KRITISCH | Ohne Erstzulassung wird der **Angebotspreis als Marktniveau** genommen. Max-EK und Erstangebot sind damit zirkulär. Die Oberfläche blendet sie aus, CSV und eingefrorene Besichtigungsbasis übernehmen sie aber. | `rechner.py:261-264`; `api.py:104`; `ausgabe.py:57-58` | P1-12 |
 | Q2 | HOCH | **Negativer `Content-Length`** umgeht das Größenlimit (`rfile.read(-1)`), noch vor der Anmeldung. Der Thread hängt und puffert unbegrenzt. | `api.py:485-488` (ausgeführt) | P1-13 |
 | Q3 | HOCH | **Datenschutz:** Verkäuferdaten, Unterschriften und Fotos werden unbefristet gespeichert, eine Lösch- oder Anonymisierungsfunktion fehlt | `team.py`, `api.py:461-467` | P1-14a |
@@ -91,7 +91,7 @@ Bestätigung der Architektur-Risiken durch die QA:
 | Q15 | NIEDRIG | ICS-Escape behandelt `\r` nicht | `api.py:124-125` | P1-13 |
 | Q16 | NIEDRIG | Verstecktes `--passwort` in Prozessliste/Shell-Historie | `scout.py:189` | P1-09 |
 | Q17 | NIEDRIG | `installieren.bat` akzeptiert 3.10–3.13 | `installieren.bat:28` | P1-10 |
-| Q18 | NIEDRIG | Irreführender Kommentar zur Thread-Nutzung | `datenbank.py:45` | P1-04 |
+| Q18 | NIEDRIG | Irreführender Kommentar zur Thread-Nutzung | `datenbank.py:29` | P1-04 |
 
 Positiv geprüft:
 - **Keine XSS-Lücke gefunden.** Autoescape ist aktiv, kein `|safe`, Fremddaten laufen über `textContent` bzw. `esc()`, Links nur http(s), Unterschriften werden per Regex geprüft.

@@ -74,18 +74,18 @@ config.yaml (suchen) → Suchauftrag → KleinanzeigenQuelle.suche → Hoefliche
 | ID | Risiko | Beleg | Schwere | Maßnahme | Paket |
 |---|---|---|---|---|---|
 | R1 | Nicht freigegebene Quelle (Kleinanzeigen-HTML) läuft standardmäßig, per Auto-Suche alle 3 h | `config.yaml:10-20,196`; `importer.py:39-40` nur Warnung | **KRITISCH** (Regel 11/12) | Importer verweigert Suche **und** Detailabruf für nicht freigegebene Quellen; Auto-Suche standardmäßig aus | P1-01a |
-| R3 | Keine Backups, keine Schema-Version; `ALTER TABLE` bei jedem Öffnen | `datenbank.py:49-53` | **KRITISCH** (blockiert alle Migrationen) | `scout.py sichern`/`wiederherstellen` über SQLite-Backup-API inkl. Fotos, `integrity_check`, `schema_version` | P1-02, P1-03 |
+| R3 | Keine Backups, keine Schema-Version; `ALTER TABLE` bei jedem Öffnen | vorher `datenbank.py` (ALTER TABLE beim Öffnen); **behoben** durch `wmscout/sicherung.py` und `wmscout/migrationen.py` (P1-02/P1-03) | **KRITISCH** (blockiert alle Migrationen) | `scout.py sichern`/`wiederherstellen` über SQLite-Backup-API inkl. Fotos, `integrity_check`, `schema_version` | P1-02, P1-03 |
 | R2 | User-Agent gibt sich als Chrome aus | `config.yaml:32`, `netz.py` | HOCH | ehrlicher User-Agent mit Projektname (Regel 11: keine gefälschten Browser-Fingerabdrücke) | P1-01a |
-| R4 | Schlüssel ohne Quelle | `datenbank.py:11,58`; `basis.py:103`; `rechner.py:176` | HOCH | `UNIQUE(quelle, anzeigen_id)` **vor** der zweiten Quelle | P2-02 |
-| R5 | „kontaktiert“ schon beim Kopieren; Nachfassen macht aus „abgesagt“ wieder „kontaktiert“ | `report.html:406`, `mobil.js:483`, `datenbank.py:139` | HOCH | Statuswert „vorbereitet“, Knopf „gesendet bestätigen“; später Kontakte als Ereignisse | P1-06, P3-06 |
+| R4 | Schlüssel ohne Quelle | `migrationen.py:27`; `datenbank.py:36`; `basis.py:103`; `rechner.py:176` | HOCH | `UNIQUE(quelle, anzeigen_id)` **vor** der zweiten Quelle | P2-02 |
+| R5 | „kontaktiert“ schon beim Kopieren; Nachfassen macht aus „abgesagt“ wieder „kontaktiert“ | `report.html:406`, `mobil.js:483`, `datenbank.py:117` | HOCH | Statuswert „vorbereitet“, Knopf „gesendet bestätigen“; später Kontakte als Ereignisse | P1-06, P3-06 |
 | R6 | Globaler Lock umfasst Bewertung, Antwortversand und WhatsApp-HTTP (Timeout 20 s) | `api.py:57,495-497` | HOCH | Lock nur um DB-Zugriffe, Verbindung je Thread; Versand außerhalb; WhatsApp asynchron | P1-05 |
-| R7 | Mehrere SQLite-Verbindungen ohne WAL (nur Python-Standard-Wartezeit 5 s); alle HTTP-Threads teilen eine Verbindung; keine Laufsperre (App + `lauf.bat` parallel) | `app.py:59,102`; `scout.py:198`; `api.py:54`; `datenbank.py:46` | HOCH | WAL, `busy_timeout`, Laufsperre (Lease in `suchlaeufe`, Schema v3) | P1-04 |
+| R7 | Mehrere SQLite-Verbindungen ohne WAL (nur Python-Standard-Wartezeit 5 s); alle HTTP-Threads teilen eine Verbindung; keine Laufsperre (App + `lauf.bat` parallel) | `app.py:59,102`; `scout.py:198`; `api.py:54`; `datenbank.py:30` | HOCH | WAL, `busy_timeout`, Laufsperre (Lease in `suchlaeufe`, Schema v3) | P1-04 |
 | R8 | Keine Fehlerisolation je Quelle/Suchauftrag | `importer.py:108-125` | HOCH | `try` je Auftrag und Quelle, Status je Quelle | P2-03 |
-| R9 | Verfügbarkeit nur geschätzt; Inserate nach 21 Tagen in der App nicht mehr bearbeitbar | `datenbank.py:99`; `api.py:74-78` | MITTEL | Spalte `verfuegbarkeit` + `zuletzt_bestaetigt` | P3-04 |
-| R10 | Preisverlauf geht verloren | `datenbank.py:73-76` | MITTEL | `preis_historie` (nur anhängen) | P2-02 (Start), P3-03 |
+| R9 | Verfügbarkeit nur geschätzt; Inserate nach 21 Tagen in der App nicht mehr bearbeitbar | `datenbank.py:77`; `api.py:74-78` | MITTEL | Spalte `verfuegbarkeit` + `zuletzt_bestaetigt` | P3-04 |
+| R10 | Preisverlauf geht verloren | `datenbank.py:51-54` | MITTEL | `preis_historie` (nur anhängen) | P2-02 (Start), P3-03 |
 | R11 | Dubletten flüchtig/lückenhaft; Ankaufsstatus am Inserat | `auswertung.py:24,74-83` | MITTEL | `fahrzeuge` mit Fingerabdruck, Zusammenführung nur als Vorschlag | P3-02 |
 | R12 | Bewertung O(aktive × alle) im Lock; Vergleichsbasis enthält gelöschte/alte Inserate | `auswertung.py:59`; `rechner.py:200,217` | MITTEL | SQL-Vorfilter, Indizes, gespeicherte `bewertungen` | P3-07, P5 |
-| R13 | „gewerblich unbekannt“ wird als privat behandelt | `datenbank.py:62` | MITTEL | `anbieter_typ` privat/haendler/unbekannt | P2-02, P3-05 |
+| R13 | „gewerblich unbekannt“ wird als privat behandelt | `datenbank.py:40` | MITTEL | `anbieter_typ` privat/haendler/unbekannt | P2-02, P3-05 |
 | R14 | Besichtigung: letzter Schreiber gewinnt, Konflikt wird nur gemeldet | `api.py:434-437` | MITTEL | `UPDATE … WHERE version=?`, sonst 409 | P1-07 |
 | R15 | Bewertung hängt an der Datenbank | `auswertung.py:8,65`; `anschreiben.py:9` | MITTEL | `STATUS` in Domänenmodul; `bewerte_alle` bekommt Listen | P1-08 |
 | R16 | Firmen-/Mail-Daten in versionierter `config.yaml`; Passwort als CLI-Argument | `config.yaml:175-181,218-224`; `scout.py:189` | NIEDRIG | `config.local.yaml` (ignoriert) als Überlagerung | P1-09 |
