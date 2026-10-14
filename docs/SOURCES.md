@@ -28,6 +28,7 @@ Anleitung zum Programmieren eines Adapters: `docs/QUELLEN.md`.
 | Kleinanzeigen – manueller Import | Generalist | hoch | Nutzer fügt ein | kostenlos | wie eingefügt | Handarbeit | **OK** |
 | mobile.de – Search-API / Ad-Stream | Händler-Mix | gering–mittel (wahrscheinlich) | API-Account über Kundenservice | unbekannt | hoch | Ad-Stream ereignisbasiert | **PRÜFEN** |
 | mobile.de – gespeicherte Suche per E-Mail | Händler-Mix | gering–mittel | Suchauftrag | kostenlos | gering | **max. 1 E-Mail/Tag** (belegt) | **OK** (ergänzend) |
+| mobile.de – im Browser gespeicherte Such-/Anzeigenseiten (manueller Import, P2-05b) | Händler-Mix | ca. 19 % (Wohnmobil-Suche 14.10.2026: 9.846 von 52.604 Angeboten „Privatanbieter“, 42.458 Händler, 301 Firmenfahrzeuge) | Nutzer speichert Seiten selbst (Strg+S); kein Abruf, ADR-010 | kostenlos | hoch (Preis, EZ, km, Ort, Kategorie, Anbietertyp je Treffer) | Handarbeit, 20 Treffer je Seite | **OK** |
 | AutoScout24 – Listing Creation API | Händler-Mix | gering | nur Einstellen, kein Lesen | unbekannt | – | – | **BLOCKED** als Lesequelle |
 | AutoScout24 – Suchauftrag | Händler-Mix | gering | Push/E-Mail mit Konto | kostenlos | gering | unbekannt | **OK** |
 | Caraworld (publimind GmbH) | Spezialmarkt | ca. 22 % privat (2015, veraltet) | kein Lesezugang bekannt | – | wahrscheinlich gut | unbekannt | **PRÜFEN** (Anfrage); manuell OK |

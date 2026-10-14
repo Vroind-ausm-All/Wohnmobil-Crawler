@@ -1,8 +1,10 @@
-"""Im Browser gespeicherte Kleinanzeigen-Seiten (Strg+S) erkennen – ohne jeden Netzabruf (ADR-010).
+"""Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten (Strg+S) erkennen – ohne jeden Netzabruf (ADR-010).
 
 Der Nutzer ruft Such- oder Detailseiten selbst auf und speichert sie als „Webseite, nur HTML“ oder „komplett“
 in den Import-Ordner (config.yaml → import → ordner). Hier wird nur erkannt, was in der Datei steht; die
-Selektoren stehen unverändert im Parser der Quelle (wmscout/quellen/kleinanzeigen/parser.py).
+Selektoren stehen unverändert im Parser der Quelle (wmscout/quellen/kleinanzeigen/parser.py bzw. mobilede/parser.py).
+Die Plattform erkennt man am Seitenkopf (canonical/og:url/Speichervermerk, bei mobile.de zusätzlich og:site_name);
+Kleinanzeigen wird nur erkannt, wenn die Seite nicht von mobile.de stammt.
 """
 from __future__ import annotations
 
@@ -18,6 +20,11 @@ from ..normalisierung.fahrzeug import art_schluessel, arten_im_text
 from ..quellen.basis import Inserat
 from ..quellen.kleinanzeigen.adapter import anzeigen_id_aus_url
 from ..quellen.kleinanzeigen.parser import BASIS, name_in_details, parse_detailseite, parse_suchseite
+from ..quellen.mobilede import KENNUNG as MOBILEDE
+from ..quellen.mobilede import anzeigen_id_aus_url as mobilede_id_aus_url
+from ..quellen.mobilede import detail_url as mobilede_detail_url
+from ..quellen.mobilede import parse_detailseite as mobilede_detailseite
+from ..quellen.mobilede import parse_suchseite as mobilede_suchseite
 
 QUELLE = "kleinanzeigen"
 HTML_ENDUNGEN = {".html", ".htm"}
@@ -34,6 +41,10 @@ _KATEGORIE = re.compile(r"/s-wohnwagen-mobile/([^/?#]+)", re.I)
 _ALLGEMEIN = re.compile(r"wohn(?:wagen|mobile?)\s*(?:&|und|/)\s*(?:wohn)?(?:wagen|mobile?)", re.I)
 # Merkmale, die nur eine einzelne Anzeigenseite hat (dieselben Elemente, die parse_detailseite ausliest)
 _ANZEIGEN_MERKMAL = re.compile(r"""id\s*=\s*["']?viewad-(?:title|price)\b""", re.I)
+# mobile.de: Host der Seitenadresse im Kopf; die Suchseiten haben weder canonical noch og:url, aber og:site_name
+_MOBILEDE_HOST = re.compile(r"^https?://(?:[\w-]+\.)*mobile\.de(?=[/:?#]|$)", re.I)
+_MOBILEDE_SITE = {"mobile.de", "mobile_de"}
+_MOBILEDE_ANZEIGE = re.compile(r"""data-testid\s*=\s*["']?vip-ad-title\b""", re.I)
 
 
 class BegleitordnerFehler(OSError):
@@ -196,10 +207,55 @@ def haupttabelle_ids(html: str) -> set[str]:
     return {t["id"] for t in parse_suchseite(str(teil))} if teil.contents else set()
 
 
+def _seitenadressen(html: str) -> list[str]:
+    """Adressen aus dem Seitenkopf: canonical, og:url und der Speichervermerk des Browsers (nur aus dem <head>)."""
+    kopf = BeautifulSoup(_strenger_kopf(html) or "", "html.parser", parse_only=SoupStrainer(["link", "meta"]))
+    urls = []
+    if el := kopf.find(["link", "meta"], rel="canonical"):
+        urls.append(el.get("href"))
+    if el := kopf.find("meta", attrs={"property": "og:url"}):
+        urls.append(el.get("content"))
+    urls.append(_gespeichert_von(html))
+    return [u.strip() for u in urls if u]
+
+
+def ist_mobilede_seite(html: str) -> bool:
+    """Stammt die Datei von mobile.de? Nur der Kopf zählt: Adresse (canonical/og:url/Speichervermerk) auf *.mobile.de oder
+    `og:site_name` „mobile.de“/„mobile_de“ (die Suchseiten haben weder canonical noch og:url). Links im Seitentext zählen nicht."""
+    if any(_MOBILEDE_HOST.match(u) for u in _seitenadressen(html)):
+        return True
+    kopf = BeautifulSoup(_strenger_kopf(html) or "", "html.parser", parse_only=SoupStrainer("meta"))
+    site = kopf.find("meta", attrs={"property": "og:site_name"})
+    return bool(site) and (site.get("content") or "").strip().lower() in _MOBILEDE_SITE
+
+
+def plattform_der_seite(html: str) -> str:
+    """'mobile.de' oder 'kleinanzeigen' (alles, was nicht eindeutig von mobile.de kommt)."""
+    return MOBILEDE if ist_mobilede_seite(html) else QUELLE
+
+
+def _erkenne_mobilede(html: str) -> tuple[str, list[Inserat]]:
+    """Wie `erkenne_seite`, für mobile.de: Anzeigenseite = Adresse `details.html?id=…` im Kopf (oder erkennbarer Anzeigentitel);
+    Suchseite = Trefferblöcke `*-result-listing-N`. Die „ähnlichen Fahrzeuge“ einer Anzeigenseite sind keine Treffer."""
+    ad_id = next((i for u in _seitenadressen(html) if (i := mobilede_id_aus_url(u))), None)
+    if ad_id:
+        d = mobilede_detailseite(html)
+        if d.get("titel") or d.get("details"):
+            d.pop("anzeigen_id", None)
+            return "detail", [Inserat(quelle=MOBILEDE, anzeigen_id=ad_id, url=mobilede_detail_url(ad_id), **d)]
+    elif _MOBILEDE_ANZEIGE.search(html):
+        return "detail_ohne_id", []
+    treffer = [Inserat(quelle=MOBILEDE, anzeigen_id=t.pop("id"), **t) for t in mobilede_suchseite(html)]
+    return ("suche", treffer) if treffer else ("unbekannt", [])
+
+
 def erkenne_seite(html: str) -> tuple[str, list[Inserat]]:
     """Art der Seite und die erkannten Inserate (ohne Gesuche).
 
-    Art: 'suche', 'detail', 'unbekannt' oder 'detail_ohne_id' (Anzeigenseite, aber ohne ermittelbare Anzeigen-ID)."""
+    Art: 'suche', 'detail', 'unbekannt' oder 'detail_ohne_id' (Anzeigenseite, aber ohne ermittelbare Anzeigen-ID).
+    Seiten von mobile.de (Kopf, siehe `ist_mobilede_seite`) liest `_erkenne_mobilede`; alles andere gilt als Kleinanzeigen."""
+    if ist_mobilede_seite(html):
+        return _erkenne_mobilede(html)
     ad_id, url, sicher = _detail_kennung(html)
     # Detailseiten können unten „ähnliche Anzeigen“ enthalten – eine eindeutige Inserats-URL geht deshalb vor
     if ad_id and sicher and (inserat := _detail_inserat(ad_id, url, parse_detailseite(html))):

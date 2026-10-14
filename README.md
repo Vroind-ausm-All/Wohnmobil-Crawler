@@ -126,6 +126,16 @@ im Programmordner. Dann in der App auf **„⤓ Gespeicherte Seiten einlesen“*
 Neue Fahrzeuge erscheinen sofort in der Liste; das Programm ruft dafür nichts selbst aus dem Internet ab.
 Eingelesene Dateien wandern nach `import/eingelesen/<Datum>/`, nicht erkannte nach `import/nicht_erkannt/`.
 
+**Auch mobile.de:** Genauso geht es mit **mobile.de** – Wohnmobil-Suche (Treffer-Liste) oder einzelne Anzeige im Browser öffnen,
+`Strg`+`S`, als „Webseite, komplett“ (so sind die Testseiten gespeichert worden) oder „Webseite, nur HTML“ (für mobile.de noch nicht
+geprüft) im selben Ordner `import` speichern. Kleinanzeigen- und
+mobile.de-Seiten dürfen gemischt im Ordner liegen; das Programm erkennt die Plattform an der Seite selbst. Es wird auch hier nichts
+aus dem Internet geladen – weder Anzeigen hinter den Links noch Bilder (die mobile.de-AGB untersagen automatisierte Abfragen). Tipps:
+In der mobile.de-Suche den Filter **„Privatanbieter“** setzen (linke Spalte „Anbieter“), dann stehen in der Liste nur private
+Verkäufer; jede Suchseite enthält höchstens 20 Treffer, weitere Seiten einzeln speichern. Die Treffer tragen als Nummer `md-<mobile.de-ID>`.
+Gesponserte Plätze („Gesponsert“) werden mitgelesen, weil es normale Anzeigen sind. Gewerbliche Anbieter („Gewerbe“, Händler mit
+Namen) werden als gewerblich erkannt und – wie bei Kleinanzeigen – nicht zum Anschreiben vorgeschlagen.
+
 Hinweise zum Einlesen:
 - Je Klick werden höchstens 25 Dateien (bzw. etwa 20 Sekunden lang) gelesen; den Rest liest der nächste Klick.
   Dateien über 20 MB werden nicht gelesen (sie bleiben liegen).
@@ -143,9 +153,15 @@ Hinweise zum Einlesen:
   „niedrig“. **Achtung:** Wohnwagen, deren Text kein Art-Wort enthält (z. B. nur „Knaus Südwind 580“), werden dabei wie
   ein Wohnmobil gerechnet und können zu hoch bewertet sein – vor dem Anschreiben prüfen. Der Brief nennt bei nicht bestätigter oder unbekannter Art keine
   Fahrzeugart. Eine später eingelesene Detailseite oder ein Art-Filter bestätigt bzw. korrigiert die Art.
+  **mobile.de** nennt die Kategorie („Kastenwagen“, „Teilintegrierter“, „Alkoven“, „Integrierter“, „Wohnwagen“) bei jedem Treffer und
+  auf der Anzeigenseite („Kategorie“); sie gilt als **bestätigt**. „Wohnmobil andere“ und „Andere“ sind keine Art – dann gilt
+  die Regel für unbekannte bzw. vorläufige Art wie oben. Eine Art-Filter-Adresse wie bei Kleinanzeigen gibt es bei mobile.de nicht
+  (die gespeicherte Suchseite enthält keine Suchadresse).
 - **Datenschutz:** `import/eingelesen/` enthält die vollständigen gespeicherten Seiten, auch Verkäuferangaben
   (Name, Ort, ggf. Telefonnummer). Das Programm löscht nichts automatisch – lösche die Dateien nach der Prüfung selbst.
-  Speichere Seiten möglichst nicht angemeldet, damit keine Kontodaten in der Datei landen.
+  Speichere Seiten möglichst nicht angemeldet, damit keine Kontodaten in der Datei landen. Das gilt ebenso für mobile.de: Der
+  Quelltext einer mobile.de-Anzeige kann die Telefonnummer des Anbieters enthalten, auch wenn sie auf der Seite erst nach „Einblenden“
+  erscheint. Das Programm liest sie nicht und speichert sie nicht in der Datenbank – in der Datei unter `import/eingelesen/` steht sie aber.
 - Beim Einlesen einer alten gespeicherten Seite gilt die Anzeige als „zuletzt gesehen: heute“, auch wenn sie
   inzwischen gelöscht oder verkauft sein kann. Lies deshalb möglichst frisch gespeicherte Seiten ein.
 
