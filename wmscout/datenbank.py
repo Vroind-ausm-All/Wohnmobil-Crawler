@@ -86,7 +86,10 @@ class Datenbank:
         werte = {k: a.get(k) for k in FELDER_UPDATE}
         werte["suche"] = suche
         werte["vb"] = int(bool(a.get("vb")))
-        werte["gewerblich"] = int(bool(a.get("gewerblich")))
+        # Ausdrücklich None (`Inserat.gewerblich`: Anbieter unbekannt, z. B. Anbieterkasten der Trefferliste fehlt) wird NULL, nicht
+        # „privat“ (0) – sonst würde ein Händler ungeprüft wie ein Privatverkäufer behandelt; `anschreiben.hinweise` weist darauf hin.
+        # Fehlt der Schlüssel ganz (Aufrufer ohne Anbieterangabe), bleibt es wie bisher 0.
+        werte["gewerblich"] = None if "gewerblich" in a and a["gewerblich"] is None else int(bool(a.get("gewerblich")))
         if alt is None:
             spalten = ["id", *werte, "erstmals_gesehen", "zuletzt_gesehen"]
             self.con.execute(
@@ -130,6 +133,11 @@ class Datenbank:
         """Feld „Art“ der gespeicherten Detailseite (None ohne Detailseite oder ohne Angabe)."""
         zeile = self.con.execute("SELECT art, detail_geladen FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
         return zeile["art"] if zeile and zeile["detail_geladen"] and zeile["art"] else None
+
+    def gewerblich_zu(self, ad_id: str) -> int | None:
+        """Gespeicherter Anbietertyp (1 gewerblich, 0 privat); None, wenn die Anzeige neu oder der Anbieter unbekannt ist."""
+        zeile = self.con.execute("SELECT gewerblich FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+        return zeile["gewerblich"] if zeile else None
 
     def suche_zu(self, ad_id: str) -> str | None:
         zeile = self.con.execute("SELECT suche FROM anzeigen WHERE id=?", (ad_id,)).fetchone()

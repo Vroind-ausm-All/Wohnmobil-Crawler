@@ -19,6 +19,11 @@ ZUGRIFFSARTEN = {
 }
 
 
+# `Inserat.details["art_quelle"]`: Die Fahrzeugart dieses Treffers stammt aus dessen eigener Kategorie, die die Quelle selbst bestätigt
+# (nur dann gilt sie beim Import als „bestätigt“; eine Art aus anderer Herkunft ohne dieses Kennzeichen bleibt vorläufig)
+ART_QUELLE_KATEGORIE = "kategorie"
+
+
 class QuellenFehler(Exception):
     """Basis für alle Fehler einer Quelle – der Importer fängt sie je Quelle ab."""
 

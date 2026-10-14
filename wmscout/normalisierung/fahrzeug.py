@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import re
 
-from .geo import plz_aus_text
+from .geo import auslands_kuerzel, plz_aus_text
 
 # Aufbauhersteller (Reihenfolge egal – längere Namen werden zuerst geprüft)
 MARKEN = [
@@ -249,7 +249,8 @@ def serie_aus_modell(marke: str | None, modell: str | None) -> str | None:
 
 
 def ergaenze_fahrzeug(a: dict) -> dict:
-    """Setzt marke (normalisiert), modell, serie, fahrzeug („Knaus Sky TI 650 MEG“) und plz in einer Anzeige."""
+    """Setzt marke (normalisiert), modell, serie, fahrzeug („Knaus Sky TI 650 MEG“), plz und ausland (Länderkürzel bei Orten im
+    Ausland, sonst None; dann gibt es keine PLZ und keine Entfernung) in einer Anzeige."""
     titel = a.get("titel") or ""
     text = " ".join(str(a.get(k) or "") for k in ("kurzbeschreibung", "beschreibung"))
     marke = normalisiere_marke(a.get("marke"))
@@ -261,5 +262,6 @@ def ergaenze_fahrzeug(a: dict) -> dict:
         details = {}
     modell = modell_aus_text(marke, titel, text, details.get("Modell"))
     a.update(marke=marke, modell=modell, serie=serie_aus_modell(marke, modell),
-             fahrzeug=fahrzeug_bezeichnung(marke, modell), plz=plz_aus_text(a.get("ort")))
+             fahrzeug=fahrzeug_bezeichnung(marke, modell), plz=plz_aus_text(a.get("ort")),
+             ausland=auslands_kuerzel(a.get("ort")))
     return a
