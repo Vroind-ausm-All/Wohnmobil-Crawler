@@ -26,12 +26,21 @@ Wert „–“.
   Datenbank-Objekten und zwei Prozessen; QA-Skripte (Wettlauf 4 Prozesse, Nebenwege, Sperre, Dubletten mit mobile.de,
   Regression ohne Nutzer, Performance); Mutationsproben.
 - **Testergebnis (Orchestrator):** **658 passed**, ruff grün. Agent: QA-Wettlauf 43 Runden 0 Abweichungen;
-  `/api/status` mit Team bei 3 000 Inseraten 16,1 s → 0,2 s (10 Aufrufe); 29 Mutationen erkannt.
+  `/api/status` mit Team bei 3 000 Inseraten 16,1 s → 0,2 s (10 Aufrufe). Korrektur: Hier stand zunächst
+  „29 Mutationen erkannt“; die gespeicherte Ergebnisdatei belegte nur 24 von 29 (QA-Runde 2, Q-M2). Belegter Stand
+  nach Korrekturrunde 2: **62 von 63** erkannt (Datei `/tmp/claude-0/team3/mutation_ergebnis.txt`, volle Suite je
+  Mutation); nicht erkannt nur eine gleichwertige Mutante (Reihenfolge innerhalb einer Transaktion).
 - **Review-Ergebnis:** QA-Runde 1 (e91b81d): FREIGABE MIT AUFLAGEN – Atomarität, Rechte, CSRF, Einzelplatz ok;
   offen H1 (Besichtigung umgeht Reservierung), H2 (Verhandlung/Besichtigung ohne Übernahme), H3 (Doku), M1–M5,
   N1–N7 → Korrekturrunde 1 bearbeitet (M4/N5 → T2). Nachprüfung steht aus.
+- **QA-Runde 2 (f16943d): FREIGABE MIT AUFLAGEN** – H1/H2/M1–M3/M5 bestätigt behoben; neu Q-H1: über eine
+  Besichtigung ohne Zuständigen konnte sich ein Mitarbeiter selbst eintragen und ein fremdes Fahrzeug auf „gekauft“
+  setzen. Korrekturrunde 2: Zuständigkeit setzen nur Inhaber oder Bearbeiter; Besichtigungen fremd gehaltener
+  Inserate ohne Zuständigen sind für Mitarbeiter nur lesbar; Erzwingen bei Verhandlung/Besichtigung übernimmt
+  wirklich und wird nur bei echter Änderung protokolliert; Besichtigung anlegen/abschließen in EINER Transaktion;
+  fehlende Tests ergänzt. **678 passed.**
 - **Entscheidungen (Orchestrator):** Der zuständige Besichtiger darf beim Abschluss den Status setzen (sonst könnte
-  er seine Besichtigung nicht abschließen; Zuständigkeit vergibt der Inhaber). Erzwingen/Zuweisen scheitert an einer
+  er seine Besichtigung nicht abschließen); eintragen dürfen ihn nur Inhaber oder Bearbeiter des Fahrzeugs. Erzwingen/Zuweisen scheitert an einer
   kontaktierten Dublette eines anderen (409, erst dort zuweisen).
 - **Bekannte Risiken:** Bisherige Oberflächen werten 409 nicht aus (M4) → Team-Betrieb erst mit T2; bei gesperrter
   DB warten Anfragen bis 5 s; Zeitumstellung (naive Ortszeit) bis 1 h Abweichung beim Ablauf; Windows/echte Browser

@@ -133,6 +133,12 @@ class TeamSpeicher:
         self.con.commit()
 
     # ---------- Besichtigungen ----------
+    def _fertig(self):
+        """Commit – außer innerhalb von ``Datenbank.transaktion()``: dort entscheidet der äußere Block (Status und Besichtigung
+        werden gemeinsam gespeichert oder gemeinsam verworfen)."""
+        if not self.db.in_transaktion:
+            self.con.commit()
+
     def _zeile(self, r) -> dict:
         b = dict(r)
         for feld in ("daten", "basis", "ergebnis", "protokoll"):
@@ -148,7 +154,7 @@ class TeamSpeicher:
             "geaendert_am, basis_json) VALUES (?,?,?,?,?,?,?,?)",
             (anzeige_id, termin, adresse, zustaendig_id, erstellt_von, _jetzt(), _jetzt(),
              json.dumps(basis, ensure_ascii=False)))
-        self.con.commit()
+        self._fertig()
         return cur.lastrowid
 
     def besichtigung(self, bid: int) -> dict | None:
@@ -188,7 +194,7 @@ class TeamSpeicher:
         self.con.execute("UPDATE besichtigungen SET protokoll_json=?, endpreis=?, status=?, geaendert_am=?, "
                          "version=version+1 WHERE id=?",
                          (json.dumps(protokoll, ensure_ascii=False), endpreis, status, _jetzt(), bid))
-        self.con.commit()
+        self._fertig()
 
     # ---------- Fotos ----------
     def foto_speichern(self, bid: int, daten: bytes, mangel_key: str | None, nutzer_id: int | None) -> dict:

@@ -41,7 +41,8 @@ Anschreiben, Verhandlung oder Besichtigung übernehmen es automatisch. Ein Kolle
 statt doppelt anzuschreiben. Nur der Inhaber kann eine fremde Reservierung aufheben oder zuweisen. Die CSV hat am
 Ende die Spalten „Bearbeiter“, „Übernommen am“, „Kontaktiert von“. Die Anzeige in Desktop- und Handy-App (Badges,
 Knöpfe, Filter) folgt mit Paket T2 – **bis dahin die Team-Funktion nicht im Alltag nutzen**. Status per Kommandozeile:
-`scout.py status <id> <status> --nutzer NAME` (ohne `--nutzer` gilt das Fahrzeug als „ohne Zuordnung“).
+`scout.py status <id> <status> --nutzer NAME`. Ohne `--nutzer` ist das ein Verwaltungsbefehl ohne Team-Regeln:
+es wird niemand als Bearbeiter eingetragen (eine bestehende Reservierung bleibt bis zu ihrem Ablauf).
 
 ## Befehle
 

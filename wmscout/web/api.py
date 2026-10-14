@@ -280,9 +280,15 @@ class Anfrage:
         return self.team_sicht().fremder_halter(anzeige_id, team["dubletten"]) if team.get("erzwingen") else None
 
     def logge_erzwingen(self, anzeige_id: str, vorher):
-        if vorher:
-            log.info("Erzwungene Übernahme: Anzeige %s von %s durch %s", anzeige_id,
-                     (self.team_sicht().person(vorher[1]) or {}).get("name"), self.nutzer["name"])
+        """Erzwungene Übernahme ins Protokoll – nur, wenn sich der Halter tatsächlich geändert hat (``vorher`` = (Inserat, Nutzer) des
+        bisherigen Halters, siehe ``vorheriger_halter``). Ein Statuswechsel ohne Übernahme (Besichtigung auf abgeschlossenem Inserat)
+        ändert ihn nicht und wird deshalb nicht als „erzwungen“ gemeldet."""
+        if not vorher:
+            return
+        sicht = self.team_sicht()
+        if sicht.halter(vorher[0]) != vorher[1]:
+            log.info("Erzwungene Übernahme: Anzeige %s von %s durch %s", anzeige_id, (sicht.person(vorher[1]) or {}).get("name"),
+                     self.nutzer["name"])
 
     def konflikt(self, anzeige_id: str, dubletten=(), *, ziel_id: int | None = None, gruppe: bool = False) -> Antwort:
         """409 mit verständlichem Text und dem aktuellen Team-Stand des Inserats.
@@ -298,15 +304,26 @@ class Anfrage:
             text = sicht.konflikt_text(anzeige_id, dubletten)
         return Antwort(409, text, {"team": sicht.objekt_id(anzeige_id, status, dubletten)})
 
-    def darf_besichtigung(self, b: dict) -> bool:
-        return self.nutzer["rolle"] == "inhaber" or b["zustaendig_id"] in (None, self.nutzer["id"])
+    def ist_inhaber_oder_bearbeiter(self, anzeige_id: str, sicht: TeamSicht | None = None) -> bool:
+        """Inhaber oder wirksamer Bearbeiter des Inserats – nur sie dürfen im Team die Zuständigkeit für eine Besichtigung vergeben.
+        Ohne Team (Einzelplatz, Nutzer „lokal“) immer ``True``. Wer das Inserat nicht hält (frei, abgelaufen, Kollege), darf sich
+        nicht selbst eintragen: Die Ausnahme beim Abschluss (``b_abschluss``) beruht darauf, dass die Zuständigkeit legitim vergeben wurde."""
+        if not self.team_aktiv or self.nutzer["rolle"] == "inhaber":
+            return True
+        sicht = sicht or self.team_sicht()
+        return sicht.halter(anzeige_id) == self.nutzer["id"]
+
+    def darf_besichtigung(self, b: dict, sicht: TeamSicht | None = None) -> bool:
+        """Schreiben (planen, speichern, Foto, Abschluss): Inhaber, Bearbeiter des Inserats oder eingetragener Zuständiger. Eine
+        Besichtigung ohne Zuständigen (Altbestand) auf einem Inserat, das ein Kollege hält, ist für Mitarbeiter nur lesbar."""
+        return b["zustaendig_id"] == self.nutzer["id"] or self.ist_inhaber_oder_bearbeiter(b["anzeige_id"], sicht)
 
     def besichtigung(self, bid: str, schreiben: bool = False) -> dict:
         b = self.k.team.besichtigung(int(bid))
         if not b:
             raise Antwort(404, "Besichtigung nicht gefunden")
         if schreiben and not self.darf_besichtigung(b):
-            raise Antwort(403, "Diese Besichtigung ist einem anderen Mitarbeiter zugewiesen")
+            raise Antwort(403, "Diese Besichtigung darf nur der Zuständige, der Bearbeiter des Inserats oder der Inhaber ändern")
         return b
 
     # ----- statische Dateien (ohne Sperre)
@@ -415,7 +432,7 @@ class Anfrage:
             "meine": sum(1 for z, t in teams if t["mein"] and (z["a"].get("status") or "neu") in OFFEN) if sicht else None,
             "frei_bereit": sum(1 for z, t in teams if z["bereit"] and (z["a"].get("status") or "neu") == "neu"
                                and sicht.ist_frei(t)) if sicht else None,
-            "termine": [self.besichtigung_kurz(b) for b in termine],
+            "termine": [self.besichtigung_kurz(b, sicht) for b in termine],
             "bereit": sum(1 for z in zeilen if z["bereit"] and (z["a"].get("status") or "neu") == "neu"),
             "nachfassen": sum(1 for z in zeilen if z["nachfassen"]),
             "arbeit": sum(1 for z in zeilen if z["a"].get("status") in ("kontaktiert", "verhandlung", "besichtigung")),
@@ -450,16 +467,16 @@ class Anfrage:
         sicht = self.team_sicht()
         return {**fahrzeug_kurz(z, sicht.objekt(z) if sicht else None), "bewertung": z["b"].dict(), "brief": z["brief"], "nachfass_text": z["nachfass_text"],
                 "nachfass_betrag": z["nachfass_betrag"], "anschreiben_text": z["a"].get("anschreiben_text"),
-                "notiz": z["a"].get("notiz"), "besichtigungen": [self.besichtigung_kurz(b) for b in
+                "notiz": z["a"].get("notiz"), "besichtigungen": [self.besichtigung_kurz(b, sicht) for b in
                                                                  self.k.team.besichtigungen(offen=False, anzeige_id=anzeige_id)]}
 
-    def besichtigung_kurz(self, b: dict) -> dict:
+    def besichtigung_kurz(self, b: dict, sicht: TeamSicht | None = None) -> dict:
         link = self.k.app_link(f"/m#/besichtigung/{b['id']}")
         return {"id": b["id"], "anzeige_id": b["anzeige_id"], "status": b["status"], "termin": b["termin"],
                 "adresse": b["adresse"], "zustaendig": b["zustaendig"], "fahrzeug": b["basis"].get("fahrzeug"),
                 "bild": None, "endpreis": b["endpreis"], "karte": karten_link(b.get("adresse") or b["basis"].get("ort")),
                 "whatsapp": whatsapp_link(termin_text(b, link), (b["zustaendig"] or {}).get("telefon")),
-                "darf_bearbeiten": self.darf_besichtigung(b)}
+                "darf_bearbeiten": self.darf_besichtigung(b, sicht)}
 
     def besichtigung_voll(self, b: dict) -> dict:
         e = berechne(self.k.katalog(), b["daten"] or {}, b["basis"])
@@ -609,11 +626,28 @@ class Anfrage:
             raise Antwort(400, "Termin bitte als Datum und Uhrzeit angeben") from e
 
     def _zustaendig(self, wert) -> int | None:
+        """Besichtiger beim Anlegen: leer = der Anlegende. Ob er die Zuständigkeit vergeben darf, prüft ``besichtigung_anlegen``."""
         if wert in (None, ""):
             return self.nutzer["id"]
-        if not self.k.team.nutzer(int(wert)):
+        try:
+            ziel = int(wert)
+        except (TypeError, ValueError):
+            raise Antwort(400, "Mitarbeiter nicht gefunden") from None
+        if not self.k.team.nutzer(ziel):
             raise Antwort(400, "Mitarbeiter nicht gefunden")
-        return int(wert)
+        return ziel
+
+    def _zustaendig_planen(self, b: dict, wert) -> int | None:
+        """Besichtiger beim Planen. Leer = unverändert (nie stillschweigend der Aufrufer); nur Inhaber und Bearbeiter des Inserats
+        dürfen die Zuständigkeit setzen oder ändern – ein Mitarbeiter kann sich auf fremden Inseraten nicht selbst eintragen (403).
+        Eine noch leere Zuständigkeit (Altbestand) übernimmt ein berechtigter Aufrufer selbst."""
+        berechtigt = self.ist_inhaber_oder_bearbeiter(b["anzeige_id"])
+        if wert in (None, ""):
+            return self.nutzer["id"] if b["zustaendig_id"] is None and berechtigt else b["zustaendig_id"]
+        ziel = self._zustaendig(wert)
+        if ziel != b["zustaendig_id"] and not berechtigt:
+            raise Antwort(403, "Die Zuständigkeit für eine Besichtigung vergeben nur der Bearbeiter des Inserats oder der Inhaber")
+        return ziel
 
     def besichtigung_anlegen(self, daten: dict) -> dict:
         """Besichtigung anlegen. Im Team ist das wie ein Kontakt: ein Kollege hält das Inserat → 409; ist es frei, übernimmt der
@@ -627,22 +661,30 @@ class Anfrage:
         zustaendig = self._zustaendig(daten.get("zustaendig_id"))              # prüfen, bevor etwas geändert wird (400)
         basis = basis_fuer(z, k.cfg)
         status = k.db.status_von(ad_id) or "neu"
+        # Status/Übernahme und Besichtigungsdatensatz in EINER Transaktion: bei Konflikt, Fehler oder „database is locked“ bleibt
+        # beides unverändert (nie ein Status „Besichtigung“ ohne Besichtigung).
         if self.team_aktiv:
             team = self.team_parameter(daten, ad_id)
             vorher = self.vorheriger_halter(ad_id, team)
             try:
-                if status in ("neu", "kontaktiert", "verhandlung", "besichtigung"):
-                    k.db.setze_status(ad_id, "besichtigung", **team)
-                elif not darf_status(self.team_sicht().halter(ad_id), self.nutzer["id"], self.nutzer["rolle"]):
-                    raise BearbeitungsKonflikt(ad_id)                          # abgeschlossenes Inserat eines Kollegen
+                with k.db.transaktion():
+                    if status in ("neu", "kontaktiert", "verhandlung", "besichtigung"):
+                        k.db.setze_status(ad_id, "besichtigung", **team)        # danach hält der Anlegende das Inserat (oder ist Inhaber)
+                    elif not darf_status(self.team_sicht().halter(ad_id), self.nutzer["id"], self.nutzer["rolle"]):
+                        raise BearbeitungsKonflikt(ad_id)                      # abgeschlossenes Inserat eines Kollegen
+                    elif not self.ist_inhaber_oder_bearbeiter(ad_id):
+                        raise Antwort(403, "Besichtigung auf einem abgeschlossenen Inserat nur durch den Bearbeiter oder den Inhaber – "
+                                           "bitte das Inserat zuerst übernehmen")
+                    bid = k.team.besichtigung_anlegen(ad_id, basis, termin, adresse, zustaendig, self.nutzer["id"])
             except BearbeitungsKonflikt:
                 raise self.konflikt(ad_id, team["dubletten"] if status in IN_ARBEIT + ("neu",) else (), gruppe=team["erzwingen"]) from None
             self.logge_erzwingen(ad_id, vorher)
-            k.veraendert()
-        elif status in ("neu", "kontaktiert", "verhandlung"):
-            k.db.setze_status(ad_id, "besichtigung")
-            k.veraendert()
-        bid = k.team.besichtigung_anlegen(ad_id, basis, termin, adresse, zustaendig, self.nutzer["id"])
+        else:
+            with k.db.transaktion():
+                if status in ("neu", "kontaktiert", "verhandlung"):
+                    k.db.setze_status(ad_id, "besichtigung")
+                bid = k.team.besichtigung_anlegen(ad_id, basis, termin, adresse, zustaendig, self.nutzer["id"])
+        k.veraendert()
         b = k.team.besichtigung(bid)
         self._zuweisung_melden(b)
         return self.besichtigung_kurz(b)
@@ -655,9 +697,8 @@ class Anfrage:
                                   [b["basis"].get("fahrzeug", ""), termin, b.get("adresse") or b["basis"].get("ort") or ""])
 
     def b_planen(self, b: dict, daten: dict) -> dict:
-        self.k.team.besichtigung_planen(b["id"], self._termin(daten.get("termin")),
-                                        (daten.get("adresse") or "").strip() or None,
-                                        self._zustaendig(daten.get("zustaendig_id")))
+        termin, adresse = self._termin(daten.get("termin")), (daten.get("adresse") or "").strip() or None
+        self.k.team.besichtigung_planen(b["id"], termin, adresse, self._zustaendig_planen(b, daten.get("zustaendig_id")))
         neu = self.k.team.besichtigung(b["id"])
         if neu["zustaendig_id"] != b["zustaendig_id"]:
             self._zuweisung_melden(neu)
@@ -706,18 +747,21 @@ class Anfrage:
         endpreis = daten.get("endpreis") if entscheidung == "gekauft" else None
         status = "abgebrochen" if entscheidung == "abgebrochen" else "abgeschlossen"
         ad_status = {"gekauft": "gekauft", "abgelehnt": "abgesagt", "offen": "verhandlung"}.get(entscheidung)
-        if ad_status:                  # zuerst der Inserat-Status (kann im Team 409 ergeben), dann das Protokoll – nie halb gespeichert
-            team = self.team_parameter({}, b["anzeige_id"])
-            if team:
-                # Inhaber und der zugewiesene Besichtiger dürfen den Status eines Inserats ändern, das ein Kollege bearbeitet,
-                # ohne die Bearbeitung zu übernehmen (die Besichtigung wurde vom Bearbeiter bzw. Inhaber so vergeben)
-                team["inhaber"] = team["inhaber"] or b["zustaendig_id"] == self.nutzer["id"]
-            try:
-                self.k.db.setze_status(b["anzeige_id"], ad_status, betrag=endpreis, **team)
-            except BearbeitungsKonflikt:
-                raise self.konflikt(b["anzeige_id"], team["dubletten"] if ad_status in IN_ARBEIT else ()) from None
-            self.k.veraendert()
-        self.k.team.besichtigung_abschliessen(b["id"], protokoll, endpreis, status)
+        team = self.team_parameter({}, b["anzeige_id"]) if ad_status else {}
+        if team:
+            # Inhaber und der eingetragene Besichtiger dürfen den Status eines Inserats ändern, das ein Kollege bearbeitet, ohne die
+            # Bearbeitung zu übernehmen. Die Zuständigkeit kann sich ein Mitarbeiter nicht selbst geben (``_zustaendig_planen``,
+            # ``besichtigung_anlegen``): sie stammt vom Inhaber oder vom Bearbeiter des Inserats. Der Bearbeiter selbst braucht keine Ausnahme.
+            team["inhaber"] = team["inhaber"] or b["zustaendig_id"] == self.nutzer["id"]
+        # Inserat-Status (kann im Team 409 ergeben) und Protokoll in EINER Transaktion – nie halb gespeichert
+        try:
+            with self.k.db.transaktion():
+                if ad_status:
+                    self.k.db.setze_status(b["anzeige_id"], ad_status, betrag=endpreis, **team)
+                self.k.team.besichtigung_abschliessen(b["id"], protokoll, endpreis, status)
+        except BearbeitungsKonflikt:
+            raise self.konflikt(b["anzeige_id"], team["dubletten"] if ad_status in IN_ARBEIT else ()) from None
+        self.k.veraendert()
         return {"ok": True, "protokoll": f"/protokoll/{b['id']}"}
 
 

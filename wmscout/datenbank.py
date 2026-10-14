@@ -81,6 +81,7 @@ class Datenbank:
         # check_same_thread=False: die App bedient Anfragen nacheinander in einem Server-Thread
         self.con = sqlite3.connect(pfad, check_same_thread=False, timeout=timeout)
         self.con.row_factory = sqlite3.Row
+        self._tiefe = 0          # >0: innerhalb von ``transaktion()`` – verschachtelte Schreibblöcke committen nicht selbst
 
     def speichere_treffer(self, a: dict, suche: str) -> str:
         """Fügt ein oder aktualisiert. Rückgabe: 'neu', 'preis' (Preis gesenkt) oder 'bekannt'."""
@@ -162,10 +163,34 @@ class Datenbank:
     @contextmanager
     def _exklusiv(self):
         """Schreibsperre vor dem ersten Lesen (BEGIN IMMEDIATE): prüfen und schreiben sind eine Einheit, auch gegen andere
-        Verbindungen (Suchlauf, zweiter Prozess). Fehler und Konflikte rollen alles zurück."""
+        Verbindungen (Suchlauf, zweiter Prozess). Fehler und Konflikte rollen alles zurück.
+
+        Verschachtelt (innerhalb von ``transaktion()``) gehört die Transaktion dem äußeren Block: kein eigener Beginn, kein Commit,
+        kein Rollback – ein Fehler läuft nach außen und macht dort ALLES rückgängig."""
+        if self._tiefe:
+            yield
+            return
         if self.con.in_transaction:
             self.con.commit()
         self.con.execute("BEGIN IMMEDIATE")
+        self._tiefe += 1
+        try:
+            yield
+            self.con.commit()
+        except BaseException:
+            self.con.rollback()
+            raise
+        finally:
+            self._tiefe -= 1
+
+    @contextmanager
+    def _schreiben(self):
+        """Einfacher Schreibzugriff: Commit am Ende, bei jedem Fehler (z. B. „database is locked“) Rollback – auf der gemeinsamen
+        App-Verbindung darf nie eine offene Transaktion zurückbleiben (sie würde die Datenbank für andere Verbindungen sperren).
+        Innerhalb von ``transaktion()`` committet erst der äußere Block."""
+        if self._tiefe:
+            yield
+            return
         try:
             yield
         except BaseException:
@@ -173,16 +198,14 @@ class Datenbank:
             raise
         self.con.commit()
 
-    @contextmanager
-    def _schreiben(self):
-        """Einfacher Schreibzugriff: Commit am Ende, bei jedem Fehler (z. B. „database is locked“) Rollback – auf der gemeinsamen
-        App-Verbindung darf nie eine offene Transaktion zurückbleiben (sie würde die Datenbank für andere Verbindungen sperren)."""
-        try:
-            yield
-        except BaseException:
-            self.con.rollback()
-            raise
-        self.con.commit()
+    def transaktion(self):
+        """Mehrere Schreibzugriffe (auch anderer Klassen auf dieser Verbindung, z. B. ``TeamSpeicher``) als EINE Transaktion:
+        entweder alles oder – bei Konflikt, Fehler oder „database is locked“ – nichts."""
+        return self._exklusiv()
+
+    @property
+    def in_transaktion(self) -> bool:
+        return self._tiefe > 0
 
     def daten_version(self) -> int:
         """``PRAGMA data_version``: ändert sich, wenn eine ANDERE Verbindung (z. B. der Suchlauf) die Datenbank geschrieben hat."""
@@ -197,8 +220,9 @@ class Datenbank:
         ``IN_ARBEIT``; sie setzen einen Kontakt voraus) übernehmen das Inserat zuerst (wie ``uebernimm``, inkl. Dubletten) und
         tragen den ersten Kontakt ein – sonst bliebe ein so bearbeitetes Inserat „ohne Zuordnung“ und ein Kollege könnte es
         erneut kontaktieren. Ausnahme: ``inhaber`` (Inhaber oder zugewiesener Besichtiger) ändert 'verhandlung'/'besichtigung'
-        eines von einem Kollegen gehaltenen Inserats, ohne es zu übernehmen. 'neu' leert den Kontakt (Bearbeiter bleibt); alle
-        anderen Status verlangen: frei, eigene Reservierung oder ``inhaber``. Sonst ``BearbeitungsKonflikt`` – dann ist nichts geändert."""
+        eines von einem Kollegen gehaltenen Inserats, ohne es zu übernehmen – außer mit ``erzwingen``, das übernimmt wirklich.
+        'neu' leert den Kontakt (Bearbeiter bleibt); alle anderen Status verlangen: frei, eigene Reservierung oder ``inhaber``.
+        Sonst ``BearbeitungsKonflikt`` – dann ist nichts geändert."""
         jetzt = datetime.now().isoformat(timespec="seconds")
         sets, werte = ["status=?", "status_am=?", "notiz=COALESCE(?, notiz)"], [status, jetzt, notiz]
         if status == "kontaktiert" and text:
@@ -222,8 +246,9 @@ class Datenbank:
             if not self.con.execute("SELECT 1 FROM anzeigen WHERE id=?", (ad_id,)).fetchone():
                 return False
             uebernehmen = status in IN_ARBEIT
-            if uebernehmen and status != "kontaktiert" and inhaber and self._fremde_halter([ad_id], nutzer_id, grenze):
-                uebernehmen = False                                 # fremdes Inserat: Status ändern, Bearbeiter bleibt
+            if uebernehmen and status != "kontaktiert" and inhaber and not erzwingen \
+                    and self._fremde_halter([ad_id], nutzer_id, grenze):
+                uebernehmen = False                                 # fremdes Inserat: Status ändern, Bearbeiter bleibt (nicht bei Erzwingen)
             if uebernehmen:
                 if not self._uebernimm(ad_id, nutzer_id, jetzt, grenze, erzwingen, dubletten):
                     raise BearbeitungsKonflikt(ad_id)

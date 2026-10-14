@@ -15,7 +15,10 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 | QA-Runde 1: 19 Mutationen | 19 erkannt |
 | QA-Urteil Runde 1 | **FREIGABE MIT AUFLAGEN** (H1 Besichtigung, H2 Verhandlung, H3 Doku) → Korrekturrunde 1 |
 | Agent nach Korrekturrunde 1: QA-Skripte (Nebenwege, Wettlauf, Sperre, Dubletten, Inaktive, Suchlauf, Regression) | H1/H2 → 409; 503 statt 500, keine offene Transaktion; 10× `/api/status` mit Team 16,1 s → 0,2 s |
-| QA-Nachprüfung, Browser, Windows | nicht geprüft |
+| QA-Runde 2 (f16943d) | FREIGABE MIT AUFLAGEN (Q-H1 Selbsteintragung als Besichtiger) → Korrekturrunde 2 |
+| Nach Korrekturrunde 2 (Agent): pytest / Mutationen (volle Suite je Mutation) | **678 passed**; **62 von 63** erkannt (1 gleichwertig) |
+| QA-Skripte nach Korrekturrunde 2 (Besichtiger, Erzwingen, Sperre, Dubletten-Cache, Nebenwege) | Selbsteintragung 403; Erzwingen übernimmt, Log nur bei Änderung; Sperre → 503 ohne halben Zustand |
+| Browser, Windows | nicht geprüft |
 
 ---
 
