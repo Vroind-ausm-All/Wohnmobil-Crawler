@@ -20,6 +20,7 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
 from ...normalisierung.fahrzeug import ist_basismarke, marke_aus_text, normalisiere_marke
+from ...normalisierung.person import profilname
 
 BASIS = "https://www.kleinanzeigen.de"
 
@@ -258,6 +259,29 @@ def _erster_text(soup, *selektoren: str) -> str:
     return ""
 
 
+def _verkaeufer_name(soup) -> str | None:
+    """Profilname aus dem Verkäuferkasten `#viewad-contact`: bevorzugt `aria-label="Profil von <Name>"`, sonst der Link
+    auf das Profil (`userId=`; der Kürzel-Link „HW“ fällt durch die Namensprüfung); älteres Layout: `.userprofile-vip a`.
+    Ohne Treffer None – „Privater Nutzer“, Badges und „Aktiv seit …“ sind keine Namen."""
+    kasten = soup.select_one("#viewad-contact")
+    kandidaten = []
+    if kasten is not None:
+        kandidaten += [a["aria-label"][len("Profil von "):] for a in kasten.select("a[aria-label]")
+                       if a["aria-label"].lower().startswith("profil von ")]
+        kandidaten += [_text(a) for a in kasten.select("a[href*='userId=']")]
+    kandidaten += [_text(a) for a in soup.select(".userprofile-vip a")]
+    return next((n for k in kandidaten if (n := profilname(k))), None)
+
+
+def name_in_details(d: dict) -> dict:
+    """Entfernt `verkaeufer_name` aus dem Ergebnis von parse_detailseite() und legt ihn – als einziges Personenfeld –
+    in `details` ab (landet in `details_json`; keine Telefonnummern, Profil-IDs oder Adressen)."""
+    name = d.pop("verkaeufer_name", None)
+    if name:
+        d["details"] = {**d.get("details", {}), "verkaeufer_name": name}
+    return d
+
+
 def parse_detailseite(html: str) -> dict:
     """Merkmale einer Anzeigenseite. Zusätzlich `anzeigen_id` (aus dem Kasten „Anzeigen-ID“) und `ort`."""
     soup = BeautifulSoup(html, "html.parser")
@@ -300,7 +324,7 @@ def parse_detailseite(html: str) -> dict:
         "art": detail("Art") or None,
         "leistung": detail("Leistung") or None,
         "getriebe": detail("Getriebe") or None,
-        "verkaeufer_name": _text(soup.select_one(".userprofile-vip a, .userprofile-vip")) or None,
+        "verkaeufer_name": _verkaeufer_name(soup),
         "gewerblich": "gewerblich" in verkaeufer_box.lower() or pro_link,
         "details": details,
     }

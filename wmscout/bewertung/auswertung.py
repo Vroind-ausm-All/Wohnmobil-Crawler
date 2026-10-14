@@ -8,7 +8,7 @@ from pathlib import Path
 from ..datenbank import STATUS, Datenbank
 from ..normalisierung.fahrzeug import ergaenze_fahrzeug
 from ..normalisierung.geo import entfernung_km
-from .anschreiben import Anschreiber, euro, sperrgrund
+from .anschreiben import Anschreiber, euro, hinweise, sperrgrund
 from .rechner import Rechner
 
 
@@ -83,7 +83,8 @@ def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None =
             a["duplikat"] = f"doppelt eingestellt – ältere Anzeige {live_aelter[0]['id']} ist noch online"
         b = rechner.bewerte(a, vergleich)
         sperre = sperrgrund(a, cfg)
-        # Text gibt es für jede nicht gesperrte Anzeige; „bereit“ sind nur die, deren Ampel passt
+        # Text gibt es für jede nicht gesperrte Anzeige; „bereit“ sind nur die, deren Ampel passt.
+        # `hinweise` (z. B. Fahrzeugart nicht bestätigt) sperren nichts, sie stehen sichtbar am Fahrzeug
         brief = schreiber.text(a, b) if not sperre else None
         grund = nachfass_grund(a, cfg, jetzt)
         nachfass_text, nachfass_betrag = schreiber.nachfass(a, b) if grund else (None, None)
@@ -92,7 +93,7 @@ def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None =
         else:
             ust = b.haendler_vk - b.haendler_vk / 1.19
         zeilen.append({
-            "a": a, "b": b, "sperre": sperre, "brief": brief, "ust": round(ust / 10) * 10,
+            "a": a, "b": b, "sperre": sperre, "hinweise": hinweise(a), "brief": brief, "ust": round(ust / 10) * 10,
             "bereit": bool(brief) and schreiber.soll_schreiben(b.ampel),
             "neu": bool(lauf_start and (a.get("erstmals_gesehen") or "") >= lauf_start),
             "nachfassen": grund, "nachfass_text": nachfass_text, "nachfass_betrag": nachfass_betrag,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from datetime import date
 from pathlib import Path
@@ -8,6 +9,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from ..datenbank import STATUS, UNBEKANNT, VORLAEUFIG, import_art
 from ..normalisierung.fahrzeug import ART_PLURAL
+from ..normalisierung.person import profilname
 
 AMPEL_RANG = {"gruen": 0, "gelb": 1, "rot": 2, "grau": 3}
 ART_EINZAHL = {"Sonstige": "Wohnmobil"}
@@ -56,8 +58,37 @@ def aufzaehlung(teile: list[str]) -> str:
     return ", ".join(teile[:-1]) + " und " + teile[-1]
 
 
+HINWEIS_ART_VORLAEUFIG = "Fahrzeugart nicht bestätigt – bitte prüfen"
+HINWEIS_ART_UNBEKANNT = "Fahrzeugart unbekannt – bitte prüfen"
+
+
+def hinweise(a: dict) -> list[str]:
+    """Hinweise zum Fahrzeug, die das Anschreiben NICHT sperren (Betreiberentscheidung 14.10.2026: möglichst jedes
+    Wohnmobil anschreiben können). Bisher: Herkunft der Fahrzeugart bei importierten Seiten – ist sie nicht durch
+    Art-Filter oder Detailseite bestätigt, steht sie nur im Titel bzw. fehlt, und die Bewertung rechnet mit der
+    vorläufigen bzw. mit „Sonstige“. Crawler-Funde (Art aus der Suche) und bestätigte Arten tragen keinen Hinweis."""
+    _, herkunft = import_art(a.get("suche"))
+    if herkunft == VORLAEUFIG:
+        return [HINWEIS_ART_VORLAEUFIG]
+    if herkunft == UNBEKANNT:
+        return [HINWEIS_ART_UNBEKANNT]
+    return []
+
+
+def verkaeufer_name(a: dict) -> str | None:
+    """Profilname des Verkäufers für die persönliche Anrede (aus `details_json`, nur von Detailseiten) oder None.
+
+    Suchseiten zeigen keinen Personennamen. Der Name wird nur zur Anrede gespeichert; Kürzel, Badges und Typ-Angaben
+    („HW“, „Privater Nutzer“) liefert der Parser nie, sie werden hier zur Sicherheit noch einmal geprüft."""
+    try:
+        roh = json.loads(a.get("details_json") or "{}").get("verkaeufer_name")
+    except (ValueError, AttributeError):
+        return None
+    return profilname(roh)
+
+
 def sperrgrund(a: dict, cfg: dict) -> str | None:
-    """Warum diese Anzeige nicht angeschrieben werden soll (oder None)."""
+    """Warum diese Anzeige nicht angeschrieben werden soll (oder None). Die Fahrzeugart sperrt nicht – siehe hinweise()."""
     f = cfg["filter"]
     if a.get("gewerblich"):
         return "gewerblicher Anbieter"
@@ -76,12 +107,6 @@ def sperrgrund(a: dict, cfg: dict) -> str | None:
         return "zu viele km"
     if f.get("max_entfernung_km") and (a.get("entfernung_km") or 0) > f["max_entfernung_km"]:
         return f"zu weit entfernt ({a['entfernung_km']} km)"
-    _, herkunft = import_art(a.get("suche"))
-    if herkunft == VORLAEUFIG:
-        return ("Fahrzeugart nicht bestätigt (aus Titel/Suchbegriff) – über den Art-Filter suchen oder "
-                "Detailseite einlesen")
-    if herkunft == UNBEKANNT:
-        return "Fahrzeugart unbekannt – Detailseite der Anzeige speichern und einlesen"
     text = " ".join(str(a.get(k) or "") for k in ("titel", "kurzbeschreibung", "beschreibung")).lower()
     for begriff in f["sperrbegriffe"]:
         if re.search(r"(?<!\w)" + re.escape(begriff.lower()), text):

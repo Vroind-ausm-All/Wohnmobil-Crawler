@@ -17,7 +17,7 @@ from bs4 import BeautifulSoup, SoupStrainer
 from ..normalisierung.fahrzeug import art_schluessel, arten_im_text
 from ..quellen.basis import Inserat
 from ..quellen.kleinanzeigen.adapter import anzeigen_id_aus_url
-from ..quellen.kleinanzeigen.parser import BASIS, parse_detailseite, parse_suchseite
+from ..quellen.kleinanzeigen.parser import BASIS, name_in_details, parse_detailseite, parse_suchseite
 
 QUELLE = "kleinanzeigen"
 HTML_ENDUNGEN = {".html", ".htm"}
@@ -27,7 +27,8 @@ PROJEKT = Path(__file__).resolve().parent.parent.parent
 _GESPEICHERT_VON = re.compile(r"<!--\s*saved from url=\(\d+\)\s*(\S+?)\s*-->", re.I)
 MAX_DATEIGROESSE = 20_000_000                    # größere Dateien werden nicht gelesen (Speicher, Laufzeit unter Sperre)
 # Kleinanzeigen-Suchadressen: …/s-wohnwagen-mobile/teilintegrierter/… bzw. …c220+wohnwagen_mobile.art_s:teilintegrierter
-_ART_S = re.compile(r"art_s:([\w,-]+)", re.I)
+# Nur als eigener Parametername (nicht „aufbauart_s:“ o. Ä.): davor kein Wortzeichen, also z. B. nach „.“, „+“ oder „/“
+_ART_S = re.compile(r"(?<!\w)art_s:([\w,-]+)", re.I)
 _KATEGORIE = re.compile(r"/s-wohnwagen-mobile/([^/?#]+)", re.I)
 # Allgemeine Kategorietitel nennen „Wohnwagen“ und „Wohnmobile“, sagen aber nichts über die Fahrzeugart
 _ALLGEMEIN = re.compile(r"wohn(?:wagen|mobile?)\s*(?:&|und|/)\s*(?:wohn)?(?:wagen|mobile?)", re.I)
@@ -76,6 +77,24 @@ def _kopf(html: str) -> str:
     return html[:100_000]
 
 
+_KOPF_ENDE = re.compile(r"</head\s*>|<body[\s>/]", re.I)
+_SEITENANFANG = re.compile(r"<(?:html|head|body)[\s>/]", re.I)
+
+
+def _strenger_kopf(html: str) -> str | None:
+    """Text bis zum Ende des <head> (bzw. bis <body>); None, wenn die Seite weder das eine noch das andere hat.
+    Die Fahrzeugart darf nur aus dem Kopf der Seite stammen – nie aus einem Link irgendwo im Seitentext."""
+    return html[:m.start()] if (m := _KOPF_ENDE.search(html)) else None
+
+
+def _gespeichert_von(html: str) -> str | None:
+    """Adresse aus dem Speichervermerk des Browsers – der steht ganz am Anfang, vor <html>/<head>/<body>."""
+    vorn = html[:5000]
+    if m := _SEITENANFANG.search(vorn):
+        vorn = vorn[:m.start()]
+    return m.group(1) if (m := _GESPEICHERT_VON.search(vorn)) else None
+
+
 def _detail_kennung(html: str) -> tuple[str | None, str | None, bool]:
     """(Anzeigen-ID, URL, sicher). Sicher = aus canonical/og:url/Speichervermerk, sonst aus einem Link im Kopf."""
     kopf = BeautifulSoup(_kopf(html), "html.parser", parse_only=SoupStrainer(["link", "meta", "a"]))
@@ -95,7 +114,7 @@ def _detail_kennung(html: str) -> tuple[str | None, str | None, bool]:
 
 
 def _detail_inserat(ad_id: str, url: str, d: dict) -> Inserat | None:
-    d = {k: v for k, v in d.items() if k not in ("verkaeufer_name", "anzeigen_id")}   # keine Personendaten speichern
+    d = {k: v for k, v in name_in_details(dict(d)).items() if k != "anzeigen_id"}   # Name nur zur Anrede, sonst keine Personendaten
     if not d.get("titel") and not d.get("details"):
         return None
     return Inserat(quelle=QUELLE, anzeigen_id=ad_id, url=url, **d)
@@ -121,7 +140,7 @@ class SuchseitenArt(NamedTuple):
     def fuer_treffer(self, titel: str | None, kurzbeschreibung: str | None = None) -> tuple[str | None, str | None]:
         """(Art, Herkunft) eines Treffers; Herkunft „bestaetigt“, „vorlaeufig“ oder – ohne Art – (None, None).
 
-        bestätigt nur durch den Art-Filter der Seite. Vorläufig (nie anschreibbar): (1) die Art aus dem eigenen Titel,
+        bestätigt nur durch den Art-Filter der Seite. Vorläufig (Hinweis „nicht bestätigt“): (1) die Art aus dem eigenen Titel,
         wenn der Titel GENAU EINE Art nennt (alle Suchbegriffe geprüft, nicht nur der erste Treffer) und die
         Kurzbeschreibung keine andere nennt; (2) sonst der Hinweis der Seite, wenn weder Titel noch Kurzbeschreibung
         eine andere Art nennen. Alles andere (mehrere Arten, Widerspruch) bleibt unbekannt."""
@@ -144,15 +163,16 @@ def fahrzeugart_der_suchseite(html: str) -> SuchseitenArt:
     """Fahrzeugart-Angaben einer gespeicherten Suchseite (aus canonical-/og:url-/„saved from“-Adresse und <title>).
 
     Zuverlässig ist nur ein Art-Filter in der Adresse (`art_s:<wert>`). Das Suchwort im Pfad (`/camper/k0c220` ist
-    eine Freitextsuche) und der Seitentitel sind nur ein Hinweis. „Sonstige“/„andere“ gilt als nicht erkannt."""
-    kopf = BeautifulSoup(_kopf(html), "html.parser", parse_only=SoupStrainer(["link", "meta", "title"]))
+    eine Freitextsuche) und der Seitentitel sind nur ein Hinweis. „Sonstige“/„andere“ gilt als nicht erkannt.
+    canonical, og:url und Titel zählen nur aus dem <head>; eine Seite ohne Kopf liefert daraus nichts."""
+    kopf_html = _strenger_kopf(html)
+    kopf = BeautifulSoup(kopf_html or "", "html.parser", parse_only=SoupStrainer(["link", "meta", "title"]))
     urls = []
     if el := kopf.find(["link", "meta"], rel="canonical"):
         urls.append(el.get("href"))
     if el := kopf.find("meta", attrs={"property": "og:url"}):
         urls.append(el.get("content"))
-    if m := _GESPEICHERT_VON.search(html[:5000]):
-        urls.append(m.group(1))
+    urls.append(_gespeichert_von(html))
     urls = [u for u in urls if u]
     werte = [t for u in urls for w in _ART_S.findall(u) for t in w.split(",")]
     filter_arten = {a for t in werte if (a := _art(t))}
@@ -167,6 +187,13 @@ def fahrzeugart_der_suchseite(html: str) -> SuchseitenArt:
     if (titel := kopf.find("title")) and (text := _ALLGEMEIN.sub(" ", titel.get_text(" ", strip=True))):
         return SuchseitenArt(hinweis=_art(text))
     return SuchseitenArt()
+
+
+def haupttabelle_ids(html: str) -> set[str]:
+    """Anzeigen-IDs der Trefferliste `#srchrslt-adtable`. Nur diese Treffer erfüllen den Filter der Suchadresse;
+    „Weitere Ergebnisse in anderen Orten“ (`#srchrslt-adtable-altads`) und alles außerhalb gehören nicht dazu."""
+    teil = BeautifulSoup(html, "html.parser", parse_only=SoupStrainer(id="srchrslt-adtable"))
+    return {t["id"] for t in parse_suchseite(str(teil))} if teil.contents else set()
 
 
 def erkenne_seite(html: str) -> tuple[str, list[Inserat]]:

@@ -118,7 +118,7 @@ def fahrzeug_kurz(z: dict) -> dict:
             "entfernung_km": a.get("entfernung_km"), "tage_online": a.get("tage_online"), "status": a.get("status") or "neu",
             "ampel": b.ampel, "erstangebot": b.erstangebot if b.sicherheit != "keine" else None,
             "max_ek": b.max_ek if b.sicherheit != "keine" else None, "bereit": z["bereit"], "nachfassen": z["nachfassen"],
-            "sperre": z["sperre"], "neu": z["neu"]}
+            "sperre": z["sperre"], "hinweise": z["hinweise"], "neu": z["neu"]}
 
 
 def ics(b: dict, cfg: dict, link: str | None) -> str:

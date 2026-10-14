@@ -16,8 +16,8 @@ from datetime import date
 from pathlib import Path
 
 from .datenbank import BESTAETIGT, IMPORT_SUCHE, VORLAEUFIG, Datenbank, import_art, import_suche
-from .eingang import (BegleitordnerFehler, SuchseitenArt, erkenne_seite, fahrzeugart_der_suchseite, html_dateien,
-                      lies_html, verschiebe)
+from .eingang import (BegleitordnerFehler, SuchseitenArt, erkenne_seite, fahrzeugart_der_suchseite, haupttabelle_ids,
+                      html_dateien, lies_html, verschiebe)
 from .normalisierung.fahrzeug import art_schluessel
 from .quellen import (STANDARD_QUELLE, Abruf, InseratNichtGefunden, NetzwerkFehler, Quelle, QuelleGesperrt,
                       QuellenFehler, Suchauftrag, erstelle_quelle)
@@ -179,7 +179,9 @@ class Importer:
                         if art == "detail_ohne_id" else
                         "keine Kleinanzeigen-Such- oder Detailseite erkannt – verschoben nach nicht_erkannt/"))
                     continue
-                self._speichere_seite(art, inserate, stat, fahrzeugart_der_suchseite(html) if art == "suche" else None)
+                suchseite = art == "suche"
+                self._speichere_seite(art, inserate, stat, fahrzeugart_der_suchseite(html) if suchseite else None,
+                                      haupttabelle_ids(html) if suchseite else None)
             except Exception as e:  # noqa: BLE001 – eine kaputte Datei darf die übrigen nicht aufhalten
                 stat["fehlerhaft"] += 1
                 melde(f"{datei.name}: nicht eingelesen ({e}) – Datei bleibt liegen")
@@ -196,13 +198,17 @@ class Importer:
                  stat["unbekannt"], stat["fehlerhaft"], stat["neu"], stat["preis"], stat["bekannt"])
         return stat
 
-    def _speichere_seite(self, art: str, inserate: list, stat: dict, seitenart: SuchseitenArt | None = None):
+    def _speichere_seite(self, art: str, inserate: list, stat: dict, seitenart: SuchseitenArt | None = None,
+                         haupttreffer: set[str] | None = None):
         """Speichert die Inserate einer Such- oder Detailseite.
 
-        Importierte Inserate bekommen die Suche „Import <Art> (bestätigt|vorläufig)“ bzw. `IMPORT_SUCHE` (Art unbekannt).
-        Bestätigt ist nur die Art aus dem Art-Filter der Suchseite (`SuchseitenArt.filter`) oder dem Feld „Art“ einer
-        Detailseite; Art aus dem eigenen Titel oder einem Suchwort ist vorläufig (`SuchseitenArt.fuer_treffer`) –
-        solche Inserate sind nie anschreibbar (`sperrgrund`). Siehe `_neue_suche` für das Überschreiben."""
+        Importierte Inserate bekommen die Suche „Import <Art> (bestätigt|vorläufig)“ bzw. `IMPORT_SUCHE` (Art unbekannt);
+        die Herkunft steuert den Hinweis am Fahrzeug (`bewertung.anschreiben.hinweise`), sperrt aber nichts.
+        Bestätigt ist nur die Art aus dem Art-Filter der Suchseite (`SuchseitenArt.filter`) – und nur für Treffer der
+        Haupttabelle (`haupttreffer`, ohne Angabe: keiner; „Weitere Ergebnisse in anderen Orten“ erfüllen den Filter nicht) – oder das Feld
+        „Art“ einer Detailseite. Die Detailseite ist konkreter und hat Vorrang vor dem Filter, in jeder Reihenfolge der
+        Seiten. Art aus dem eigenen Titel oder einem Suchwort ist vorläufig (`SuchseitenArt.fuer_treffer`).
+        Siehe `_neue_suche` für das Überschreiben."""
         if art == "suche":
             stat["suchseiten"] += 1
         else:
@@ -214,9 +220,13 @@ class Importer:
                 if neue_art := _art(d.get("art")):
                     herkunft = BESTAETIGT                       # Feld „Art“ der Anzeige selbst
                 else:
-                    neue_art, herkunft = seitenart.fuer_treffer(d.get("titel"), d.get("kurzbeschreibung"))
+                    neue_art, herkunft = SuchseitenArt().fuer_treffer(d.get("titel"), d.get("kurzbeschreibung"))
+            elif neue_art := _art(self.db.detail_art(d["id"])):
+                herkunft = BESTAETIGT                           # schon eingelesene Anzeigenseite geht dem Filter vor
             else:
-                neue_art, herkunft = seitenart.fuer_treffer(d.get("titel"), d.get("kurzbeschreibung"))
+                # Treffer außerhalb der Haupttabelle: wie eine Seite ohne Filter und ohne Hinweis
+                eigene = seitenart if d["id"] in (haupttreffer or ()) else SuchseitenArt()
+                neue_art, herkunft = eigene.fuer_treffer(d.get("titel"), d.get("kurzbeschreibung"))
             suche = _neue_suche(self.db.suche_zu(d["id"]), neue_art, herkunft)
             if art == "detail" and not d.get("gewerblich"):
                 d["gewerblich"] = None            # kein Hinweis auf der Detailseite ≠ „privat“: Suchlistenwert bleibt
