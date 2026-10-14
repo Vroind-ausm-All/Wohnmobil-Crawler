@@ -201,6 +201,12 @@ app:
   oeffentliche_url: ""
   erlaubte_hosts: []               # weitere Hostnamen, über die die App erreichbar sein darf
 
+# --- 7b. Team ---------------------------------------------------
+# Gilt nur, wenn Nutzer angelegt sind (python scout.py nutzer anlegen …). Wer ein Inserat übernimmt, reserviert es für
+# die eingestellte Zeit; danach ist es wieder frei, solange noch kein Kontakt bestätigt wurde.
+team:
+  reservierung_tage: 2             # 0 = Reservierungen laufen nie ab
+
 # --- 8. WhatsApp ------------------------------------------------
 # Ohne Einrichtung: In der App gibt es "Per WhatsApp senden"-Knöpfe (öffnen WhatsApp mit fertigem Text).
 # Automatische Nachrichten brauchen die offizielle WhatsApp Business Platform (Cloud API) von Meta:

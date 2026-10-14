@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from .bearbeitung import IN_ARBEIT, BearbeitungsKonflikt
 from .migrationen import NEUE_SPALTEN, migriere  # noqa: F401 – NEUE_SPALTEN bleibt hier importierbar (Kompatibilität)
 
 # Ablauf eines Ankaufs (Schlüssel → Anzeige in der App)
@@ -147,9 +149,29 @@ class Datenbank:
         wert = self.con.execute("SELECT MAX(zuletzt_gesehen) FROM anzeigen").fetchone()[0]
         return datetime.fromisoformat(wert) if wert else None
 
+    # ---------- Status und Nachfassen (mit Team: Übernahme und Status in EINER Transaktion) ----------
+    @contextmanager
+    def _exklusiv(self):
+        """Schreibsperre vor dem ersten Lesen (BEGIN IMMEDIATE): prüfen und schreiben sind eine Einheit, auch gegen andere
+        Verbindungen (Suchlauf, zweiter Prozess). Fehler und Konflikte rollen alles zurück."""
+        if self.con.in_transaction:
+            self.con.commit()
+        self.con.execute("BEGIN IMMEDIATE")
+        try:
+            yield
+        except BaseException:
+            self.con.rollback()
+            raise
+        self.con.commit()
+
     def setze_status(self, ad_id: str, status: str, notiz: str | None = None, text: str | None = None,
-                     betrag: int | None = None) -> bool:
-        """Mit Text (= Anschreiben gesendet) werden Zeitpunkt, Text und Angebot gespeichert; 'neu' setzt zurück."""
+                     betrag: int | None = None, *, nutzer_id: int | None = None, grenze: str = "", erzwingen: bool = False,
+                     inhaber: bool = False, dubletten=()) -> bool:
+        """Mit Text (= Anschreiben gesendet) werden Zeitpunkt, Text und Angebot gespeichert; 'neu' setzt zurück.
+
+        Ohne ``nutzer_id`` (Team aus) wie bisher. Mit ``nutzer_id``: 'kontaktiert' übernimmt das Inserat zuerst (wie
+        ``uebernimm``) und trägt den ersten Kontakt ein; 'neu' leert den Kontakt (Bearbeiter bleibt); alle anderen Status
+        verlangen: frei, eigene Reservierung oder ``inhaber``. Sonst ``BearbeitungsKonflikt`` – dann ist nichts geändert."""
         jetzt = datetime.now().isoformat(timespec="seconds")
         sets, werte = ["status=?", "status_am=?", "notiz=COALESCE(?, notiz)"], [status, jetzt, notiz]
         if status == "kontaktiert" and text:
@@ -164,24 +186,144 @@ class Datenbank:
         if betrag and not (status == "kontaktiert" and text):
             sets.append("angebot_betrag=?")
             werte.append(betrag)
-        cur = self.con.execute(f"UPDATE anzeigen SET {', '.join(sets)} WHERE id=?", [*werte, ad_id])
-        self.con.commit()
-        return cur.rowcount > 0
+        sql = f"UPDATE anzeigen SET {', '.join(sets)} WHERE id=?"
+        if nutzer_id is None:
+            cur = self.con.execute(sql, [*werte, ad_id])
+            self.con.commit()
+            return cur.rowcount > 0
+        with self._exklusiv():
+            if not self.con.execute("SELECT 1 FROM anzeigen WHERE id=?", (ad_id,)).fetchone():
+                return False
+            if status == "kontaktiert":
+                if not self._uebernimm(ad_id, nutzer_id, jetzt, grenze, erzwingen, dubletten):
+                    raise BearbeitungsKonflikt(ad_id)
+            elif not inhaber and self._fremde_halter([ad_id], nutzer_id, grenze):
+                raise BearbeitungsKonflikt(ad_id)
+            cur = self.con.execute(sql, [*werte, ad_id])
+            if status == "kontaktiert":
+                self._trage_kontakt_ein(ad_id, nutzer_id, jetzt)
+            elif status == "neu":
+                self.con.execute("UPDATE bearbeitung SET kontaktiert_von=NULL, kontaktiert_am=NULL WHERE anzeige_id=?", (ad_id,))
+            return cur.rowcount > 0
 
-    def nachgefasst(self, ad_id: str, text: str, betrag: int | None = None) -> bool:
-        """Nachfass-Nachricht gesendet: Zeitpunkt merken, Text an den Verlauf anhängen."""
+    def nachgefasst(self, ad_id: str, text: str, betrag: int | None = None, *, nutzer_id: int | None = None,
+                    grenze: str = "", erzwingen: bool = False, dubletten=()) -> bool:
+        """Nachfass-Nachricht gesendet: Zeitpunkt merken, Text an den Verlauf anhängen.
+        Mit ``nutzer_id`` (Team) wie 'kontaktiert': erst Übernahme (sonst ``BearbeitungsKonflikt``), erster Kontakt eingetragen."""
         jetzt = datetime.now().isoformat(timespec="seconds")
-        cur = self.con.execute(
-            "UPDATE anzeigen SET nachgefasst_am=?, nachfass_anzahl=COALESCE(nachfass_anzahl, 0)+1, "
-            "anschreiben_text=COALESCE(anschreiben_text || char(10) || char(10), '') || ? || char(10) || ?, "
-            "angebot_betrag=COALESCE(?, angebot_betrag), "
-            "status=CASE WHEN status IN ('neu', 'abgesagt') THEN 'kontaktiert' ELSE status END, "
-            "kontaktiert_am=COALESCE(kontaktiert_am, ?) WHERE id=?",
-            (jetzt, f"--- nachgefasst am {jetzt[:10]} ---", text, betrag, jetzt, ad_id))
-        self.con.commit()
-        return cur.rowcount > 0
+        sql = ("UPDATE anzeigen SET nachgefasst_am=?, nachfass_anzahl=COALESCE(nachfass_anzahl, 0)+1, "
+               "anschreiben_text=COALESCE(anschreiben_text || char(10) || char(10), '') || ? || char(10) || ?, "
+               "angebot_betrag=COALESCE(?, angebot_betrag), "
+               "status=CASE WHEN status IN ('neu', 'abgesagt') THEN 'kontaktiert' ELSE status END, "
+               "kontaktiert_am=COALESCE(kontaktiert_am, ?) WHERE id=?")
+        werte = (jetzt, f"--- nachgefasst am {jetzt[:10]} ---", text, betrag, jetzt, ad_id)
+        if nutzer_id is None:
+            cur = self.con.execute(sql, werte)
+            self.con.commit()
+            return cur.rowcount > 0
+        with self._exklusiv():
+            if not self.con.execute("SELECT 1 FROM anzeigen WHERE id=?", (ad_id,)).fetchone():
+                return False
+            if not self._uebernimm(ad_id, nutzer_id, jetzt, grenze, erzwingen, dubletten):
+                raise BearbeitungsKonflikt(ad_id)
+            cur = self.con.execute(sql, werte)
+            self._trage_kontakt_ein(ad_id, nutzer_id, jetzt)
+            return cur.rowcount > 0
 
     def setze_notiz(self, ad_id: str, notiz: str) -> bool:
         cur = self.con.execute("UPDATE anzeigen SET notiz=? WHERE id=?", (notiz, ad_id))
         self.con.commit()
         return cur.rowcount > 0
+
+    def status_von(self, ad_id: str) -> str | None:
+        """Status des Inserats; ``None``, wenn es das Inserat nicht gibt."""
+        zeile = self.con.execute("SELECT status FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+        return (zeile["status"] or "neu") if zeile else None
+
+    # ---------- Team: Übernahme, Abgabe, Zuweisung (Tabelle bearbeitung) ----------
+    _UEBERNAHME = (
+        "INSERT INTO bearbeitung(anzeige_id, bearbeiter_id, uebernommen_am) VALUES(:id, :nutzer, :jetzt) "
+        "ON CONFLICT(anzeige_id) DO UPDATE SET bearbeiter_id=excluded.bearbeiter_id, uebernommen_am=excluded.uebernommen_am "
+        "WHERE bearbeitung.bearbeiter_id IS NULL "
+        "OR bearbeitung.bearbeiter_id=excluded.bearbeiter_id "
+        "OR (bearbeitung.kontaktiert_von IS NULL AND bearbeitung.uebernommen_am < :grenze) "
+        "OR bearbeitung.bearbeiter_id NOT IN (SELECT id FROM nutzer WHERE aktiv=1) "
+        "OR :erzwingen")
+
+    def _fremde_halter(self, ids, nutzer_id: int, grenze: str) -> sqlite3.Row | None:
+        """Hält ein anderer aktiver Kollege eines dieser Inserate wirksam (Kontakt bestätigt oder Reservierung nicht abgelaufen)?"""
+        ids = list(ids)
+        if not ids:
+            return None
+        return self.con.execute(
+            "SELECT b.anzeige_id, b.bearbeiter_id FROM bearbeitung b JOIN nutzer n ON n.id=b.bearbeiter_id AND n.aktiv=1 "
+            f"WHERE b.anzeige_id IN ({','.join('?' * len(ids))}) AND b.bearbeiter_id<>? "
+            "AND (b.kontaktiert_von IS NOT NULL OR b.uebernommen_am>=?) LIMIT 1", (*ids, nutzer_id, grenze)).fetchone()
+
+    def _uebernimm(self, ad_id: str, nutzer_id: int, jetzt: str, grenze: str, erzwingen: bool, dubletten) -> bool:
+        """Nur innerhalb von ``_exklusiv``: Dubletten prüfen (liest), dann EIN bedingtes UPSERT (rowcount 0 = Konflikt)."""
+        if dubletten and not erzwingen and self._fremde_halter([d for d in dubletten if d != ad_id], nutzer_id, grenze):
+            return False
+        cur = self.con.execute(self._UEBERNAHME, {"id": ad_id, "nutzer": nutzer_id, "jetzt": jetzt, "grenze": grenze,
+                                                  "erzwingen": int(bool(erzwingen))})
+        return cur.rowcount > 0
+
+    def _trage_kontakt_ein(self, ad_id: str, nutzer_id: int, jetzt: str):
+        """Erster Kontakt: spätere Kontakte (Nachfassen, Zuweisung an andere) überschreiben ihn nicht."""
+        self.con.execute("UPDATE bearbeitung SET kontaktiert_von=COALESCE(kontaktiert_von, ?), "
+                         "kontaktiert_am=COALESCE(kontaktiert_am, ?) WHERE anzeige_id=?", (nutzer_id, jetzt, ad_id))
+
+    def uebernimm(self, anzeige_id: str, nutzer_id: int, jetzt: str, grenze: str = "", erzwingen: bool = False,
+                  dubletten=()) -> bool:
+        """Inserat übernehmen (reservieren) oder die eigene Reservierung verlängern. ``False`` = Konflikt, nichts geändert.
+
+        Gelingt, wenn niemand es hält, es schon dem Nutzer gehört, die Reservierung (``grenze`` = Zeitpunkt, vor dem sie als
+        abgelaufen gilt; "" = nie) abgelaufen und noch nicht kontaktiert ist, der Bearbeiter deaktiviert ist oder ``erzwingen``.
+        ``dubletten``: IDs derselben Fahrzeuggruppe; hält ein anderer aktiver Kollege eine davon, ist es ebenfalls ein Konflikt.
+        Die Anzeige muss existieren (nicht geprüft, um keinen zweiten Zugriff zu brauchen)."""
+        with self._exklusiv():
+            return self._uebernimm(anzeige_id, nutzer_id, jetzt, grenze, erzwingen, dubletten)
+
+    def gib_ab(self, anzeige_id: str, nutzer_id: int, inhaber: bool = False) -> bool:
+        """Reservierung zurückgeben: nur ohne bestätigten Kontakt, nur Bearbeiter oder Inhaber. ``True`` = es wurde etwas freigegeben."""
+        cur = self.con.execute("DELETE FROM bearbeitung WHERE anzeige_id=? AND kontaktiert_von IS NULL "
+                               "AND (bearbeiter_id=? OR ?)", (anzeige_id, nutzer_id, int(bool(inhaber))))
+        self.con.commit()
+        return cur.rowcount > 0
+
+    def weise_zu(self, anzeige_id: str, ziel_id: int, jetzt: str) -> None:
+        """Inserat einem Kollegen zuweisen (Berechtigung „Inhaber“ prüft der Aufrufer). ``kontaktiert_von/_am`` bleiben."""
+        self.con.execute(
+            "INSERT INTO bearbeitung(anzeige_id, bearbeiter_id, uebernommen_am) VALUES(?,?,?) "
+            "ON CONFLICT(anzeige_id) DO UPDATE SET bearbeiter_id=excluded.bearbeiter_id, uebernommen_am=excluded.uebernommen_am",
+            (anzeige_id, ziel_id, jetzt))
+        self.con.commit()
+
+    def bearbeitung_aktiv(self) -> dict[str, dict]:
+        """Alle Zeilen aus ``bearbeitung`` (ein SELECT) mit Flag ``bearbeiter_aktiv`` (Bearbeiter existiert und ist aktiv)."""
+        return {r["anzeige_id"]: dict(r) for r in self.con.execute(
+            "SELECT b.anzeige_id, b.bearbeiter_id, b.uebernommen_am, b.kontaktiert_von, b.kontaktiert_am, "
+            "COALESCE(n.aktiv, 0) AS bearbeiter_aktiv FROM bearbeitung b LEFT JOIN nutzer n ON n.id=b.bearbeiter_id")}
+
+    def team_zaehler(self, jetzt: datetime, grenze: str = "", aktiv_tage: int = 21) -> dict:
+        """Zähler je aktivem Nutzer (reserviert, in_arbeit, kontakte_heute, uebernommen_heute) und Anzahl ohne Zuordnung.
+        Nur Inserate, die in den letzten ``aktiv_tage`` Tagen gesehen wurden, zählen für reserviert/in_arbeit/ohne_zuordnung."""
+        tag = jetzt.date().isoformat()
+        seit = (jetzt - timedelta(days=aktiv_tage)).isoformat(timespec="seconds")
+        arbeit = ",".join("?" * len(IN_ARBEIT))
+        nutzer = [dict(r) for r in self.con.execute(
+            "SELECT n.id AS nutzer_id, n.name, "
+            "(SELECT COUNT(*) FROM bearbeitung b JOIN anzeigen a ON a.id=b.anzeige_id WHERE b.bearbeiter_id=n.id "
+            " AND b.kontaktiert_von IS NULL AND b.uebernommen_am>=? AND a.zuletzt_gesehen>=?) AS reserviert, "
+            f"(SELECT COUNT(*) FROM bearbeitung b JOIN anzeigen a ON a.id=b.anzeige_id WHERE b.bearbeiter_id=n.id "
+            f" AND b.kontaktiert_von IS NOT NULL AND a.status IN ({arbeit}) AND a.zuletzt_gesehen>=?) AS in_arbeit, "
+            "(SELECT COUNT(*) FROM bearbeitung b WHERE b.kontaktiert_von=n.id AND substr(b.kontaktiert_am,1,10)=?) AS kontakte_heute, "
+            "(SELECT COUNT(*) FROM bearbeitung b WHERE b.bearbeiter_id=n.id AND substr(b.uebernommen_am,1,10)=?) AS uebernommen_heute "
+            "FROM nutzer n WHERE n.aktiv=1 ORDER BY n.name",
+            (grenze, seit, *IN_ARBEIT, seit, tag, tag))]
+        ohne = self.con.execute(
+            "SELECT COUNT(*) FROM anzeigen a LEFT JOIN bearbeitung b ON b.anzeige_id=a.id "
+            "LEFT JOIN nutzer n ON n.id=b.bearbeiter_id AND n.aktiv=1 "
+            f"WHERE a.zuletzt_gesehen>=? AND a.status IN ({arbeit}) AND b.kontaktiert_von IS NULL "
+            "AND NOT (n.id IS NOT NULL AND b.uebernommen_am>=?)", (seit, *IN_ARBEIT, grenze)).fetchone()[0]
+        return {"nutzer": nutzer, "ohne_zuordnung": ohne}

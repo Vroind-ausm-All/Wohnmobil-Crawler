@@ -18,10 +18,12 @@ from pathlib import Path
 
 from .ausgabe import schreibe_ausgaben
 from .benachrichtigung import sende_mail
+from .bearbeitung import reservierung_tage
 from .bewertung.auswertung import bewerte_alle
 from .datenbank import Datenbank
 from .importer import Importer
 from .sicherung import sicherung_ordner
+from .team import lade_team_sicht
 from .web.api import Kontext, bearbeite
 
 log = logging.getLogger("scout")
@@ -65,7 +67,8 @@ class Suchlauf:
             stat = Importer(self.cfg, db).lauf(self.cfg["suchen"])
             # wie „python scout.py lauf“: Report/CSV/Anschreiben-Dateien aktualisieren, ggf. Mail
             zeilen = bewerte_alle(self.cfg, db, self.basis, lauf_start=self.letzter_start)
-            sende_mail(self.cfg, zeilen, schreibe_ausgaben(self.cfg, zeilen, self.basis, fehler=stat["fehler"]))
+            sende_mail(self.cfg, zeilen, schreibe_ausgaben(self.cfg, zeilen, self.basis, fehler=stat["fehler"],
+                                                team=lade_team_sicht(db, reservierung_tage(self.cfg))))
             for rueckruf in self.bei_ende:
                 try:
                     rueckruf(zeilen)

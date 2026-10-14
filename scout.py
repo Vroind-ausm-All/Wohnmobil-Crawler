@@ -51,7 +51,8 @@ from wmscout.importer import Importer
 from wmscout.migrationen import MigrationsFehler
 from wmscout.normalisierung.fahrzeug import ergaenze_fahrzeug
 from wmscout.sicherung import SicherungsFehler, einstellungen, sichere, sicherung_ordner, wiederherstellen
-from wmscout.team import ROLLEN, TeamSpeicher
+from wmscout.bearbeitung import reservierung_tage
+from wmscout.team import ROLLEN, TeamSpeicher, lade_team_sicht
 
 BASIS = Path(__file__).resolve().parent
 
@@ -69,13 +70,18 @@ def logging_einrichten(cfg: dict):
         handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(ordner / "scout.log", encoding="utf-8")])
 
 
+def _team(cfg, db):
+    """Team-Sicht für die CSV (Bearbeiter je Inserat); ``None`` ohne angelegte Nutzer."""
+    return lade_team_sicht(db, reservierung_tage(cfg))
+
+
 def cmd_lauf(cfg, db, args):
     start = datetime.now().isoformat(timespec="seconds")
     stat = Importer(cfg, db).lauf(cfg["suchen"])
     logging.info("Crawl fertig: %d neu, %d Preissenkungen, %d bekannt, %d Detailseiten",
                  stat["neu"], stat["preis"], stat["bekannt"], stat["details"])
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
-    erg = schreibe_ausgaben(cfg, zeilen, BASIS, fehler=stat["fehler"])
+    erg = schreibe_ausgaben(cfg, zeilen, BASIS, fehler=stat["fehler"], team=_team(cfg, db))
     logging.info("Report: %s  (%s)", erg["html"], erg["zaehl"])
     sende_mail(cfg, zeilen, erg)
 
@@ -107,13 +113,13 @@ def cmd_import(cfg, db, args):
     if stat["fehler"]:
         print("Bitte prüfen:\n" + "\n".join(f"  - {f}" for f in stat["fehler"]))
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
-    erg = schreibe_ausgaben(cfg, zeilen, BASIS)
+    erg = schreibe_ausgaben(cfg, zeilen, BASIS, team=_team(cfg, db))
     print(f"Report: {erg['html']}  ({erg['zaehl']})")
 
 
 def cmd_report(cfg, db, args):
     zeilen = bewerte_alle(cfg, db, BASIS)
-    erg = schreibe_ausgaben(cfg, zeilen, BASIS)
+    erg = schreibe_ausgaben(cfg, zeilen, BASIS, team=_team(cfg, db))
     print(f"Report: {erg['html']}\nCSV:    {erg['csv']}\n{erg['zaehl']}")
 
 
@@ -280,6 +286,7 @@ def main():
     if args.cmd == "wiederherstellen":
         return cmd_wiederherstellen(cfg, args)
     try:
+        reservierung_tage(cfg)              # ungültiges „team“ in config.yaml ebenso sofort melden
         einstellungen(cfg, BASIS)           # ungültiges „sicherung“ in config.yaml sofort melden, nicht erst bei der Sicherung
         db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]), str(sicherung_ordner(cfg, BASIS)))
     except (MigrationsFehler, ValueError, sqlite3.Error) as e:

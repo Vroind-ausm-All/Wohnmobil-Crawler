@@ -173,5 +173,6 @@ def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None =
             "bereit": bool(brief) and schreiber.soll_schreiben(b.ampel),
             "neu": bool(lauf_start and (a.get("erstmals_gesehen") or "") >= lauf_start),
             "nachfassen": grund, "nachfass_text": nachfass_text, "nachfass_betrag": nachfass_betrag,
+            "dubletten_ids": sorted(b["id"] for b in andere),       # Fahrzeuggruppe: Team-Reservierungen wirken auf alle
         })
     return zeilen

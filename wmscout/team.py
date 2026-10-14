@@ -13,6 +13,7 @@ import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from .bearbeitung import TeamSicht, kuerzel
 from .datenbank import Datenbank
 
 ROLLEN = {"inhaber": "Inhaber", "mitarbeiter": "Mitarbeiter"}
@@ -40,6 +41,14 @@ def pruefe_passwort(passwort: str, gespeichert: str) -> bool:
     except (ValueError, TypeError):
         return False
     return hmac.compare_digest(neu.hex(), h)
+
+
+def lade_team_sicht(db: Datenbank, tage: int, ich: dict | None = None, jetzt: datetime | None = None) -> TeamSicht | None:
+    """Team-Sicht aus der Datenbank (zwei SELECTs). ``None``, wenn kein aktiver Nutzer existiert (= Team-Funktionen aus)."""
+    nutzer = [dict(r) for r in db.con.execute("SELECT id, name, rolle, aktiv FROM nutzer ORDER BY id")]
+    if not any(n["aktiv"] for n in nutzer):
+        return None
+    return TeamSicht(nutzer, db.bearbeitung_aktiv(), jetzt or datetime.now(), tage, ich)
 
 
 def _token_hash(token: str) -> str:
@@ -84,6 +93,15 @@ class TeamSpeicher:
     def nutzer_liste(self, nur_aktive: bool = True) -> list[dict]:
         sql = "SELECT id, name, rolle, telefon, aktiv FROM nutzer" + (" WHERE aktiv=1" if nur_aktive else "")
         return [dict(r) for r in self.con.execute(sql + " ORDER BY name")]
+
+    def nutzer_mit_kuerzel(self, nur_aktive: bool = True) -> list[dict]:
+        """Wie ``nutzer_liste``, zusätzlich mit stabilem Kürzel (berechnet über alle Nutzer, auch deaktivierte)."""
+        alle = self.nutzer_liste(nur_aktive=False)
+        k = kuerzel(alle)
+        return [{**n, "kuerzel": k[n["id"]]} for n in alle if n["aktiv"] or not nur_aktive]
+
+    def sicht(self, tage: int, ich: dict | None = None) -> TeamSicht | None:
+        return lade_team_sicht(self.db, tage, ich)
 
     def nutzer(self, nutzer_id: int | None) -> dict | None:
         if not nutzer_id:

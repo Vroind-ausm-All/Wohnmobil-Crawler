@@ -24,6 +24,8 @@ from urllib.parse import parse_qs, quote, urlparse
 from jinja2 import Environment, FileSystemLoader
 
 from ..ausgabe import render_html
+from ..bearbeitung import (OFFEN, BearbeitungsKonflikt, TeamSicht, ablauf_grenze, darf_erzwingen, darf_zuweisen,
+                           reservierung_tage)
 from ..benachrichtigung import WhatsAppCloud, whatsapp_link
 from ..bewertung.anschreiben import euro, tsd
 from ..bewertung.auswertung import bewerte_alle
@@ -46,9 +48,9 @@ MAX_IMPORT_SEKUNDEN = 20       # Zeitbudget je Klick (die Anfrage hält die Date
 class Antwort(Exception):
     """Beendet eine Anfrage mit HTTP-Status und JSON-Fehlertext."""
 
-    def __init__(self, status: int, fehler: str):
+    def __init__(self, status: int, fehler: str, extra: dict | None = None):
         super().__init__(fehler)
-        self.status, self.fehler = status, fehler
+        self.status, self.fehler, self.extra = status, fehler, extra or {}
 
 
 class Kontext:
@@ -57,6 +59,7 @@ class Kontext:
     def __init__(self, cfg: dict, db: Datenbank, basis: Path, token: str, suchlauf, foto_ordner: Path):
         self.cfg, self.db, self.basis, self.token, self.suchlauf = cfg, db, basis, token, suchlauf
         self.team = TeamSpeicher(db, foto_ordner)
+        self.reservierung_tage = reservierung_tage(cfg)     # ValueError mit verständlicher Meldung bei falscher Konfiguration
         self.katalog_pfad = basis / "maengel.yaml"
         self.sperre = threading.Lock()          # Datenbankzugriffe nacheinander, Netzwerk parallel
         self._zeilen: tuple[float, list[dict]] | None = None
@@ -74,6 +77,9 @@ class Kontext:
 
     def veraendert(self):
         self._zeilen = None
+
+    def zeile_oder_none(self, anzeige_id: str) -> dict | None:
+        return next((z for z in self.zeilen() if z["a"]["id"] == anzeige_id), None)
 
     def zeile(self, anzeige_id: str) -> dict:
         for z in self.zeilen():
@@ -111,7 +117,7 @@ def basis_fuer(z: dict, cfg: dict) -> dict:
     }
 
 
-def fahrzeug_kurz(z: dict) -> dict:
+def fahrzeug_kurz(z: dict, team: dict | None = None) -> dict:
     a, b = z["a"], z["b"]
     return {"id": a["id"], "fahrzeug": a["fahrzeug"], "titel": a["titel"], "ort": a.get("ort"), "url": a["url"],
             "bild": a.get("bild"), "ez_jahr": a.get("ez_jahr"), "km": a.get("km"), "preis": a.get("preis"),
@@ -119,7 +125,7 @@ def fahrzeug_kurz(z: dict) -> dict:
             "ampel": b.ampel, "erstangebot": b.erstangebot if b.sicherheit != "keine" else None,
             "brief_betrag": z.get("brief_betrag"),
             "max_ek": b.max_ek if b.sicherheit != "keine" else None, "bereit": z["bereit"], "nachfassen": z["nachfassen"],
-            "sperre": z["sperre"], "hinweise": z["hinweise"], "neu": z["neu"]}
+            "sperre": z["sperre"], "hinweise": z["hinweise"], "neu": z["neu"], "team": team}
 
 
 def ics(b: dict, cfg: dict, link: str | None) -> str:
@@ -217,6 +223,38 @@ class Anfrage:
         if aendernd and self.h.headers.get("X-Scout-Token") != self.k.token:
             raise Antwort(403, "Zugriff verweigert – Seite bitte neu laden")
 
+    @property
+    def team_aktiv(self) -> bool:
+        """Team-Funktionen gelten nur mit angelegten Nutzern (ohne: anonymer „lokal“-Nutzer ohne ID, alles wie bisher)."""
+        return bool(self.nutzer) and self.nutzer["id"] is not None
+
+    def team_sicht(self) -> TeamSicht | None:
+        """Frischer Stand aus der Datenbank (zwei SELECTs) – nie aus dem 30-s-Zwischenspeicher der Bewertung."""
+        return self.k.team.sicht(self.k.reservierung_tage, self.nutzer) if self.team_aktiv else None
+
+    def jetzt_grenze(self) -> tuple[str, str]:
+        jetzt = datetime.now()
+        return jetzt.isoformat(timespec="seconds"), ablauf_grenze(jetzt, self.k.reservierung_tage)
+
+    def team_parameter(self, daten: dict, anzeige_id: str) -> dict:
+        """Zusätzliche Argumente für ``setze_status``/``nachgefasst`` im Team; ohne Team leer (= bisheriges Verhalten)."""
+        if not self.team_aktiv:
+            return {}
+        erzwingen = bool(daten.get("erzwingen"))
+        if erzwingen and not darf_erzwingen(self.nutzer["rolle"]):
+            raise Antwort(403, "Erzwingen ist dem Inhaber vorbehalten")
+        z = self.k.zeile_oder_none(anzeige_id)
+        _, grenze = self.jetzt_grenze()
+        return {"nutzer_id": self.nutzer["id"], "grenze": grenze, "erzwingen": erzwingen,
+                "dubletten": (z or {}).get("dubletten_ids") or (), "inhaber": self.nutzer["rolle"] == "inhaber"}
+
+    def konflikt(self, anzeige_id: str, dubletten=()) -> Antwort:
+        """409 mit verständlichem Text und dem aktuellen Team-Stand des Inserats."""
+        sicht = self.team_sicht()
+        status = self.k.db.status_von(anzeige_id)
+        return Antwort(409, sicht.konflikt_text(anzeige_id, dubletten),
+                       {"team": sicht.objekt_id(anzeige_id, status, dubletten)})
+
     def darf_besichtigung(self, b: dict) -> bool:
         return self.nutzer["rolle"] == "inhaber" or b["zustaendig_id"] in (None, self.nutzer["id"])
 
@@ -258,7 +296,7 @@ class Anfrage:
         if p == "/m":
             return self.html(k.env.get_template("mobil.html").render(firma=k.cfg["anschreiben"]["firma"]))
         if p == "/api/ich":
-            return self.json(200, {"nutzer": self.nutzer, "csrf": k.token, "team": k.team.hat_nutzer(),
+            return self.json(200, {"nutzer": self.ich_mit_kuerzel(), "csrf": k.token, "team": k.team.hat_nutzer(),
                                    "rollen": ROLLEN, "status": STATUS, "besichtigung_status": BESICHTIGUNG_STATUS,
                                    "firma": {x: k.cfg["anschreiben"].get(x) for x in
                                              ("firma", "ansprechpartner", "telefon", "ort")},
@@ -266,14 +304,16 @@ class Anfrage:
         if p == "/api/suchlauf":
             return self.json(200, k.suchlauf.stand)
         if p == "/api/nutzer":
-            return self.json(200, k.team.nutzer_liste())
+            return self.json(200, k.team.nutzer_mit_kuerzel())
+        if p == "/api/team":
+            return self.json(200, self.team_uebersicht())
         if p == "/api/katalog":
             return self.json(200, k.katalog())
         if p == "/api/heute":
             return self.json(200, self.heute())
         if p == "/api/fahrzeuge":
             return self.json(200, self.fahrzeuge())
-        if m := re.fullmatch(r"/api/fahrzeug/(\w+)", p):
+        if m := re.fullmatch(r"/api/fahrzeug/([\w-]+)", p):
             return self.json(200, self.fahrzeug(m.group(1)))
         if m := re.fullmatch(r"/api/besichtigung/(\d+)", p):
             return self.json(200, self.besichtigung_voll(self.besichtigung(m.group(1))))
@@ -293,12 +333,42 @@ class Anfrage:
             return self.html(self.protokoll(self.besichtigung(m.group(1))))
         raise Antwort(404, "nicht gefunden")
 
+    def ich_mit_kuerzel(self) -> dict:
+        if not self.team_aktiv:
+            return {**self.nutzer, "kuerzel": None}
+        return {**self.nutzer, "kuerzel": next((n["kuerzel"] for n in self.k.team.nutzer_mit_kuerzel(False)
+                                                if n["id"] == self.nutzer["id"]), None)}
+
+    def team_uebersicht(self) -> dict:
+        """Wer arbeitet woran? ``bearbeitung`` enthält nur Inserate mit Zustand ≠ frei oder mit belegter Dublette
+        (fehlende Einträge = frei). Zähler und Zustände kommen aus demselben Stand."""
+        k, sicht = self.k, self.team_sicht()
+        stand = datetime.now().isoformat(timespec="seconds")
+        if not sicht:
+            return {"aktiv": False, "ich": None, "nutzer": [], "zaehler": [], "ohne_zuordnung": 0, "bearbeitung": {},
+                    "reservierung_tage": k.reservierung_tage, "stand": stand}
+        zaehler = k.db.team_zaehler(sicht.jetzt, sicht.grenze)
+        nutzer = [{"id": n["id"], "name": n["name"], "kuerzel": sicht.kuerzel[n["id"]], "aktiv": bool(n["aktiv"]), "rolle": n["rolle"]}
+                  for n in sicht.nutzer.values()]
+        objekte = {z["a"]["id"]: sicht.objekt(z) for z in k.zeilen()}
+        return {"aktiv": True, "ich": {**sicht.person(self.nutzer["id"]), "rolle": self.nutzer["rolle"]},
+                "nutzer": nutzer,
+                "zaehler": [{**z, "kuerzel": sicht.kuerzel[z["nutzer_id"]]} for z in zaehler["nutzer"]],
+                "ohne_zuordnung": zaehler["ohne_zuordnung"],
+                "bearbeitung": {i: o for i, o in objekte.items() if not sicht.ist_triviale_sicht(o)},
+                "reservierung_tage": k.reservierung_tage, "stand": stand}
+
     def heute(self) -> dict:
         k, ich = self.k, self.nutzer
         eigene = ich["rolle"] != "inhaber" and ich["id"]
         termine = k.team.besichtigungen(zustaendig_id=ich["id"] if eigene else None)
         zeilen = k.zeilen()
+        sicht = self.team_sicht()
+        teams = [(z, sicht.objekt(z)) for z in zeilen] if sicht else []
         return {
+            "meine": sum(1 for z, t in teams if t["mein"] and (z["a"].get("status") or "neu") in OFFEN) if sicht else None,
+            "frei_bereit": sum(1 for z, t in teams if z["bereit"] and (z["a"].get("status") or "neu") == "neu"
+                               and sicht.ist_frei(t)) if sicht else None,
             "termine": [self.besichtigung_kurz(b) for b in termine],
             "bereit": sum(1 for z in zeilen if z["bereit"] and (z["a"].get("status") or "neu") == "neu"),
             "nachfassen": sum(1 for z in zeilen if z["nachfassen"]),
@@ -309,20 +379,30 @@ class Anfrage:
     def fahrzeuge(self) -> list[dict]:
         f = (self.query.get("filter") or ["bereit"])[0]
         q = (self.query.get("q") or [""])[0].lower().split()
+        wer = (self.query.get("wer") or ["alle"])[0]
+        if wer not in ("alle", "meine", "frei"):
+            raise Antwort(400, "wer muss alle, meine oder frei sein")
+        sicht = self.team_sicht()
+        if wer != "alle" and not sicht:
+            raise Antwort(400, "Team nicht aktiv (keine Nutzer angelegt) – „wer“ gibt es nur im Team")
         auswahl = []
         for z in self.k.zeilen():
             s = z["a"].get("status") or "neu"
+            t = sicht.objekt(z) if sicht else None
+            if (wer == "meine" and not t["mein"]) or (wer == "frei" and not sicht.ist_frei(t)):
+                continue
             ok = {"bereit": z["bereit"] and s == "neu", "nachfassen": bool(z["nachfassen"]),
                   "arbeit": s in ("kontaktiert", "verhandlung", "besichtigung"), "alle": True}.get(f, False)
             text = f"{z['a']['fahrzeug']} {z['a']['titel']} {z['a'].get('ort') or ''}".lower()
             if ok and all(w in text for w in q):
-                auswahl.append(z)
-        auswahl.sort(key=lambda z: z["b"].verhaeltnis or 99)
-        return [fahrzeug_kurz(z) for z in auswahl[:200]]
+                auswahl.append((z, t))
+        auswahl.sort(key=lambda zt: zt[0]["b"].verhaeltnis or 99)
+        return [fahrzeug_kurz(z, t) for z, t in auswahl[:200]]
 
     def fahrzeug(self, anzeige_id: str) -> dict:
         z = self.k.zeile(anzeige_id)
-        return {**fahrzeug_kurz(z), "bewertung": z["b"].dict(), "brief": z["brief"], "nachfass_text": z["nachfass_text"],
+        sicht = self.team_sicht()
+        return {**fahrzeug_kurz(z, sicht.objekt(z) if sicht else None), "bewertung": z["b"].dict(), "brief": z["brief"], "nachfass_text": z["nachfass_text"],
                 "nachfass_betrag": z["nachfass_betrag"], "anschreiben_text": z["a"].get("anschreiben_text"),
                 "notiz": z["a"].get("notiz"), "besichtigungen": [self.besichtigung_kurz(b) for b in
                                                                  self.k.team.besichtigungen(offen=False, anzeige_id=anzeige_id)]}
@@ -366,13 +446,25 @@ class Anfrage:
         if p == "/api/status":
             if daten.get("status") not in STATUS:
                 raise Antwort(400, "unbekannter Status")
-            ok = k.db.setze_status(str(daten.get("id")), daten["status"], text=text, betrag=betrag)
+            ad_id = str(daten.get("id"))
+            team = self.team_parameter(daten, ad_id)
+            try:
+                ok = k.db.setze_status(ad_id, daten["status"], text=text, betrag=betrag, **team)
+            except BearbeitungsKonflikt:
+                raise self.konflikt(ad_id, team["dubletten"] if daten["status"] == "kontaktiert" else ()) from None
             k.veraendert()
             return self.json(200 if ok else 404, {"ok": ok})
         if p == "/api/nachgefasst":
-            ok = bool(text) and k.db.nachgefasst(str(daten.get("id")), text, betrag)
+            ad_id = str(daten.get("id"))
+            team = {k_: v for k_, v in self.team_parameter(daten, ad_id).items() if k_ != "inhaber"}
+            try:
+                ok = bool(text) and k.db.nachgefasst(ad_id, text, betrag, **team)
+            except BearbeitungsKonflikt:
+                raise self.konflikt(ad_id, team["dubletten"]) from None
             k.veraendert()
             return self.json(200 if ok else 400, {"ok": ok})
+        if m := re.fullmatch(r"/api/bearbeitung/([\w-]+)/(uebernehmen|abgeben|zuweisen)", p):
+            return self.json(200, getattr(self, f"bearbeitung_{m.group(2)}")(m.group(1), daten))
         if p == "/api/notiz":
             ok = k.db.setze_notiz(str(daten.get("id")), str(daten.get("notiz") or "")[:2000])
             k.veraendert()
@@ -387,6 +479,63 @@ class Anfrage:
             b = self.besichtigung(m.group(1), schreiben=True)
             return self.json(200, getattr(self, f"b_{m.group(2)}")(b, daten))
         raise Antwort(404, "nicht gefunden")
+
+    # ----- Team: Übernehmen, Abgeben, Zuweisen
+    def _team_anzeige(self, anzeige_id: str) -> str:
+        """Status des Inserats; 400 ohne Team, 404 bei unbekannter Anzeige."""
+        if not self.team_aktiv:
+            raise Antwort(400, "Team nicht aktiv – es sind keine Nutzer angelegt (python scout.py nutzer anlegen …)")
+        status = self.k.db.status_von(anzeige_id)
+        if status is None:
+            raise Antwort(404, "Inserat nicht gefunden")
+        return status
+
+    def _team_antwort(self, anzeige_id: str, status: str) -> dict:
+        z = self.k.zeile_oder_none(anzeige_id)
+        return {"ok": True, "team": self.team_sicht().objekt_id(anzeige_id, status, (z or {}).get("dubletten_ids") or ())}
+
+    def bearbeitung_uebernehmen(self, anzeige_id: str, daten: dict) -> dict:
+        status = self._team_anzeige(anzeige_id)
+        erzwingen = bool(daten.get("erzwingen"))
+        if erzwingen and not darf_erzwingen(self.nutzer["rolle"]):
+            raise Antwort(403, "Erzwingen ist dem Inhaber vorbehalten")
+        z = self.k.zeile_oder_none(anzeige_id)
+        dubletten = (z or {}).get("dubletten_ids") or ()
+        vorher = self.team_sicht().fremder_halter(anzeige_id, dubletten) if erzwingen else None
+        jetzt, grenze = self.jetzt_grenze()
+        if not self.k.db.uebernimm(anzeige_id, self.nutzer["id"], jetzt, grenze, erzwingen, dubletten):
+            raise self.konflikt(anzeige_id, dubletten)
+        if vorher:
+            sicht = self.team_sicht()
+            log.info("Erzwungene Übernahme: Anzeige %s von %s durch %s", anzeige_id,
+                     (sicht.person(vorher[1]) or {}).get("name"), self.nutzer["name"])
+        return self._team_antwort(anzeige_id, status)
+
+    def bearbeitung_abgeben(self, anzeige_id: str, daten: dict) -> dict:
+        status = self._team_anzeige(anzeige_id)
+        sicht = self.team_sicht()
+        zeile = sicht.zeilen.get(anzeige_id)
+        inhaber = self.nutzer["rolle"] == "inhaber"
+        h = sicht.halter(anzeige_id)
+        if h is not None and h != self.nutzer["id"] and not inhaber:        # Fremdes gibt nur der Inhaber ab
+            raise Antwort(403, "Nur der Bearbeiter oder der Inhaber kann ein Inserat abgeben")
+        if zeile and zeile.get("kontaktiert_von"):
+            raise Antwort(409, "Bereits kontaktiert – der Inhaber kann das Inserat zuweisen",
+                          {"team": sicht.objekt_id(anzeige_id, status)})
+        self.k.db.gib_ab(anzeige_id, self.nutzer["id"], inhaber)
+        return self._team_antwort(anzeige_id, status)
+
+    def bearbeitung_zuweisen(self, anzeige_id: str, daten: dict) -> dict:
+        status = self._team_anzeige(anzeige_id)
+        if not darf_zuweisen(self.nutzer["rolle"]):
+            raise Antwort(403, "Zuweisen ist dem Inhaber vorbehalten")
+        ziel = daten.get("nutzer_id")
+        n = self.k.team.nutzer(ziel) if isinstance(ziel, int) and not isinstance(ziel, bool) else None
+        if not n or not n["aktiv"]:
+            raise Antwort(400, "nutzer_id fehlt oder der Mitarbeiter ist unbekannt bzw. deaktiviert")
+        self.k.db.weise_zu(anzeige_id, n["id"], self.jetzt_grenze()[0])
+        log.info("Zuweisung: Anzeige %s an %s durch %s", anzeige_id, n["name"], self.nutzer["name"])
+        return self._team_antwort(anzeige_id, status)
 
     def seiten_einlesen(self) -> dict:
         """Gespeicherte Seiten aus dem konfigurierten Import-Ordner – nie ein Pfad aus der Anfrage, kein Netzabruf."""
@@ -519,7 +668,7 @@ def bearbeite(handler, k: Kontext, methode: str):
             time.sleep(1)
         if e.status == 401 and methode == "GET" and not a.pfad.startswith("/api/"):
             return a.weiterleiten("/login?weiter=" + quote(handler.path))
-        a.json(e.status, {"fehler": e.fehler})
+        a.json(e.status, {"fehler": e.fehler, **e.extra})
     except Exception:  # noqa: BLE001 – Server soll bei einem Fehler weiterlaufen
         log.exception("Fehler bei %s %s", methode, handler.path)
         a.json(500, {"fehler": "Interner Fehler – Details in ausgabe/scout.log"})
