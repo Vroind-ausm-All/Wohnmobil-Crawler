@@ -1,5 +1,5 @@
 {# Jinja2-Vorlage für die Nachfass-Nachricht. Dieser Kommentarblock erscheint nicht im Text.
-   Verfügbare Felder: alle aus anschreiben.txt, außerdem
+   Verfügbare Felder: alle aus anschreiben.txt (u. a. anrede, zum_fahrzeug), außerdem
      kontaktiert_datum   „14.10.“ (Datum des ersten Anschreibens) – kann leer sein
      preis_gesenkt       True, wenn der Verkäufer den Preis seit dem letzten Kontakt gesenkt hat
      preis, preis_vorher aktueller und vorheriger Wunschpreis
@@ -10,9 +10,9 @@
      angebot             Betrag, der jetzt genannt wird
      nachfass_nr         1 = erstes Nachfassen
 -#}
-Hallo,
+{{ anrede }}
 
-ich hatte Ihnen {% if kontaktiert_datum %}am {{ kontaktiert_datum }} {% else %}vor einigen Tagen {% endif %}wegen Ihres Inserats zum {{ fahrzeug }}{% if ez_jahr %} (EZ {{ ez_jahr }}){% endif %} geschrieben{% if preis_gesenkt %} und gesehen, dass Sie den Preis inzwischen auf {{ preis | euro }} angepasst haben{% endif %}.
+ich hatte Ihnen {% if kontaktiert_datum %}am {{ kontaktiert_datum }} {% else %}vor einigen Tagen {% endif %}wegen Ihres Inserats {{ zum_fahrzeug }}{% if ez_jahr %} (EZ {{ ez_jahr }}){% endif %} geschrieben{% if preis_gesenkt %} und gesehen, dass Sie den Preis inzwischen auf {{ preis | euro }} angepasst haben{% endif %}.
 
 {% if fall == "zusage" %}
 Zu Ihrem neuen Preis von {{ preis | euro }} würde ich das Fahrzeug gern übernehmen – vorbehaltlich einer Besichtigung mit kurzer Probefahrt und sofern der Zustand Ihrer Beschreibung entspricht.
