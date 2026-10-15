@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .sicherung import SicherungsFehler, oeffne_lesend, sichere
 
-AKTUELLE_VERSION = 4
+AKTUELLE_VERSION = 5
 
 
 class MigrationsFehler(RuntimeError):
@@ -114,7 +114,32 @@ def _schritt_4(con: sqlite3.Connection):
           FROM inserate WHERE legacy_id IS NOT NULL AND preis IS NOT NULL""")
 
 
-SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4}
+def _schritt_5(con: sqlite3.Connection):
+    """Additive v5 (Phase B, ADR-025): Verkäuferportal. Eine Verkaufsanfrage ist ein vom Verkäufer selbst angebotenes Fahrzeug –
+    bewusst getrennt von beobachteten Inseraten (``inserate``/``anzeigen``, Architekturregel 1). Geldbeträge als ganze Euro."""
+    con.execute("""CREATE TABLE IF NOT EXISTS verkaeufer (
+        id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT, telefon TEXT, plz TEXT, ort TEXT,
+        einwilligung_am TEXT NOT NULL, einwilligung_version TEXT NOT NULL, erstellt_am TEXT NOT NULL,
+        CHECK(email IS NOT NULL OR telefon IS NOT NULL))""")
+    con.execute("""CREATE TABLE IF NOT EXISTS verkaufsanfragen (
+        id INTEGER PRIMARY KEY, referenz TEXT UNIQUE, verkaeufer_id INTEGER NOT NULL REFERENCES verkaeufer(id),
+        kanal TEXT NOT NULL, art TEXT, marke TEXT, modell TEXT, ez_jahr INTEGER, km INTEGER, preisvorstellung INTEGER,
+        beschreibung TEXT, maengel TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'eingegangen',
+        bearbeiter_id INTEGER, notiz TEXT, erfasst_von INTEGER, erstellt_am TEXT NOT NULL, aktualisiert_am TEXT NOT NULL,
+        CHECK(kanal IN ('formular', 'telefon', 'vor_ort')),
+        CHECK(status IN ('eingegangen', 'in_pruefung', 'angebot', 'abgelehnt', 'zurueckgezogen', 'gekauft')),
+        CHECK(km IS NULL OR km >= 0), CHECK(preisvorstellung IS NULL OR preisvorstellung >= 0))""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_verkaufsanfragen_status ON verkaufsanfragen(status, erstellt_am)")
+    con.execute("""CREATE TABLE IF NOT EXISTS anfrage_fotos (
+        id INTEGER PRIMARY KEY, anfrage_id INTEGER NOT NULL REFERENCES verkaufsanfragen(id),
+        datei TEXT NOT NULL, erstellt_am TEXT NOT NULL)""")
+    con.execute("""CREATE TABLE IF NOT EXISTS anfrage_verlauf (
+        id INTEGER PRIMARY KEY, anfrage_id INTEGER NOT NULL REFERENCES verkaufsanfragen(id),
+        zeitpunkt TEXT NOT NULL, nutzer_id INTEGER, ereignis TEXT NOT NULL, alt TEXT, neu TEXT)""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_anfrage_verlauf ON anfrage_verlauf(anfrage_id, zeitpunkt)")
+
+
+SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4, 5: _schritt_5}
 
 _SCHEMA_VERSION = ("CREATE TABLE IF NOT EXISTS schema_version ("
                    "version INTEGER PRIMARY KEY, angewendet_am TEXT NOT NULL)")
