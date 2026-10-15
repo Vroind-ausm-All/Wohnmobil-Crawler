@@ -1,11 +1,12 @@
 """SQLite-Speicher: merkt sich alle gesehenen Anzeigen, Preisänderungen und den Kontakt-Status."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .bearbeitung import IN_ARBEIT, BearbeitungsKonflikt
@@ -74,6 +75,18 @@ FELDER_UPDATE = ["url", "suche", "titel", "preis", "vb", "ort", "km", "ez_jahr",
                  "kurzbeschreibung", "gewerblich", "bild", "quelle"]
 
 
+STANDARD_PLATTFORM = "kleinanzeigen"          # ``anzeigen.quelle`` leer = Altbestand vor Mehrquellen
+
+
+def inhalt_hash(signatur: tuple) -> str:
+    """Fingerabdruck eines Inseratsstands für ``beobachtungen.inhalt_hash`` (gleich für Suche und Ereigniseingang)."""
+    return hashlib.sha256(json.dumps(signatur, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def jetzt_utc() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
 def wal_aktiv(cfg: dict) -> bool:
     """``ausgabe.wal`` aus config.yaml (Standard ``true``); nur echte Wahrheitswerte, damit „nein“ nicht als wahr gilt."""
     wert = (cfg.get("ausgabe") or {}).get("wal", True)
@@ -96,8 +109,12 @@ class Datenbank:
         # check_same_thread=False: die App bedient Anfragen nacheinander in einem Server-Thread
         self.con = sqlite3.connect(pfad, check_same_thread=False, timeout=timeout)
         self.con.row_factory = sqlite3.Row
-        self.journal_modus = self._setze_journal(wal)
         self._tiefe = 0          # >0: innerhalb von ``transaktion()`` – verschachtelte Schreibblöcke committen nicht selbst
+        self.journal_modus = self._setze_journal(wal)
+        try:
+            self.gleiche_v4_ab()
+        except sqlite3.OperationalError as e:      # z. B. gesperrt: rein ergänzend, holt der nächste Start nach
+            log.warning("v4-Abgleich übersprungen (%s); er wird beim nächsten Öffnen nachgeholt.", e)
 
     def _setze_journal(self, wal: bool) -> str:
         """WAL: Lesende (App, Bericht, Sicherung) und ein Schreibender (Suchlauf, Ereigniseingang) blockieren einander nicht;
@@ -115,8 +132,18 @@ class Datenbank:
             log.warning("Journalmodus %s nicht möglich; die Datenbank bleibt im Modus %s.", ziel, modus)
         return modus
 
-    def speichere_treffer(self, a: dict, suche: str) -> str:
-        """Fügt ein oder aktualisiert. Rückgabe: 'neu', 'preis' (Preis gesenkt) oder 'bekannt'."""
+    def speichere_treffer(self, a: dict, suche: str, kanal: str = "suche") -> str:
+        """Fügt ein oder aktualisiert. Rückgabe: 'neu', 'preis' (Preis gesenkt) oder 'bekannt'.
+
+        In derselben Transaktion wird der Treffer in die v4-Tabellen gespiegelt (``spiegle_inserat``), damit Ereigniseingang,
+        Preisverlauf und App dieselben Fahrzeuge kennen. ``kanal``: 'suche' (Suchlauf) oder 'manuell' (eingelesene Seite)."""
+        with self._exklusiv():
+            ergebnis = self.schreibe_anzeige(a, suche)
+            self.spiegle_inserat(a, kanal)
+        return ergebnis
+
+    def schreibe_anzeige(self, a: dict, suche: str) -> str:
+        """Nur Tabelle ``anzeigen``, ohne eigenes Commit (Teil einer Transaktion des Aufrufers)."""
         jetzt = datetime.now().isoformat(timespec="seconds")
         alt = self.con.execute("SELECT preis FROM anzeigen WHERE id=?", (a["id"],)).fetchone()
         werte = {k: a.get(k) for k in FELDER_UPDATE}
@@ -144,8 +171,76 @@ class Datenbank:
                 ergebnis = "preis"
             sets = ", ".join(f"{k}=?" for k in werte) + ", zuletzt_gesehen=?"
             self.con.execute(f"UPDATE anzeigen SET {sets} WHERE id=?", [*werte.values(), jetzt, a["id"]])
-        self.con.commit()
         return ergebnis
+
+    def spiegle_inserat(self, a: dict, kanal: str) -> int:
+        """v4-Gegenstück eines ``anzeigen``-Datensatzes (ohne eigenes Commit). Schlüssel ist (Plattform, Anzeigen-ID); ein zuerst
+        über den Ereigniseingang angelegtes Inserat wird verknüpft (``legacy_id``) statt verdoppelt. Gesehen in Suche oder
+        Seite heißt verfügbar. ``beobachtungen`` und ``preis_historie`` erhalten nur Änderungen. Rückgabe: ``inserate.id``."""
+        plattform, ad_id, jetzt = a.get("quelle") or STANDARD_PLATTFORM, a["id"], jetzt_utc()
+        alt = self.con.execute("SELECT * FROM inserate WHERE plattform=? AND anzeigen_id=?", (plattform, ad_id)).fetchone()
+        url = a.get("url") or (alt["url"] if alt else None)
+        titel = a.get("titel") or (alt["titel"] if alt else None)
+        preis = a.get("preis") if a.get("preis") is not None else (alt["preis"] if alt else None)
+        signatur = (url, titel, preis, "aktiv")
+        if alt is None:
+            self.con.execute(
+                """INSERT INTO inserate (plattform, anzeigen_id, legacy_id, url, titel, preis, verfuegbarkeit,
+                   erstmals_gesehen, zuletzt_gesehen)
+                   VALUES (?, ?, CASE WHEN EXISTS (SELECT 1 FROM inserate WHERE legacy_id=?) THEN NULL ELSE ? END, ?, ?, ?, 'aktiv', ?, ?)""",
+                (plattform, ad_id, ad_id, ad_id, url, titel, preis, jetzt, jetzt))
+            inserat_id, typ = self.con.execute("SELECT last_insert_rowid()").fetchone()[0], "neu"
+        else:
+            inserat_id = alt["id"]
+            typ = None if (alt["url"], alt["titel"], alt["preis"], alt["verfuegbarkeit"]) == signatur else "geaendert"
+            self.con.execute("UPDATE inserate SET url=?, titel=?, preis=?, verfuegbarkeit='aktiv', zuletzt_gesehen=? WHERE id=?",
+                             (url, titel, preis, jetzt, inserat_id))
+            self.verknuepfe_inserat(inserat_id, ad_id)
+        if typ:
+            self.con.execute(
+                """INSERT INTO beobachtungen (inserat_id, plattform, kanal, ereignis_typ, ereignis_id, zeitpunkt, preis, inhalt_hash)
+                   VALUES (?, ?, ?, ?, NULL, ?, ?, ?)""", (inserat_id, plattform, kanal, typ, jetzt, preis, inhalt_hash(signatur)))
+            if preis is not None and (alt is None or alt["preis"] != preis):
+                self.con.execute("INSERT INTO preis_historie (inserat_id, zeitpunkt, preis, kanal) VALUES (?, ?, ?, ?)",
+                                 (inserat_id, jetzt, preis, kanal))
+        return inserat_id
+
+    def verknuepfe_inserat(self, inserat_id: int, ad_id: str):
+        """``legacy_id`` setzen, sofern noch frei (dieselbe Anzeigen-ID auf zwei Plattformen: nur die erste wird verknüpft)."""
+        self.con.execute("UPDATE inserate SET legacy_id=? WHERE id=? AND legacy_id IS NULL "
+                         "AND NOT EXISTS (SELECT 1 FROM inserate WHERE legacy_id=?)", (ad_id, inserat_id, ad_id))
+
+    def gleiche_v4_ab(self) -> int:
+        """Rein ergänzender Abgleich beim Öffnen: ``anzeigen``-Zeilen ohne v4-Gegenstück (z. B. zwischen Schema v4 und diesem Stand
+        gespeichert) werden angelegt bzw. verknüpft, mit erstem Preis (Kanal 'abgleich'). Ändert und löscht nichts Bestehendes;
+        idempotent. Rückgabe: Anzahl neu angelegter Inserate."""
+        offen = ("SELECT a.* FROM anzeigen a WHERE NOT EXISTS (SELECT 1 FROM inserate i WHERE i.legacy_id = a.id) "
+                 "AND NOT EXISTS (SELECT 1 FROM inserate i WHERE i.plattform = COALESCE(NULLIF(a.quelle, ''), ?) AND i.anzeigen_id = a.id "
+                 "AND i.legacy_id IS NOT NULL)")
+        if self.con.execute(f"SELECT EXISTS ({offen})", (STANDARD_PLATTFORM,)).fetchone()[0] == 0:
+            return 0
+        neu = 0
+        with self._exklusiv():
+            for z in self.con.execute(offen, (STANDARD_PLATTFORM,)).fetchall():
+                plattform = z["quelle"] or STANDARD_PLATTFORM
+                alt = self.con.execute("SELECT id FROM inserate WHERE plattform=? AND anzeigen_id=?", (plattform, z["id"])).fetchone()
+                if alt:
+                    self.verknuepfe_inserat(alt["id"], z["id"])
+                    continue
+                cur = self.con.execute(
+                    """INSERT INTO inserate (plattform, anzeigen_id, legacy_id, url, titel, preis, verfuegbarkeit,
+                       erstmals_gesehen, zuletzt_gesehen)
+                       VALUES (?, ?, CASE WHEN EXISTS (SELECT 1 FROM inserate WHERE legacy_id=?) THEN NULL ELSE ? END,
+                               ?, ?, ?, 'unbekannt', ?, ?)""",
+                    (plattform, z["id"], z["id"], z["id"], z["url"], z["titel"], z["preis"],
+                     z["erstmals_gesehen"] or "", z["zuletzt_gesehen"] or ""))
+                if z["preis"] is not None:
+                    self.con.execute("INSERT INTO preis_historie (inserat_id, zeitpunkt, preis, kanal) VALUES (?, ?, ?, 'abgleich')",
+                                     (cur.lastrowid, z["zuletzt_gesehen"] or jetzt_utc(), z["preis"]))
+                neu += 1
+        if neu:
+            log.info("v4-Abgleich: %d Inserate aus „anzeigen“ ergänzt.", neu)
+        return neu
 
     def speichere_details(self, ad_id: str, d: dict):
         felder = {k: d.get(k) for k in ("titel", "preis", "km", "ez_jahr", "marke", "art", "leistung",

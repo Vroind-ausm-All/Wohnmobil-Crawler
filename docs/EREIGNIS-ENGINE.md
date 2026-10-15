@@ -23,8 +23,8 @@ Der Integrationszweig bleibt `claude/gifted-heisenberg-d1cjlr`. `main` wird nich
 - Bekannte Zustände werden nicht erneut protokolliert; optionale externe `ereignis_id` wird dedupliziert.
 - Löschereignisse ändern nur die **Verfügbarkeit** des Inserats, nicht dessen Ankaufstatus.
 - Preise werden bei Änderung historisiert. Erste Altpreise werden mit Herkunft `migration` übernommen.
-- Die neue Tabelle `inserate` ist **parallel** zur bestehenden `anzeigen` angelegt. Die alte Oberfläche und
-  Bewertung lesen weiterhin `anzeigen`; der Abgleich/Synchronisationsweg ist bewusst **Folgearbeit**.
+- Die neue Tabelle `inserate` liegt parallel zu `anzeigen`. Seit ADR-024 werden beide in denselben Transaktionen
+  geschrieben: Suchtreffer erscheinen in v4, neue/geänderte Ereignisse in `anzeigen` (Art unbekannt, F14).
 - Die Migration ist versioniert, wird transaktional ausgeführt und erstellt vorher eine verifizierte Sicherung.
 
 ## Quellenfreigabe
@@ -40,7 +40,7 @@ Der Integrationszweig bleibt `claude/gifted-heisenberg-d1cjlr`. `main` wird nich
 ## Folgearbeiten
 
 1. P1-04: WAL / verbindungsspezifische DB-Zugriffe / Laufsperren.
-2. Alte `anzeigen`-Schreibwege und v4-`inserate` synchronisieren, bevor die neue Tabelle produktiv als Datenquelle dient.
+2. ~~Alte `anzeigen`-Schreibwege und v4-`inserate` synchronisieren~~ – umgesetzt (ADR-024, P1-04b).
 3. Sucheingänge mit Berechtigungskonzept anbinden; API-Credentials nur über Umgebungsvariablen.
 4. Ereignis-Zeitordnung und Reconnect/Catch-up pro Datenquelle klären (stale Events vermeiden).
 5. Benachrichtigungen, Dashboard und Bewertungslogik ausschließlich über verifizierte Daten zuschalten.

@@ -158,6 +158,11 @@ umbenannt, nicht gelöscht.
 verständlicher Meldung ab (kein Schreiben mit altem Code). Ohne erfolgreiches Backup keine Migration. Wiederherstellung
 nur nach ausdrücklicher Bestätigung (P1-02) und, dank Laufsperre (P1-04) nicht während eines Laufs.
 
+**Stand 15.10.2026 (Plan nachgeführt):** Tatsächlich umgesetzt sind v3 (`schema_version`) und v4 (PR #7: `quellen`,
+`inserate`, `beobachtungen`, `preis_historie` parallel zu `anzeigen`). WAL und Laufsperre kamen ohne Schemaänderung
+(P1-04a/P1-04, Dateisperre statt `suchlaeufe`). `anzeigen` und v4 werden seit ADR-024 in denselben Transaktionen
+geschrieben. Die nächste freie Version für Fahrzeugidentitäten ist **v5**; die Zeilen unten sind der ursprüngliche Plan.
+
 | Version | Phase | Inhalt |
 |---|---|---|
 | v3 | 1 | `schema_version` anlegen, Altbestände als v1/v2 erkennen; minimale `suchlaeufe` (id, quelle, start, ende, laeuft_bis, ergebnis) als Laufsperre; WAL, `busy_timeout`; Indizes nur nach `EXPLAIN QUERY PLAN` |

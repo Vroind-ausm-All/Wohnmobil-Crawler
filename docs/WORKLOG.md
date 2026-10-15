@@ -6,7 +6,19 @@ Wert „–“.
 
 ---
 
-## Phase 1 – P1-04a Parallelzugriff: WAL und Sperr-Wartezeit (14.10.2026) · Status: REVIEW
+## Phase 1 – P1-04b `anzeigen` ↔ v4 gleich halten (15.10.2026) · Status: REVIEW
+
+- **Anlass:** 3.0-Analyse, P0 „Datenmodell vereinheitlichen“; Betreiber: „mach weiter“. Ohne Subagenten umgesetzt.
+- **Geänderte Dateien:** `wmscout/datenbank.py` (`spiegle_inserat`, `verknuepfe_inserat`, `gleiche_v4_ab`,
+  `schreibe_anzeige`, `speichere_treffer` mit `kanal` unter `BEGIN IMMEDIATE`), `wmscout/ereignis_speicher.py`
+  (Transaktion über `Datenbank.transaktion`, Zeile in `anzeigen`), `wmscout/importer.py` (Seitenimport = Kanal `manuell`),
+  Tests `tests/test_v4_abgleich.py` (13), Doku ADR-024, ROADMAP, ARCHITECTURE (Versionsplan nachgeführt), EREIGNIS-ENGINE.
+- **Tests:** `pytest -q`: 717 bestanden (Linux, inkl. PR-#9-Stand); `ruff check .` grün. Gegenprobe: Spiegeln aus (6
+  Fehlschläge), Ereignis → App aus (5), Kollisionsschutz aus (1), Abgleich beim Öffnen aus (2), Änderungserkennung aus (2).
+- **Fehler unterwegs:** Abgleich lief im Konstruktor vor `_tiefe` – von den neuen Tests gefunden, behoben.
+- **Nicht geprüft:** Windows-CI (folgt im PR); Laufzeit des Abgleichs mit sehr großem Altbestand.
+
+: WAL und Sperr-Wartezeit (14.10.2026) · Status: REVIEW
 
 - **Anlass:** Betreiber-Analyse „Wohnmobil-Scout 3.0“, Vorschlag erster PR `claude/phase1-db-parallelzugriff`
   (Ereigniseingang, Browser-App und Hintergrundläufe nebeneinander). Ohne Subagenten und ohne Warteschleifen umgesetzt.
