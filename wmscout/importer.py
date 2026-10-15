@@ -256,7 +256,7 @@ class Importer:
             suche = _neue_suche(self.db.suche_zu(d["id"]), neue_art, herkunft)
             if art == "detail" and not d.get("gewerblich") and self.db.gewerblich_zu(d["id"]):
                 d["gewerblich"] = None            # kein Hinweis auf der Detailseite ≠ „privat“: gewerblicher Listenwert bleibt
-            stat[self.db.speichere_treffer(d, suche)] += 1
+            stat[self.db.speichere_treffer(d, suche, kanal="manuell")] += 1
             if art == "detail":
                 self.db.speichere_details(d["id"], d)
                 stat["details"] += 1

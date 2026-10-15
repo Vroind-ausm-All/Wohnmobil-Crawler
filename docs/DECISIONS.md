@@ -259,3 +259,22 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   aufnehmen. Leistungsdaten je Mitarbeiter entstehen (Zähler, CSV-Spalten) – Zweck „Doppelkontakt vermeiden,
   Arbeit verteilen“; Mitbestimmung (§ 87 Abs. 1 Nr. 6 BetrVG) beachten, Speicherdauer mit P1-14a. Die bisherigen
   Oberflächen werten 409 noch nicht aus → **Team-Betrieb erst mit T2**.
+
+## ADR-024 – `anzeigen` und v4-Tabellen gleich halten, ohne neue Schemaversion · vorgeschlagen (15.10.2026)
+
+* **Kontext:** Schema v4 (PR #7) legte `inserate`, `beobachtungen`, `preis_historie` neben `anzeigen` an. Suche,
+  Seitenimport, App und Bewertung schrieben/lasen weiter nur `anzeigen`, der Ereigniseingang nur v4 – zwei getrennte
+  Datenwege (Befund P0 der 3.0-Analyse).
+* **Entscheidung:**
+  1. `Datenbank.speichere_treffer` spiegelt jeden Treffer in derselben Transaktion (`BEGIN IMMEDIATE`) nach v4
+     (Kanal `suche` bzw. `manuell` für eingelesene Seiten); protokolliert werden nur Änderungen.
+  2. `EreignisSpeicher` schreibt neue/geänderte Inserate zusätzlich nach `anzeigen`: unbekannte Art (`IMPORT_SUCHE`,
+     F14), eine vorhandene Zuordnung bleibt. Löschereignisse ändern nur `inserate.verfuegbarkeit`, nie den Ankaufstatus.
+     Gehört dieselbe Anzeigen-ID in `anzeigen` einer anderen Plattform, bleibt die App-Zeile unberührt (Warnung).
+  3. Beim Öffnen ergänzt ein rein additiver, idempotenter Abgleich fehlende v4-Gegenstücke (Kanal `abgleich`).
+  4. Zeitpunkte in v4 aus Suche/Abgleich in UTC (Ereignisse waren es schon); `anzeigen` bleibt bei Ortszeit.
+* **Warum keine Migration v5:** Nur additive Daten in abgeleiteten Tabellen, keine Strukturänderung; v5 bleibt für
+  Fahrzeugidentitäten frei. Kein Löschen, kein Überschreiben bestehender `anzeigen`-Werte durch den Abgleich.
+* **Folgen:** App und Ereigniseingang sehen dieselben Fahrzeuge; Preisverlauf entsteht ab jetzt auch aus der Suche.
+  Offen: Verfügbarkeit („offline“) in der App anzeigen (UI); Anzeigen-ID-Kollision über Plattformen hinweg löst erst
+  ein plattformbezogener Schlüssel in `anzeigen` (v5).
