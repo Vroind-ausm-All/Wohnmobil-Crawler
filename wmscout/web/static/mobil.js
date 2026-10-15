@@ -44,7 +44,7 @@
         if (r.status === 403 && daten !== undefined && !nochmal) {        // Server neu gestartet → neues Token holen
           return ladeIch().then(function () { return api(pfad, daten, true); });
         }
-        if (!r.ok) { var e = new Error(d.fehler || ("Fehler " + r.status)); e.status = r.status; throw e; }
+        if (!r.ok) { var e = new Error(d.fehler || ("Fehler " + r.status)); e.status = r.status; e.grund = d.grund || ""; e.daten = d; throw e; }
         return d;
       });
     });
@@ -158,15 +158,20 @@
   }
 
   var LISTEN = { bereit: "Anschreiben bereit", nachfassen: "Nachfassen", arbeit: "In Arbeit", alle: "Alle Fahrzeuge" };
+  var WER = { alle: "Alle", meine: "Meine", frei: "Frei" };
   function liste(filter, suche) {
-    return api("/api/fahrzeuge?filter=" + encodeURIComponent(filter) + "&q=" + encodeURIComponent(suche || "")).then(function (l) {
+    var wer = S.ich.team ? (S.wer || "alle") : "alle";
+    return api("/api/fahrzeuge?filter=" + encodeURIComponent(filter) + "&q=" + encodeURIComponent(suche || "") + (wer !== "alle" ? "&wer=" + wer : "")).then(function (l) {
       inhalt.innerHTML = "<h1>" + esc(LISTEN[filter] || "Fahrzeuge") + " (" + l.length + ")</h1>" +
         '<input type="search" id="suche" placeholder="Marke, Modell, Ort …" value="' + esc(suche || "") + '">' +
         '<div class="reihe">' + Object.keys(LISTEN).map(function (f) {
           return '<a class="knopf klein' + (f === filter ? " primaer" : "") + '" href="#/liste/' + f + '">' + esc(LISTEN[f]) + "</a>";
         }).join("") + "</div>" +
+        (S.ich.team ? '<div class="reihe" role="group" aria-label="Wer">' + Object.keys(WER).map(function (w) {
+          return '<button class="knopf klein' + (w === wer ? " primaer" : "") + '" data-aktion="wer" data-wer="' + w + '" aria-pressed="' + (w === wer) + '">' + WER[w] + "</button>";
+        }).join("") + "</div>" : "") +
         (l.length ? l.map(function (f) {
-          return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + ampelTag(f.ampel) + "</div>" +
+          return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + teamBadge(f.team) + ampelTag(f.ampel) + "</div>" +
             '<p class="leise">EZ ' + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") + (f.entfernung_km !== null ? " · " + tsd(f.entfernung_km) + " km entfernt" : "") + "</p>" +
             hinweisZeilen(f) +
             (f.nachfassen ? '<p class="leise" style="color:var(--gelb)">Nachfassen: ' + esc(f.nachfassen) + "</p>" : "") +
@@ -183,10 +188,40 @@
     return (f.hinweise || []).map(function (h) { return '<p class="hinweis info">⚠ ' + esc(h) + "</p>"; }).join("");
   }
 
+  // ---------------------------------------------------------------- Team (nur mit angelegten Nutzern, T2)
+  // Badge = Symbol + Kürzel (nie nur Farbe); der Server entscheidet, die App zeigt seinen letzten Stand.
+  var TEAM_SYMBOL = { reserviert: "◔", kontaktiert: "✉", ohne_zuordnung: "?", verwaist: "!" };
+  function teamFrei(t) { return !t || ((t.zustand === "frei" || t.zustand === "ohne_zuordnung" || t.zustand === "verwaist") && !t.dublette_von); }
+  function teamText(t) {
+    if (!t) return "";
+    var p = t.bearbeiter, dub = t.dublette_von;
+    if (!p && dub && dub.bearbeiter) return "Dublette bearbeitet " + (dub.mein ? "du" : dub.bearbeiter.name) + " – nicht doppelt anschreiben";
+    if (t.zustand === "reserviert") return (t.mein ? "Von dir" : "Von " + p.name) + " reserviert seit " + datum(t.seit) + (t.laeuft_ab ? ", frei ab " + datum(t.laeuft_ab) : "");
+    if (t.zustand === "kontaktiert") return (t.mein ? "Du bearbeitest es" : (p ? p.name : "Ein Kollege") + " bearbeitet es");
+    if (t.zustand === "ohne_zuordnung") return "In Arbeit, aber niemandem zugeordnet";
+    if (t.zustand === "verwaist") return "Bearbeiter deaktiviert – übernehmen oder zuweisen lassen";
+    return "Frei";
+  }
+  function teamBadge(t) {
+    if (!t || (t.zustand === "frei" && !t.dublette_von)) return "";
+    var p = t.bearbeiter, dub = !p && t.dublette_von && t.dublette_von.bearbeiter ? t.dublette_von : null;
+    var z = dub ? "dublette" : t.zustand, mein = t.mein || (dub && dub.mein);
+    var text = (dub ? "⧉" : TEAM_SYMBOL[z] || "•") + " " + (p ? p.kuerzel : dub ? dub.bearbeiter.kuerzel : { ohne_zuordnung: "ohne Zuordnung", verwaist: "verwaist" }[z] || z);
+    return '<span class="tb tb-' + esc(z) + (mein ? " mein" : "") + '" title="' + esc(teamText(t)) + '">' + esc(text) + "</span>";
+  }
+  // Einheitliche Fehlermeldung; bei 409 (Kollege hält das Fahrzeug) mit dem Text des Servers und frischer Ansicht
+  function teamFehler(e, id) {
+    if (e.grund === "csrf") { toast("Sitzung abgelaufen – bitte neu laden"); return; }
+    if (e.grund === "belegt") { toast("Datenbank kurz belegt – bitte erneut versuchen"); return; }
+    toast((e.status === 409 ? "✕ Nicht senden – " : "") + e.message);
+    if (e.status === 409 && id) fahrzeug(id);
+  }
+
   function fahrzeug(id) {
     return Promise.all([api("/api/fahrzeug/" + encodeURIComponent(id)), nutzerListe()]).then(function (r) {
       var f = r[0], nutzer = r[1], b = f.bewertung, ich = S.ich.nutzer;
-      var status = S.ich.status || {};
+      var status = S.ich.status || {}, t = f.team, darf = (t && t.darf) || {};
+      var fremd = !!t && !t.mein && !teamFrei(t), sperr = fremd ? " disabled" : "";
       inhalt.innerHTML =
         "<h1>" + esc(f.fahrzeug) + "</h1>" +
         '<p class="leise">' + ampelTag(f.ampel) + " EZ " + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") +
@@ -196,11 +231,18 @@
         '<p class="leise">Marktniveau ' + eur(b.marktwert_angebote) + " · Sicherheit " + esc(b.sicherheit) + "</p>" +
         '<a class="knopf klein" href="' + link(f.url) + '" target="_blank" rel="noopener">Anzeige öffnen ↗</a></div>' +
         hinweisZeilen(f) +
+        (t ? '<div class="karte team"><div class="zeile">' + (teamBadge(t) || '<span class="tb tb-frei">frei</span>') + '<span class="leise">' + esc(teamText(t)) + "</span></div>" +
+          '<div class="reihe">' + (darf.uebernehmen && !t.mein ? '<button class="knopf klein" data-aktion="uebernehmen">Ich übernehme</button>' : "") +
+          (darf.abgeben ? '<button class="knopf klein" data-aktion="abgeben">Abgeben</button>' : "") +
+          (darf.erzwingen && fremd && !darf.uebernehmen ? '<button class="knopf klein" data-aktion="erzwingen">Übernahme erzwingen</button>' : "") + "</div></div>" : "") +
+        (f.status === "vorbereitet" ? '<p class="hinweis info">Text kopiert – noch nicht als gesendet bestätigt.</p>' +
+          '<button class="knopf primaer voll" data-aktion="gesendet"' + sperr + '>gesendet ✓</button>' : "") +
         (f.nachfass_text ? "<h2>Nachfassen</h2><p class=\"leise\">" + esc(f.nachfassen) + '</p><textarea id="nf">' + esc(f.nachfass_text) + "</textarea>" +
-          '<button class="knopf primaer voll" data-aktion="nachfassen">↻ Kopieren &amp; Anzeige öffnen</button>' : "") +
+          '<button class="knopf primaer voll" data-aktion="nachfassen"' + sperr + '>↻ Kopieren &amp; Anzeige öffnen</button>' : "") +
         (f.brief ? '<h2>Anschreiben</h2><textarea id="brief">' + esc(f.brief) + "</textarea>" +
-          '<button class="knopf primaer voll" data-aktion="anschreiben">✉ Kopieren &amp; Anzeige öffnen</button>' :
-          (f.anschreiben_text ? '<h2>Gesendet</h2><textarea readonly>' + esc(f.anschreiben_text) + "</textarea>" : (f.sperre ? '<p class="hinweis info">Kein Anschreiben: ' + esc(f.sperre) + "</p>" : ""))) +
+          '<button class="knopf primaer voll" data-aktion="anschreiben"' + sperr + '>✉ Kopieren &amp; Anzeige öffnen</button>' +
+          (fremd ? '<p class="hinweis warn">' + esc(teamText(t)) + " – nicht anschreiben.</p>" : "") :
+          (f.anschreiben_text ? "<h2>" + (f.status === "vorbereitet" ? "Kopierter Text" : "Gesendet") + '</h2><textarea readonly>' + esc(f.anschreiben_text) + "</textarea>" : (f.sperre ? '<p class="hinweis info">Kein Anschreiben: ' + esc(f.sperre) + "</p>" : ""))) +
         "<h2>Status</h2><div class=\"reihe\">" + Object.keys(status).map(function (k) {
           return '<button class="knopf klein' + (k === f.status ? " primaer" : "") + '" data-status="' + esc(k) + '">' + esc(status[k]) + "</button>";
         }).join("") + "</div>" +
@@ -484,14 +526,32 @@
     var a = t.getAttribute("data-aktion"), id = inhalt.dataset.id;
     if (a) e.preventDefault();
     if (a === "anschreiben" || a === "nachfassen") {
-      var text = document.getElementById(a === "anschreiben" ? "brief" : "nf").value, ok = kopiere(text);
-      window.open(inhalt.dataset.url, "_blank", "noopener");
+      // Kopieren sofort (braucht die Berührung), die Anzeige erst nach OK des Servers: bei 409 hält ein Kollege das Fahrzeug.
+      // Gilt erst nach „gesendet ✓“ als kontaktiert (ADR-012).
+      var text = document.getElementById(a === "anschreiben" ? "brief" : "nf").value, ok = kopiere(text), fenster = null, url = inhalt.dataset.url;
+      try { fenster = window.open("", "_blank"); if (fenster) fenster.opener = null; } catch (x) { fenster = null; }
       var p = a === "anschreiben"
-        ? api("/api/status", { id: id, status: "kontaktiert", text: text, betrag: parseInt(inhalt.dataset.erst, 10) || null })
+        ? api("/api/status", { id: id, status: "vorbereitet", text: text, betrag: parseInt(inhalt.dataset.erst, 10) || null })
         : api("/api/nachgefasst", { id: id, text: text, betrag: parseInt(inhalt.dataset.nfbetrag, 10) || null });
-      p.then(function () { toast(ok ? "Text kopiert ✓ – in " + (inhalt.dataset.quelle === "mobile.de" ? "mobile.de im „E-Mail“/„Nachricht“-Formular" : inhalt.dataset.quelle === "kleinanzeigen" ? "Kleinanzeigen" : "der Anzeige") + " einfügen und senden" : "Bitte Text markieren und kopieren"); });
+      p.then(function () {
+        if (/^https?:\/\//i.test(url || "")) { if (fenster && !fenster.closed) fenster.location.href = url; else window.open(url, "_blank", "noopener"); }
+        else if (fenster) fenster.close();
+        toast(ok ? "Text kopiert ✓ – in " + (inhalt.dataset.quelle === "mobile.de" ? "mobile.de im „E-Mail“/„Nachricht“-Formular" : inhalt.dataset.quelle === "kleinanzeigen" ? "Kleinanzeigen" : "der Anzeige") + " einfügen, senden, dann „gesendet ✓“" : "Bitte Text markieren und kopieren");
+        fahrzeug(id);
+      }, function (err) { if (fenster) fenster.close(); teamFehler(err, id); });
+    } else if (a === "gesendet") {
+      api("/api/status", { id: id, status: "kontaktiert" }).then(function () { toast("Als gesendet gespeichert ✓"); fahrzeug(id); }, function (err) { teamFehler(err, id); });
+    } else if (a === "uebernehmen" || a === "erzwingen" || a === "abgeben") {
+      if (a === "erzwingen" && !confirm("Übernahme erzwingen? Der Kollege verliert das Fahrzeug.")) return;
+      api("/api/bearbeitung/" + encodeURIComponent(id) + "/" + (a === "abgeben" ? "abgeben" : "uebernehmen"), a === "erzwingen" ? { erzwingen: true } : {})
+        .then(function () { toast(a === "abgeben" ? "Abgegeben – wieder frei" : "Übernommen ✓"); fahrzeug(id); }, function (err) { teamFehler(err, id); });
+    } else if (a === "wer") {
+      S.wer = t.getAttribute("data-wer");
+      var teil = location.hash.replace(/^#\/?/, "").split("/");
+      liste(teil[0] === "liste" ? (teil[1] || "bereit") : "bereit", (document.getElementById("suche") || {}).value);
     } else if (t.hasAttribute("data-status")) {
-      api("/api/status", { id: id, status: t.getAttribute("data-status") }).then(function () { toast("Status gespeichert"); fahrzeug(id); });
+      api("/api/status", { id: id, status: t.getAttribute("data-status") }).then(function () { toast("Status gespeichert"); fahrzeug(id); },
+                                                                           function (err) { teamFehler(err, id); });
     } else if (a === "planen") {
       var termin = document.getElementById("b-termin").value;
       api("/api/besichtigung", { anzeige_id: id, termin: termin || null, adresse: document.getElementById("b-adresse").value,

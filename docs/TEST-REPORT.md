@@ -4,6 +4,16 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## T2 + P1-06 – Team-Oberfläche, „gesendet ✓“ (15.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux) | 725 bestanden, davon 8 neu (`test_team_oberflaeche.py`) |
+| `node --check` der ausgelieferten Seite (mit Team, ohne Nutzer, statisch) und `mobil.js`/`sw.js` | ohne Fehler |
+| Browser-Klicktest Desktop (Chromium, 3 Nutzer) | Übernehmen, Sperre, Filter, gesendet ✓, Badges, Zähler – bestanden, 0 JS-Fehler |
+| Browser-Klicktest Handy (390×844) | Übernehmen, Sperre mit Grund, Filter „Frei“, gesendet ✓ – bestanden, 0 JS-Fehler |
+| Safari/iOS, Windows-CI | nicht geprüft |
+
 ## P1-04b – `anzeigen` ↔ v4 (15.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

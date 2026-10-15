@@ -8,11 +8,14 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 from .bewertung.anschreiben import euro, tsd
+from .bearbeitung import IN_ARBEIT
 from .datenbank import STATUS
 
 
-def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None = None, app: dict | None = None) -> str:
-    """app = {"token": …} im Browser-Modus (python scout.py app), sonst statische Datei."""
+def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None = None, app: dict | None = None,
+                team: dict | None = None) -> tuple[str, dict]:
+    """app = {"token": …} im Browser-Modus (python scout.py app), sonst statische Datei.
+    team = Antwort von ``/api/team`` (nur mit angelegten Nutzern, sonst None): dann zeigt die Seite Bearbeiter-Badges, Zähler und Filter."""
     env = Environment(loader=FileSystemLoader(str(basis / "vorlagen")), autoescape=True)
     env.filters["euro"] = euro
     env.filters["tsd"] = tsd
@@ -24,12 +27,12 @@ def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None =
         "neu": sum(z["neu"] for z in zeilen),
         "anschreiben": sum(z["bereit"] for z in zeilen),
         "kontaktiert": sum(z["a"].get("status") == "kontaktiert" for z in zeilen),
-        "arbeit": sum(z["a"].get("status") in ("kontaktiert", "verhandlung", "besichtigung") for z in zeilen),
+        "arbeit": sum(z["a"].get("status") in IN_ARBEIT for z in zeilen),
         "nachfassen": sum(bool(z["nachfassen"]) for z in zeilen),
     }
     return env.get_template("report.html").render(
         stand=datetime.now().strftime("%d.%m.%Y %H:%M"), anzahl=len(zeilen), zeilen=zeilen, zaehl=zaehl,
-        fehler=fehler, app=app or {},
+        fehler=fehler, app=app or {}, team=team if team and team.get("aktiv") else None,
         ust_label="USt auf Marge (§25a, 19/119)" if cfg["rechner"]["differenzbesteuerung"] else "USt 19 % im Händler-VK",
         fair_untergrenze=cfg["rechner"].get("fair_untergrenze_privatwert", 0), status_liste=list(STATUS.items()),
         differenzbesteuerung=bool(cfg["rechner"]["differenzbesteuerung"]),

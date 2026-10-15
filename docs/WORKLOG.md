@@ -6,7 +6,26 @@ Wert „–“.
 
 ---
 
-## Phase 1 – P1-04b `anzeigen` ↔ v4 gleich halten (15.10.2026) · Status: REVIEW
+## Phase 2 – T2 Team-Oberfläche + P1-06 „gesendet ✓“ (15.10.2026) · Status: REVIEW
+
+- **Anlass:** Betreiber „ja, mach T2“. Grundlage: nicht committeter Entwurf des am Wochenlimit abgebrochenen T2-Agenten
+  (Status `vorbereitet`, Desktop-HTML/CSS, Server-Anpassungen; `.bat`-Änderungen waren nur Zeilenenden und wurden verworfen).
+  Fertiggestellt vom Orchestrator ohne Subagenten.
+- **Ergänzt:** Desktop-JavaScript für Badges, Zähler, Filter „Wer“, Übernehmen/Abgeben/Zuweisen/Erzwingen, Team-Stand
+  jede Minute; Team-Code nur bei aktivem Team im HTML (statischer Bericht bleibt ohne Team-Begriffe); Handy-App: Badges,
+  Filter „Wer“, Team-Knöpfe, „gesendet ✓“, Anschreiben setzt nur noch `vorbereitet` und öffnet die Anzeige erst nach 200
+  (vorher setzte die Handy-App sofort „kontaktiert“); `sw.js`-Version erhöht; Filter „Anschreiben bereit“ (Desktop und
+  `/api/fahrzeuge`) behält „Text kopiert“.
+- **Fehler unterwegs:** Browser-Klicktest fand, dass „Text kopiert“-Karten aus dem Standardfilter verschwanden („gesendet ✓“
+  unerreichbar) – behoben. Ein bestehender Test (`test_fehler_mitten_in_der_transaktion…`) setzte das alte Verhalten voraus
+  (Nachfassen = Kontakt); angepasst, prüft den Rollback weiterhin echt.
+- **Tests:** `pytest -q` 725 bestanden, `ruff` grün; neu `tests/test_team_oberflaeche.py` (8, inkl. `node --check` der
+  ausgelieferten Skripte). Browser-Klicktests (Chromium, Playwright; Desktop und Handy 390×844) mit drei Nutzern:
+  Übernehmen, Sperre für Kollegen, Filter „Frei“, Anschreiben → „gesendet ✓“ → kontaktiert, Badges beim Kollegen,
+  keine JavaScript-Fehler. Die Klickskripte liegen nicht im Repository (nicht Teil der CI).
+- **Nicht geprüft:** Safari/iOS (Zwischenablage nach Serverantwort), Windows-CI (folgt im PR).
+
+ `anzeigen` ↔ v4 gleich halten (15.10.2026) · Status: REVIEW
 
 - **Anlass:** 3.0-Analyse, P0 „Datenmodell vereinheitlichen“; Betreiber: „mach weiter“. Ohne Subagenten umgesetzt.
 - **Geänderte Dateien:** `wmscout/datenbank.py` (`spiegle_inserat`, `verknuepfe_inserat`, `gleiche_v4_ab`,
