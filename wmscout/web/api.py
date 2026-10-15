@@ -25,6 +25,8 @@ from urllib.parse import parse_qs, quote, urlparse
 from jinja2 import Environment, FileSystemLoader
 
 from ..ausgabe import render_html
+from .. import verkauf as vk
+from ..verkauf import Eingabefehler, VerkaufSpeicher
 from ..bearbeitung import (IN_ARBEIT, OFFEN, VORBEREITET, BearbeitungsKonflikt, TeamSicht, ablauf_grenze, darf_erzwingen, darf_status,
                            darf_zuweisen, reservierung_tage)
 from ..benachrichtigung import WhatsAppCloud, whatsapp_link
@@ -71,6 +73,7 @@ class Kontext:
     def __init__(self, cfg: dict, db: Datenbank, basis: Path, token: str, suchlauf, foto_ordner: Path):
         self.cfg, self.db, self.basis, self.token, self.suchlauf = cfg, db, basis, token, suchlauf
         self.team = TeamSpeicher(db, foto_ordner)
+        self.verkauf = VerkaufSpeicher(db, foto_ordner / "anfragen")     # im Fotoordner: mit gesichert
         self.reservierung_tage = reservierung_tage(cfg)     # ValueError mit verständlicher Meldung bei falscher Konfiguration
         self.katalog_pfad = basis / "maengel.yaml"
         self.sperre = threading.Lock()          # Datenbankzugriffe nacheinander, Netzwerk parallel
@@ -392,7 +395,56 @@ class Anfrage:
             return self.senden(200, pfad.read_bytes(), mimetypes.guess_type(pfad.name)[0] or "image/jpeg")
         if m := re.fullmatch(r"/protokoll/(\d+)", p):
             return self.html(self.protokoll(self.besichtigung(m.group(1))))
+        if p in ("/verkaufen", "/anfragen"):
+            return self.html(k.env.get_template(p[1:] + ".html").render(
+                firma=k.cfg["anschreiben"]["firma"], token=k.token, arten=vk.ARTEN, maengel=vk.MAENGEL, kanaele=vk.KANAELE,
+                status=vk.STATUS, ich=self.nutzer, team=self.team_aktiv))
+        if p == "/api/verkaufsanfragen":
+            return self.json(200, self.verkaufsanfragen())
+        if m := re.fullmatch(r"/api/verkaufsanfrage/(\d+)", p):
+            return self.json(200, self.verkaufsanfrage(int(m.group(1))))
+        if m := re.fullmatch(r"/anfrage-fotos/(\d+)/([\w.-]+)", p):
+            pfad = k.verkauf.foto_pfad(int(m.group(1)), m.group(2))
+            if not pfad:
+                raise Antwort(404, "Foto nicht gefunden")
+            return self.senden(200, pfad.read_bytes(), mimetypes.guess_type(pfad.name)[0] or "image/jpeg")
         raise Antwort(404, "nicht gefunden")
+
+    # ----- Verkäuferportal (Phase B)
+    def _bewertung_kurz(self, b) -> dict:
+        keine = b.sicherheit == "keine"
+        return {"ampel": b.ampel, "sicherheit": b.sicherheit, "marktwert": None if keine else b.marktwert_angebote,
+                "max_ek": None if keine else b.max_ek, "erstangebot": None if keine else b.erstangebot,
+                "spanne_von": b.spanne_von, "spanne_bis": b.spanne_bis, "art": b.art}
+
+    def _nutzer_namen(self) -> dict:
+        return {n["id"]: n["name"] for n in self.k.team.nutzer_mit_kuerzel(False)} if self.team_aktiv else {}
+
+    def verkaufsanfragen(self) -> list[dict]:
+        k = self.k
+        status = (self.query.get("status") or [None])[0] or None
+        try:
+            liste = k.verkauf.liste(status)
+        except ValueError as e:
+            raise Antwort(400, str(e)) from e
+        vergleich, rechner, namen = vk.vergleich_aus(k.db), vk.Rechner(k.cfg), self._nutzer_namen()
+        return [{**{x: a[x] for x in ("id", "referenz", "kanal", "art", "marke", "modell", "ez_jahr", "km", "preisvorstellung",
+                                         "status", "erstellt_am", "name", "plz", "ort", "fotos_anzahl", "bearbeiter_id")},
+                 "bearbeiter": namen.get(a["bearbeiter_id"]), "bewertung": self._bewertung_kurz(vk.bewerte(k.cfg, a, vergleich, rechner))}
+                for a in liste]
+
+    def verkaufsanfrage(self, anfrage_id: int) -> dict:
+        k = self.k
+        a = k.verkauf.lade(anfrage_id)
+        if not a:
+            raise Antwort(404, "Anfrage nicht gefunden")
+        b = vk.bewerte(k.cfg, a, vk.vergleich_aus(k.db))
+        namen = self._nutzer_namen()
+        a["maengel"] = [{"key": m, "text": vk.MAENGEL.get(m, m)} for m in json.loads(a["maengel"] or "[]")]
+        a["bearbeiter"] = namen.get(a["bearbeiter_id"])
+        for v in a["verlauf"]:
+            v["nutzer"] = namen.get(v["nutzer_id"])
+        return {**a, "bewertung": {**b.dict(), **self._bewertung_kurz(b)}, "spanne_verkaeufer": vk.spanne_fuer_verkaeufer(b, k.cfg)}
 
     def ich_mit_kuerzel(self) -> dict:
         if not self.team_aktiv:
@@ -551,6 +603,10 @@ class Anfrage:
             return self.json(200, self.seiten_einlesen())
         if p == "/api/besichtigung":
             return self.json(200, self.besichtigung_anlegen(daten))
+        if p == "/api/verkaufsanfrage":
+            return self.json(200, self.verkaufsanfrage_anlegen(daten))
+        if m := re.fullmatch(r"/api/verkaufsanfrage/(\d+)/(status|notiz|uebernehmen|foto)", p):
+            return self.json(200, self.verkaufsanfrage_aendern(int(m.group(1)), m.group(2), daten))
         if m := re.fullmatch(r"/api/besichtigung/(\d+)/(planen|speichern|foto|abschluss)", p):
             b = self.besichtigung(m.group(1), schreiben=True)
             return self.json(200, getattr(self, f"b_{m.group(2)}")(b, daten))
@@ -610,6 +666,39 @@ class Anfrage:
             raise self.konflikt(anzeige_id, dubletten, ziel_id=n["id"], gruppe=True) from None
         log.info("Zuweisung: Anzeige %s an %s durch %s", anzeige_id, n["name"], self.nutzer["name"])
         return self._team_antwort(anzeige_id, status)
+
+    def verkaufsanfrage_anlegen(self, daten: dict) -> dict:
+        """Anfrage anlegen (Formular in der App; Telefon/vor Ort durch Mitarbeiter). Antwort mit Referenz und – nur bei sicherer
+        Datenlage – grober Spanne für den Verkäufer; nie Max-EK oder Angebot."""
+        k = self.k
+        try:
+            a = vk.pruefe_anfrage(daten)
+        except Eingabefehler as e:
+            raise Antwort(400, "Bitte prüfen: " + "; ".join(e.fehler), {"felder": e.fehler}) from e
+        version = str((k.cfg.get("verkaeuferportal") or {}).get("einwilligung_version") or "unbekannt")
+        neu = k.verkauf.anlegen(a, self.nutzer["id"], version)
+        b = vk.bewerte(k.cfg, {**a, "id": neu["id"]}, vk.vergleich_aus(k.db))
+        log.info("Verkaufsanfrage %s angelegt (%s) durch %s", neu["referenz"], a["kanal"], self.nutzer["name"])
+        return {**neu, "spanne": vk.spanne_fuer_verkaeufer(b, k.cfg)}
+
+    def verkaufsanfrage_aendern(self, anfrage_id: int, art: str, daten: dict) -> dict:
+        k, nid = self.k, self.nutzer["id"]
+        try:
+            if art == "status":
+                ok = k.verkauf.setze_status(anfrage_id, str(daten.get("status")), nid)
+            elif art == "notiz":
+                ok = k.verkauf.setze_notiz(anfrage_id, str(daten.get("notiz") or ""), nid)
+            elif art == "uebernehmen":
+                ok = k.verkauf.setze_bearbeiter(anfrage_id, None if daten.get("abgeben") is True else nid, nid)
+            else:
+                return k.verkauf.foto_speichern(anfrage_id, _bild_bytes(str(daten.get("bild") or "")), nid)
+        except LookupError as e:
+            raise Antwort(404, str(e)) from e
+        except ValueError as e:
+            raise Antwort(400, str(e)) from e
+        if not ok:
+            raise Antwort(404, "Anfrage nicht gefunden")
+        return {"ok": True}
 
     def seiten_einlesen(self) -> dict:
         """Gespeicherte Seiten aus dem konfigurierten Import-Ordner – nie ein Pfad aus der Anfrage, kein Netzabruf."""

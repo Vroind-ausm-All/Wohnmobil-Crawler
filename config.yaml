@@ -248,3 +248,10 @@ email:
   passwort_env: SCOUT_SMTP_PASSWORT     # Passwort als Umgebungsvariable, nicht hier
   empfaenger: "dein.name@example.de"
   nur_bei_neuen_treffern: true
+
+# Verkäuferportal (Phase B): Verkäufer bieten ihr Fahrzeug selbst an (/verkaufen), das Team bearbeitet es unter /anfragen.
+# Version 1 läuft nur in der App (lokal/Tailscale) – öffentlich erst nach eigener Sicherheitsprüfung (ADR-025).
+verkaeuferportal:
+  spanne_zeigen: true                # grobe Marktwert-Spanne nach dem Absenden (nie Max-EK oder Angebot)
+  spanne_mindest_sicherheit: mittel  # nur bei Datenlage „mittel“ oder „hoch“
+  einwilligung_version: "2026-10-entwurf"   # Stand des Einwilligungstexts; bei jeder Textänderung erhöhen

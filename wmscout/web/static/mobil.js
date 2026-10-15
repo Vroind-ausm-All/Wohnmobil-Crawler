@@ -130,6 +130,7 @@
         '<a class="kachel" href="#/liste/bereit"><b>' + d.bereit + "</b><span>Anschreiben bereit</span></a>" +
         '<a class="kachel" href="#/liste/nachfassen"><b>' + d.nachfassen + "</b><span>Nachfassen</span></a>" +
         '<a class="kachel" href="#/liste/arbeit"><b>' + d.arbeit + "</b><span>In Arbeit</span></a></div>" +
+        '<p><a class="knopf klein" href="/anfragen">Verkaufsanfragen</a> <a class="knopf klein" href="/verkaufen">+ Anfrage erfassen</a></p>' +
         "<h2>Besichtigungen heute</h2>" + (heutige.length ? heutige.map(terminKarte).join("") : '<p class="leise">Keine Termine für heute.</p>') +
         (d.termine.length > heutige.length ? '<p><a href="#/termine">Alle ' + d.termine.length + " offenen Besichtigungen →</a></p>" : "") +
         "<h2>Suche</h2>" + '<p class="leise">' + esc(d.suchlauf.laeuft ? "Läuft: " + (d.suchlauf.meldung || "") : (d.suchlauf.meldung || "Bereit")) +

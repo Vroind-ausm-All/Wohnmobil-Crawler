@@ -6,7 +6,23 @@ Wert „–“.
 
 ---
 
-## Phase 2 – T2 Team-Oberfläche + P1-06 „gesendet ✓“ (15.10.2026) · Status: REVIEW
+## Phase B – Verkäuferportal v1, intern (15.10.2026) · Status: REVIEW
+
+- **Anlass:** Betreiber: „mache Phase B das Verkäuferportal“; Entscheidungen per Rückfrage: erst intern, grobe Spanne,
+  Preisvorstellung freiwillig (ADR-025). Umgesetzt vom Orchestrator ohne Subagenten.
+- **Geändert/neu:** `wmscout/migrationen.py` (Schema v5), `wmscout/verkauf.py` (neu: Prüfung, Rechner-Sicht, Spanne,
+  Speicher), `wmscout/team.py` (`bild_endung` gemeinsam), `wmscout/web/api.py` (Seiten `/verkaufen`, `/anfragen`,
+  JSON-API, Fotos), `vorlagen/verkaufen.html`, `vorlagen/anfragen.html` (neu), Links in Desktop- und Handy-App,
+  `config.yaml` (`verkaeuferportal`), Tests `tests/test_verkauf.py` (neu, 28); Versionstests auf v5 angepasst
+  (`test_migration.py`, `test_ereignisse.py`; Paralleltest prüft jetzt allgemein „jeder Schritt genau einmal“).
+- **Tests:** `pytest -q` 753 bestanden, `ruff` grün; Gegenprobe an 4 Schutzstellen (Spannen-Sicherheit, Fotopfad,
+  Einwilligung nur als echtes `true`, kein Max-EK in der Antwort) – die Fotopfad-Probe fiel zuerst durch, Test ergänzt,
+  danach alle 4 erkannt. Browser-Klicktest (Chromium, 400×860): Pflichtfeld-Meldungen, Assistent mit 2 Fotos, Referenz,
+  Spanne, Team-Ansicht mit Fotos/Übernehmen/Status/Verlauf, 0 JS-Fehler (Skript nicht im Repository).
+- **Nicht geprüft:** öffentlicher Betrieb (bewusst nicht gebaut), Safari/iOS, Windows-CI (folgt im PR).
+- **Offen (Betreiber):** Einwilligungstext und Datenschutzhinweis rechtlich prüfen; Widerruf/Löschung; Freigabe B4.
+
+ + P1-06 „gesendet ✓“ (15.10.2026) · Status: REVIEW
 
 - **Anlass:** Betreiber „ja, mach T2“. Grundlage: nicht committeter Entwurf des am Wochenlimit abgebrochenen T2-Agenten
   (Status `vorbereitet`, Desktop-HTML/CSS, Server-Anpassungen; `.bat`-Änderungen waren nur Zeilenenden und wurden verworfen).

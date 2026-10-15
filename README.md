@@ -162,6 +162,12 @@ Du bekommst dann nur eine Mail, wenn neue Treffer mit Anschreiben dabei sind.
 4. In der Anzeige den Kontakt öffnen – bei Kleinanzeigen **„Nachricht schreiben“**, bei mobile.de das **„E-Mail“/„Nachricht“-Formular** des Anbieters → `Strg`+`V` → Senden.
 5. **gesendet ✓** klicken – erst jetzt gilt der Verkäufer als „kontaktiert“ (ADR-012).
 
+**Verkaufsanfragen (Phase B, erst intern):** Unter **`/verkaufen`** erfasst ihr ein Fahrzeug, das ein Verkäufer euch selbst
+anbietet (Telefon, vor Ort oder Formular am Tablet): Fahrzeug, Mängel, bis zu 12 Fotos, freiwillige Preisvorstellung,
+Kontakt und Einwilligung. Danach erscheinen Referenz und – nur bei sicherer Datenlage – eine grobe Spanne für den
+Verkäufer (nie Max-EK oder Angebot). Unter **`/anfragen`** stehen alle Anfragen mit Bewertung, Fotos, Status, Bearbeiter
+und Verlauf. Es geht keine automatische Nachricht an Verkäufer. Öffentlich erreichbar ist das Portal noch nicht (ADR-025).
+
 **Team (nur mit angelegten Nutzern):** An jedem Fahrzeug zeigt ein Abzeichen mit Symbol und Kürzel, wer es bearbeitet
 (◔ reserviert, ✉ kontaktiert, ⧉ Dublette, ? ohne Zuordnung, ! verwaist; eigene gefüllt, fremde umrandet). „Ich übernehme“ /
 „Abgeben“ auf Karte und im Fenster; der Inhaber kann zusätzlich zuweisen und eine Übernahme erzwingen. Oben stehen die

@@ -4,6 +4,16 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## Phase B – Verkäuferportal v1 (15.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux) | 753 bestanden, davon 28 neu (`test_verkauf.py`) |
+| Migration v1/v2/v4 → v5, parallel 3 Prozesse | bestanden (Versionstests angepasst) |
+| Gegenprobe 4 Schutzstellen | alle erkannt (Fotopfad erst nach Testergänzung) |
+| Browser-Klicktest `/verkaufen` + `/anfragen` | bestanden, 0 JS-Fehler |
+| Windows-CI, Safari/iOS | nicht geprüft |
+
 ## T2 + P1-06 – Team-Oberfläche, „gesendet ✓“ (15.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

@@ -282,3 +282,24 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Folgen:** App und Ereigniseingang sehen dieselben Fahrzeuge; Preisverlauf entsteht ab jetzt auch aus der Suche.
   Offen: Verfügbarkeit („offline“) in der App anzeigen (UI); Anzeigen-ID-Kollision über Plattformen hinweg löst erst
   ein plattformbezogener Schlüssel in `anzeigen` (v5).
+
+## ADR-025 – Verkäuferportal v1: intern, eigene Tabellen, grobe Spanne nur bei sicherer Datenlage · vorgeschlagen (15.10.2026)
+
+* **Kontext:** 3.0-Analyse Phase B. Verkäufer sollen ihr Fahrzeug selbst anbieten (eigener, autorisierter Zulauf statt
+  Beobachtung fremder Börsen). Betreiberentscheidungen 15.10.2026: Version 1 **erst intern** (App lokal/Tailscale,
+  Telefon- und Vor-Ort-Anfragen erfasst das Team); dem Verkäufer eine **grobe Spanne**; Preisvorstellung **freiwillig**.
+* **Entscheidung:**
+  1. Eigene Tabellen in Schema **v5** (`verkaeufer`, `verkaufsanfragen`, `anfrage_fotos`, `anfrage_verlauf`) – getrennt von
+     `anzeigen`/`inserate` (Architekturregel 1: Beobachtung ≠ freigegebenes Angebot). Geldbeträge ganze Euro, Status per
+     CHECK, jede Änderung im Verlauf (wer, wann, alt → neu). Verkäufer und Anfrage in einer Transaktion.
+  2. Bewertung mit dem unveränderten Rechner über `verkauf.als_fahrzeug` (Art vom Verkäufer, Mängel als Text) –
+     keine portal-spezifische Logik in der Ankaufsberechnung.
+  3. Dem Verkäufer höchstens eine auf 1.000 € nach außen gerundete Spanne des Angebotsniveaus, nur bei Sicherheit
+     ≥ `verkaeuferportal.spanne_mindest_sicherheit` (Standard „mittel“), mit Hinweis „kein Kaufangebot“; nie Max-EK
+     oder Erstangebot. Abschaltbar (`spanne_zeigen`).
+  4. Alle Seiten hinter der bestehenden Anmeldung; keine automatische Nachricht an Verkäufer (Regel 10); Fotos im
+     Browser verkleinert (keine EXIF/GPS-Originale), nur JPEG/PNG/WebP, höchstens 12, im Fotoordner (mitgesichert).
+  5. Einwilligung Pflicht, mit Zeitpunkt und Textversion (`einwilligung_version`) gespeichert.
+* **Folgen / offen:** Fahrzeugidentität rückt auf v6. Vor einem **öffentlichen** Betrieb: eigene Sicherheits- und
+  Betriebsarchitektur (Hosting, HTTPS, Spam-/Missbrauchsschutz, Status-Link mit Geheimnis), Datenschutzerklärung und
+  Einwilligungstext rechtlich prüfen, Löschung/Widerruf (Anonymisieren) umsetzen.
