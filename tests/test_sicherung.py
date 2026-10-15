@@ -194,8 +194,9 @@ def hash_datei(pfad) -> str:
 
 
 def dateien(ordner) -> set[str]:
-    # -wal/-shm sind Arbeitsdateien von SQLite im WAL-Modus (entstehen beim Öffnen, verschwinden mit der letzten Verbindung)
-    return ({p.relative_to(ordner).as_posix() for p in ordner.rglob("*") if not p.name.endswith(("-wal", "-shm"))}
+    # -wal/-shm sind Arbeitsdateien von SQLite im WAL-Modus (entstehen beim Öffnen, verschwinden mit der letzten Verbindung);
+    # .laufsperre ist die bleibende, leere Sperrdatei der Laufsperre (P1-04)
+    return ({p.relative_to(ordner).as_posix() for p in ordner.rglob("*") if not p.name.endswith(("-wal", "-shm", ".laufsperre"))}
             if ordner.exists() else set())
 
 

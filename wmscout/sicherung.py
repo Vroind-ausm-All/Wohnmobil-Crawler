@@ -25,6 +25,8 @@ from datetime import datetime
 from pathlib import Path, PurePath, PureWindowsPath
 from urllib.parse import quote_from_bytes
 
+from .laufsperre import Laufsperre
+
 STANDARD_BEHALTEN = 10
 TEIL_MAX_ALTER = 3600            # Sekunden: liegen gebliebene .teil-Dateien älter als das werden beim Sichern aufgeräumt
 _ZUSATZ = re.compile(r"[^A-Za-z0-9-]+")
@@ -333,10 +335,25 @@ def _entpacke_sicher(zip_pfad: Path, ziel: Path):
                                "Es wurde nichts verändert.") from e
 
 
-def wiederherstellen(sicherung: str | Path, db_pfad: str | Path, bestaetigt: bool = False,
-                     ziel_ordner: str | Path | None = None, foto_ordner: str | Path | None = None,
-                     behalten: int = STANDARD_BEHALTEN, pruefung: Callable[[Path], None] | None = None,
-                     sperr_timeout: float = 2.0, mit_fotos: bool = True) -> Wiederherstellung:
+def wiederherstellen(sicherung: str | Path, db_pfad: str | Path, bestaetigt: bool = False, *args, **optionen) -> Wiederherstellung:
+    """Wie ``_wiederherstellen``, zusätzlich unter der Laufsperre (P1-04): Läuft ein Suchlauf, bricht sie ohne Änderung ab;
+    während der Wiederherstellung startet kein Suchlauf."""
+    if bestaetigt and Path(sicherung).is_file():           # sonst meldet ``_wiederherstellen`` den Grund, ohne Sperrdatei
+        sperre = Laufsperre(db_pfad)
+        if not sperre.erwerben():
+            raise SicherungsFehler("Ein Suchlauf läuft gerade (App-Suche oder geplante Aufgabe). Abwarten bzw. beenden und "
+                                   "erneut versuchen. Es wurde nichts verändert.")
+        try:
+            return _wiederherstellen(sicherung, db_pfad, bestaetigt, *args, **optionen)
+        finally:
+            sperre.freigeben()
+    return _wiederherstellen(sicherung, db_pfad, bestaetigt, *args, **optionen)
+
+
+def _wiederherstellen(sicherung: str | Path, db_pfad: str | Path, bestaetigt: bool = False,
+                      ziel_ordner: str | Path | None = None, foto_ordner: str | Path | None = None,
+                      behalten: int = STANDARD_BEHALTEN, pruefung: Callable[[Path], None] | None = None,
+                      sperr_timeout: float = 2.0, mit_fotos: bool = True) -> Wiederherstellung:
     """Spielt eine Sicherung zurück. Nur mit ``bestaetigt=True`` (App und Suchlauf müssen beendet sein; die Sperrprüfung
     erkennt nur aktive Schreibvorgänge, keine ruhende App).
 

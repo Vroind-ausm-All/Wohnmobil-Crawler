@@ -47,6 +47,7 @@ from wmscout.bewertung.anschreiben import Anschreiber, euro
 from wmscout.bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids, vergleichsbasis
 from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import STATUS, Datenbank, wal_aktiv
+from wmscout.laufsperre import Laufsperre
 from wmscout.eingang import import_ordner
 from wmscout.importer import Importer
 from wmscout.migrationen import MigrationsFehler
@@ -77,6 +78,17 @@ def _team(cfg, db):
 
 
 def cmd_lauf(cfg, db, args):
+    sperre = Laufsperre(BASIS / cfg["ausgabe"]["datenbank"])
+    if not sperre.erwerben():
+        logging.warning("Suchlauf übersprungen: Es läuft bereits ein Suchlauf (App oder geplante Aufgabe).")
+        return
+    try:
+        _lauf(cfg, db)
+    finally:
+        sperre.freigeben()
+
+
+def _lauf(cfg, db):
     start = datetime.now().isoformat(timespec="seconds")
     stat = Importer(cfg, db).lauf(cfg["suchen"])
     logging.info("Crawl fertig: %d neu, %d Preissenkungen, %d bekannt, %d Detailseiten",

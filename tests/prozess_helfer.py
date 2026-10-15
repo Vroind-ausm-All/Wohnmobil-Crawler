@@ -38,3 +38,19 @@ def schreiber(pfad: str, nr: int, anzahl: int, barriere, ergebnisse):
         ergebnisse.put((nr, f"FEHLER {type(e).__name__}: {e}"))
     finally:
         db.con.close()
+
+
+def halte_laufsperre(db_pfad: str, bereit, ende):
+    """Hält die Laufsperre wie ein laufender „scout.py lauf“, bis ``ende`` gesetzt wird. ``ende=None``: bis der Test den
+    Prozess beendet (Absturz) – ein Event, auf das ein getöteter Prozess wartet, bliebe für immer gesperrt."""
+    import time
+
+    from wmscout.laufsperre import Laufsperre
+    sperre = Laufsperre(db_pfad)
+    if sperre.erwerben():
+        bereit.set()
+    if ende is None:
+        time.sleep(120)
+    else:
+        ende.wait(120)
+    sperre.freigeben()

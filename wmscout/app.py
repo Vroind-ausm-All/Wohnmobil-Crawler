@@ -21,6 +21,7 @@ from .benachrichtigung import sende_mail
 from .bearbeitung import reservierung_tage
 from .bewertung.auswertung import bewerte_alle
 from .datenbank import Datenbank, wal_aktiv
+from .laufsperre import Laufsperre
 from .importer import Importer
 from .sicherung import sicherung_ordner
 from .team import lade_team_sicht
@@ -55,13 +56,22 @@ class Suchlauf:
     def starte(self) -> bool:
         if self.thread and self.thread.is_alive():
             return False
+        sperre = Laufsperre(self.db_pfad)          # auch gegen „scout.py lauf“ aus der Aufgabenplanung (anderer Prozess)
+        if not sperre.erwerben():
+            self.stand.update(meldung="Es läuft bereits ein Suchlauf (z. B. geplante Aufgabe) – diesmal nicht gestartet.")
+            return False
         self.letzter_start = datetime.now().isoformat(timespec="seconds")
         self.stand.update(laeuft=True, meldung="Suche startet …", fehler=None, ende=None)
-        self.thread = threading.Thread(target=self._lauf, daemon=True)
-        self.thread.start()
+        self.thread = threading.Thread(target=self._lauf, args=(sperre,), daemon=True)
+        try:
+            self.thread.start()
+        except BaseException:
+            sperre.freigeben()
+            self.stand.update(laeuft=False)
+            raise
         return True
 
-    def _lauf(self):
+    def _lauf(self, sperre: Laufsperre | None = None):
         try:
             db = self.oeffne_datenbank()
             stat = Importer(self.cfg, db).lauf(self.cfg["suchen"])
@@ -82,6 +92,8 @@ class Suchlauf:
             log.exception("Suchlauf fehlgeschlagen")
             self.stand.update(fehler=str(e), meldung="Suchlauf fehlgeschlagen")
         finally:
+            if sperre is not None:
+                sperre.freigeben()
             self.stand.update(laeuft=False, ende=datetime.now().isoformat(timespec="seconds"))
 
 
@@ -115,9 +127,8 @@ class AutoSuche:
             jetzt = datetime.now()
             faellig = self.naechste(letzter, jetzt)
             self.suchlauf.stand["naechste_auto"] = faellig.isoformat(timespec="minutes")
-            if faellig <= jetzt and not self.suchlauf.stand["laeuft"]:
+            if faellig <= jetzt and not self.suchlauf.stand["laeuft"] and self.suchlauf.starte():
                 log.info("Automatische Suche startet")
-                self.suchlauf.starte()
             time.sleep(60)
 
 

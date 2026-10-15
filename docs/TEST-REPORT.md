@@ -4,13 +4,14 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
-## P1-04a – WAL und Sperr-Wartezeit (14.10.2026) · REVIEW
+## P1-04a/P1-04 – WAL, Sperr-Wartezeit, Laufsperre (14.–15.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |
 |---|---|
 | `pytest -q` (Linux, Python 3.13) | 684 bestehende + 12 neue (`test_parallelzugriff.py`) bestanden |
 | `ruff check .` | grün |
 | Gegenprobe ohne WAL / ohne DELETE-Sicherung / ohne Checkpoint-Prüfung | 5 / 1 / 1 Tests schlagen an |
+| Laufsperre (`tests/test_laufsperre.py`, 8 Tests, Linux) | bestanden; Gegenprobe: App, `scout.py lauf`, Wiederherstellung, Freigabe nach Fehler – je 1 Test schlägt an |
 | Windows-CI, 1. Lauf | 1 Fehlschlag: `test_m2_reste_…` schrieb eine erfundene `-shm` neben die jetzt WAL-Datenbank (unter Windows gesperrt, Errno 22); Test stellt den Fall nun ausdrücklich im Modus DELETE nach |
 
 ## T1 – Team-Übersicht Kern und API (14.10.2026) · REVIEW

@@ -19,8 +19,12 @@ Wert „–“.
 - **Windows-CI (PR #9, 1. Lauf):** 695 von 696 grün; `test_m2_reste_der_alten_datenbank_…` schrieb eine erfundene `-shm`
   neben die WAL-Datenbank, die Windows sperrt. Korrigiert: der Test stellt den Altfall ausdrücklich im Modus DELETE nach.
 - **Nicht geprüft:** Datenbank auf Netzlaufwerk; Laufsperre (P1-04, offen).
-- **Offen:** P1-04 Laufsperre; Verbindung `anzeigen` ↔ v4-Tabellen (eigener PR); Phasen A–G der 3.0-Analyse
-  brauchen je eigene Freigabe.
+- **Nachtrag P1-04 Laufsperre (15.10.2026, gleicher PR):** `wmscout/laufsperre.py` (Dateisperre des Betriebssystems),
+  eingebunden in `Suchlauf.starte` (App/Auto-Suche), `scout.py lauf` und `sicherung.wiederherstellen`. Tests
+  `tests/test_laufsperre.py` (8, u. a. echter zweiter Prozess, Kill gibt frei, echter Aufruf `scout.py lauf`).
+  Gegenprobe: jede der vier Einbindungen einmal entfernt – jeweils 1 Test schlägt an. Erster Testentwurf hing (getöteter
+  Hilfsprozess blockierte ein Event); korrigiert, der Kill-Test nutzt kein Event mehr.
+- **Offen:** Verbindung `anzeigen` ↔ v4-Tabellen (eigener PR); Phasen A–G der 3.0-Analyse brauchen je eigene Freigabe.
 
 ## Phase 2 – Team-Übersicht (14.10.2026)
 
