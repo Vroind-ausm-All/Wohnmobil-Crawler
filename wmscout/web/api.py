@@ -25,7 +25,7 @@ from urllib.parse import parse_qs, quote, urlparse
 from jinja2 import Environment, FileSystemLoader
 
 from ..ausgabe import render_html
-from ..bearbeitung import (IN_ARBEIT, OFFEN, BearbeitungsKonflikt, TeamSicht, ablauf_grenze, darf_erzwingen, darf_status,
+from ..bearbeitung import (IN_ARBEIT, OFFEN, VORBEREITET, BearbeitungsKonflikt, TeamSicht, ablauf_grenze, darf_erzwingen, darf_status,
                            darf_zuweisen, reservierung_tage)
 from ..benachrichtigung import WhatsAppCloud, whatsapp_link
 from ..bewertung.anschreiben import euro, tsd
@@ -351,7 +351,8 @@ class Anfrage:
             return self.html(k.env.get_template("login.html").render(firma=k.cfg["anschreiben"]["firma"]))
         if p == "/":
             zeilen = k.zeilen()
-            html, _ = render_html(k.cfg, zeilen, k.basis, fehler=k.suchlauf.stand["fehler"], app={"token": k.token})
+            team = self.team_uebersicht() if self.team_aktiv else None
+            html, _ = render_html(k.cfg, zeilen, k.basis, fehler=k.suchlauf.stand["fehler"], app={"token": k.token}, team=team)
             return self.html(html)
         if p == "/m":
             return self.html(k.env.get_template("mobil.html").render(firma=k.cfg["anschreiben"]["firma"]))
@@ -413,7 +414,8 @@ class Anfrage:
         sichtbar = [z for z in zaehler["nutzer"] if self.nutzer["rolle"] == "inhaber" or z["nutzer_id"] == self.nutzer["id"]]
         nutzer = [{"id": n["id"], "name": n["name"], "kuerzel": sicht.kuerzel[n["id"]], "aktiv": bool(n["aktiv"]), "rolle": n["rolle"]}
                   for n in sicht.nutzer.values()]
-        objekte = {z["a"]["id"]: sicht.objekt(z) for z in k.zeilen()}
+        # ``status`` (additiv): Oberflächen zeigen damit Statuswechsel der Kollegen ohne Neuladen
+        objekte = {z["a"]["id"]: {**sicht.objekt(z), "status": z["a"].get("status") or "neu"} for z in k.zeilen()}
         return {"aktiv": True, "ich": {**sicht.person(self.nutzer["id"]), "rolle": self.nutzer["rolle"]},
                 "nutzer": nutzer,
                 "zaehler": [{**z, "kuerzel": sicht.kuerzel[z["nutzer_id"]]} for z in sichtbar],
@@ -435,7 +437,7 @@ class Anfrage:
             "termine": [self.besichtigung_kurz(b, sicht) for b in termine],
             "bereit": sum(1 for z in zeilen if z["bereit"] and (z["a"].get("status") or "neu") == "neu"),
             "nachfassen": sum(1 for z in zeilen if z["nachfassen"]),
-            "arbeit": sum(1 for z in zeilen if z["a"].get("status") in ("kontaktiert", "verhandlung", "besichtigung")),
+            "arbeit": sum(1 for z in zeilen if z["a"].get("status") in IN_ARBEIT),
             "suchlauf": k.suchlauf.stand,
         }
 
@@ -454,8 +456,9 @@ class Anfrage:
             t = sicht.objekt(z) if sicht else None
             if (wer == "meine" and not t["mein"]) or (wer == "frei" and not sicht.ist_frei(t)):
                 continue
-            ok = {"bereit": z["bereit"] and s == "neu", "nachfassen": bool(z["nachfassen"]),
-                  "arbeit": s in ("kontaktiert", "verhandlung", "besichtigung"), "alle": True}.get(f, False)
+            # „Text kopiert“ bleibt unter „Anschreiben bereit“, bis „gesendet ✓“ bestätigt ist (ADR-012)
+            ok = {"bereit": (z["bereit"] and s == "neu") or s == VORBEREITET, "nachfassen": bool(z["nachfassen"]),
+                  "arbeit": s in IN_ARBEIT, "offen": s in OFFEN, "alle": True}.get(f, False)
             text = f"{z['a']['fahrzeug']} {z['a']['titel']} {z['a'].get('ort') or ''}".lower()
             if ok and all(w in text for w in q):
                 auswahl.append((z, t))
@@ -510,6 +513,10 @@ class Anfrage:
             if daten.get("status") not in STATUS:
                 raise Antwort(400, "unbekannter Status")
             ad_id = str(daten.get("id"))
+            aktuell = k.db.status_von(ad_id) if daten["status"] == VORBEREITET else None
+            if aktuell in (*IN_ARBEIT, "gekauft") and aktuell != VORBEREITET:
+                # veraltete Seite: „Text kopiert“ darf einen schon bestätigten Kontakt oder Kauf nicht zurücksetzen
+                raise Antwort(409, f"Status ist bereits „{STATUS[aktuell]}“ – bitte Seite neu laden, nicht senden")
             team = self.team_parameter(daten, ad_id)
             uebernimmt = daten["status"] in IN_ARBEIT
             vorher = self.vorheriger_halter(ad_id, team) if uebernimmt else None
@@ -668,7 +675,7 @@ class Anfrage:
             vorher = self.vorheriger_halter(ad_id, team)
             try:
                 with k.db.transaktion():
-                    if status in ("neu", "kontaktiert", "verhandlung", "besichtigung"):
+                    if status == "neu" or status in IN_ARBEIT:
                         k.db.setze_status(ad_id, "besichtigung", **team)        # danach hält der Anlegende das Inserat (oder ist Inhaber)
                     elif not darf_status(self.team_sicht().halter(ad_id), self.nutzer["id"], self.nutzer["rolle"]):
                         raise BearbeitungsKonflikt(ad_id)                      # abgeschlossenes Inserat eines Kollegen
@@ -677,11 +684,11 @@ class Anfrage:
                                            "bitte das Inserat zuerst übernehmen")
                     bid = k.team.besichtigung_anlegen(ad_id, basis, termin, adresse, zustaendig, self.nutzer["id"])
             except BearbeitungsKonflikt:
-                raise self.konflikt(ad_id, team["dubletten"] if status in IN_ARBEIT + ("neu",) else (), gruppe=team["erzwingen"]) from None
+                raise self.konflikt(ad_id, team["dubletten"] if status == "neu" or status in IN_ARBEIT else (), gruppe=team["erzwingen"]) from None
             self.logge_erzwingen(ad_id, vorher)
         else:
             with k.db.transaktion():
-                if status in ("neu", "kontaktiert", "verhandlung"):
+                if status in ("neu", "vorbereitet", "kontaktiert", "verhandlung"):
                     k.db.setze_status(ad_id, "besichtigung")
                 bid = k.team.besichtigung_anlegen(ad_id, basis, termin, adresse, zustaendig, self.nutzer["id"])
         k.veraendert()

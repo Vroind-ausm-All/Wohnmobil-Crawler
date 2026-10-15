@@ -10,7 +10,7 @@
   python scout.py sichern                   Datenbank (und Fotos) sichern -> daten/sicherungen
   python scout.py wiederherstellen <Datei> --bestaetigt [--ohne-fotos]   Sicherung zurückspielen (App und Suchlauf vorher beenden)
   python scout.py status <ID> kontaktiert [--nutzer NAME]   Status setzen (neu|kontaktiert|verhandlung|besichtigung|gekauft|abgesagt|
-                                            uninteressant); mit --nutzer im Team für diesen Mitarbeiter (sonst „ohne Zuordnung“)
+                                            uninteressant|vorbereitet); mit --nutzer im Team für diesen Mitarbeiter (sonst „ohne Zuordnung“)
 """
 from __future__ import annotations
 

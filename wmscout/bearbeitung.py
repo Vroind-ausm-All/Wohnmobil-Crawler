@@ -7,7 +7,8 @@ Zustände eines Inserats:
   frei             niemand hält es (nie übernommen, Reservierung abgelaufen oder der Bearbeiter ist deaktiviert)
   reserviert       ein aktiver Kollege hat es übernommen, noch kein bestätigter Kontakt (läuft nach ``reservierung_tage`` ab)
   kontaktiert      der Kontakt wurde bestätigt (``kontaktiert_von``); läuft nie ab
-  ohne_zuordnung   Altbestand: Status „kontaktiert“/„in Verhandlung“/„Besichtigung“, aber niemand zugeordnet
+  ohne_zuordnung   Altbestand: Status „kontaktiert“/„in Verhandlung“/„Besichtigung“ (oder „vorbereitet“ nach abgelaufener Reservierung:
+                   unklar, ob gesendet wurde), aber niemand zugeordnet
   verwaist         Status wie oben, der Kontakt wurde bestätigt, der Bearbeiter ist aber deaktiviert (oder fehlt); übernehmbar wie
                    ``ohne_zuordnung`` (Mitarbeiter per Übernehmen, Inhaber per Zuweisen), damit nichts liegen bleibt
 """
@@ -17,7 +18,8 @@ import re
 from datetime import datetime, timedelta
 
 FREI, RESERVIERT, KONTAKTIERT, OHNE_ZUORDNUNG, VERWAIST = "frei", "reserviert", "kontaktiert", "ohne_zuordnung", "verwaist"
-IN_ARBEIT = ("kontaktiert", "verhandlung", "besichtigung")      # Inserat-Status, die einen Kontakt voraussetzen
+VORBEREITET = "vorbereitet"                                       # Text kopiert/Anzeige geöffnet, Versand noch nicht bestätigt (ADR-012)
+IN_ARBEIT = (VORBEREITET, "kontaktiert", "verhandlung", "besichtigung")   # Inserat-Status „in Arbeit“: übernehmen das Inserat
 OFFEN = ("neu", *IN_ARBEIT)                                      # nicht abgeschlossen (für „meine“ auf der Startseite)
 INHABER = "inhaber"
 

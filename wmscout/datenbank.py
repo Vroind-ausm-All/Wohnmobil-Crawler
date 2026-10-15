@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from .bearbeitung import IN_ARBEIT, BearbeitungsKonflikt
+from .bearbeitung import IN_ARBEIT, VORBEREITET, BearbeitungsKonflikt
 from .migrationen import NEUE_SPALTEN, migriere  # noqa: F401 – NEUE_SPALTEN bleibt hier importierbar (Kompatibilität)
 
 log = logging.getLogger(__name__)
@@ -18,7 +18,8 @@ log = logging.getLogger(__name__)
 STANDARD_WARTEZEIT = 10.0
 
 # Ablauf eines Ankaufs (Schlüssel → Anzeige in der App)
-STATUS = {"neu": "offen", "kontaktiert": "kontaktiert", "verhandlung": "in Verhandlung",
+# „vorbereitet“ = Text kopiert/Anzeige geöffnet; erst „kontaktiert“ (Knopf „gesendet“) ist ein bestätigter Kontakt (ADR-012)
+STATUS = {"neu": "offen", "vorbereitet": "Text kopiert", "kontaktiert": "kontaktiert", "verhandlung": "in Verhandlung",
           "besichtigung": "Besichtigung", "gekauft": "gekauft", "abgesagt": "abgesagt",
           "uninteressant": "uninteressant"}
 
@@ -341,11 +342,14 @@ class Datenbank:
     def setze_status(self, ad_id: str, status: str, notiz: str | None = None, text: str | None = None,
                      betrag: int | None = None, *, nutzer_id: int | None = None, grenze: str = "", erzwingen: bool = False,
                      inhaber: bool = False, dubletten=()) -> bool:
-        """Mit Text (= Anschreiben gesendet) werden Zeitpunkt, Text und Angebot gespeichert; 'neu' setzt zurück.
+        """Mit Text (= Anschreiben) werden Text und Angebot gespeichert, bei 'kontaktiert' auch der Zeitpunkt; 'neu' setzt zurück.
 
-        Ohne ``nutzer_id`` (Team aus) wie bisher. Mit ``nutzer_id``: 'kontaktiert', 'verhandlung' und 'besichtigung' (alle
-        ``IN_ARBEIT``; sie setzen einen Kontakt voraus) übernehmen das Inserat zuerst (wie ``uebernimm``, inkl. Dubletten) und
-        tragen den ersten Kontakt ein – sonst bliebe ein so bearbeitetes Inserat „ohne Zuordnung“ und ein Kollege könnte es
+        'vorbereitet' (Text kopiert, Versand noch nicht bestätigt) speichert Text und Angebot, setzt aber weder ``kontaktiert_am`` noch
+        im Team ``kontaktiert_von``: erst 'kontaktiert' ist ein bestätigter Kontakt (ADR-012).
+
+        Ohne ``nutzer_id`` (Team aus) wie bisher. Mit ``nutzer_id``: 'vorbereitet', 'kontaktiert', 'verhandlung' und 'besichtigung'
+        (alle ``IN_ARBEIT``) übernehmen das Inserat zuerst (wie ``uebernimm``, inkl. Dubletten); die drei letzten tragen außerdem den
+        ersten Kontakt ein – sonst bliebe ein so bearbeitetes Inserat „ohne Zuordnung“ und ein Kollege könnte es
         erneut kontaktieren. Ausnahme: ``inhaber`` (Inhaber oder zugewiesener Besichtiger) ändert 'verhandlung'/'besichtigung'
         eines von einem Kollegen gehaltenen Inserats, ohne es zu übernehmen – außer mit ``erzwingen``, das übernimmt wirklich.
         'neu' leert den Kontakt (Bearbeiter bleibt); alle anderen Status verlangen: frei, eigene Reservierung oder ``inhaber``.
@@ -356,12 +360,15 @@ class Datenbank:
             sets += ["kontaktiert_am=?", "anschreiben_text=?", "angebot_betrag=?", "nachgefasst_am=NULL",
                      "nachfass_anzahl=0"]
             werte += [jetzt, text, betrag]
+        elif status == VORBEREITET and text:
+            sets += ["anschreiben_text=?", "angebot_betrag=?", "nachgefasst_am=NULL", "nachfass_anzahl=0"]
+            werte += [text, betrag]
         elif status == "kontaktiert":
             sets.append("kontaktiert_am=COALESCE(kontaktiert_am, ?)")
             werte.append(jetzt)
         elif status == "neu":
             sets += ["kontaktiert_am=NULL", "nachgefasst_am=NULL", "nachfass_anzahl=0"]
-        if betrag and not (status == "kontaktiert" and text):
+        if betrag and not (status in ("kontaktiert", VORBEREITET) and text):
             sets.append("angebot_betrag=?")
             werte.append(betrag)
         sql = f"UPDATE anzeigen SET {', '.join(sets)} WHERE id=?"
@@ -373,7 +380,7 @@ class Datenbank:
             if not self.con.execute("SELECT 1 FROM anzeigen WHERE id=?", (ad_id,)).fetchone():
                 return False
             uebernehmen = status in IN_ARBEIT
-            if uebernehmen and status != "kontaktiert" and inhaber and not erzwingen \
+            if uebernehmen and status not in ("kontaktiert", VORBEREITET) and inhaber and not erzwingen \
                     and self._fremde_halter([ad_id], nutzer_id, grenze):
                 uebernehmen = False                                 # fremdes Inserat: Status ändern, Bearbeiter bleibt (nicht bei Erzwingen)
             if uebernehmen:
@@ -382,7 +389,7 @@ class Datenbank:
             elif status not in IN_ARBEIT and not inhaber and self._fremde_halter([ad_id], nutzer_id, grenze):
                 raise BearbeitungsKonflikt(ad_id)
             cur = self.con.execute(sql, [*werte, ad_id])
-            if uebernehmen:
+            if uebernehmen and status != VORBEREITET:
                 self._trage_kontakt_ein(ad_id, nutzer_id, jetzt)
             elif status == "neu":
                 self.con.execute("UPDATE bearbeitung SET kontaktiert_von=NULL, kontaktiert_am=NULL WHERE anzeige_id=?", (ad_id,))
@@ -390,26 +397,32 @@ class Datenbank:
 
     def nachgefasst(self, ad_id: str, text: str, betrag: int | None = None, *, nutzer_id: int | None = None,
                     grenze: str = "", erzwingen: bool = False, dubletten=()) -> bool:
-        """Nachfass-Nachricht gesendet: Zeitpunkt merken, Text an den Verlauf anhängen.
-        Mit ``nutzer_id`` (Team) wie 'kontaktiert': erst Übernahme (sonst ``BearbeitungsKonflikt``), erster Kontakt eingetragen."""
+        """Nachfass-Nachricht: Zeitpunkt merken, Text an den Verlauf anhängen.
+
+        Ein noch offenes Inserat wird nur 'vorbereitet' (Text kopiert, kein bestätigter Kontakt, ADR-012); ein abgesagter Vorgang
+        bleibt abgesagt (Nachfassen setzt ihn nicht zurück). Mit ``nutzer_id`` (Team) wie ein Kontakt: erst Übernahme (sonst
+        ``BearbeitungsKonflikt``), der erste Kontakt wird eingetragen, sobald der Vorgang schon kontaktiert war."""
         jetzt = datetime.now().isoformat(timespec="seconds")
         sql = ("UPDATE anzeigen SET nachgefasst_am=?, nachfass_anzahl=COALESCE(nachfass_anzahl, 0)+1, "
                "anschreiben_text=COALESCE(anschreiben_text || char(10) || char(10), '') || ? || char(10) || ?, "
                "angebot_betrag=COALESCE(?, angebot_betrag), "
-               "status=CASE WHEN status IN ('neu', 'abgesagt') THEN 'kontaktiert' ELSE status END, "
-               "kontaktiert_am=COALESCE(kontaktiert_am, ?) WHERE id=?")
+               "status=CASE WHEN COALESCE(status, 'neu') = 'neu' THEN 'vorbereitet' ELSE status END, "
+               "kontaktiert_am=CASE WHEN COALESCE(status, 'neu') IN ('neu', 'vorbereitet') THEN kontaktiert_am "
+               "ELSE COALESCE(kontaktiert_am, ?) END WHERE id=?")
         werte = (jetzt, f"--- nachgefasst am {jetzt[:10]} ---", text, betrag, jetzt, ad_id)
         if nutzer_id is None:
             with self._schreiben():
                 cur = self.con.execute(sql, werte)
             return cur.rowcount > 0
         with self._exklusiv():
-            if not self.con.execute("SELECT 1 FROM anzeigen WHERE id=?", (ad_id,)).fetchone():
+            vorher = self.con.execute("SELECT status FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+            if not vorher:
                 return False
             if not self._uebernimm(ad_id, nutzer_id, jetzt, grenze, erzwingen, dubletten):
                 raise BearbeitungsKonflikt(ad_id)
             cur = self.con.execute(sql, werte)
-            self._trage_kontakt_ein(ad_id, nutzer_id, jetzt)
+            if (vorher["status"] or "neu") not in ("neu", VORBEREITET):
+                self._trage_kontakt_ein(ad_id, nutzer_id, jetzt)
             return cur.rowcount > 0
 
     def setze_notiz(self, ad_id: str, notiz: str) -> bool:

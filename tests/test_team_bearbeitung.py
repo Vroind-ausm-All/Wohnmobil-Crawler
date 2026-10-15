@@ -272,6 +272,7 @@ def test_fehler_mitten_in_der_transaktion_rollt_uebernahme_und_status_zurueck(db
     a, b = anzeige_ids(db, 2)
     ben = team.ids["Ben"]
     vorher = anzeigen_zeile(db, a)
+    db.setze_status(b, "verhandlung")      # Nachfassen trägt einen Kontakt nur bei schon kontaktierten Vorgängen ein (ADR-012)
 
     def kaputt(*args):
         raise sqlite3.OperationalError("simulierter Fehler")

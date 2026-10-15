@@ -1,6 +1,6 @@
 /* Service Worker: App-Gerüst offline verfügbar, zuletzt geladene Daten als Rückfall ohne Netz.
    Änderungen (Speichern, Fotos) puffert die App selbst und sendet sie, sobald wieder Netz da ist. */
-var VERSION = 'wm-scout-1';
+var VERSION = 'wm-scout-2';
 var GERUEST = ['/m', '/static/mobil.css', '/static/mobil.js', '/static/besichtigung.js',
                '/static/icon-192.png', '/static/icon-512.png', '/manifest.webmanifest'];
 

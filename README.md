@@ -156,9 +156,17 @@ Du bekommst dann nur eine Mail, wenn neue Treffer mit Anschreiben dabei sind.
 1. `python scout.py app` (oder `app.bat`) – Filter „Anschreiben bereit“ ist vorausgewählt.
 2. **Wohnmobil anklicken** → Bewertung prüfen, Text bei Bedarf anpassen.
 3. **✉ Anschreiben** (auf der Karte oder im Fenster) → der Text liegt in der Zwischenablage, die Anzeige
-   öffnet sich in einem neuen Tab und das Fahrzeug wird als „kontaktiert“ gespeichert (inkl. gesendetem
-   Text; „Rückgängig“ im Hinweis unten).
+   öffnet sich in einem neuen Tab und das Fahrzeug steht auf „Text kopiert“ (Text gespeichert; „Rückgängig“ im
+   Hinweis unten). Im Team öffnet sich die Anzeige erst, wenn der Server das Fahrzeug für dich reserviert hat –
+   hält es ein Kollege, erscheint stattdessen ein roter Hinweis, wer es bearbeitet.
 4. In der Anzeige den Kontakt öffnen – bei Kleinanzeigen **„Nachricht schreiben“**, bei mobile.de das **„E-Mail“/„Nachricht“-Formular** des Anbieters → `Strg`+`V` → Senden.
+5. **gesendet ✓** klicken – erst jetzt gilt der Verkäufer als „kontaktiert“ (ADR-012).
+
+**Team (nur mit angelegten Nutzern):** An jedem Fahrzeug zeigt ein Abzeichen mit Symbol und Kürzel, wer es bearbeitet
+(◔ reserviert, ✉ kontaktiert, ⧉ Dublette, ? ohne Zuordnung, ! verwaist; eigene gefüllt, fremde umrandet). „Ich übernehme“ /
+„Abgeben“ auf Karte und im Fenster; der Inhaber kann zusätzlich zuweisen und eine Übernahme erzwingen. Oben stehen die
+Zähler je Mitarbeiter (Mitarbeiter sehen nur die eigenen), der Filter **Wer: Alle / Meine / Frei** blendet fremde Fahrzeuge
+aus. Der Stand der Kollegen wird jede Minute und beim Zurückkehren zur Seite neu geladen.
 
 **Gespeicherte Seiten einlesen:** Öffne eine Suchergebnisseite oder eine einzelne Anzeige auf Kleinanzeigen
 ganz normal im Browser, drücke `Strg`+`S` und speichere sie als „Webseite, nur HTML“ in den Ordner `import`

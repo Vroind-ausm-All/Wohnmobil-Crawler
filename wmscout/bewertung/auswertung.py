@@ -13,7 +13,7 @@ from .anschreiben import Anschreiber, betrag_im_brief, euro, hinweise, sperrgrun
 from .rechner import Bewertung, Rechner
 
 
-BEARBEITET = {"kontaktiert", "verhandlung", "besichtigung", "gekauft", "abgesagt", "uninteressant"}
+BEARBEITET = {"vorbereitet", "kontaktiert", "verhandlung", "besichtigung", "gekauft", "abgesagt", "uninteressant"}
 
 
 def finde_duplikate(alle: list[dict]) -> dict[str, list[dict]]:

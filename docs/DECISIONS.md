@@ -123,13 +123,17 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Alternativen:** Status weiter am Inserat und Dubletten nur anzeigen (einfacher, aber Doppelansprache bleibt möglich).
 * **Folgen:** Größte Schemaänderung des Projekts; nur mit Migrationsrahmen (ADR-009) und Kompatibilitäts-View.
 
-## ADR-012 – Kontakt gilt erst nach Bestätigung · vorgeschlagen (UI Phase 1, Datenmodell Phase 3)
+## ADR-012 – Kontakt gilt erst nach Bestätigung · gilt (umgesetzt 15.10.2026 mit T2, P1-06)
 
 * **Kontext:** Desktop (`report.html`) und Handy (`mobil.js`) setzen „kontaktiert“ beim Kopieren des Textes.
 * **Entscheidung:** Kopieren/Öffnen setzt nur „vorbereitet“; „kontaktiert“ erst nach ausdrücklicher Bestätigung
   „gesendet“ durch den Nutzer. Nachfassen setzt einen abgesagten Vorgang nicht zurück auf „kontaktiert“.
 * **Folgen:** Ein zusätzlicher Klick je Kontakt; Kennzahl „kontaktierte Verkäufer“ wird verlässlich.
-  Offen: Gelten alte „kontaktiert“-Einträge als bestätigt? (Betreiberfrage)
+  Offen: Gelten alte „kontaktiert“-Einträge als bestätigt? (Betreiberfrage) – bis zur Antwort bleiben sie unverändert.
+* **Umsetzung:** Status `vorbereitet` („Text kopiert“) speichert Text und Angebot, aber weder `kontaktiert_am` noch im
+  Team `kontaktiert_von`; im Team reserviert er das Inserat. Desktop und Handy öffnen die Anzeige erst nach der
+  Server-Antwort 200 (bei 409 bleibt sie zu). „Text kopiert“ bleibt im Filter „Anschreiben bereit“, bis „gesendet ✓“
+  bestätigt ist. Eine veraltete Seite kann einen bestätigten Kontakt nicht per „vorbereitet“ zurücksetzen (409).
 
 ## ADR-013 – Nebenläufigkeit und Laufsperre · vorgeschlagen (Phase 1)
 

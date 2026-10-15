@@ -10,7 +10,8 @@ dem Büro-PC.
 | Bereich | Funktion |
 |---|---|
 | **Heute** | Zähler „Anschreiben bereit“, „Nachfassen“, „In Arbeit“; Besichtigungen des Tages; Suchlauf starten |
-| **Anschreiben** | Liste mit Bewertung; Fahrzeug antippen → Text prüfen → „✉ Kopieren & Anzeige öffnen“ (Status wird gespeichert); Nachfassen genauso |
+| **Anschreiben** | Liste mit Bewertung; Fahrzeug antippen → Text prüfen → „✉ Kopieren & Anzeige öffnen“ (Status „Text kopiert“); nach dem Absenden **„gesendet ✓“** tippen – erst dann gilt der Verkäufer als kontaktiert. Nachfassen genauso |
+| **Wer bearbeitet was** | Abzeichen mit Kürzel an jedem Fahrzeug (◔ reserviert, ✉ kontaktiert, ⧉ Dublette); Filter „Alle / Meine / Frei“; „Ich übernehme“ / „Abgeben“ (Inhaber: „Übernahme erzwingen“); hält ein Kollege das Fahrzeug, ist „Anschreiben“ gesperrt und der Grund steht daneben |
 | **Besichtigung planen** | Termin, Adresse, zuständiger Mitarbeiter; WhatsApp an den Mitarbeiter öffnet sich mit fertigem Text; Termin als Kalenderdatei (.ics); Navigation |
 | **Besichtigung durchführen** | Fahrzeugdaten (FIN, km, HU, Gas, Schlüssel), Pflicht-Checkliste, Feuchtigkeitsmessung, Reifen-DOT, Mängelkatalog mit Schweregrad, Fotos je Mangel, Anpassung mit Begründung – **Abzug und Endpreis-Vorschlag rechnen live mit** |
 | **Ohne Netz** | Alle Eingaben und Fotos werden auf dem Handy gesichert und automatisch übertragen, sobald wieder Netz da ist („1 wartet“ oben rechts) |
