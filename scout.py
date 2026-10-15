@@ -46,7 +46,8 @@ from wmscout.benachrichtigung import sende_mail
 from wmscout.bewertung.anschreiben import Anschreiber, euro
 from wmscout.bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids, vergleichsbasis
 from wmscout.bewertung.rechner import Rechner
-from wmscout.datenbank import STATUS, Datenbank
+from wmscout.datenbank import STATUS, Datenbank, wal_aktiv
+from wmscout.laufsperre import Laufsperre
 from wmscout.eingang import import_ordner
 from wmscout.importer import Importer
 from wmscout.migrationen import MigrationsFehler
@@ -77,6 +78,17 @@ def _team(cfg, db):
 
 
 def cmd_lauf(cfg, db, args):
+    sperre = Laufsperre(BASIS / cfg["ausgabe"]["datenbank"])
+    if not sperre.erwerben():
+        logging.warning("Suchlauf übersprungen: Es läuft bereits ein Suchlauf (App oder geplante Aufgabe).")
+        return
+    try:
+        _lauf(cfg, db)
+    finally:
+        sperre.freigeben()
+
+
+def _lauf(cfg, db):
     start = datetime.now().isoformat(timespec="seconds")
     stat = Importer(cfg, db).lauf(cfg["suchen"])
     logging.info("Crawl fertig: %d neu, %d Preissenkungen, %d bekannt, %d Detailseiten",
@@ -305,7 +317,7 @@ def main():
     try:
         reservierung_tage(cfg)              # ungültiges „team“ in config.yaml ebenso sofort melden
         einstellungen(cfg, BASIS)           # ungültiges „sicherung“ in config.yaml sofort melden, nicht erst bei der Sicherung
-        db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]), str(sicherung_ordner(cfg, BASIS)))
+        db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]), str(sicherung_ordner(cfg, BASIS)), wal=wal_aktiv(cfg))
     except (MigrationsFehler, ValueError, sqlite3.Error) as e:
         sys.exit(f"Datenbank-Start abgebrochen: {e}")
     {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "rechne": cmd_rechne,

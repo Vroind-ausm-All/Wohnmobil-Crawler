@@ -194,7 +194,10 @@ def hash_datei(pfad) -> str:
 
 
 def dateien(ordner) -> set[str]:
-    return {p.relative_to(ordner).as_posix() for p in ordner.rglob("*")} if ordner.exists() else set()
+    # -wal/-shm sind Arbeitsdateien von SQLite im WAL-Modus (entstehen beim Öffnen, verschwinden mit der letzten Verbindung);
+    # .laufsperre ist die bleibende, leere Sperrdatei der Laufsperre (P1-04)
+    return ({p.relative_to(ordner).as_posix() for p in ordner.rglob("*") if not p.name.endswith(("-wal", "-shm", ".laufsperre"))}
+            if ordner.exists() else set())
 
 
 def beschaedige_index(pfad):
@@ -337,6 +340,9 @@ def test_m2_gesperrte_datenbank_bricht_ab_ohne_aenderung(bestand):
 
 def test_m2_reste_der_alten_datenbank_werden_erst_beim_austausch_entfernt(bestand):
     pfad, fotos, ziel = bestand
+    # Reste einer Datenbank im Modus DELETE (ausgabe.wal: false). Im WAL-Modus ist -shm die von SQLite eingeblendete Datei
+    # und unter Windows nicht überschreibbar; den WAL-Fall prüft test_parallelzugriff.py.
+    _sql(pfad, "PRAGMA journal_mode=DELETE")
     kopie = sichere(pfad, ziel, fotos)
     reste = [pfad.with_name(pfad.name + e) for e in ("-wal", "-shm", "-journal")]
     schreiber = sqlite3.connect(pfad, isolation_level=None)

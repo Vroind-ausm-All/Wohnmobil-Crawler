@@ -138,6 +138,13 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Entscheidung:** WAL, `busy_timeout`, eine Verbindung je Thread, Lock nur um DB-Zugriffe, externe Aufrufe außerhalb
   bzw. asynchron, Laufsperre über die Datenbank.
 * **Folgen:** Mehrere Nutzer blockieren sich nicht mehr gegenseitig; Tests für parallele Zugriffe nötig.
+* **Umgesetzt (P1-04a, 14.10.2026):** WAL und `busy_timeout` (10 s) in `Datenbank`; abschaltbar mit `ausgabe.wal: false`
+  (Netzlaufwerke, dort ist WAL nicht zulässig). `synchronous` bleibt beim sicheren Standard FULL. Sicherungen werden auf
+  den Modus DELETE gestellt (eine Datei, kein `-wal` daneben). Die Wiederherstellung prüft zusätzlich per
+  `wal_checkpoint(TRUNCATE)`, weil `BEGIN EXCLUSIVE` im WAL-Modus Lesende nicht erkennt. Laufsperre (P1-04): Dateisperre
+  des Betriebssystems (`fcntl.flock` bzw. `msvcrt.locking`) auf `<datenbank>.laufsperre` statt der geplanten Tabelle
+  `suchlaeufe` mit Lease – ohne Schemaänderung, und ein abgestürzter Lauf hinterlässt keine veraltete Sperre. Nicht wartend:
+  App-Suche, Auto-Suche und `scout.py lauf` überspringen, die Wiederherstellung bricht ohne Änderung ab.
 
 ## ADR-014 – Fehlerisolation je Quelle · vorgeschlagen (Phase 2)
 

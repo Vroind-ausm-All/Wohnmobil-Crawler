@@ -83,7 +83,7 @@ config.yaml (suchen) → Suchauftrag → KleinanzeigenQuelle.suche → Hoefliche
 | R4 | Schlüssel ohne Quelle | `migrationen.py:27`; `datenbank.py:36`; `basis.py:103`; `rechner.py:176` | HOCH | `UNIQUE(quelle, anzeigen_id)` **vor** der zweiten Quelle | P2-02 |
 | R5 | „kontaktiert“ schon beim Kopieren; Nachfassen macht aus „abgesagt“ wieder „kontaktiert“ | `report.html:406`, `mobil.js:483`, `datenbank.py:117` | HOCH | Statuswert „vorbereitet“, Knopf „gesendet bestätigen“; später Kontakte als Ereignisse | P1-06, P3-06 |
 | R6 | Globaler Lock umfasst Bewertung, Antwortversand und WhatsApp-HTTP (Timeout 20 s) | `api.py:57,495-497` | HOCH | Lock nur um DB-Zugriffe, Verbindung je Thread; Versand außerhalb; WhatsApp asynchron | P1-05 |
-| R7 | Mehrere SQLite-Verbindungen ohne WAL (nur Python-Standard-Wartezeit 5 s); alle HTTP-Threads teilen eine Verbindung; keine Laufsperre (App + `lauf.bat` parallel) | `app.py:59,102`; `scout.py:198`; `api.py:54`; `datenbank.py:30` | HOCH | WAL, `busy_timeout`, Laufsperre (Lease in `suchlaeufe`, Schema v3) | P1-04 |
+| R7 | ~~Mehrere SQLite-Verbindungen ohne WAL (nur Python-Standard-Wartezeit 5 s)~~ WAL + 10 s seit P1-04a, Laufsperre seit P1-04; alle HTTP-Threads teilen eine Verbindung; keine Laufsperre (App + `lauf.bat` parallel) | `app.py:59,102`; `scout.py:198`; `api.py:54`; `datenbank.py:30` | HOCH | WAL, `busy_timeout`, Laufsperre (Lease in `suchlaeufe`, Schema v3) | P1-04 |
 | R8 | Keine Fehlerisolation je Quelle/Suchauftrag | `importer.py:108-125` | HOCH | `try` je Auftrag und Quelle, Status je Quelle | P2-03 |
 | R9 | Verfügbarkeit nur geschätzt; Inserate nach 21 Tagen in der App nicht mehr bearbeitbar | `datenbank.py:77`; `api.py:74-78` | MITTEL | Spalte `verfuegbarkeit` + `zuletzt_bestaetigt` | P3-04 |
 | R10 | Preisverlauf geht verloren | `datenbank.py:51-54` | MITTEL | `preis_historie` (nur anhängen) | P2-02 (Start), P3-03 |
@@ -156,7 +156,7 @@ umbenannt, nicht gelöscht.
 (`schema_version`, minimale `suchlaeufe` mit Lease) · 4 = Phase 2 · 5 = Phase 3 · 6 = `bewertungen` (Phase 5).
 **Schutzregeln:** Ist die Schemaversion der Datenbank höher als die dem Code bekannte, bricht der Start mit
 verständlicher Meldung ab (kein Schreiben mit altem Code). Ohne erfolgreiches Backup keine Migration. Wiederherstellung
-nur nach ausdrücklicher Bestätigung (P1-02) und, sobald die Laufsperre existiert (P1-04), nicht während eines Laufs.
+nur nach ausdrücklicher Bestätigung (P1-02) und, dank Laufsperre (P1-04) nicht während eines Laufs.
 
 | Version | Phase | Inhalt |
 |---|---|---|

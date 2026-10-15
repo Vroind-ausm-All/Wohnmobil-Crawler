@@ -6,6 +6,26 @@ Wert „–“.
 
 ---
 
+## Phase 1 – P1-04a Parallelzugriff: WAL und Sperr-Wartezeit (14.10.2026) · Status: REVIEW
+
+- **Anlass:** Betreiber-Analyse „Wohnmobil-Scout 3.0“, Vorschlag erster PR `claude/phase1-db-parallelzugriff`
+  (Ereigniseingang, Browser-App und Hintergrundläufe nebeneinander). Ohne Subagenten und ohne Warteschleifen umgesetzt.
+- **Geänderte Dateien:** `wmscout/datenbank.py` (`_setze_journal`, `wal_aktiv`, `STANDARD_WARTEZEIT` 10 s),
+  `wmscout/sicherung.py` (Sicherung im Modus DELETE, Checkpoint-Prüfung vor Wiederherstellung), `wmscout/app.py`,
+  `scout.py`, `config.yaml` (`ausgabe.wal`), Tests `tests/test_parallelzugriff.py` (neu), `tests/prozess_helfer.py`,
+  `tests/test_sicherung.py` (Dateivergleich ignoriert die SQLite-Arbeitsdateien `-wal`/`-shm`).
+- **Tests:** `pytest -q`: 684 bestehende + 12 neue grün; `ruff check .` grün. Gegenproben (je Änderung einmal
+  zurückgebaut): ohne WAL 5 Fehlschläge, ohne DELETE-Sicherung 1, ohne Checkpoint-Prüfung 1 – alle drei erkannt.
+- **Windows-CI (PR #9, 1. Lauf):** 695 von 696 grün; `test_m2_reste_der_alten_datenbank_…` schrieb eine erfundene `-shm`
+  neben die WAL-Datenbank, die Windows sperrt. Korrigiert: der Test stellt den Altfall ausdrücklich im Modus DELETE nach.
+- **Nicht geprüft:** Datenbank auf Netzlaufwerk; Laufsperre (P1-04, offen).
+- **Nachtrag P1-04 Laufsperre (15.10.2026, gleicher PR):** `wmscout/laufsperre.py` (Dateisperre des Betriebssystems),
+  eingebunden in `Suchlauf.starte` (App/Auto-Suche), `scout.py lauf` und `sicherung.wiederherstellen`. Tests
+  `tests/test_laufsperre.py` (8, u. a. echter zweiter Prozess, Kill gibt frei, echter Aufruf `scout.py lauf`).
+  Gegenprobe: jede der vier Einbindungen einmal entfernt – jeweils 1 Test schlägt an. Erster Testentwurf hing (getöteter
+  Hilfsprozess blockierte ein Event); korrigiert, der Kill-Test nutzt kein Event mehr.
+- **Offen:** Verbindung `anzeigen` ↔ v4-Tabellen (eigener PR); Phasen A–G der 3.0-Analyse brauchen je eigene Freigabe.
+
 ## Phase 2 – Team-Übersicht (14.10.2026)
 
 ### T1 – Team-Übersicht Kern und API · Status: REVIEW

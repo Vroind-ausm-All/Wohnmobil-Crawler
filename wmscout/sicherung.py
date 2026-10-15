@@ -25,6 +25,8 @@ from datetime import datetime
 from pathlib import Path, PurePath, PureWindowsPath
 from urllib.parse import quote_from_bytes
 
+from .laufsperre import Laufsperre
+
 STANDARD_BEHALTEN = 10
 TEIL_MAX_ALTER = 3600            # Sekunden: liegen gebliebene .teil-Dateien älter als das werden beim Sichern aufgeräumt
 _ZUSATZ = re.compile(r"[^A-Za-z0-9-]+")
@@ -137,14 +139,17 @@ def _integritaet(pfad: Path, anzeigename: str | None = None):
 
 
 def _kopiere_db(quelle: Path, ziel: Path):
-    """Backup-API: konsistente Kopie. Die Quelle wird nur lesend geöffnet (fehlt sie, entsteht keine Datei);
-    Verbindungen werden in jedem Fall geschlossen (Windows-Dateisperren)."""
+    """Backup-API: konsistente Kopie (im WAL-Modus einschließlich der noch nicht zurückgeschriebenen Seiten aus ``-wal``).
+    Die Quelle wird nur lesend geöffnet (fehlt sie, entsteht keine Datei); Verbindungen werden in jedem Fall geschlossen
+    (Windows-Dateisperren). Die Kopie wird auf den Journalmodus DELETE gestellt: eine Sicherung ist genau eine Datei,
+    ohne ``-wal``/``-shm`` daneben (die Backup-API übernähme sonst den WAL-Modus der Quelle)."""
     try:
         src = oeffne_lesend(quelle)
         try:
             dst = sqlite3.connect(str(ziel))
             try:
                 src.backup(dst)
+                dst.execute("PRAGMA journal_mode=DELETE")
             finally:
                 dst.close()
         finally:
@@ -179,6 +184,11 @@ def _pruefe_sperre(db_pfad: Path, timeout: float):
     try:
         con.execute("BEGIN EXCLUSIVE")
         con.execute("ROLLBACK")
+        # WAL: BEGIN EXCLUSIVE übersieht Lesende. Der Checkpoint schreibt -wal in die Datenbank zurück und meldet „busy“, solange
+        # jemand liest oder schreibt – danach ist -wal leer und darf beim Austausch entfallen. Ohne WAL: wirkungslos (0, -1, -1).
+        if con.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()[0]:
+            raise SicherungsFehler("Die Datenbank ist in Benutzung (App, Suchlauf oder geplante Aufgabe läuft noch?). "
+                                   "Alles beenden und erneut versuchen. Es wurde nichts verändert.")
     except sqlite3.OperationalError as e:
         if (getattr(e, "sqlite_errorcode", 0) or 0) & 0xFF in (_SQLITE_BUSY, _SQLITE_LOCKED):
             raise SicherungsFehler("Die Datenbank ist in Benutzung (App, Suchlauf oder geplante Aufgabe läuft noch?). "
@@ -325,10 +335,25 @@ def _entpacke_sicher(zip_pfad: Path, ziel: Path):
                                "Es wurde nichts verändert.") from e
 
 
-def wiederherstellen(sicherung: str | Path, db_pfad: str | Path, bestaetigt: bool = False,
-                     ziel_ordner: str | Path | None = None, foto_ordner: str | Path | None = None,
-                     behalten: int = STANDARD_BEHALTEN, pruefung: Callable[[Path], None] | None = None,
-                     sperr_timeout: float = 2.0, mit_fotos: bool = True) -> Wiederherstellung:
+def wiederherstellen(sicherung: str | Path, db_pfad: str | Path, bestaetigt: bool = False, *args, **optionen) -> Wiederherstellung:
+    """Wie ``_wiederherstellen``, zusätzlich unter der Laufsperre (P1-04): Läuft ein Suchlauf, bricht sie ohne Änderung ab;
+    während der Wiederherstellung startet kein Suchlauf."""
+    if bestaetigt and Path(sicherung).is_file():           # sonst meldet ``_wiederherstellen`` den Grund, ohne Sperrdatei
+        sperre = Laufsperre(db_pfad)
+        if not sperre.erwerben():
+            raise SicherungsFehler("Ein Suchlauf läuft gerade (App-Suche oder geplante Aufgabe). Abwarten bzw. beenden und "
+                                   "erneut versuchen. Es wurde nichts verändert.")
+        try:
+            return _wiederherstellen(sicherung, db_pfad, bestaetigt, *args, **optionen)
+        finally:
+            sperre.freigeben()
+    return _wiederherstellen(sicherung, db_pfad, bestaetigt, *args, **optionen)
+
+
+def _wiederherstellen(sicherung: str | Path, db_pfad: str | Path, bestaetigt: bool = False,
+                      ziel_ordner: str | Path | None = None, foto_ordner: str | Path | None = None,
+                      behalten: int = STANDARD_BEHALTEN, pruefung: Callable[[Path], None] | None = None,
+                      sperr_timeout: float = 2.0, mit_fotos: bool = True) -> Wiederherstellung:
     """Spielt eine Sicherung zurück. Nur mit ``bestaetigt=True`` (App und Suchlauf müssen beendet sein; die Sperrprüfung
     erkennt nur aktive Schreibvorgänge, keine ruhende App).
 
