@@ -339,6 +339,9 @@ def test_m2_gesperrte_datenbank_bricht_ab_ohne_aenderung(bestand):
 
 def test_m2_reste_der_alten_datenbank_werden_erst_beim_austausch_entfernt(bestand):
     pfad, fotos, ziel = bestand
+    # Reste einer Datenbank im Modus DELETE (ausgabe.wal: false). Im WAL-Modus ist -shm die von SQLite eingeblendete Datei
+    # und unter Windows nicht überschreibbar; den WAL-Fall prüft test_parallelzugriff.py.
+    _sql(pfad, "PRAGMA journal_mode=DELETE")
     kopie = sichere(pfad, ziel, fotos)
     reste = [pfad.with_name(pfad.name + e) for e in ("-wal", "-shm", "-journal")]
     schreiber = sqlite3.connect(pfad, isolation_level=None)

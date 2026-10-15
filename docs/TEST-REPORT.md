@@ -11,7 +11,7 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 | `pytest -q` (Linux, Python 3.13) | 684 bestehende + 12 neue (`test_parallelzugriff.py`) bestanden |
 | `ruff check .` | grün |
 | Gegenprobe ohne WAL / ohne DELETE-Sicherung / ohne Checkpoint-Prüfung | 5 / 1 / 1 Tests schlagen an |
-| Windows-CI | nicht geprüft (folgt im PR) |
+| Windows-CI, 1. Lauf | 1 Fehlschlag: `test_m2_reste_…` schrieb eine erfundene `-shm` neben die jetzt WAL-Datenbank (unter Windows gesperrt, Errno 22); Test stellt den Fall nun ausdrücklich im Modus DELETE nach |
 
 ## T1 – Team-Übersicht Kern und API (14.10.2026) · REVIEW
 

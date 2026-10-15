@@ -16,7 +16,9 @@ Wert „–“.
   `tests/test_sicherung.py` (Dateivergleich ignoriert die SQLite-Arbeitsdateien `-wal`/`-shm`).
 - **Tests:** `pytest -q`: 684 bestehende + 12 neue grün; `ruff check .` grün. Gegenproben (je Änderung einmal
   zurückgebaut): ohne WAL 5 Fehlschläge, ohne DELETE-Sicherung 1, ohne Checkpoint-Prüfung 1 – alle drei erkannt.
-- **Nicht geprüft:** Windows-CI (läuft erst mit dem PR); Datenbank auf Netzlaufwerk; Laufsperre (P1-04, offen).
+- **Windows-CI (PR #9, 1. Lauf):** 695 von 696 grün; `test_m2_reste_der_alten_datenbank_…` schrieb eine erfundene `-shm`
+  neben die WAL-Datenbank, die Windows sperrt. Korrigiert: der Test stellt den Altfall ausdrücklich im Modus DELETE nach.
+- **Nicht geprüft:** Datenbank auf Netzlaufwerk; Laufsperre (P1-04, offen).
 - **Offen:** P1-04 Laufsperre; Verbindung `anzeigen` ↔ v4-Tabellen (eigener PR); Phasen A–G der 3.0-Analyse
   brauchen je eigene Freigabe.
 
