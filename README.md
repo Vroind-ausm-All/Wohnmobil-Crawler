@@ -189,6 +189,13 @@ dasselbe ab Firmensitz und kann speichern. Jedes Gebot speichert die gezeigte Ka
 „nachrechnen“ bzw. `python scout.py kalkulation pruefen` zeigt, dass sie sich exakt wiederholen lässt. Provision:
 `config.yaml` → `kalkulation.provision_prozent` (Standard 2 %, ADR-028).
 
+**Besichtigung und Abwicklung (Phase F):** Auch Verkaufsanfragen werden mit der Handy-App besichtigt (planen in `/anfragen`).
+Wird eine Besichtigung mit „gekauft“ abgeschlossen – bei Anfragen wie bei Inseraten –, entsteht unter **`/ankaeufe`** ein
+Ankaufsvorgang: druckbares Vertragsmuster (ohne Rechtsgewähr, vor Einsatz prüfen lassen), „Vertrag unterschrieben“ bestätigen
+und Scan hochladen, Übergabe und Zahlung, Ist-Kosten, Verkauf. Jeder Vorgang zeigt den Weg vom Angebot bzw. Gebot bis zum
+Verkauf mit Belegen und vergleicht Plan (eingefrorene Kalkulation) mit Ist; die Übersicht zeigt die mittleren Abweichungen als
+Grundlage, die Kalkulation bewusst nachzustellen (ADR-029).
+
 **Team (nur mit angelegten Nutzern):** An jedem Fahrzeug zeigt ein Abzeichen mit Symbol und Kürzel, wer es bearbeitet
 (◔ reserviert, ✉ kontaktiert, ⧉ Dublette, ? ohne Zuordnung, ! verwaist; eigene gefüllt, fremde umrandet). „Ich übernehme“ /
 „Abgeben“ auf Karte und im Fenster; der Inhaber kann zusätzlich zuweisen und eine Übernahme erzwingen. Oben stehen die

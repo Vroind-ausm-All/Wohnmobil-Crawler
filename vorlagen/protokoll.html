@@ -40,7 +40,7 @@
     <div>FIN: {{ d.fahrzeug.fin if d.fahrzeug else '' }}</div><div>Kennzeichen: {{ d.fahrzeug.kennzeichen if d.fahrzeug else '' }}</div>
     <div>Erstzulassung: {{ b.basis.ez_jahr or '–' }}</div><div>km-Stand abgelesen: {{ d.km_abgelesen|tsd if d.km_abgelesen else '–' }} (Anzeige: {{ b.basis.km_anzeige|tsd if b.basis.km_anzeige else '–' }})</div>
     <div>HU bis: {{ d.fahrzeug.hu_bis if d.fahrzeug else '' }}</div><div>Gasprüfung bis: {{ d.fahrzeug.gas_bis if d.fahrzeug else '' }}</div>
-    <div>Schlüssel: {{ d.fahrzeug.schluessel if d.fahrzeug else '' }}</div><div>Inserat: <span class="leise">{{ b.basis.url }}</span></div>
+    <div>Schlüssel: {{ d.fahrzeug.schluessel if d.fahrzeug else '' }}</div>{% if b.basis.referenz %}<div>Verkaufsanfrage: {{ b.basis.referenz }}</div>{% else %}<div>Inserat: <span class="leise">{{ b.basis.url or '' }}</span></div>{% endif %}
   </div>
 
   <h2>Prüfpunkte</h2>

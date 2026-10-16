@@ -169,6 +169,16 @@ Auftrag des Betreibers am 16.10.2026 („Phase E“); Entscheidungen siehe ADR-0
 | E2 | P1 | **Nachrechenbar**: eingefrorene Eingabe (Stichtag, Parameter, Vergleichsauszug), Schema v8, Prüfung + CLI | Orchestrator | E1 | Gespeicherte Kalkulation unabhängig von späterer Config/Datenlage; Manipulation erkannt | REVIEW |
 | E3 | P1 | **Am Gebotsfeld**: Standorte live zum Betrag (Transport ab Standort), Team in `/anfragen`, Gebot speichert Kalkulation | Orchestrator | E2 | Jedes angenommene Gebot hat genau eine Kalkulation | REVIEW |
 
+## Phase F (3.0) – Besichtigung und Abwicklung
+
+Auftrag des Betreibers am 16.10.2026 („Phase F“); Entscheidungen siehe ADR-029.
+
+| ID | Prio | Arbeitspaket | Agent | Abhängig | Akzeptanz | Status |
+|---|---|---|---|---|---|---|
+| F1 | P1 | **Handy-Besichtigung für Verkaufsanfragen** (Grundlage aus Bewertung/Zuschlag, Rechte über Bearbeiter) | Orchestrator | B1, D2 | Inserate unverändert; Anfrage-Besichtigung nur durch Inhaber/Bearbeiter | REVIEW |
+| F2 | P1 | **Ankaufsvorgang** (Schema v9): Vertrag (Muster + Bestätigung + Scan), Übergabe/Zahlung, Kosten, Verkauf, Storno | Orchestrator | F1, E2 | Weg vom Gebot zum Ankauf lückenlos mit Belegen; Verlauf/Kosten nur anfügbar | REVIEW |
+| F3 | P1 | **Ergebnisvergleich** Plan (eingefrorene Kalkulation) gegen Ist, Übersicht | Orchestrator | F2 | Nur Anzeige; Gewinn mit derselben Formel wie der Rechner, gerundet | REVIEW |
+
 ## Phase 3 – Datenbank und Marktbeobachtung
 
 **Abnahme:** identische Inserate lassen sich ohne Datenverlust erneut importieren; Preis- und Fahrzeughistorie bleiben

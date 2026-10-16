@@ -4,6 +4,17 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## Phase F – Besichtigung und Abwicklung (16.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux) | 804 bestanden, davon 8 neu (`test_ankauf.py`) |
+| Ablauf Anfrage ohne/mit Demo-Zuschlag, Inserat, Ablehnung, Storno | bestanden (Weg, Plan aus nachrechenbarer Kalkulation, Provision nur mit Auktion) |
+| Migration v8-Altbestand → v9 | Besichtigungen unverändert, neue Spalte leer, zweiter Lauf ohne Wirkung |
+| Gegenprobe 18 Schutzstellen | alle erkannt |
+| Browser-Klicktest Desktop + Handy (390 px) | bestanden, 0 JS-Fehler |
+| Windows-CI, Safari/iOS | nicht geprüft |
+
 ## Phase E – Deal Intelligence (16.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

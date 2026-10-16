@@ -165,12 +165,13 @@ class TeamSpeicher:
         return b
 
     def besichtigung_anlegen(self, anzeige_id: str, basis: dict, termin: str | None, adresse: str | None,
-                             zustaendig_id: int | None, erstellt_von: int | None) -> int:
+                             zustaendig_id: int | None, erstellt_von: int | None, anfrage_id: int | None = None) -> int:
+        """``anfrage_id``: Besichtigung einer Verkaufsanfrage (Phase F); ``anzeige_id`` ist dann ``anfrage-<id>``."""
         cur = self.con.execute(
             "INSERT INTO besichtigungen (anzeige_id, termin, adresse, zustaendig_id, erstellt_von, erstellt_am, "
-            "geaendert_am, basis_json) VALUES (?,?,?,?,?,?,?,?)",
+            "geaendert_am, basis_json, anfrage_id) VALUES (?,?,?,?,?,?,?,?,?)",
             (anzeige_id, termin, adresse, zustaendig_id, erstellt_von, _jetzt(), _jetzt(),
-             json.dumps(basis, ensure_ascii=False)))
+             json.dumps(basis, ensure_ascii=False), anfrage_id))
         self._fertig()
         return cur.lastrowid
 
