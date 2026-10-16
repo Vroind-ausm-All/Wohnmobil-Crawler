@@ -159,7 +159,8 @@ var TOKEN = {{ token | tojson }}, STATUS = {{ status | tojson }}, KANAELE = {{ k
         (s ? '<p class="leise">Dem Verkäufer gezeigt: ' + eur(s[0]) + ' – ' + eur(s[1]) + '</p>' : '<p class="leise">Dem Verkäufer wurde keine Spanne gezeigt (Datenlage zu unsicher oder abgeschaltet).</p>') + '</div>' +
         '<div class="karte"><h3>Verkäufer</h3><p>' + esc(a.name) + ' · ' + esc(a.plz) + ' ' + esc(a.ort || '') + '</p><p>' +
         (a.telefon ? '<a href="tel:' + esc(a.telefon) + '">' + esc(a.telefon) + '</a> ' : '') + (a.email ? '<a href="mailto:' + esc(a.email) + '">' + esc(a.email) + '</a>' : '') + '</p>' +
-        '<p class="leise">Einwilligung am ' + datum(a.einwilligung_am) + ' (Text ' + esc(a.einwilligung_version) + ')</p></div>' +
+        '<p class="leise">Einwilligung am ' + datum(a.einwilligung_am) + ' (Text ' + esc(a.einwilligung_version) + ')</p>' +
+        (INHABER && a.status !== 'zurueckgezogen' ? '<button class="knopf klein" data-widerruf="1">Widerruf: personenbezogene Daten löschen</button>' : '') + '</div>' +
         '<div class="karte"><h3>Zustand</h3>' + (a.maengel.length ? '<p>' + a.maengel.map(function(m){ return '⚠ ' + esc(m.text); }).join('<br>') + '</p>' : '<p class="leise">Keine Mängel angegeben.</p>') +
         (a.beschreibung ? '<p style="white-space:pre-wrap">' + esc(a.beschreibung) + '</p>' : '') +
         (a.fotos.length ? '<div class="fotos">' + a.fotos.map(function(f){ var u = '/anfrage-fotos/' + a.id + '/' + encodeURIComponent(f.datei); return '<a href="' + u + '" target="_blank" rel="noopener"><img src="' + u + '" alt="Foto"></a>'; }).join('') + '</div>' : '<p class="leise">Keine Fotos.</p>') + '</div>' +
@@ -185,8 +186,12 @@ var TOKEN = {{ token | tojson }}, STATUS = {{ status | tojson }}, KANAELE = {{ k
   document.getElementById('liste').addEventListener('click', function(e){ var k = e.target.closest('.karte'); if(k) detail(+k.dataset.id); });
   document.getElementById('liste').addEventListener('keydown', function(e){ var k = e.target.closest('.karte'); if(k && e.key === 'Enter') detail(+k.dataset.id); });
   document.getElementById('detail').addEventListener('click', function(e){
-    var t = e.target.closest('[data-status],[data-aktion],[data-freigabe],[data-auktion-aktion],[data-kalk-aktion]'); if(!t || !aktiv) return;
+    var t = e.target.closest('[data-status],[data-aktion],[data-freigabe],[data-auktion-aktion],[data-kalk-aktion],[data-widerruf]'); if(!t || !aktiv) return;
     if(t.dataset.kalkAktion){ e.preventDefault(); return kalkAktion(t); }
+    if(t.dataset.widerruf){
+      if(!confirm('Widerruf ausführen? Name, Kontakt, Beschreibung, Notiz und Fotos werden unwiderruflich gelöscht, die Freigabe zurückgenommen.')) return;
+      return api('/api/verkaufsanfrage/' + aktiv + '/widerruf', {}).then(function(){ return Promise.all([liste(), detail(aktiv)]); }, function(err){ alert(err.message); });
+    }
     if(t.dataset.auktionAktion) return auktionAktion(t);
     var p = t.dataset.freigabe ? api('/api/verkaufsanfrage/' + aktiv + '/freigabe', {freigeben: t.dataset.freigabe === '1'})
           : t.dataset.status ? api('/api/verkaufsanfrage/' + aktiv + '/status', {status:t.dataset.status})

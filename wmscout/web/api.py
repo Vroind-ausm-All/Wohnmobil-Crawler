@@ -30,6 +30,7 @@ from ..verkauf import Eingabefehler, VerkaufSpeicher
 from ..haendler import STANDORT_STATUS, HaendlerSpeicher
 from ..auktion import STANDARD as MINDESTPREIS_STANDARD
 from ..auktion import AuktionSpeicher, AuktionsFehler
+from .. import datenrechte
 from ..deal import DealSpeicher
 from ..team import HAENDLER
 from ..bearbeitung import (IN_ARBEIT, OFFEN, VORBEREITET, BearbeitungsKonflikt, TeamSicht, ablauf_grenze, darf_erzwingen, darf_status,
@@ -476,6 +477,17 @@ class Anfrage:
             return self.senden(200, pfad.read_bytes(), mimetypes.guess_type(pfad.name)[0] or "image/jpeg")
         raise Antwort(404, "nicht gefunden")
 
+    def anfrage_widerruf(self, anfrage_id: int) -> dict:
+        """Widerruf der Einwilligung (G0, ``datenrechte.widerruf``) – nur der Inhaber."""
+        try:
+            erg = datenrechte.widerruf(self.k.db, self.k.cfg, self.k.verkauf.foto_ordner.parent, anfrage_id, self.nutzer["id"])
+        except LookupError as e:
+            raise Antwort(404, str(e)) from e
+        except ValueError as e:
+            raise Antwort(409, str(e)) from e
+        log.info("Widerruf für Anfrage %s ausgeführt durch %s", anfrage_id, self.nutzer["name"])
+        return {"ok": True, **erg}
+
     # ----- Deal Intelligence (Phase E)
     def betrag_aus_query(self) -> int | None:
         wert = ((self.query.get("betrag") or [""])[0]).strip()
@@ -740,6 +752,9 @@ class Anfrage:
                 raise Antwort(404, str(fehler)) from fehler
             kid = k.deal.speichern(e, erg, anlass="gespeichert", anfrage_id=int(m.group(1)), standort_id=standort, nutzer_id=self.nutzer["id"])
             return self.json(200, {"id": kid})
+        if m := re.fullmatch(r"/api/verkaufsanfrage/(\d+)/widerruf", p):
+            self.nur_inhaber()
+            return self.json(200, self.anfrage_widerruf(int(m.group(1))))
         if m := re.fullmatch(r"/api/verkaufsanfrage/(\d+)/auktion", p):
             self.nur_inhaber()
             aid = k.auktion.anlegen(int(m.group(1)), self.nutzer["id"], startpreis=daten.get("startpreis"),

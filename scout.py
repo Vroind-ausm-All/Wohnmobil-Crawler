@@ -51,6 +51,7 @@ from wmscout.laufsperre import Laufsperre
 from wmscout.eingang import import_ordner
 from wmscout.auktion import STATUS as AUKTION_STATUS
 from wmscout.auktion import AuktionSpeicher
+from wmscout import datenrechte
 from wmscout.deal import DealSpeicher
 from wmscout.haendler import STANDORT_STATUS, HaendlerSpeicher
 from wmscout.importer import Importer
@@ -303,6 +304,21 @@ def cmd_kalkulation(cfg, db, args):
     print(f"{p['anzahl']} gespeicherte Kalkulationen – alle identisch nachgerechnet.")
 
 
+def cmd_anfrage(cfg, db, args):
+    """Widerruf einer Verkaufsanfrage (Datenrechte, G0) – wie der Knopf des Inhabers in /anfragen."""
+    r = db.con.execute("SELECT id FROM verkaufsanfragen WHERE referenz=?", (args.referenz.strip().upper(),)).fetchone()
+    if not r:
+        sys.exit(f"Anfrage „{args.referenz}“ unbekannt")
+    if not args.bestaetigt:
+        sys.exit("Löscht personenbezogene Daten unwiderruflich – zur Bestätigung --bestaetigt angeben")
+    try:
+        erg = datenrechte.widerruf(db, cfg, foto_ordner(cfg), r["id"], None)
+    except ValueError as e:
+        sys.exit(f"Nicht gelöscht: {e}")
+    print(f"Widerruf ausgeführt: {erg['fotos']} Foto(s) gelöscht, {erg['besichtigungen']} Besichtigung(en) geschwärzt, "
+          f"Verkäufer {'anonymisiert' if erg['verkaeufer_anonymisiert'] else 'bleibt (weitere Anfragen)'}.")
+
+
 def cmd_status(cfg, db, args):
     """Ohne ``--nutzer`` wie bisher: kein Eintrag in `bearbeitung`, ein kontaktiertes Inserat gilt im Team als „ohne Zuordnung“.
     Mit ``--nutzer`` gilt die Team-Regel wie in der App (Übernahme, Konflikt mit Kollegen, Kontakt durch wen)."""
@@ -358,6 +374,10 @@ def main():
     st.add_argument("--ort")
     au = sub.add_parser("auktion", help="Demo-Auktionen auflisten oder das Auktionsprotokoll prüfen")
     au.add_argument("aktion", choices=["liste", "pruefen"])
+    an = sub.add_parser("anfrage", help="Verkaufsanfrage: Widerruf der Einwilligung ausführen (Daten löschen)")
+    an.add_argument("aktion", choices=["widerruf"])
+    an.add_argument("referenz", help="z. B. VA-2026-0001")
+    an.add_argument("--bestaetigt", action="store_true", help="Löschen wirklich ausführen")
     ka = sub.add_parser("kalkulation", help="gespeicherte Kalkulationen (Gebote) nachrechnen")
     ka.add_argument("aktion", choices=["pruefen"])
     s = sub.add_parser("status", help="Status einer Anzeige setzen")
@@ -389,7 +409,7 @@ def main():
         sys.exit(f"Datenbank-Start abgebrochen: {e}")
     {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "rechne": cmd_rechne,
      "nutzer": cmd_nutzer, "status": cmd_status, "standort": cmd_standort,
-     "auktion": cmd_auktion, "kalkulation": cmd_kalkulation}[args.cmd](cfg, db, args)
+     "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":
