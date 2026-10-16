@@ -52,7 +52,7 @@ from wmscout.laufsperre import Laufsperre
 from wmscout.eingang import import_ordner
 from wmscout.auktion import STATUS as AUKTION_STATUS
 from wmscout.auktion import AuktionSpeicher
-from wmscout import datenrechte
+from wmscout import datenrechte, mandanten
 from wmscout.audit import AuditSpeicher
 from wmscout.nutzung import nutzung
 from wmscout.deal import DealSpeicher
@@ -183,6 +183,30 @@ def cmd_rechne(cfg, db, args):
 def cmd_app(cfg, db, args):
     from wmscout.app import starte
     starte(cfg, db, BASIS, port=args.port, browser=not args.kein_browser)
+
+
+def cmd_mandant(cfg, args):
+    """Mandanten (G2): anlegen, auflisten, Nutzung je Mandant. Arbeiten in einem Mandanten: scout.py --mandant KENNUNG <befehl>."""
+    if args.aktion == "anlegen":
+        if not args.kennung or not args.url:
+            sys.exit("Aufruf: python scout.py mandant anlegen KENNUNG --name \"Firma\" --url https://firma.example.de")
+        ziel = mandanten.anlegen(cfg, BASIS, args.kennung, args.name or args.kennung, args.url)
+        print(f"Mandant „{args.kennung}“ angelegt: {ziel}/mandant.yaml\n"
+              f"Ersten Inhaber anlegen: python scout.py --mandant {args.kennung} nutzer anlegen NAME --rolle inhaber")
+        return
+    liste = mandanten.alle(cfg, BASIS)
+    for m in liste:
+        k = m["mandant"]["kennung"]
+        if args.aktion == "liste":
+            print(f"{k:<16} {m['mandant']['name']:<28} {', '.join(sorted(mandanten.hosts(m)))}")
+            continue
+        db = Datenbank(str(BASIS / m["ausgabe"]["datenbank"]), str(sicherung_ordner(m, BASIS)), wal=wal_aktiv(m))
+        try:
+            n = nutzung(db, args.monat)
+        finally:
+            db.con.close()
+        z = n["zaehler"]
+        print(f"{k:<16} {n['monat']}  " + "  ".join(f"{name}={'–' if wert is None else wert}" for name, wert in z.items()))
 
 
 def foto_ordner(cfg) -> Path:
@@ -367,10 +391,13 @@ def cmd_status(cfg, db, args):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--config", default="config.yaml")
+    p.add_argument("--mandant", help="Befehl für diesen Mandanten ausführen (mandanten/<kennung>/, G2)")
     sub = p.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("app", help="Browser-App starten: anklicken, anschreiben, Status speichern")
     a.add_argument("--port", type=int, help="Standard: config.yaml → app → port (8765)")
     a.add_argument("--kein-browser", action="store_true", help="Browser nicht automatisch öffnen")
+    a.add_argument("--mandanten", action="store_true", help="alle Mandanten aus mandanten/ bedienen (Hostname wählt den Mandanten)")
+    a.add_argument("--lokal", help="mit --mandanten: dieser Mandant ist zusätzlich über 127.0.0.1 erreichbar")
     sub.add_parser("lauf", help="crawlen, bewerten, Report erzeugen")
     sub.add_parser("report", help="Report aus vorhandenen Daten neu erzeugen")
     im = sub.add_parser("import", help="im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten einlesen (ohne Internet)")
@@ -411,6 +438,12 @@ def main():
     ad.add_argument("--limit", type=int, default=500)
     nz = sub.add_parser("nutzung", help="Nutzungszähler eines Monats (Anfragen, Auktionen, Gebote, Ankäufe, Zugriffe, aktive Nutzer)")
     nz.add_argument("--monat", help="JJJJ-MM, Standard: laufender Monat")
+    md = sub.add_parser("mandant", help="Mandanten (mehrere Firmen) anlegen, auflisten, Nutzung je Mandant")
+    md.add_argument("aktion", choices=["anlegen", "liste", "nutzung"])
+    md.add_argument("kennung", nargs="?", help="nur anlegen: z. B. firma-b (a–z, 0–9, Bindestrich)")
+    md.add_argument("--name")
+    md.add_argument("--url", help="nur anlegen: eigene Adresse, z. B. https://firma-b.example.de")
+    md.add_argument("--monat", help="nur nutzung: JJJJ-MM")
     ka = sub.add_parser("kalkulation", help="gespeicherte Kalkulationen (Gebote) nachrechnen")
     ka.add_argument("aktion", choices=["pruefen"])
     s = sub.add_parser("status", help="Status einer Anzeige setzen")
@@ -428,6 +461,17 @@ def main():
     args = p.parse_args()
 
     cfg = lade_config(args.config)
+    try:
+        if args.cmd == "mandant" or (args.cmd == "app" and args.mandanten):
+            logging_einrichten(cfg)
+            if args.cmd == "mandant":
+                return cmd_mandant(cfg, args)
+            from wmscout.app import starte_mandanten
+            return starte_mandanten(cfg, BASIS, port=args.port, lokal=args.lokal)
+        if args.mandant:
+            cfg = mandanten.mandant_cfg(cfg, BASIS, args.mandant)
+    except (mandanten.MandantenFehler, MigrationsFehler) as e:
+        sys.exit(f"Mandanten: {e}")
     logging_einrichten(cfg)
     # Sichern/Wiederherstellen arbeiten ohne Datenbank-Start (die Datenbank darf defekt oder neuer sein)
     if args.cmd == "sichern":

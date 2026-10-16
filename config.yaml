@@ -210,6 +210,11 @@ app:
   live_max_gesamt: 40
   sitzung_leerlauf_stunden: 72     # nach so vielen Stunden ohne Nutzung neu anmelden (0 = aus); spätestens nach 30 Tagen
 
+# Mandantenbetrieb (G2, docs/MANDANTEN.md): mehrere Firmen auf einem Server, je eigene Datenbank. Nur mit
+# „python scout.py app --mandanten“; sonst ohne Wirkung.
+mandanten:
+  ordner: mandanten                # je Mandant ein Unterordner mit mandant.yaml (relativ zum Projektordner)
+
 # --- 7b. Team ---------------------------------------------------
 # Gilt nur, wenn Nutzer angelegt sind (python scout.py nutzer anlegen …). Wer ein Inserat übernimmt, reserviert es für
 # die eingestellte Zeit; danach ist es wieder frei, solange noch kein Kontakt bestätigt wurde.

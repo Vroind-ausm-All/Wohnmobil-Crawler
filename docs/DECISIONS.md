@@ -492,3 +492,23 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
      Zugriffe, Änderungen, aktive Nutzer) – keine eigene Zähltabelle, die auseinanderlaufen könnte; keine Preise, keine Rechnung.
 * **Folgen / offen:** Mehrere App-Prozesse teilen keine Ereignisse (es läuft ohnehin nur einer). Mit Mandanten (G2) müssen
   Ereignisse und Zähler je Mandant getrennt werden. Handy-App (`/m`) nutzt Live noch nicht (offline-orientiert).
+
+## ADR-033 – G2: Mandanten als getrennte Datenbanken, Auswahl allein über den Hostnamen · vorgeschlagen (17.10.2026)
+
+* **Kontext:** 3.0-Analyse Phase G „mandantenfähige Nutzung“; Betreiber: „Beides nacheinander“ (G0, dann Mandanten). Die
+  Sicherheitsprüfung (ADR-030) lehnte mandantenfähigen Betrieb ab, solange alle Daten in einer Datenbank ohne Trennung liegen
+  (Befund M7: Lesen firmenweit).
+* **Entscheidung:**
+  1. **Eine Datenbank je Mandant** statt `mandant_id` in jeder Tabelle: 257 SQL-Aufrufe (`execute`, Stand G2) müssten sonst einzeln und für immer
+     korrekt gefiltert werden; ein einziger vergessener Filter wäre ein Datenleck. Getrennte Dateien trennen auch Fotos,
+     Sicherungen, Audit, Live-Ereignisse (G1) und Nutzungszähler – ohne Schemaänderung und ohne Migration bestehender Daten.
+  2. Ordner `mandanten/<kennung>/` (konfigurierbar: `mandanten.ordner`) mit `mandant.yaml` = Abweichungen von `config.yaml`.
+     Datenpfade erzwingt das Programm; `ausgabe`, `sicherung`, `import` in `mandant.yaml` sind verboten. Adresse und Versandwege
+     (WhatsApp, E-Mail) werden nicht geerbt.
+  3. **Hostname wählt den Mandanten** (vor jeder anderen Verarbeitung, unbekannt → 403 ohne Lesen des Inhalts und ohne Nennung
+     der Mandanten). Jeder Hostname gehört zu genau einem Mandanten (sonst kein Start). `127.0.0.1` nur mit `--lokal KENNUNG`.
+     Ein Prozess, je Mandant ein eigener Kontext (Verbindung, Sperre, Bremse, Live, Audit, Suchlauf).
+  4. Kommandozeile mit `--mandant KENNUNG` für alle Befehle; `mandant anlegen|liste|nutzung`.
+  5. Einzelbetrieb unverändert (ohne `--mandanten` keine Wirkung).
+* **Folgen / offen:** Keine gemeinsame Marktdatenbasis (jeder Mandant sucht selbst). Kein Administrator in der Oberfläche.
+  Viele Mandanten in einem Prozess nicht vorgesehen (Threads je Live-Verbindung). Bestehende Daten werden nicht verschoben.

@@ -4,6 +4,18 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## Phase G2 – Mandantenfähigkeit (17.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux) | 853 bestanden, davon 6 neu (`test_mandanten.py`) |
+| Konfiguration: erzwungene Pfade, verbotene Abschnitte, nicht geerbte Adresse/WhatsApp, doppelte/fehlende Hostnamen | bestanden |
+| HTTP: Hostname wählt Mandanten; Zugang und Sitzung von A bei B wertlos; Anfragen, Audit, Live, Nutzung getrennt | bestanden |
+| Unbekannter Host → 403 ohne Mandantennamen; 127.0.0.1 nur mit `--lokal` | bestanden |
+| CLI `mandant anlegen/liste/nutzung`, `--mandant` | bestanden |
+| Gegenprobe 6 Schutzstellen | alle erkannt |
+| Reverse-Proxy mit mehreren Hostnamen, Windows-CI, Last | nicht geprüft (Windows-CI folgt im PR) |
+
 ## Phase G1 – Echtzeit per SSE und Nutzungszähler (16.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

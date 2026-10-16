@@ -18,6 +18,9 @@ Sie ist eine technische Checkliste, keine Rechtsberatung.
 - [ ] Anfragen mit `X-Forwarded-*`/`Forwarded` gelten nie als „lokal“ – ohne angelegte Nutzer ist die App über den Proxy
       also gesperrt. **Vor dem Pilot mindestens einen Inhaber anlegen** (`scout.py nutzer anlegen …`).
 
+- [ ] Mehrere Firmen: nur im Mandantenbetrieb (`docs/MANDANTEN.md`), je Firma eigener Hostname; der Proxy reicht den
+      `Host`-Kopf unverändert durch und leitet nur die eingetragenen Hostnamen weiter.
+
 ## 2. Grenzen im Proxy
 
 Die App begrenzt selbst: JSON 1 MB, Fotos/Dokumente ca. 8 MB je Bild, Lesezeitlimit 30 s je Verbindung, Login-Bremse
@@ -58,7 +61,7 @@ Die App begrenzt selbst: JSON 1 MB, Fotos/Dokumente ca. 8 MB je Bild, Lesezeitli
 
 | Punkt | Stand |
 |---|---|
-| Lesezugriff nach Bedarf (Need-to-know) | Team liest firmenweit alle Anfragen – gewollt für eine Firma; Trennung zwischen Firmen folgt mit **G2 Mandanten** |
+| Lesezugriff nach Bedarf (Need-to-know) | Team liest firmenweit alle Anfragen – gewollt für eine Firma; Trennung zwischen Firmen **erledigt (G2):** je Firma eigene Datenbank, `docs/MANDANTEN.md` |
 | Inline-Skripte (CSP mit `'unsafe-inline'`) | Nonce/Auslagerung als Folgearbeit |
 | Sitzungs-Leerlaufzeit | **erledigt (G0b):** `app.sitzung_leerlauf_stunden` (Standard 72), spätestens nach 30 Tagen |
 | CSRF-Token je Sitzung | nicht umgesetzt; Schutz über SameSite-Cookie, JSON-Pflicht, Origin- und Sec-Fetch-Site-Prüfung |

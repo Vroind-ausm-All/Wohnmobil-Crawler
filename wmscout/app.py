@@ -27,6 +27,9 @@ from .importer import Importer
 from .sicherung import sicherung_ordner
 from .team import lade_team_sicht
 from .web.api import Kontext, bearbeite
+from .web.sicherheit import SICHERHEITS_KOPF
+from . import mandanten
+from .sicherung import sicherung_ordner as _sicherung_ordner
 
 log = logging.getLogger("scout")
 
@@ -133,7 +136,8 @@ class AutoSuche:
             time.sleep(60)
 
 
-def baue_handler(k: Kontext):
+def baue_handler(k: Kontext | None = None, waehle=None):
+    """Einzelbetrieb: ein Kontext. Mandanten (G2): ``waehle(host) -> Kontext | None`` – allein der Hostname entscheidet."""
     class Handler(BaseHTTPRequestHandler):
         server_version = "WohnmobilScout"
         sys_version = ""                 # keine Python-Version im Server-Kopf (G0)
@@ -142,11 +146,27 @@ def baue_handler(k: Kontext):
         def log_message(self, fmt, *args):
             log.debug("app: " + fmt, *args)
 
+        def _kontext(self) -> Kontext | None:
+            if waehle is None:
+                return k
+            gewaehlt = waehle((self.headers.get("Host") or "").strip().lower())
+            if gewaehlt is None:            # unbekannter Hostname: Inhalt nicht lesen, keine Mandanten verraten
+                body = b'{"fehler": "Dieser Hostname ist nicht freigegeben"}'
+                self.send_response(403)
+                for name, wert in {"Content-Type": "application/json; charset=utf-8", "Content-Length": str(len(body)),
+                                   "Cache-Control": "no-store", **SICHERHEITS_KOPF}.items():
+                    self.send_header(name, wert)
+                self.end_headers()
+                self.wfile.write(body)
+            return gewaehlt
+
         def do_GET(self):
-            bearbeite(self, k, "GET")
+            if kx := self._kontext():
+                bearbeite(self, kx, "GET")
 
         def do_POST(self):
-            bearbeite(self, k, "POST")
+            if kx := self._kontext():
+                bearbeite(self, kx, "POST")
 
     Handler.kontext = k                  # für Diagnose und Tests (z. B. Live-Verbindungen zählen)
     return Handler
@@ -164,13 +184,62 @@ class Server(ThreadingHTTPServer):
 
 def erstelle_server(cfg: dict, db: Datenbank, basis: Path, port: int = 8765) -> tuple[HTTPServer, str, Suchlauf]:
     """Lauscht nur auf 127.0.0.1. Handys erreichen die App über `tailscale serve` (HTTPS), siehe docs/HANDY-APP.md."""
-    token = secrets.token_urlsafe(18)
+    k, suchlauf = _kontext(cfg, db, basis)
+    server = Server(("127.0.0.1", port), baue_handler(k))
+    return server, k.token, suchlauf
+
+
+def _kontext(cfg: dict, db: Datenbank, basis: Path) -> tuple[Kontext, Suchlauf]:
     db_pfad = basis / cfg["ausgabe"]["datenbank"]
     suchlauf = Suchlauf(cfg, str(db_pfad), basis)
-    k = Kontext(cfg, db, basis, token, suchlauf, db_pfad.parent / "fotos")
+    k = Kontext(cfg, db, basis, secrets.token_urlsafe(18), suchlauf, db_pfad.parent / "fotos")
     suchlauf.bei_ende.append(lambda zeilen: (k.veraendert(), k.whatsapp.neue_treffer(zeilen), k.live.melde("suchlauf")))
-    server = Server(("127.0.0.1", port), baue_handler(k))
-    return server, token, suchlauf
+    return k, suchlauf
+
+
+def erstelle_server_mandanten(grund_cfg: dict, basis: Path, port: int = 8765, lokal: str | None = None) -> HTTPServer:
+    """Mandantenbetrieb (G2, ADR-033): je Mandant eigene Datenbank, eigener Kontext (Sperre, Live, Audit, Suchlauf). Der Hostname
+    der Anfrage wählt den Mandanten; 127.0.0.1/localhost nur, wenn ``lokal`` einen Mandanten benennt. ``MandantenFehler``,
+    wenn die Mandanten nicht eindeutig sind – dann startet nichts."""
+    liste = mandanten.alle(grund_cfg, basis)
+    if lokal and lokal not in {c["mandant"]["kennung"] for c in liste}:
+        raise mandanten.MandantenFehler(f"--lokal {lokal}: kein solcher Mandant")
+    nach_host: dict[str, Kontext] = {}
+    kontexte: dict[str, tuple[Kontext, Suchlauf]] = {}
+    for cfg in liste:
+        db = Datenbank(str(basis / cfg["ausgabe"]["datenbank"]), str(_sicherung_ordner(cfg, basis)), wal=wal_aktiv(cfg))
+        k, suchlauf = _kontext(cfg, db, basis)
+        kennung = cfg["mandant"]["kennung"]
+        kontexte[kennung] = (k, suchlauf)
+        for h in mandanten.hosts(cfg):
+            nach_host[h] = k
+    server = Server(("127.0.0.1", port), baue_handler(waehle=nach_host.get))
+    if lokal:                                    # erst nach dem Binden: tatsächlicher Port (auch bei Port 0)
+        p = server.server_address[1]
+        nach_host[f"127.0.0.1:{p}"] = nach_host[f"localhost:{p}"] = kontexte[lokal][0]
+    server.mandanten = kontexte
+    return server
+
+
+def starte_mandanten(grund_cfg: dict, basis: Path, port: int | None = None, lokal: str | None = None):
+    port = port or (grund_cfg.get("app") or {}).get("port", 8765)
+    try:
+        server = erstelle_server_mandanten(grund_cfg, basis, port, lokal)
+    except OSError:
+        print(f"Port {port} ist belegt – läuft die App schon? Sonst: python scout.py app --mandanten --port {port + 1}")
+        return
+    print(f"Wohnmobil-Scout (Mandantenbetrieb) auf 127.0.0.1:{port}   (Beenden: Strg+C)")
+    for kennung, (k, suchlauf) in server.mandanten.items():
+        auto = AutoSuche(k.cfg, suchlauf)
+        print(f"  {kennung:<16} {k.cfg['mandant']['name']:<28} {', '.join(sorted(mandanten.hosts(k.cfg)))}"
+              + (f"  · Auto-Suche alle {auto.stunden:g} h" if auto.stunden > 0 else ""))
+        auto.starte()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nbeendet")
+    finally:
+        server.server_close()
 
 
 def starte(cfg: dict, db: Datenbank, basis: Path, port: int | None = None, browser: bool = True):
