@@ -70,10 +70,10 @@ def mandant_cfg(grund_cfg: dict, basis: Path, kennung: str) -> dict:
         if isinstance(grund.get(k), dict):
             grund[k]["aktiv"] = False
     cfg = _mischen(grund, eigen)
-    rel = f"{_wurzel_text(grund_cfg)}/{kennung}"
-    cfg["ausgabe"] = {**(grund_cfg.get("ausgabe") or {}), "ordner": f"{rel}/ausgabe", "datenbank": f"{rel}/daten/anzeigen.sqlite"}
-    cfg["sicherung"] = {**(grund_cfg.get("sicherung") or {}), "ordner": f"{rel}/daten/sicherungen"}
-    cfg["import"] = {**(grund_cfg.get("import") or {}), "ordner": f"{rel}/import"}
+    rel = Path(_wurzel_text(grund_cfg)) / kennung
+    cfg["ausgabe"] = {**(grund_cfg.get("ausgabe") or {}), "ordner": str(rel / "ausgabe"), "datenbank": str(rel / "daten" / "anzeigen.sqlite")}
+    cfg["sicherung"] = {**(grund_cfg.get("sicherung") or {}), "ordner": str(rel / "daten" / "sicherungen")}
+    cfg["import"] = {**(grund_cfg.get("import") or {}), "ordner": str(rel / "import")}
     cfg["mandant"] = {"kennung": kennung, "name": name}
     return cfg
 

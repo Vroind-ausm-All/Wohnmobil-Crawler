@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import threading
+from pathlib import Path
 
 import pytest
 import yaml
@@ -33,8 +34,9 @@ def test_konfiguration_pfade_fest_und_nichts_geerbt(grund, tmp_path):
     _zwei(grund, tmp_path)
     a = mandanten.mandant_cfg(grund, tmp_path, "firma-a")
     assert a["mandant"] == {"kennung": "firma-a", "name": "Firma A"} and a["anschreiben"]["firma"] == "Firma A"
-    assert a["ausgabe"]["datenbank"] == f"{tmp_path}/mandanten/firma-a/daten/anzeigen.sqlite"
-    assert a["sicherung"]["ordner"].endswith("firma-a/daten/sicherungen") and a["import"]["ordner"].endswith("firma-a/import")
+    assert Path(a["ausgabe"]["datenbank"]) == tmp_path / "mandanten" / "firma-a" / "daten" / "anzeigen.sqlite"
+    assert Path(a["sicherung"]["ordner"]).parts[-3:] == ("firma-a", "daten", "sicherungen")
+    assert Path(a["import"]["ordner"]).parts[-2:] == ("firma-a", "import")
     assert mandanten.hosts(a) == {"a.test"} and a["whatsapp"]["aktiv"] is False                  # Adresse/WhatsApp nicht geerbt
     assert a["crawler"] == grund["crawler"]                                                     # sonst wie config.yaml
     assert [m["mandant"]["kennung"] for m in mandanten.alle(grund, tmp_path)] == ["firma-a", "firma-b"]
@@ -99,7 +101,7 @@ def test_hostname_waehlt_mandanten_und_trennt_alles(mserver, tmp_path):
     # eigene Dateien je Mandant
     pa = ka.db.con.execute("PRAGMA database_list").fetchone()[2]
     pb = kb.db.con.execute("PRAGMA database_list").fetchone()[2]
-    assert pa != pb and "/firma-a/daten/" in pa and "/firma-b/daten/" in pb
+    assert Path(pa).parts[-3:-1] == ("firma-a", "daten") and Path(pb).parts[-3:-1] == ("firma-b", "daten")
     # Audit, Live und Nutzung je Mandant
     assert ka.db.con.execute("SELECT COUNT(*) FROM audit WHERE nutzer='Anna'").fetchone()[0] >= 2
     assert kb.db.con.execute("SELECT COUNT(*) FROM audit WHERE nutzer='Anna'").fetchone()[0] == 1            # nur der Fehlversuch

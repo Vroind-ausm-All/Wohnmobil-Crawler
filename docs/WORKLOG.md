@@ -17,7 +17,8 @@ Wert „–“.
   Tests `test_mandanten.py` (6).
 - **Keine Schemaänderung**, keine Migration, Einzelbetrieb unverändert.
 - **Tests:** siehe TEST-REPORT, `ruff` grün. Gegenprobe an 6 Schutzstellen – alle erkannt (eine erste Fassung der Gegenprobe
-  „127.0.0.1 immer erreichbar“ scheiterte nur an einem KeyError und wurde durch eine echte Fehlleitung ersetzt).
+  „127.0.0.1 immer erreichbar“ scheiterte nur an einem KeyError und wurde durch eine echte Fehlleitung ersetzt). Windows-CI fand
+  pfadtrennerabhängige Testannahmen (`/` statt `\\`); Pfade werden jetzt mit `Path` gebildet und so verglichen.
 - **Nicht geprüft:** Betrieb hinter echtem Reverse-Proxy mit mehreren Hostnamen, Browser-Klicktest (keine Oberflächenänderung),
   Last mit mehreren Mandanten.
 
