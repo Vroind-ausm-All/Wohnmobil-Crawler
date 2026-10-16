@@ -20,7 +20,7 @@ nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px}
 </head>
 <body>
 <main>
-  <nav class="oben"><a href="/verkaufen">+ Anfrage erfassen</a><a href="/">Ankaufsliste</a></nav>
+  <nav class="oben"><a href="/verkaufen">+ Anfrage erfassen</a>{% if ich.rolle == 'inhaber' %}<a href="/standorte">Standorte</a>{% endif %}<a href="/haendler">Händlerportal</a><a href="/">Ankaufsliste</a></nav>
   <h1>Verkaufsanfragen</h1>
   <p class="leise">Fahrzeuge, die Verkäufer uns selbst anbieten – getrennt von beobachteten Inseraten. Keine automatische Nachricht an Verkäufer.</p>
   <div class="reihe" role="group" aria-label="Status">
@@ -32,7 +32,7 @@ nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px}
   </div>
 </main>
 <script>
-var TOKEN = {{ token | tojson }}, STATUS = {{ status | tojson }}, KANAELE = {{ kanaele | tojson }};
+var TOKEN = {{ token | tojson }}, STATUS = {{ status | tojson }}, KANAELE = {{ kanaele | tojson }}, INHABER = {{ 'true' if ich.rolle == 'inhaber' else 'false' }};
 (function(){
   var filter = '', aktiv = null;
   var OFFEN = {eingegangen:1, in_pruefung:1, angebot:1};
@@ -84,6 +84,13 @@ var TOKEN = {{ token | tojson }}, STATUS = {{ status | tojson }}, KANAELE = {{ k
         '<div class="karte"><h3>Zustand</h3>' + (a.maengel.length ? '<p>' + a.maengel.map(function(m){ return '⚠ ' + esc(m.text); }).join('<br>') + '</p>' : '<p class="leise">Keine Mängel angegeben.</p>') +
         (a.beschreibung ? '<p style="white-space:pre-wrap">' + esc(a.beschreibung) + '</p>' : '') +
         (a.fotos.length ? '<div class="fotos">' + a.fotos.map(function(f){ var u = '/anfrage-fotos/' + a.id + '/' + encodeURIComponent(f.datei); return '<a href="' + u + '" target="_blank" rel="noopener"><img src="' + u + '" alt="Foto"></a>'; }).join('') + '</div>' : '<p class="leise">Keine Fotos.</p>') + '</div>' +
+        '<div class="karte"><h3>Standorte</h3>' +
+        (a.weitergabe_einwilligung_am ? '<p class="leise">Verkäufer stimmt der Weitergabe an Standorte zu (' + datum(a.weitergabe_einwilligung_am) + ').</p>'
+                                      : '<p class="leise">Keine Zustimmung des Verkäufers zur Weitergabe – nicht freigebbar.</p>') +
+        (a.freigegeben_am ? '<p class="hinweis ok">Für geprüfte Standorte freigegeben seit ' + datum(a.freigegeben_am) + '</p>' : '') +
+        (INHABER && a.weitergabe_einwilligung_am ? (a.freigegeben_am ? '<button class="knopf klein" data-freigabe="0">Freigabe zurücknehmen</button>'
+            : '<p class="leise">Vor der Freigabe Beschreibung und Fotos auf Kontaktdaten prüfen.</p><button class="knopf klein primaer" data-freigabe="1">Für Standorte freigeben</button>') : '') +
+        (a.interessen.length ? '<p>Interesse: ' + a.interessen.map(function(i){ return esc(i.standort) + ' (' + datum(i.zeitpunkt) + ')'; }).join(', ') + '</p>' : '') + '</div>' +
         '<div class="karte"><h3>Bearbeitung</h3><p class="leise">Bearbeiter: ' + esc(a.bearbeiter || '–') + '</p>' +
         '<div class="reihe"><button class="knopf klein" data-aktion="uebernehmen">Ich übernehme</button>' + (a.bearbeiter_id ? '<button class="knopf klein" data-aktion="abgeben">Abgeben</button>' : '') + '</div>' +
         '<div class="reihe">' + Object.keys(STATUS).map(function(k){ return '<button class="knopf klein' + (k === a.status ? ' primaer' : '') + '" data-status="' + k + '">' + esc(STATUS[k]) + '</button>'; }).join('') + '</div>' +
@@ -97,8 +104,9 @@ var TOKEN = {{ token | tojson }}, STATUS = {{ status | tojson }}, KANAELE = {{ k
   document.getElementById('liste').addEventListener('click', function(e){ var k = e.target.closest('.karte'); if(k) detail(+k.dataset.id); });
   document.getElementById('liste').addEventListener('keydown', function(e){ var k = e.target.closest('.karte'); if(k && e.key === 'Enter') detail(+k.dataset.id); });
   document.getElementById('detail').addEventListener('click', function(e){
-    var t = e.target.closest('[data-status],[data-aktion]'); if(!t || !aktiv) return;
-    var p = t.dataset.status ? api('/api/verkaufsanfrage/' + aktiv + '/status', {status:t.dataset.status})
+    var t = e.target.closest('[data-status],[data-aktion],[data-freigabe]'); if(!t || !aktiv) return;
+    var p = t.dataset.freigabe ? api('/api/verkaufsanfrage/' + aktiv + '/freigabe', {freigeben: t.dataset.freigabe === '1'})
+          : t.dataset.status ? api('/api/verkaufsanfrage/' + aktiv + '/status', {status:t.dataset.status})
                              : api('/api/verkaufsanfrage/' + aktiv + '/uebernehmen', {abgeben: t.dataset.aktion === 'abgeben'});
     p.then(function(){ return Promise.all([liste(), detail(aktiv)]); }, function(err){ alert(err.message); });
   });

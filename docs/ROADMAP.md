@@ -139,6 +139,16 @@ Freigegeben vom Betreiber am 15.10.2026 („mache Phase B das Verkäuferportal�
 | B3 | P1 | **Team-Ansicht `/anfragen`**: Liste mit Bewertung, Detail mit Fotos, Kontakt, Status, Bearbeiter, Notiz, Verlauf | Orchestrator | B1 | Statuswechsel nachvollziehbar (Verlauf); nur angemeldet | REVIEW |
 | B4 | P2 | Öffentlicher Betrieb: Hosting/HTTPS, Spam-Schutz, Status-Link, Datenschutzerklärung, Widerruf/Löschung | – | B1–B3, Sicherheitsprüfung | Betreiberfreigabe + Rechtsprüfung | TODO (Freigabe nötig) |
 
+## Phase C (3.0) – Händlerportal (eigene Standorte)
+
+Freigegeben vom Betreiber am 16.10.2026 („Phase C“); Entscheidungen siehe ADR-026.
+
+| ID | Prio | Arbeitspaket | Agent | Abhängig | Akzeptanz | Status |
+|---|---|---|---|---|---|---|
+| C1 | P1 | **Schema v6**: Standorte, Standort je Nutzer, Weitergabe/Freigabe, Interesse | Orchestrator | B1 | Altbestand v1/v2/v4/v5 → v6 ohne Verlust (bestehende Spalten unverändert) | REVIEW |
+| C2 | P1 | **Rolle `haendler` + Positivliste**, Standortprüfung, Verwaltung `/standorte` + CLI | Orchestrator | C1 | Ungeprüfte/gesperrte Standorte sehen nichts; Händler erreichen nichts außer `/haendler` | REVIEW |
+| C3 | P1 | **`/haendler`**: anonymisierte Fahrzeuge mit Preisvorstellung, Fotos, Interesse; Freigabe in `/anfragen` | Orchestrator | C2 | Keine Kontaktdaten/Max-EK; nur zugestimmt + freigegeben + offen | REVIEW |
+
 ## Phase 3 – Datenbank und Marktbeobachtung
 
 **Abnahme:** identische Inserate lassen sich ohne Datenverlust erneut importieren; Preis- und Fahrzeughistorie bleiben

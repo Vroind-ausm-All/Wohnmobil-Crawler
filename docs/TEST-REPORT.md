@@ -4,6 +4,15 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## Phase C – Händlerportal v1 (16.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux) | 765 bestanden, davon 12 neu (`test_haendler.py`) |
+| Gegenprobe 6 Schutzstellen | alle erkannt |
+| Browser-Klicktest Händlerablauf | bestanden, 0 JS-Fehler |
+| Windows-CI, Safari/iOS | nicht geprüft |
+
 ## Phase B – Verkäuferportal v1 (15.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

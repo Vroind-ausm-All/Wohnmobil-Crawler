@@ -49,6 +49,7 @@ from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import STATUS, Datenbank, wal_aktiv
 from wmscout.laufsperre import Laufsperre
 from wmscout.eingang import import_ordner
+from wmscout.haendler import STANDORT_STATUS, HaendlerSpeicher
 from wmscout.importer import Importer
 from wmscout.migrationen import MigrationsFehler
 from wmscout.normalisierung.fahrzeug import ergaenze_fahrzeug
@@ -227,14 +228,20 @@ def _passwort_abfragen(name: str) -> str:
 def cmd_nutzer(cfg, db, args):
     team = TeamSpeicher(db, foto_ordner(cfg))
     if args.aktion == "liste":
-        for n in team.nutzer_liste(nur_aktive=False):
+        for n in team.nutzer_liste(nur_aktive=False, auch_haendler=True):
             print(f"{n['name']:<20} {ROLLEN[n['rolle']]:<12} {n['telefon'] or '':<16} {'aktiv' if n['aktiv'] else 'gesperrt'}")
         return
     if not args.name:
         sys.exit("Bitte einen Namen angeben, z. B.: python scout.py nutzer anlegen Max")
     if args.aktion == "anlegen":
+        standort_id = None
+        if args.standort:
+            s = HaendlerSpeicher(db).standort_nach_name(args.standort)
+            if not s:
+                sys.exit(f"Standort „{args.standort}“ unbekannt (python scout.py standort liste)")
+            standort_id = s["id"]
         try:
-            team.nutzer_anlegen(args.name, args.passwort or _passwort_abfragen(args.name), args.rolle, args.telefon)
+            team.nutzer_anlegen(args.name, args.passwort or _passwort_abfragen(args.name), args.rolle, args.telefon, standort_id)
         except Exception as e:  # noqa: BLE001 – verständliche Meldung statt Traceback
             sys.exit(f"Nicht angelegt: {e}")
         print(f"{args.name} angelegt ({ROLLEN[args.rolle]}). Ab jetzt ist für die App eine Anmeldung nötig.")
@@ -244,6 +251,28 @@ def cmd_nutzer(cfg, db, args):
     elif args.aktion in ("sperren", "entsperren"):
         ok = team.nutzer_aktiv_setzen(args.name, args.aktion == "entsperren")
         print("gespeichert" if ok else f"{args.name} nicht gefunden")
+
+
+def cmd_standort(cfg, db, args):
+    h = HaendlerSpeicher(db)
+    if args.aktion == "liste":
+        for s in h.standorte():
+            print(f"{s['name']:<24} {STANDORT_STATUS[s['status']]:<12} {s['plz'] or '':<6} {s['ort'] or '':<20} {s['nutzer']} Zugang/Zugänge")
+        return
+    if not args.name:
+        sys.exit("Bitte den Namen des Standorts angeben, z. B.: python scout.py standort anlegen \"Filiale Nord\"")
+    if args.aktion == "anlegen":
+        try:
+            h.standort_anlegen(args.name, args.plz, args.ort)
+        except (ValueError, sqlite3.IntegrityError) as e:
+            sys.exit(f"Nicht angelegt: {e}")
+        print(f"Standort {args.name} angelegt (zur Prüfung). Freischalten: python scout.py standort pruefen \"{args.name}\"")
+        return
+    s = h.standort_nach_name(args.name)
+    if not s:
+        sys.exit(f"Standort „{args.name}“ unbekannt")
+    h.setze_standort_status(s["id"], "geprueft" if args.aktion == "pruefen" else "gesperrt", None)
+    print("geprüft – Zugang frei" if args.aktion == "pruefen" else "gesperrt – Zugang sofort beendet")
 
 
 def cmd_status(cfg, db, args):
@@ -292,7 +321,13 @@ def main():
     n.add_argument("name", nargs="?")
     n.add_argument("--rolle", choices=list(ROLLEN), default="mitarbeiter")
     n.add_argument("--telefon", help="Handynummer international, z. B. +491701234567 (für WhatsApp)")
+    n.add_argument("--standort", help="nur Rolle haendler: Name des Standorts (python scout.py standort anlegen …)")
     n.add_argument("--passwort", help=argparse.SUPPRESS)      # nur für Tests/Automatisierung
+    st = sub.add_parser("standort", help="Standorte/Händler für das Händlerportal verwalten (prüfen = Zugang frei)")
+    st.add_argument("aktion", choices=["anlegen", "liste", "pruefen", "sperren"])
+    st.add_argument("name", nargs="?")
+    st.add_argument("--plz")
+    st.add_argument("--ort")
     s = sub.add_parser("status", help="Status einer Anzeige setzen")
     s.add_argument("id")
     s.add_argument("status", choices=list(STATUS))
@@ -321,7 +356,7 @@ def main():
     except (MigrationsFehler, ValueError, sqlite3.Error) as e:
         sys.exit(f"Datenbank-Start abgebrochen: {e}")
     {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "rechne": cmd_rechne,
-     "nutzer": cmd_nutzer, "status": cmd_status}[args.cmd](cfg, db, args)
+     "nutzer": cmd_nutzer, "status": cmd_status, "standort": cmd_standort}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":

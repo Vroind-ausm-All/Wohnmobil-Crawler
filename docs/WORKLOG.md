@@ -6,7 +6,23 @@ Wert „–“.
 
 ---
 
-## Phase B – Verkäuferportal v1, intern (15.10.2026) · Status: REVIEW
+## Phase C – Händlerportal v1 für eigene Standorte (16.10.2026) · Status: REVIEW
+
+- **Anlass:** Betreiber „Phase C“; Entscheidungen per Rückfrage (ADR-026): eigene Standorte, Zustimmung Verkäufer + Freigabe
+  Inhaber, anonymisiert mit Preisvorstellung, erst intern. Umgesetzt vom Orchestrator ohne Subagenten.
+- **Geändert/neu:** `wmscout/migrationen.py` (v6), `wmscout/haendler.py` (neu), `wmscout/verkauf.py` (Weitergabe, Freigabe,
+  Interessen), `wmscout/team.py` (Rolle `haendler`, Händler nicht in Team-Listen), `wmscout/datenbank.py` (Team-Zähler ohne
+  Händler), `wmscout/web/api.py` (Positivliste, Routen), `vorlagen/haendler.html`, `vorlagen/standorte.html` (neu),
+  `vorlagen/verkaufen.html`, `vorlagen/anfragen.html`, `scout.py` (`standort …`, `nutzer anlegen --standort`), `config.yaml`
+  (Einwilligungsversion), Tests `tests/test_haendler.py` (neu, 12); Migrationstests auf v6, Zeilenvergleich nur über die
+  vorher vorhandenen Spalten (neue leere Spalten sind erlaubt).
+- **Tests:** `pytest -q` 765 bestanden, `ruff` grün. Gegenprobe an 6 Schutzstellen (Positivliste, Standortprüfung,
+  anonyme Positivliste, Zustimmung des Verkäufers, Maskierung im Freitext, nur Inhaber gibt frei) – alle erkannt.
+  Zwei eigene Testfehler unterwegs (Kurzschluss mit `or`, Weiterleitung statt 401 bei Dateien) korrigiert.
+  Browser-Klicktest Ablauf Erfassen → Freigeben → Standort prüfen → Händler sieht anonym → Interesse: bestanden, 0 JS-Fehler.
+- **Nicht geprüft:** Windows-CI (folgt im PR), Safari/iOS, externe Händler (nicht Teil von v1).
+
+, intern (15.10.2026) · Status: REVIEW
 
 - **Anlass:** Betreiber: „mache Phase B das Verkäuferportal“; Entscheidungen per Rückfrage: erst intern, grobe Spanne,
   Preisvorstellung freiwillig (ADR-025). Umgesetzt vom Orchestrator ohne Subagenten.

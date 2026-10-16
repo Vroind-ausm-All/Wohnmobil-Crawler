@@ -254,4 +254,4 @@ email:
 verkaeuferportal:
   spanne_zeigen: true                # grobe Marktwert-Spanne nach dem Absenden (nie Max-EK oder Angebot)
   spanne_mindest_sicherheit: mittel  # nur bei Datenlage „mittel“ oder „hoch“
-  einwilligung_version: "2026-10-entwurf"   # Stand des Einwilligungstexts; bei jeder Textänderung erhöhen
+  einwilligung_version: "2026-10-entwurf-2" # Stand des Einwilligungstexts (2: + freiwillige Weitergabe an Standorte); bei jeder Textänderung erhöhen

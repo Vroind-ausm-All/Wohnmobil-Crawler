@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#24524a">
+<link rel="icon" href="/static/icon-192.png">
+<title>Händlerportal – {{ firma }}</title>
+<link rel="stylesheet" href="/static/mobil.css">
+<style>
+main{max-width:1000px;margin:0 auto;padding:16px}
+nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px}
+.raster{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.fotos{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px} .fotos img{width:84px;height:64px;object-fit:cover;border-radius:6px}
+</style>
+</head>
+<body>
+<main>
+  <nav class="oben">{% if not haendler %}<a href="/anfragen">Verkaufsanfragen</a><a href="/">Ankaufsliste</a>{% endif %}<a href="#" id="abmelden">Abmelden</a></nav>
+  <h1>Händlerportal</h1>
+  {% if haendler %}
+  <p class="leise">{{ ich.name }} · Standort {{ standort.name if standort else '–' }}{% if standort %} ({{ standort_status[standort.status] }}){% endif %}</p>
+  {% else %}
+  <p class="hinweis info">Vorschau: So sehen geprüfte Standorte die freigegebenen Verkaufsanfragen – ohne Namen, Telefon, E-Mail und genaue Adresse.</p>
+  {% endif %}
+  <p class="leise">Fahrzeuge privater Verkäufer, die einer Weitergabe zugestimmt haben und von uns freigegeben wurden. „Interesse melden“ ist unverbindlich – wir melden uns.</p>
+  <div id="liste" class="raster"><p class="leise">Lade …</p></div>
+</main>
+<script>
+var TOKEN = {{ token | tojson }}, HAENDLER = {{ 'true' if haendler else 'false' }};
+(function(){
+  function esc(s){ return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function eur(x){ return x === null || x === undefined ? 'keine Angabe' : Math.round(x).toLocaleString('de-DE') + ' €'; }
+  function tsd(x){ return x ? Number(x).toLocaleString('de-DE') : '?'; }
+  function api(url, d){
+    var opt = {credentials:'same-origin', headers:{}};
+    if(d !== undefined){ opt.method = 'POST'; opt.headers['Content-Type'] = 'application/json'; opt.headers['X-Scout-Token'] = TOKEN; opt.body = JSON.stringify(d); }
+    return fetch(url, opt).then(function(r){
+      if(r.status === 401){ location.href = '/login?weiter=%2Fhaendler'; throw new Error('Bitte anmelden'); }
+      return r.json().catch(function(){ return {}; }).then(function(x){ if(!r.ok) throw new Error(x.fehler || ('Fehler ' + r.status)); return x; });
+    });
+  }
+  function lade(){
+    return api('/api/haendler/fahrzeuge').then(function(l){
+      var el = document.getElementById('liste');
+      el.innerHTML = l.length ? l.map(function(f){
+        return '<div class="karte"><div class="zeile"><span class="titel">' + esc([f.marke, f.modell].filter(Boolean).join(' ')) + '</span><span class="tag">' + esc(f.region || '') + '</span></div>' +
+          '<p class="leise">' + esc(f.referenz) + ' · ' + esc(f.art) + ' · EZ ' + esc(f.ez_jahr) + ' · ' + tsd(f.km) + ' km</p>' +
+          '<div class="zahlen"><div><span>Preisvorstellung</span><b>' + eur(f.preisvorstellung) + '</b></div></div>' +
+          (f.maengel.length ? '<p class="hinweis info">⚠ ' + f.maengel.map(esc).join(' · ') + '</p>' : '<p class="leise">Keine Mängel angegeben.</p>') +
+          (f.beschreibung ? '<p style="white-space:pre-wrap">' + esc(f.beschreibung) + '</p>' : '') +
+          (f.fotos.length ? '<div class="fotos">' + f.fotos.map(function(d){ var u = '/haendler-fotos/' + f.id + '/' + encodeURIComponent(d); return '<a href="' + u + '" target="_blank" rel="noopener"><img src="' + u + '" alt="Foto"></a>'; }).join('') + '</div>' : '') +
+          (HAENDLER ? (f.interesse ? '<p class="hinweis ok">Interesse gemeldet ✓</p>' : '<button class="knopf primaer voll" data-interesse="' + f.id + '">Interesse melden</button>') : '') +
+          '</div>';
+      }).join('') : '<p class="leise">Derzeit keine freigegebenen Fahrzeuge.</p>';
+    }).catch(function(e){ document.getElementById('liste').innerHTML = '<p class="hinweis warn">' + esc(e.message) + '</p>'; });
+  }
+  document.getElementById('liste').addEventListener('click', function(e){
+    var b = e.target.closest('[data-interesse]'); if(!b) return;
+    b.disabled = true;
+    api('/api/haendler/fahrzeug/' + b.dataset.interesse + '/interesse', {}).then(lade, function(err){ alert(err.message); b.disabled = false; });
+  });
+  document.getElementById('abmelden').onclick = function(e){ e.preventDefault(); api('/api/logout', {}).then(function(){ location.href = '/login'; }); };
+  lade();
+})();
+</script>
+</body>
+</html>

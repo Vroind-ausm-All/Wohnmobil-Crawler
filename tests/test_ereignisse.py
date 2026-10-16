@@ -97,8 +97,8 @@ def test_v4_altdaten_und_ankauf_werden_nicht_veraendert(tmp_path):
     db_pfad = tmp_path / "alt.sqlite"
     baue_v2(db_pfad)
     alt = zeilen(db_pfad, "anzeigen")
-    assert migriere(db_pfad, tmp_path / "backups") == [3, 4, 5]
-    assert lese_version(db_pfad) == AKTUELLE_VERSION == 5
+    assert migriere(db_pfad, tmp_path / "backups") == [3, 4, 5, 6]
+    assert lese_version(db_pfad) == AKTUELLE_VERSION == 6
     assert zeilen(db_pfad, "anzeigen") == alt
     assert len(zeilen(db_pfad, "inserate")) == len(alt)
     assert len(sicherungen(tmp_path / "backups", "alt")) == 1

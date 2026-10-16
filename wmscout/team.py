@@ -16,7 +16,8 @@ from pathlib import Path
 from .bearbeitung import TeamSicht, kuerzel
 from .datenbank import Datenbank
 
-ROLLEN = {"inhaber": "Inhaber", "mitarbeiter": "Mitarbeiter"}
+ROLLEN = {"inhaber": "Inhaber", "mitarbeiter": "Mitarbeiter", "haendler": "Händler (Standort)"}
+HAENDLER = "haendler"          # sieht nur das Händlerportal (/haendler); nie Team-Listen, Ankauf oder Kontaktdaten (ADR-026)
 BESICHTIGUNG_STATUS = {"geplant": "geplant", "laeuft": "läuft", "abgeschlossen": "abgeschlossen",
                        "abgebrochen": "abgebrochen"}
 SITZUNG_TAGE = 30
@@ -45,7 +46,7 @@ def pruefe_passwort(passwort: str, gespeichert: str) -> bool:
 
 def lade_team_sicht(db: Datenbank, tage: int, ich: dict | None = None, jetzt: datetime | None = None) -> TeamSicht | None:
     """Team-Sicht aus der Datenbank (zwei SELECTs). ``None``, wenn kein aktiver Nutzer existiert (= Team-Funktionen aus)."""
-    nutzer = [dict(r) for r in db.con.execute("SELECT id, name, rolle, aktiv FROM nutzer ORDER BY id")]
+    nutzer = [dict(r) for r in db.con.execute("SELECT id, name, rolle, aktiv FROM nutzer WHERE rolle != 'haendler' ORDER BY id")]
     if not any(n["aktiv"] for n in nutzer):
         return None
     return TeamSicht(nutzer, db.bearbeitung_aktiv(), jetzt or datetime.now(), tage, ich)
@@ -76,13 +77,16 @@ class TeamSpeicher:
     def hat_nutzer(self) -> bool:
         return self.con.execute("SELECT 1 FROM nutzer WHERE aktiv=1 LIMIT 1").fetchone() is not None
 
-    def nutzer_anlegen(self, name: str, passwort: str, rolle: str = "mitarbeiter", telefon: str | None = None) -> int:
+    def nutzer_anlegen(self, name: str, passwort: str, rolle: str = "mitarbeiter", telefon: str | None = None,
+                       standort_id: int | None = None) -> int:
         if rolle not in ROLLEN:
             raise ValueError(f"Rolle muss {' oder '.join(ROLLEN)} sein")
         if len(passwort) < 8:
             raise ValueError("Passwort braucht mindestens 8 Zeichen")
-        cur = self.con.execute("INSERT INTO nutzer (name, rolle, passwort_hash, telefon, erstellt_am) VALUES (?,?,?,?,?)",
-                               (name.strip(), rolle, hash_passwort(passwort), telefon, _jetzt()))
+        if (rolle == HAENDLER) != (standort_id is not None):
+            raise ValueError("Händler brauchen einen Standort (--standort); andere Rollen haben keinen")
+        cur = self.con.execute("INSERT INTO nutzer (name, rolle, passwort_hash, telefon, erstellt_am, standort_id) VALUES (?,?,?,?,?,?)",
+                               (name.strip(), rolle, hash_passwort(passwort), telefon, _jetzt(), standort_id))
         self.con.commit()
         return cur.lastrowid
 
@@ -101,8 +105,10 @@ class TeamSpeicher:
         self.con.commit()
         return cur.rowcount > 0
 
-    def nutzer_liste(self, nur_aktive: bool = True) -> list[dict]:
-        sql = "SELECT id, name, rolle, telefon, aktiv FROM nutzer" + (" WHERE aktiv=1" if nur_aktive else "")
+    def nutzer_liste(self, nur_aktive: bool = True, auch_haendler: bool = False) -> list[dict]:
+        """Team-Mitglieder (Inhaber, Mitarbeiter); Händler-Zugänge der Standorte nur mit ``auch_haendler`` (Verwaltung)."""
+        bedingungen = (["aktiv=1"] if nur_aktive else []) + ([] if auch_haendler else ["rolle != 'haendler'"])
+        sql = "SELECT id, name, rolle, telefon, aktiv, standort_id FROM nutzer" + (" WHERE " + " AND ".join(bedingungen) if bedingungen else "")
         return [dict(r) for r in self.con.execute(sql + " ORDER BY name")]
 
     def nutzer_mit_kuerzel(self, nur_aktive: bool = True) -> list[dict]:
@@ -135,7 +141,7 @@ class TeamSpeicher:
     def nutzer_zu_token(self, token: str | None) -> dict | None:
         if not token:
             return None
-        r = self.con.execute("SELECT n.id, n.name, n.rolle, n.telefon FROM sitzungen s JOIN nutzer n ON n.id=s.nutzer_id "
+        r = self.con.execute("SELECT n.id, n.name, n.rolle, n.telefon, n.standort_id FROM sitzungen s JOIN nutzer n ON n.id=s.nutzer_id "
                              "WHERE s.token_hash=? AND s.ablauf>=? AND n.aktiv=1", (_token_hash(token), _jetzt())).fetchone()
         return dict(r) if r else None
 

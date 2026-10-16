@@ -555,7 +555,7 @@ class Datenbank:
             f" AND b.kontaktiert_von IS NOT NULL AND a.status IN ({arbeit}) AND a.zuletzt_gesehen>=?) AS in_arbeit, "
             "(SELECT COUNT(*) FROM bearbeitung b WHERE b.kontaktiert_von=n.id AND substr(b.kontaktiert_am,1,10)=?) AS kontakte_heute, "
             "(SELECT COUNT(*) FROM bearbeitung b WHERE b.bearbeiter_id=n.id AND substr(b.uebernommen_am,1,10)=?) AS uebernommen_heute "
-            "FROM nutzer n WHERE n.aktiv=1 ORDER BY n.name",
+            "FROM nutzer n WHERE n.aktiv=1 AND n.rolle != 'haendler' ORDER BY n.name",
             (grenze, seit, *IN_ARBEIT, seit, tag, tag))]
         ohne = self.con.execute(
             "SELECT COUNT(*) FROM anzeigen a LEFT JOIN bearbeitung b ON b.anzeige_id=a.id "

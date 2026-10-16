@@ -168,6 +168,12 @@ Kontakt und Einwilligung. Danach erscheinen Referenz und – nur bei sicherer Da
 Verkäufer (nie Max-EK oder Angebot). Unter **`/anfragen`** stehen alle Anfragen mit Bewertung, Fotos, Status, Bearbeiter
 und Verlauf. Es geht keine automatische Nachricht an Verkäufer. Öffentlich erreichbar ist das Portal noch nicht (ADR-025).
 
+**Händlerportal für eure Standorte (Phase C, erst intern):** Standorte legt der Inhaber unter **`/standorte`** an und schaltet
+sie nach Prüfung frei; Zugänge: `python scout.py nutzer anlegen NAME --rolle haendler --standort "Filiale Nord"`. Ein
+Standort-Zugang sieht nur **`/haendler`**: Verkaufsanfragen, bei denen der Verkäufer der Weitergabe zugestimmt hat UND der
+Inhaber sie in `/anfragen` freigegeben hat – anonym (Region „12xxx“, ohne Name/Telefon/E-Mail) mit Preisvorstellung und
+Fotos; „Interesse melden“ ist unverbindlich und erscheint bei der Anfrage. Sperren eines Standorts wirkt sofort (ADR-026).
+
 **Team (nur mit angelegten Nutzern):** An jedem Fahrzeug zeigt ein Abzeichen mit Symbol und Kürzel, wer es bearbeitet
 (◔ reserviert, ✉ kontaktiert, ⧉ Dublette, ? ohne Zuordnung, ! verwaist; eigene gefüllt, fremde umrandet). „Ich übernehme“ /
 „Abgeben“ auf Karte und im Fenster; der Inhaber kann zusätzlich zuweisen und eine Übernahme erzwingen. Oben stehen die

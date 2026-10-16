@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .sicherung import SicherungsFehler, oeffne_lesend, sichere
 
-AKTUELLE_VERSION = 5
+AKTUELLE_VERSION = 6
 
 
 class MigrationsFehler(RuntimeError):
@@ -139,7 +139,32 @@ def _schritt_5(con: sqlite3.Connection):
     con.execute("CREATE INDEX IF NOT EXISTS idx_anfrage_verlauf ON anfrage_verlauf(anfrage_id, zeitpunkt)")
 
 
-SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4, 5: _schritt_5}
+
+def _neue_spalte(con: sqlite3.Connection, tabelle: str, spalte: str, typ: str):
+    if spalte not in {r[1] for r in con.execute(f"PRAGMA table_info({tabelle})")}:
+        con.execute(f"ALTER TABLE {tabelle} ADD COLUMN {spalte} {typ}")
+
+
+def _schritt_6(con: sqlite3.Connection):
+    """Additive v6 (Phase C, ADR-026): Händlerportal für eigene Standorte/Filialen. Ein Standort sieht freigegebene
+    Verkaufsanfragen erst nach Prüfung; freigegeben ist eine Anfrage nur mit Einwilligung des Verkäufers UND Freigabe des
+    Inhabers. Nur neue Tabellen und neue (leere) Spalten – nichts Bestehendes wird verändert."""
+    con.execute("""CREATE TABLE IF NOT EXISTS standorte (
+        id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE, plz TEXT, ort TEXT,
+        status TEXT NOT NULL DEFAULT 'offen', geprueft_am TEXT, geprueft_von INTEGER, erstellt_am TEXT NOT NULL,
+        CHECK(status IN ('offen', 'geprueft', 'gesperrt')))""")
+    _neue_spalte(con, "nutzer", "standort_id", "INTEGER REFERENCES standorte(id)")
+    _neue_spalte(con, "verkaufsanfragen", "weitergabe_einwilligung_am", "TEXT")
+    _neue_spalte(con, "verkaufsanfragen", "freigegeben_am", "TEXT")
+    _neue_spalte(con, "verkaufsanfragen", "freigegeben_von", "INTEGER")
+    con.execute("""CREATE TABLE IF NOT EXISTS anfrage_interesse (
+        id INTEGER PRIMARY KEY, anfrage_id INTEGER NOT NULL REFERENCES verkaufsanfragen(id),
+        standort_id INTEGER NOT NULL REFERENCES standorte(id), nutzer_id INTEGER, zeitpunkt TEXT NOT NULL,
+        UNIQUE(anfrage_id, standort_id))""")
+
+
+SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4, 5: _schritt_5,
+                                                             6: _schritt_6}
 
 _SCHEMA_VERSION = ("CREATE TABLE IF NOT EXISTS schema_version ("
                    "version INTEGER PRIMARY KEY, angewendet_am TEXT NOT NULL)")
