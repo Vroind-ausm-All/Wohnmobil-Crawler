@@ -182,6 +182,13 @@ Standorte. Nach dem Ende entscheidet allein der Inhaber („Zuschlag bestätigen
 Nachricht hinaus. Jedes Gebot steht in einem hash-verketteten Protokoll: `python scout.py auktion pruefen` (oder „Protokoll
 prüfen“) zeigt, ob etwas verändert wurde. Einstellungen: `config.yaml` → `auktion` (ADR-027).
 
+**Deal-Kalkulation (Phase E):** Direkt am Gebotsfeld sehen Standorte zum eingegebenen Betrag den erwarteten Gewinn, den
+Max-EK („sicher bis“ und Obergrenze) sowie Szenarien vorsichtig/erwartet/günstig aus der Marktspanne, einen Risikowert mit
+Begründung und alle Annahmen (Kosten, Zielmarge, §25a, Provision, Transport ab Standort). In `/anfragen` rechnet das Team
+dasselbe ab Firmensitz und kann speichern. Jedes Gebot speichert die gezeigte Kalkulation samt eingefrorener Eingabe;
+„nachrechnen“ bzw. `python scout.py kalkulation pruefen` zeigt, dass sie sich exakt wiederholen lässt. Provision:
+`config.yaml` → `kalkulation.provision_prozent` (Standard 2 %, ADR-028).
+
 **Team (nur mit angelegten Nutzern):** An jedem Fahrzeug zeigt ein Abzeichen mit Symbol und Kürzel, wer es bearbeitet
 (◔ reserviert, ✉ kontaktiert, ⧉ Dublette, ? ohne Zuordnung, ! verwaist; eigene gefüllt, fremde umrandet). „Ich übernehme“ /
 „Abgeben“ auf Karte und im Fenster; der Inhaber kann zusätzlich zuweisen und eine Übernahme erzwingen. Oben stehen die

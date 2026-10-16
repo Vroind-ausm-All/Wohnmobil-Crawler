@@ -14,6 +14,7 @@ nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px}
 .fotos{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px} .fotos img{width:84px;height:64px;object-fit:cover;border-radius:6px}
 .auktion{border:2px solid #24524a;border-radius:8px;padding:8px 10px;margin-top:10px}
 .auktion form{display:flex;gap:6px;margin-top:6px} .auktion input{flex:1;min-width:0}
+.kalk{margin-top:8px;border-top:1px dashed var(--line);padding-top:6px} .kalk table{font-size:12px} .kalk ul{padding-left:18px;font-size:13px}
 </style>
 </head>
 <body>
@@ -29,6 +30,7 @@ nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px}
   <div id="liste" class="raster"><p class="leise">Lade …</p></div>
   <div id="beendet"></div>
 </main>
+<script src="/static/kalkulation.js"></script>
 <script>
 var TOKEN = {{ token | tojson }}, HAENDLER = {{ 'true' if haendler else 'false' }};
 (function(){
@@ -61,6 +63,7 @@ var TOKEN = {{ token | tojson }}, HAENDLER = {{ 'true' if haendler else 'false' 
       h += '<p>Endet in <b data-rest="' + a.id + '">' + rest(a.rest_sek) + '</b> <span class="leise">(' + esc(new Date(a.ende_utc).toLocaleString('de-DE')) + ')</span></p>';
       if(a.du_fuehrst) h += '<p class="hinweis ok">Ihr Standort hat das Höchstgebot.</p>';
       else if(a.eigenes_hoechstes) h += '<p class="hinweis warn">Sie wurden überboten (Ihr Gebot: ' + eur(a.eigenes_hoechstes) + ').</p>';
+      h += '<div data-kalk="' + a.id + '" data-betrag="' + a.naechstes_mindestgebot + '"></div>';
       if(a.bieten_moeglich) h += '<form data-auktion="' + a.id + '"><input type="number" name="betrag" inputmode="numeric" min="' + a.naechstes_mindestgebot + '" step="1" value="' + a.naechstes_mindestgebot + '" aria-label="Gebot in Euro">' +
         '<button class="knopf primaer" type="submit">Bieten</button></form><p class="leise">Mindestens ' + eur(a.naechstes_mindestgebot) + '. Gebote in den letzten Minuten verlängern die Auktion.</p>';
     } else {
@@ -71,6 +74,19 @@ var TOKEN = {{ token | tojson }}, HAENDLER = {{ 'true' if haendler else 'false' 
     }
     return h + '</div>';
   }
+  // Kalkulation zum eingegebenen Betrag – gerechnet auf dem Server, je Auktion der zuletzt angefragte Betrag gewinnt
+  var KALK = {}, WARTE_KALK = {};
+  function kalkLaden(id, betrag){
+    var el = document.querySelector('[data-kalk="' + id + '"]'); if(!el || !(betrag > 0)) return;
+    var nr = (WARTE_KALK[id] = (WARTE_KALK[id] || 0) + 1);
+    api('/api/haendler/auktion/' + id + '/kalkulation?betrag=' + betrag).then(function(x){
+      if(nr !== WARTE_KALK[id]) return;
+      KALK[id] = x.ergebnis;
+      var ziel = document.querySelector('[data-kalk="' + id + '"]');
+      if(ziel){ var offen = ziel.querySelector('details[open]'); ziel.innerHTML = Kalkulation.html(x.ergebnis, x.eingabe_hash); if(offen) ziel.querySelector('details').open = true; }
+    }, function(e){ if(nr === WARTE_KALK[id]) el.innerHTML = '<p class="leise">Kalkulation nicht verfügbar: ' + esc(e.message) + '</p>'; });
+  }
+  var TIMER = {};
   function lade(){
     return Promise.all([api('/api/haendler/fahrzeuge'), api('/api/haendler/auktionen')]).then(function(x){
       var l = x[0], auktionen = {}, beendet = [];
@@ -91,17 +107,27 @@ var TOKEN = {{ token | tojson }}, HAENDLER = {{ 'true' if haendler else 'false' 
       document.getElementById('beendet').innerHTML = beendet.length ? '<h2>Ihre beendeten Demo-Auktionen</h2><div class="raster">' + beendet.map(function(a){
         return '<div class="karte"><div class="zeile"><span class="titel">' + esc([a.fahrzeug.marke, a.fahrzeug.modell].filter(Boolean).join(' ')) + '</span><span class="tag">' + esc(a.referenz) + '</span></div>' + auktionHtml(a) + '</div>';
       }).join('') + '</div>' : '';
+      document.querySelectorAll('[data-kalk]').forEach(function(k){
+        var f = document.querySelector('form[data-auktion="' + k.dataset.kalk + '"]');
+        kalkLaden(k.dataset.kalk, f ? parseInt(f.elements.betrag.value, 10) : parseInt(k.dataset.betrag, 10));
+      });
     }).catch(function(e){ document.getElementById('liste').innerHTML = '<p class="hinweis warn">' + esc(e.message) + '</p>'; });
   }
   document.getElementById('liste').addEventListener('input', function(e){
-    var f = e.target.closest('form[data-auktion]'); if(f) delete f.dataset.wid;
+    var f = e.target.closest('form[data-auktion]'); if(!f) return;
+    delete f.dataset.wid;
+    clearTimeout(TIMER[f.dataset.auktion]);
+    TIMER[f.dataset.auktion] = setTimeout(function(){ kalkLaden(f.dataset.auktion, parseInt(f.elements.betrag.value, 10)); }, 350);
   });
   document.getElementById('liste').addEventListener('submit', function(e){
     var f = e.target.closest('form[data-auktion]'); if(!f) return;
     e.preventDefault();
     var betrag = parseInt(f.elements.betrag.value, 10), knopf = f.querySelector('button');
     if(!(betrag > 0)){ alert('Bitte einen ganzen Euro-Betrag eingeben'); return; }
-    if(!confirm('Demo-Gebot über ' + eur(betrag) + ' abgeben? (nicht verbindlich)')) return;
+    var k = KALK[f.dataset.auktion], info = '';
+    if(k && k.moeglich && k.betrag === betrag) info = '\nErwarteter Gewinn ' + eur(k.szenarien.erwartet.gewinn) + ', Obergrenze (Max-EK) ' + eur(k.korridor.obergrenze) +
+      (k.ampel === 'rot' ? '\nACHTUNG: Gebot liegt über der Obergrenze.' : '');
+    if(!confirm('Demo-Gebot über ' + eur(betrag) + ' abgeben? (nicht verbindlich)' + info)) return;
     f.dataset.wid = f.dataset.wid || neueId();
     knopf.disabled = true; WARTET = true;
     fetch('/api/haendler/auktion/' + f.dataset.auktion + '/gebot', {method:'POST', credentials:'same-origin',

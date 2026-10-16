@@ -119,8 +119,11 @@ def gewichtetes_quantil(werte: list[tuple[float, float]], q: float) -> float:
 
 
 class Rechner:
-    def __init__(self, cfg: dict):
+    def __init__(self, cfg: dict, stichtag: datetime | None = None):
+        """``stichtag`` (lokale Zeit): Alter und „alte Anzeige“ relativ zu diesem Zeitpunkt statt zu jetzt – damit eine gespeicherte
+        Kalkulation später exakt nachgerechnet werden kann (Phase E, ``kalkulation``). Ohne Stichtag unverändert „heute“."""
         self.c = cfg["rechner"]
+        self.stichtag = stichtag
         self.mm = {**STANDARD_MARKTMODELL, **(self.c.get("marktmodell") or {})}
         wf = self.c.get("wertfaktoren") or {}
         self.wf_max_plus = wf.get("max_plus", 0.06)
@@ -128,7 +131,7 @@ class Rechner:
         self.wf_liste = [(e["name"], float(e["wert"]), re.compile(r"(?<!\w)(?:" + e["muster"] + ")", re.I))
                          for e in wf.get("liste", [])]
         self.marken_faktor = {m.lower(): k["faktor"] for k in self.mm["markenklassen"] for m in k["marken"]}
-        self.heute = date.today()
+        self.heute = stichtag.date() if stichtag else date.today()
         self._cache: dict[str, tuple] = {}
 
     # ---------- Bausteine ----------
@@ -195,7 +198,7 @@ class Rechner:
         """[(Preis ÷ Referenzwert, Gewicht, gleiche Marke)] für vergleichbare Angebote."""
         jt, kt = self.c["vergleich_jahre_toleranz"], self.c["vergleich_km_toleranz"]
         art, marke, serie = self.art(a), (a.get("marke") or "").lower(), (a.get("serie") or "").lower()
-        alt_grenze = (datetime.now() - timedelta(days=180)).isoformat(timespec="seconds")
+        alt_grenze = ((self.stichtag or datetime.now()) - timedelta(days=180)).isoformat(timespec="seconds")
         erg = []
         for b in alle:
             if b.get("id") == a.get("id") or not b.get("preis") or b["preis"] < 1000 or b.get("gewerblich"):

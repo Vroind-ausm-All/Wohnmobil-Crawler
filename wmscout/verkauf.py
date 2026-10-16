@@ -118,7 +118,11 @@ def als_fahrzeug(anfrage: dict) -> dict:
          "titel": " ".join(x for x in (anfrage.get("marke"), anfrage.get("modell")) if x), "marke": anfrage.get("marke"),
          "ez_jahr": anfrage.get("ez_jahr"), "km": anfrage.get("km"), "preis": anfrage.get("preisvorstellung"),
          "kurzbeschreibung": beschreibung or None, "plz": anfrage.get("plz"), "ort": anfrage.get("ort"), "gewerblich": 0}
-    return ergaenze_fahrzeug(a)
+    a = ergaenze_fahrzeug(a)
+    # ergaenze_fahrzeug liest die PLZ aus dem Ort einer Anzeige („70173 Stuttgart“); hier ist sie ein eigenes Feld – sonst ginge sie
+    # verloren und jede Anfrage rechnete mit der Transportpauschale statt nach Entfernung
+    a["plz"] = anfrage.get("plz") or a.get("plz")
+    return a
 
 
 def vergleich_aus(db: Datenbank) -> list[dict]:

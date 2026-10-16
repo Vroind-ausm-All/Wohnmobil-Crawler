@@ -126,9 +126,9 @@ def test_v1_wird_erkannt_und_ohne_verlust_migriert(tmp_path):
     vorher = zeilen(pfad, "anzeigen")
     assert len(vorher) == 3
 
-    assert migriere(pfad, ziel) == [2, 3, 4, 5, 6, 7]
-    assert lese_version(pfad) == AKTUELLE_VERSION == 7
-    assert versionen(pfad) == [1, 2, 3, 4, 5, 6, 7]                                     # Ausgangsstand 1 wird festgehalten
+    assert migriere(pfad, ziel) == [2, 3, 4, 5, 6, 7, 8]
+    assert lese_version(pfad) == AKTUELLE_VERSION == 8
+    assert versionen(pfad) == [1, 2, 3, 4, 5, 6, 7, 8]                                     # Ausgangsstand 1 wird festgehalten
     nachher_spalten = spaltennamen(pfad, "anzeigen")
     assert set(spalten_alt) <= set(nachher_spalten) and set(migrationen.NEUE_SPALTEN) <= set(nachher_spalten)
     assert zeilen(pfad, "anzeigen", ", ".join(spalten_alt)) == vorher            # alle alten Zeilen und Spalten unverändert
@@ -140,7 +140,7 @@ def test_v1_wird_erkannt_und_ohne_verlust_migriert(tmp_path):
 
     # Sicherung vor der Migration existiert, ist heil und enthält den Stand von Version 1
     kopie = sicherungen(ziel, "alt")
-    assert len(kopie) == 1 and "vor-v7" in kopie[0].name
+    assert len(kopie) == 1 and "vor-v8" in kopie[0].name
     assert _sql(kopie[0], "PRAGMA integrity_check")[0][0] == "ok"
     assert lese_version(kopie[0]) == 1 and zeilen(kopie[0], "anzeigen") == vorher
 
@@ -154,8 +154,8 @@ def test_v2_wird_erkannt_und_ohne_verlust_migriert(tmp_path):
     vorher = {t: zeilen(pfad, t) for t in tabellen}
     assert [len(v) for v in vorher.values()] == [3, 1, 1, 1, 1]
 
-    assert migriere(pfad, ziel) == [3, 4, 5, 6, 7]
-    assert versionen(pfad) == [2, 3, 4, 5, 6, 7]
+    assert migriere(pfad, ziel) == [3, 4, 5, 6, 7, 8]
+    assert versionen(pfad) == [2, 3, 4, 5, 6, 7, 8]
     for t, alt in vorher.items():
         assert zeilen(pfad, t, alt_spalten[t]) == alt, t                                        # inkl. kontaktiert_am, Texte, Preise, Team
     z = _sql(pfad, "SELECT kontaktiert_am, anschreiben_text, angebot_betrag, status, notiz, quelle "
@@ -174,7 +174,7 @@ def test_teilweise_ergaenzte_datenbank_gilt_als_v1_und_wird_vervollstaendigt(tmp
     con.commit()
     con.close()
     assert lese_version(pfad) == 1
-    assert migriere(pfad, tmp_path / "s") == [2, 3, 4, 5, 6, 7]
+    assert migriere(pfad, tmp_path / "s") == [2, 3, 4, 5, 6, 7, 8]
     assert set(migrationen.NEUE_SPALTEN) <= set(spaltennamen(pfad, "anzeigen"))
     assert _sql(pfad, "SELECT bild FROM anzeigen WHERE id='2'")[0] == ("b.jpg",)
 
@@ -245,7 +245,7 @@ def test_fehlgeschlagener_schritt_wird_zurueckgerollt(tmp_path, monkeypatch):
     assert {t: zeilen(pfad, t) for t in vorher} == vorher
     assert len(sicherungen(ziel, "db")) == 1                                   # Sicherung bleibt als Rückweg
     monkeypatch.undo()
-    assert migriere(pfad, ziel) == [3, 4, 5, 6, 7]                                          # nach Behebung läuft die Migration durch
+    assert migriere(pfad, ziel) == [3, 4, 5, 6, 7, 8]                                          # nach Behebung läuft die Migration durch
 
 
 def test_schritt_3_scheitert_nach_erfolgreichem_schritt_2(tmp_path, monkeypatch):
@@ -257,7 +257,7 @@ def test_schritt_3_scheitert_nach_erfolgreichem_schritt_2(tmp_path, monkeypatch)
     assert lese_version(pfad) == 2 and versionen(pfad) == [1, 2]               # Schritt 2 gilt, Schritt 3 nicht
     assert len(zeilen(pfad, "anzeigen")) == 3
     monkeypatch.undo()
-    assert migriere(pfad, ziel) == [3, 4, 5, 6, 7] and versionen(pfad) == [1, 2, 3, 4, 5, 6, 7]
+    assert migriere(pfad, ziel) == [3, 4, 5, 6, 7, 8] and versionen(pfad) == [1, 2, 3, 4, 5, 6, 7, 8]
 
 
 def test_unlesbare_datei_und_fremde_datenbank(tmp_path):
@@ -281,11 +281,11 @@ def test_rueckweg_pre_migration_sicherung_stellt_v1_wieder_her(tmp_path):
     baue_v1(pfad)
     vorher = zeilen(pfad, "anzeigen")
     Datenbank(str(pfad), str(ziel)).con.close()
-    assert lese_version(pfad) == 7
+    assert lese_version(pfad) == 8
     wiederherstellen(sicherungen(ziel, "db")[0], pfad, bestaetigt=True, ziel_ordner=ziel)
     assert lese_version(pfad) == 1 and zeilen(pfad, "anzeigen") == vorher
     Datenbank(str(pfad), str(ziel)).con.close()                                # und lässt sich erneut migrieren
-    assert lese_version(pfad) == 7 and len(zeilen(pfad, "anzeigen")) == 3
+    assert lese_version(pfad) == 8 and len(zeilen(pfad, "anzeigen")) == 3
 
 
 # ---------- Korrekturrunde 1: H1 (Migration räumt nicht auf), M3/M4-Mutanten, paralleles Anlegen, N2 ----------
@@ -295,10 +295,10 @@ def test_h1_migration_loescht_keine_sicherungen_auch_bei_voller_aufbewahrung(tmp
     baue_v2(pfad)
     vorhandene = [sichere(pfad, ziel, behalten=20) for _ in range(15)]           # Betreiber: config sicherung.behalten = 20
     assert len(sicherungen(ziel, "db")) == 15
-    assert migriere(pfad, ziel) == [3, 4, 5, 6, 7]
+    assert migriere(pfad, ziel) == [3, 4, 5, 6, 7, 8]
     jetzt = sicherungen(ziel, "db")
     assert len(jetzt) == 16 and all(v in jetzt for v in vorhandene)               # nichts gelöscht, nur die Migrationssicherung dazu
-    assert jetzt[-1].name.endswith("-vor-v7.sqlite")
+    assert jetzt[-1].name.endswith("-vor-v8.sqlite")
 
 
 def test_h1_migrationssicherungen_bleiben_bis_eine_normale_sicherung_nach_konfiguration_aufraeumt(tmp_path):
@@ -336,7 +336,7 @@ def test_m4_zweiter_prozess_war_schneller_schritt_laeuft_nicht_doppelt(tmp_path,
     monkeypatch.setitem(migrationen.SCHRITTE, 3, lambda con: aufrufe.append(1))
     migrationen._fuehre_aus(veraltet, 3, 2)
     veraltet.close()
-    assert aufrufe == [] and versionen(pfad) == [2, 3, 4, 5, 6, 7] and not veraltet_in_transaktion(pfad)
+    assert aufrufe == [] and versionen(pfad) == [2, 3, 4, 5, 6, 7, 8] and not veraltet_in_transaktion(pfad)
 
 
 def veraltet_in_transaktion(pfad) -> bool:
@@ -439,8 +439,8 @@ def test_q23_parallel_angelegte_aeltere_datenbank_wird_neu_beurteilt_und_migrier
         return False
 
     monkeypatch.setattr(migrationen, "_neu_anlegen", anderer_prozess_war_schneller)
-    assert migriere(pfad, ziel) == [3, 4, 5, 6, 7]
-    assert lese_version(pfad) == AKTUELLE_VERSION and versionen(pfad) == [2, 3, 4, 5, 6, 7]
+    assert migriere(pfad, ziel) == [3, 4, 5, 6, 7, 8]
+    assert lese_version(pfad) == AKTUELLE_VERSION and versionen(pfad) == [2, 3, 4, 5, 6, 7, 8]
     assert len(zeilen(pfad, "anzeigen")) == len(ZEILEN_V1) and len(sicherungen(ziel, "db")) == 1
 
 
@@ -451,12 +451,12 @@ def test_f2_sicherungsfehler_aber_anderer_prozess_hat_schon_migriert_ist_kein_fe
 
     def anderer_prozess_migriert_dann_scheitert_die_sicherung(*a, **k):
         monkeypatch.setattr(migrationen, "sichere", echt)
-        assert migriere(pfad, ziel) == [3, 4, 5, 6, 7]
+        assert migriere(pfad, ziel) == [3, 4, 5, 6, 7, 8]
         raise SicherungsFehler("simuliert: Namenskonflikt")
 
     monkeypatch.setattr(migrationen, "sichere", anderer_prozess_migriert_dann_scheitert_die_sicherung)
     assert migriere(pfad, ziel) == []
-    assert versionen(pfad) == [2, 3, 4, 5, 6, 7] and len(zeilen(pfad, "anzeigen")) == len(ZEILEN_V1)
+    assert versionen(pfad) == [2, 3, 4, 5, 6, 7, 8] and len(zeilen(pfad, "anzeigen")) == len(ZEILEN_V1)
 
 
 def test_f2_zwei_echte_prozesse_gleichzeitig_auf_altbestand_kein_abbruch_genau_eine_migration(tmp_path):
@@ -482,8 +482,8 @@ def test_f2_zwei_echte_prozesse_gleichzeitig_auf_altbestand_kein_abbruch_genau_e
         meldungen = sorted(o.strip() for o, _ in ausgaben)
         assert all(m.startswith("OK") for m in meldungen), ausgaben
         schritte = [v for m in meldungen for v in json.loads(m[3:])]
-        assert sorted(schritte) == [3, 4, 5, 6, 7], meldungen                                  # jeder Schritt genau einmal
-        assert versionen(pfad) == [2, 3, 4, 5, 6, 7]
+        assert sorted(schritte) == [3, 4, 5, 6, 7, 8], meldungen                                  # jeder Schritt genau einmal
+        assert versionen(pfad) == [2, 3, 4, 5, 6, 7, 8]
         assert {t: zeilen(pfad, t, alt_spalten[t]) for t in vorher} == vorher                                      # nichts verloren
         for s in sicherungen(ziel, "r" + str(runde)):
             assert _sql(s, "PRAGMA integrity_check")[0][0] == "ok"

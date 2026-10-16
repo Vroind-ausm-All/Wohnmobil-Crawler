@@ -360,3 +360,30 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   abschneiden; dagegen hilft nur, den letzten Hash außerhalb festzuhalten (CLI zeigt ihn). Echte, verbindliche Auktionen
   (AGB, Widerruf, Zahlungsabwicklung, externe Bieter) sind ausdrücklich nicht Teil von Phase D und brauchen eine eigene
   Entscheidung samt rechtlicher Prüfung. Fahrzeugidentität rückt auf v8.
+
+## ADR-028 – Deal Intelligence: Kalkulation am Gebot, eingefrorene Eingabe, Standorte sehen Max-EK · vorgeschlagen (16.10.2026)
+
+* **Kontext:** 3.0-Analyse Phase E: Gewinnkalkulation und Max-EK unmittelbar neben dem Gebotsfeld; jede Kalkulation mit Annahmen
+  und Unsicherheit reproduzierbar. Architekturregel: Marktwert bleibt eigenständiges Modul. Betreiberentscheidungen 16.10.2026:
+  **Standorte und Team sehen die volle Kalkulation** (eigene Filialen); **Provision als Prozent vom Zuschlag**.
+* **Entscheidung:**
+  1. Neues reines Modul `bewertung/kalkulation.py` auf dem unveränderten Rechner: Szenarien vorsichtig/erwartet/günstig aus der
+     Marktspanne (ohne Spanne nur „erwartet“), je Händler-VK, Kosten, Zielmarge, **Max-EK inkl. Provision** (Bisektion, auf 100 €
+     abgerundet) und Gewinn beim Betrag (auf 50 € gerundet). Korridor: „sicher bis“ = Max-EK vorsichtig, „Obergrenze“ = Max-EK
+     erwartet; Ampel für den Betrag. Risikowert 0–100 als Summe benannter Punkte (Datenlage, Spannbreite, Mängel, Alter, km,
+     Gebotshöhe) – eine Faustregel, kein Modell; jeder Punkt wird angezeigt.
+  2. **Nachrechenbar:** Die Eingabe enthält alles, wovon das Ergebnis abhängt – Fahrzeug in Rechner-Sicht (ohne PLZ/Ort), die
+     tatsächlich passenden Vergleichsangebote (gleiche Filter wie der Rechner, getestet gegen die ganze Datenbank), die wirksamen
+     Rechner-Parameter inkl. eingebauter Standards, Provision, Stichtag, Entfernung, Betrag – und wird mit SHA-256 gespeichert.
+     Der Rechner bekommt dafür einen optionalen Stichtag (ohne Angabe unverändert). Eine Rechenversion (`E1`) markiert
+     Formeländerungen; ältere Kalkulationen gelten dann als „andere Version“ statt still abzuweichen.
+  3. Schema **v8**: `kalkulationen` (nur anfügbar, je Gebot höchstens eine). Jedes angenommene Gebot speichert die Kalkulation,
+     die der Standort gesehen hat, **in derselben Transaktion**; abgelehnte oder wiederholte Gebote speichern nichts. Scheitert die
+     Kalkulation, zählt das Gebot trotzdem (Hilfe, keine Gebotsregel; Fehler im Log).
+  4. **Sicht der Standorte:** Kalkulation live zum eingegebenen Betrag, Transport ab Standort-PLZ, Entfernung auf 10 km gerundet
+     (genauer muss ein Standort den Wohnort des Verkäufers nicht eingrenzen). Hebt ADR-026 Nr. 4 für Max-EK und Gewinn auf;
+     Name, Kontaktdaten, genaue PLZ/Ort bleiben verborgen. Das Team sieht dieselbe Rechnung ab Firmensitz, kann sie speichern und
+     jede gespeicherte Kalkulation nachrechnen (`/api/kalkulation/<id>`, `scout.py kalkulation pruefen`).
+* **Folgen / offen:** Jede Kalkulation liest alle Vergleichsangebote (wie die bestehende Bewertung) – bei sehr großer Datenbank
+  zwischenspeichern. Provision wirkt als Kosten ohne eigene Umsatzsteuer (Annahme). Tatsächlicher EK/VK zur Kalibrierung folgt mit
+  Phase F. Nebenbei behoben: Verkaufsanfragen verloren ihre PLZ (Transport immer pauschal) – deren Bewertungen ändern sich.
