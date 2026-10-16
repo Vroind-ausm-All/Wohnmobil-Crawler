@@ -53,6 +53,7 @@ from wmscout.eingang import import_ordner
 from wmscout.auktion import STATUS as AUKTION_STATUS
 from wmscout.auktion import AuktionSpeicher
 from wmscout import datenrechte
+from wmscout.audit import AuditSpeicher
 from wmscout.deal import DealSpeicher
 from wmscout.haendler import STANDORT_STATUS, HaendlerSpeicher
 from wmscout.importer import Importer
@@ -321,6 +322,15 @@ def cmd_anfrage(cfg, db, args):
           f"Verkäufer {'anonymisiert' if erg['verkaeufer_anonymisiert'] else 'bleibt (weitere Anfragen)'}.")
 
 
+def cmd_audit(cfg, db, args):
+    """Audit-Protokoll (G0b): wer hat wann Personendaten gelesen oder etwas geändert."""
+    zeilen = AuditSpeicher(db).liste(tage=args.tage, nutzer=args.nutzer, objekt=args.objekt, limit=args.limit)
+    for z in reversed(zeilen):
+        print(f"{z['zeitpunkt']}  {z['nutzer'] or '–':<14} {z['aktion']:<7} {z['status']}  {z['methode']:<4} {z['pfad']}  "
+              f"{z['objekt'] or ''}  {z['ip'] or ''}")
+    print(f"{len(zeilen)} Einträge (letzte {args.tage} Tage)")
+
+
 def cmd_status(cfg, db, args):
     """Ohne ``--nutzer`` wie bisher: kein Eintrag in `bearbeitung`, ein kontaktiertes Inserat gilt im Team als „ohne Zuordnung“.
     Mit ``--nutzer`` gilt die Team-Regel wie in der App (Übernahme, Konflikt mit Kollegen, Kontakt durch wen)."""
@@ -380,6 +390,11 @@ def main():
     an.add_argument("aktion", choices=["widerruf"])
     an.add_argument("referenz", help="z. B. VA-2026-0001")
     an.add_argument("--bestaetigt", action="store_true", help="Löschen wirklich ausführen")
+    ad = sub.add_parser("audit", help="Audit-Protokoll anzeigen: wer hat wann Personendaten gelesen oder etwas geändert")
+    ad.add_argument("--tage", type=int, default=30)
+    ad.add_argument("--nutzer")
+    ad.add_argument("--objekt", help="z. B. anfrage:12, ankauf:3")
+    ad.add_argument("--limit", type=int, default=500)
     ka = sub.add_parser("kalkulation", help="gespeicherte Kalkulationen (Gebote) nachrechnen")
     ka.add_argument("aktion", choices=["pruefen"])
     s = sub.add_parser("status", help="Status einer Anzeige setzen")
@@ -411,7 +426,7 @@ def main():
         sys.exit(f"Datenbank-Start abgebrochen: {e}")
     {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "rechne": cmd_rechne,
      "nutzer": cmd_nutzer, "status": cmd_status, "standort": cmd_standort,
-     "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage}[args.cmd](cfg, db, args)
+     "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage, "audit": cmd_audit}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":

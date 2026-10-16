@@ -3,7 +3,7 @@
 Versionen: 1 = ZIP-Stand (Tabelle ``anzeigen`` im Ur-Schema), 2 = Stand vor Phase 1 (ergänzte Spalten + Team-Tabellen),
 3 = Phase 1 (``schema_version``, ``bearbeitung``), 4 = vorbereiteter Mehrquellen-Ereigniseingang, 5 = Verkäuferportal,
 6 = Händlerportal (Standorte), 7 = Demo-Auktionen, 8 = gespeicherte Kalkulationen (Deal Intelligence),
-9 = Ankaufsvorgänge (Besichtigung bis Verkauf).
+9 = Ankaufsvorgänge (Besichtigung bis Verkauf), 10 = Audit-Protokoll und Leerlauf-Zeit der Sitzungen (G0b).
 Jeder Schritt läuft in einer eigenen Transaktion, ist idempotent
 (``IF NOT EXISTS``, Spaltenprüfung) und wird erst nach erfolgreicher Sicherung der Datenbank ausgeführt.
 Die DDL der Schritte ist eingefroren: spätere Änderungen gehören in einen neuen Schritt, nicht in einen alten.
@@ -17,7 +17,7 @@ from pathlib import Path
 
 from .sicherung import SicherungsFehler, oeffne_lesend, sichere
 
-AKTUELLE_VERSION = 9
+AKTUELLE_VERSION = 10
 
 
 class MigrationsFehler(RuntimeError):
@@ -253,8 +253,23 @@ def _schritt_9(con: sqlite3.Connection):
                 BEGIN SELECT RAISE(ABORT, '{tabelle} ist nur anfügbar'); END""")
 
 
+def _schritt_10(con: sqlite3.Connection):
+    """Additive v10 (G0b, ADR-031): Audit-Protokoll – wer hat wann was gelesen oder geändert (nur anfügbar, ohne Inhalte der
+    Anfrage, ohne Passwörter) – und letzte Nutzung je Sitzung für das Leerlauf-Zeitlimit (neue, leere Spalte)."""
+    con.execute("""CREATE TABLE IF NOT EXISTS audit (
+        id INTEGER PRIMARY KEY, zeitpunkt TEXT NOT NULL, nutzer_id INTEGER, nutzer TEXT, rolle TEXT, ip TEXT,
+        methode TEXT NOT NULL, pfad TEXT NOT NULL, status INTEGER NOT NULL, aktion TEXT NOT NULL, objekt TEXT)""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_audit_zeit ON audit(zeitpunkt)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_audit_objekt ON audit(objekt, id)")
+    for art in ("UPDATE", "DELETE"):
+        con.execute(f"""CREATE TRIGGER IF NOT EXISTS audit_kein_{art.lower()} BEFORE {art} ON audit
+            BEGIN SELECT RAISE(ABORT, 'audit ist nur anfügbar'); END""")
+    _neue_spalte(con, "sitzungen", "zuletzt", "TEXT")
+
+
 SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4, 5: _schritt_5,
-                                                             6: _schritt_6, 7: _schritt_7, 8: _schritt_8, 9: _schritt_9}
+                                                             6: _schritt_6, 7: _schritt_7, 8: _schritt_8, 9: _schritt_9,
+                                                             10: _schritt_10}
 
 _SCHEMA_VERSION = ("CREATE TABLE IF NOT EXISTS schema_version ("
                    "version INTEGER PRIMARY KEY, angewendet_am TEXT NOT NULL)")

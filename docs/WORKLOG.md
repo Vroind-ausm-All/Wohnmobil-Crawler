@@ -6,6 +6,22 @@ Wert „–“.
 
 ---
 
+## Phase G0b – Audit-Protokoll, Leerlauf, Rechte je Ankaufsschritt (16.10.2026) · Status: REVIEW
+
+- **Anlass:** Fortsetzung „Phase G“ (Betreiber: G0 → Mandanten nacheinander, ohne Zwischenfreigabe); Restpunkte aus ADR-030,
+  die Phase F voraussetzten. Entscheidungen ADR-031.
+- **Geändert/neu:** `wmscout/migrationen.py` (v10: `audit`, `sitzungen.zuletzt`), `wmscout/audit.py` (neu: Einordnung,
+  Speicher mit eigener Verbindung), `wmscout/web/api.py` (Protokoll nach jeder Antwort, `/api/audit` nur Inhaber, Rechte je
+  Ankaufsschritt, Dokumente in Sandbox/PDF als Download), `wmscout/team.py` (Leerlauf-Zeitlimit), `scout.py` (`audit`),
+  `config.yaml` (`app.sitzung_leerlauf_stunden`), Tests `test_audit.py` (6), Migrationstests auf v10.
+- **Behoben nebenbei:** Test-Hilfe `versionen()` sortierte Schemaversionen als Text (10 vor 2).
+- **Erster Ansatz verworfen:** Audit-Eintrag über die gemeinsame Verbindung – bei gesperrter Datenbank blieb kurz eine
+  Transaktion offen (drei bestehende Sperr-Tests schlugen an). Jetzt eigene Verbindung im Autocommit.
+- **Tests:** siehe TEST-REPORT, `ruff` grün. Gegenprobe an 6 Schutzstellen – alle erkannt; eine siebte (404 für fehlenden
+  Ankauf) war wirkungslos, weil `AnkaufSpeicher.lade` schon 404 meldet – die doppelte Prüfung wurde entfernt.
+- **Nicht geprüft:** Browser-Klicktest (keine Oberflächenänderung außer Download-Kopfzeilen), Safari/iOS, Verhalten bei sehr großem
+  Audit-Bestand (Index auf Zeitpunkt und Objekt vorhanden).
+
 ## Phase G0 – Voraussetzungen für Skalierung (16.10.2026) · Status: REVIEW
 
 - **Anlass:** Betreiber „Phase G“, Entscheidung „Beides nacheinander“ (G0 Voraussetzungen, dann Mandanten), SSE, nur

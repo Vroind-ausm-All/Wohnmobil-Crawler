@@ -31,6 +31,7 @@ from ..haendler import STANDORT_STATUS, HaendlerSpeicher
 from ..auktion import STANDARD as MINDESTPREIS_STANDARD
 from ..auktion import AuktionSpeicher, AuktionsFehler
 from .. import datenrechte
+from ..audit import AuditSpeicher, einordnen
 from ..deal import DealSpeicher
 from ..team import pruefe_passwort
 from .sicherheit import SICHERHEITS_KOPF, LoginBremse
@@ -48,7 +49,7 @@ from ..bewertung.besichtigung import berechne, lade_katalog
 from ..datenbank import STATUS, Datenbank
 from ..eingang import import_ordner, relativ_zum_projekt
 from ..importer import Importer
-from ..team import BESICHTIGUNG_STATUS, ROLLEN, TeamSpeicher
+from ..team import BESICHTIGUNG_STATUS, LEERLAUF_STUNDEN, ROLLEN, TeamSpeicher
 
 log = logging.getLogger("scout")
 STATIC = Path(__file__).with_name("static")
@@ -84,11 +85,12 @@ class Kontext:
 
     def __init__(self, cfg: dict, db: Datenbank, basis: Path, token: str, suchlauf, foto_ordner: Path):
         self.cfg, self.db, self.basis, self.token, self.suchlauf = cfg, db, basis, token, suchlauf
-        self.team = TeamSpeicher(db, foto_ordner)
+        app = cfg.get("app") or {}
+        self.team = TeamSpeicher(db, foto_ordner, float(app.get("sitzung_leerlauf_stunden", LEERLAUF_STUNDEN) or 0))
+        self.audit = AuditSpeicher(db)
         self.verkauf = VerkaufSpeicher(db, foto_ordner / "anfragen")     # im Fotoordner: mit gesichert
         self.haendler = HaendlerSpeicher(db)
         self.auktion = AuktionSpeicher(db, cfg)             # ValueError bei falscher Konfiguration (Abschnitt auktion)
-        app = cfg.get("app") or {}
         self.bremse = LoginBremse(int(app.get("login_max_fehlversuche", 5)), int(app.get("login_max_fehlversuche_je_ip", 20)),
                                   int(app.get("login_sperre_minuten", 15)) * 60)
         self.vertrauter_proxy = app.get("vertrauter_proxy") is True     # nur dann X-Forwarded-For/-Proto auswerten
@@ -228,10 +230,13 @@ class Anfrage:
         self.sitzung = cookie[COOKIE].value if COOKIE in cookie else None
         self.nutzer: dict | None = None
         self.verzoegern = False          # nach Fehlanmeldung – außerhalb der Sperre warten
+        self.status: int | None = None   # gesendeter Status (Audit-Protokoll)
+        self.audit_name: str | None = None
 
     # ----- Antworten
     def senden(self, status: int, body: bytes, typ: str, kopf: dict | None = None):
         h = self.h
+        self.status = status
         h.send_response(status)
         h.send_header("Content-Type", typ)
         h.send_header("Content-Length", str(len(body)))
@@ -489,7 +494,19 @@ class Anfrage:
             pfad = k.ankauf.dokument_pfad(int(m.group(1)), m.group(2))
             if not pfad:
                 raise Antwort(404, "Dokument nicht gefunden")
-            return self.senden(200, pfad.read_bytes(), mimetypes.guess_type(pfad.name)[0] or "application/octet-stream")
+            # Hochgeladene Dateien nie als aktive Seite der App: PDF nur als Download, alles in einer Sandbox (G0b)
+            kopf = {"Content-Security-Policy": "sandbox; default-src 'none'; img-src 'self'"}
+            if pfad.suffix.lower() == ".pdf":
+                kopf["Content-Disposition"] = f'attachment; filename="{pfad.name}"'
+            return self.senden(200, pfad.read_bytes(), mimetypes.guess_type(pfad.name)[0] or "application/octet-stream", kopf)
+        if p == "/api/audit":
+            self.nur_inhaber()
+            q = {k2: (v[0] if v else None) for k2, v in self.query.items()}
+            try:
+                tage, limit = int(q.get("tage") or 30), int(q.get("limit") or 500)
+            except ValueError as e:
+                raise Antwort(400, "tage und limit müssen Zahlen sein") from e
+            return self.json(200, k.audit.liste(tage=tage, nutzer=q.get("nutzer"), objekt=q.get("objekt"), limit=limit))
         if m := re.fullmatch(r"/api/kalkulation/(\d+)", p):
             x = k.deal.lade(int(m.group(1)))
             if not x:
@@ -552,8 +569,17 @@ class Anfrage:
         self._zuweisung_melden(b)
         return self.besichtigung_kurz(b)
 
+    def darf_ankauf(self, a: dict) -> bool:
+        """Schritte eines Vorgangs (Vertrag, Übergabe, Kosten, Verkauf, Dokumente): Inhaber, Zuständiger der Besichtigung oder
+        Bearbeiter der Anfrage bzw. des Inserats (G0b) – wie beim Schreiben der Besichtigung selbst."""
+        b = self.k.team.besichtigung(a["besichtigung_id"])
+        return bool(b) and self.darf_besichtigung(b)
+
     def ankauf_schritt(self, aid: int, art: str, daten: dict) -> dict:
         k, nid = self.k, self.nutzer["id"]
+        if not self.darf_ankauf(k.ankauf.lade(aid)):      # AnkaufFehler 404, wenn es den Vorgang nicht gibt
+            raise Antwort(403, "Diesen Ankauf bearbeiten nur der Zuständige der Besichtigung, der Bearbeiter oder der Inhaber",
+                          grund="recht")
         if art == "vertrag":
             k.ankauf.vertrag_bestaetigen(aid, nid)
         elif art == "uebergabe":
@@ -593,6 +619,7 @@ class Anfrage:
         if herkunft and urlparse(herkunft).netloc not in k.erlaubte_hosts(self.h.server.server_address[1]):
             raise Antwort(403, "Anmeldung von fremden Seiten nicht erlaubt", grund="csrf")
         name, passwort, ip = str(daten.get("name") or "")[:100], str(daten.get("passwort") or ""), self.client_ip()
+        self.audit_name = name
         warten = k.bremse.wartezeit(ip, name)
         if warten:
             log.warning("Anmeldung gebremst: %r von %s (%s s)", name[:40], ip, warten)
@@ -1229,6 +1256,29 @@ def ist_gesperrt(fehler: sqlite3.OperationalError) -> bool:
 
 def bearbeite(handler, k: Kontext, methode: str):
     a = Anfrage(handler, k)
+    try:
+        _bearbeite(a, handler, k, methode)
+    finally:
+        _protokolliere(a, k, methode)
+
+
+def _protokolliere(a: Anfrage, k: Kontext, methode: str):
+    """Audit-Eintrag nach der Antwort über eine eigene Verbindung – auch abgelehnte Zugriffe (401/403) werden festgehalten.
+    Ein Fehler hier darf die (schon gesendete) Antwort nicht beeinflussen."""
+    art = einordnen(methode, a.pfad) if a.status else None
+    if not art:
+        return
+    try:
+        with k.sperre:
+            team = k.team.hat_nutzer()
+        if team:
+            k.audit.schreibe(a.nutzer if a.nutzer and a.nutzer.get("id") else None, a.client_ip(), methode, a.pfad, a.status,
+                             art[0], art[1], a.audit_name)
+    except Exception:  # noqa: BLE001
+        log.exception("Audit-Eintrag fehlgeschlagen: %s %s", methode, a.pfad)
+
+
+def _bearbeite(a: Anfrage, handler, k: Kontext, methode: str):
     try:
         if methode == "GET" and a.statisch():
             return

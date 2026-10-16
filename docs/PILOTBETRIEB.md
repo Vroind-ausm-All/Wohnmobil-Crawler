@@ -32,6 +32,7 @@ Die App begrenzt selbst: JSON 1 MB, Fotos/Dokumente ca. 8 MB je Bild, Lesezeitli
 - [ ] Jeder Mitarbeiter und jeder Standort hat einen eigenen Zugang; keine geteilten Passwörter.
 - [ ] Ausgeschiedene Nutzer sofort sperren (`scout.py nutzer sperren NAME`).
 - [ ] Offene Punkte aus der Sicherheitsprüfung beachten (unten).
+- [ ] Audit-Protokoll regelmäßig sichten (`scout.py audit --tage 7`), z. B. auffällige 403/401 oder Lesezugriffe außerhalb der Arbeitszeit.
 
 ## 4. Daten und Sicherungen
 
@@ -57,9 +58,9 @@ Die App begrenzt selbst: JSON 1 MB, Fotos/Dokumente ca. 8 MB je Bild, Lesezeitli
 |---|---|
 | Lesezugriff nach Bedarf (Need-to-know) | Team liest firmenweit alle Anfragen – gewollt für eine Firma; Trennung zwischen Firmen folgt mit **G2 Mandanten** |
 | Inline-Skripte (CSP mit `'unsafe-inline'`) | Nonce/Auslagerung als Folgearbeit |
-| Sitzungs-Leerlaufzeit | Sitzungen laufen nach fester Dauer ab, nicht nach Untätigkeit |
+| Sitzungs-Leerlaufzeit | **erledigt (G0b):** `app.sitzung_leerlauf_stunden` (Standard 72), spätestens nach 30 Tagen |
 | CSRF-Token je Sitzung | nicht umgesetzt; Schutz über SameSite-Cookie, JSON-Pflicht, Origin- und Sec-Fetch-Site-Prüfung |
 | WebP/HEIC-Metadaten | nur JPEG/PNG werden bereinigt (die App verkleinert Fotos im Browser zu JPEG) |
-| Audit-Protokoll wer was gesehen/geändert hat | folgt nach Phase F (Schema v10) |
-| Rechte je Ankaufsschritt, PDF als Anhang | folgt nach Phase F |
+| Audit-Protokoll wer was gesehen/geändert hat | **erledigt (G0b, Schema v10):** `scout.py audit`, `/api/audit` (Inhaber); Aufbewahrungsfrist festlegen |
+| Rechte je Ankaufsschritt, PDF als Anhang | **erledigt (G0b):** nur Zuständiger/Bearbeiter/Inhaber; Dokumente als Download in Sandbox |
 | Notizen frei für das ganze Team | bewusst so (bestehender Ablauf), Entscheidung des Betreibers offen |

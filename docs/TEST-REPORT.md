@@ -4,6 +4,19 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## Phase G0b – Audit-Protokoll, Leerlauf, Rechte je Ankaufsschritt (16.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux) | 840 bestanden, davon 6 neu (`test_audit.py`); Migrationstests auf v10 |
+| Migration v1/v2-Altbestand → v10 | bestanden (Zeilenzahlen inkl. Sitzungen unverändert, Sicherung `vor-v10`) |
+| Protokoll: Lesen/Ändern/abgelehnt/Anmeldung, keine Inhalte/Passwörter, nur Inhaber liest, nur anfügbar | bestanden |
+| Gesperrte Datenbank: keine offene Transaktion trotz Audit | bestanden (bestehende Sperr-Tests) |
+| Leerlauf-Zeitlimit inkl. Sitzungen vor v10 und „0 = aus“ | bestanden |
+| Ankaufsschritte nur Zuständiger/Bearbeiter/Inhaber; PDF als Download in Sandbox | bestanden |
+| Gegenprobe 6 Schutzstellen | alle erkannt |
+| Windows-CI, Safari/iOS, großer Audit-Bestand | nicht geprüft (Windows-CI folgt im PR) |
+
 ## Phase G0 – Voraussetzungen für Skalierung (16.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |
