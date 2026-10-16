@@ -12,6 +12,8 @@ main{max-width:1000px;margin:0 auto;padding:16px}
 nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px}
 .raster{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
 .fotos{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px} .fotos img{width:84px;height:64px;object-fit:cover;border-radius:6px}
+.auktion{border:2px solid #24524a;border-radius:8px;padding:8px 10px;margin-top:10px}
+.auktion form{display:flex;gap:6px;margin-top:6px} .auktion input{flex:1;min-width:0}
 </style>
 </head>
 <body>
@@ -25,6 +27,7 @@ nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px}
   {% endif %}
   <p class="leise">Fahrzeuge privater Verkäufer, die einer Weitergabe zugestimmt haben und von uns freigegeben wurden. „Interesse melden“ ist unverbindlich – wir melden uns.</p>
   <div id="liste" class="raster"><p class="leise">Lade …</p></div>
+  <div id="beendet"></div>
 </main>
 <script>
 var TOKEN = {{ token | tojson }}, HAENDLER = {{ 'true' if haendler else 'false' }};
@@ -40,8 +43,39 @@ var TOKEN = {{ token | tojson }}, HAENDLER = {{ 'true' if haendler else 'false' 
       return r.json().catch(function(){ return {}; }).then(function(x){ if(!r.ok) throw new Error(x.fehler || ('Fehler ' + r.status)); return x; });
     });
   }
+  // Gebot einmal pro Absicht: dieselbe ID bei Wiederholung (Netz weg), neue ID bei neuem Betrag
+  function neueId(){ var b = new Uint8Array(16); crypto.getRandomValues(b); return Array.prototype.map.call(b, function(x){ return ('0' + x.toString(16)).slice(-2); }).join(''); }
+  var ENDEN = [], WARTET = false;
+  function rest(sek){
+    if(sek <= 0) return 'beendet';
+    var t = Math.floor(sek / 86400), h = Math.floor(sek % 86400 / 3600), m = Math.floor(sek % 3600 / 60), s = sek % 60;
+    return (t ? t + ' T ' : '') + (t || h ? h + ' Std ' : '') + m + ' Min' + (t ? '' : ' ' + s + ' s');
+  }
+  function auktionHtml(a){
+    var mp = a.mindestpreis_erreicht === null ? 'kein Mindestpreis' : (a.mindestpreis_erreicht ? 'Mindestpreis erreicht ✓' : 'Mindestpreis noch nicht erreicht');
+    var h = '<div class="auktion" data-auktionsbox="' + a.id + '"><div class="zeile"><b>Demo-Auktion</b><span class="tag">nicht verbindlich</span></div>' +
+      '<div class="zahlen"><div><span>Höchstgebot</span><b>' + (a.hoechstgebot ? eur(a.hoechstgebot) : 'noch keins') + '</b></div>' +
+      '<div><span>Gebote</span><b>' + a.gebote_anzahl + '</b></div></div><p class="leise">' + esc(mp) + ' · Schritt ' + eur(a.schritt) + '</p>';
+    if(a.status === 'laeuft'){
+      ENDEN.push({id: a.id, ende: Date.now() + a.rest_sek * 1000});
+      h += '<p>Endet in <b data-rest="' + a.id + '">' + rest(a.rest_sek) + '</b> <span class="leise">(' + esc(new Date(a.ende_utc).toLocaleString('de-DE')) + ')</span></p>';
+      if(a.du_fuehrst) h += '<p class="hinweis ok">Ihr Standort hat das Höchstgebot.</p>';
+      else if(a.eigenes_hoechstes) h += '<p class="hinweis warn">Sie wurden überboten (Ihr Gebot: ' + eur(a.eigenes_hoechstes) + ').</p>';
+      if(a.bieten_moeglich) h += '<form data-auktion="' + a.id + '"><input type="number" name="betrag" inputmode="numeric" min="' + a.naechstes_mindestgebot + '" step="1" value="' + a.naechstes_mindestgebot + '" aria-label="Gebot in Euro">' +
+        '<button class="knopf primaer" type="submit">Bieten</button></form><p class="leise">Mindestens ' + eur(a.naechstes_mindestgebot) + '. Gebote in den letzten Minuten verlängern die Auktion.</p>';
+    } else {
+      h += '<p class="leise">' + esc(a.status_text) + (a.ergebnis_text ? ' · ' + esc(a.ergebnis_text) : '') + '</p>' +
+        (a.zuschlag_fuer_dich ? '<p class="hinweis ok">Demo-Zuschlag für Ihren Standort (' + eur(a.hoechstgebot) + ') – nicht verbindlich, wir melden uns.</p>'
+          : (a.du_fuehrst && a.status === 'beendet' ? '<p class="hinweis info">Ihr Gebot war das höchste – die Entscheidung steht noch aus.</p>'
+            : (a.status === 'zugeschlagen' ? '<p class="leise">Der Zuschlag ging an einen anderen Standort.</p>' : '')));
+    }
+    return h + '</div>';
+  }
   function lade(){
-    return api('/api/haendler/fahrzeuge').then(function(l){
+    return Promise.all([api('/api/haendler/fahrzeuge'), api('/api/haendler/auktionen')]).then(function(x){
+      var l = x[0], auktionen = {}, beendet = [];
+      ENDEN = [];
+      x[1].forEach(function(a){ if(a.status === 'laeuft') auktionen[a.anfrage_id] = a; else beendet.push(a); });
       var el = document.getElementById('liste');
       el.innerHTML = l.length ? l.map(function(f){
         return '<div class="karte"><div class="zeile"><span class="titel">' + esc([f.marke, f.modell].filter(Boolean).join(' ')) + '</span><span class="tag">' + esc(f.region || '') + '</span></div>' +
@@ -50,11 +84,53 @@ var TOKEN = {{ token | tojson }}, HAENDLER = {{ 'true' if haendler else 'false' 
           (f.maengel.length ? '<p class="hinweis info">⚠ ' + f.maengel.map(esc).join(' · ') + '</p>' : '<p class="leise">Keine Mängel angegeben.</p>') +
           (f.beschreibung ? '<p style="white-space:pre-wrap">' + esc(f.beschreibung) + '</p>' : '') +
           (f.fotos.length ? '<div class="fotos">' + f.fotos.map(function(d){ var u = '/haendler-fotos/' + f.id + '/' + encodeURIComponent(d); return '<a href="' + u + '" target="_blank" rel="noopener"><img src="' + u + '" alt="Foto"></a>'; }).join('') + '</div>' : '') +
+          (auktionen[f.id] ? auktionHtml(auktionen[f.id]) : '') +
           (HAENDLER ? (f.interesse ? '<p class="hinweis ok">Interesse gemeldet ✓</p>' : '<button class="knopf primaer voll" data-interesse="' + f.id + '">Interesse melden</button>') : '') +
           '</div>';
       }).join('') : '<p class="leise">Derzeit keine freigegebenen Fahrzeuge.</p>';
+      document.getElementById('beendet').innerHTML = beendet.length ? '<h2>Ihre beendeten Demo-Auktionen</h2><div class="raster">' + beendet.map(function(a){
+        return '<div class="karte"><div class="zeile"><span class="titel">' + esc([a.fahrzeug.marke, a.fahrzeug.modell].filter(Boolean).join(' ')) + '</span><span class="tag">' + esc(a.referenz) + '</span></div>' + auktionHtml(a) + '</div>';
+      }).join('') + '</div>' : '';
     }).catch(function(e){ document.getElementById('liste').innerHTML = '<p class="hinweis warn">' + esc(e.message) + '</p>'; });
   }
+  document.getElementById('liste').addEventListener('input', function(e){
+    var f = e.target.closest('form[data-auktion]'); if(f) delete f.dataset.wid;
+  });
+  document.getElementById('liste').addEventListener('submit', function(e){
+    var f = e.target.closest('form[data-auktion]'); if(!f) return;
+    e.preventDefault();
+    var betrag = parseInt(f.elements.betrag.value, 10), knopf = f.querySelector('button');
+    if(!(betrag > 0)){ alert('Bitte einen ganzen Euro-Betrag eingeben'); return; }
+    if(!confirm('Demo-Gebot über ' + eur(betrag) + ' abgeben? (nicht verbindlich)')) return;
+    f.dataset.wid = f.dataset.wid || neueId();
+    knopf.disabled = true; WARTET = true;
+    fetch('/api/haendler/auktion/' + f.dataset.auktion + '/gebot', {method:'POST', credentials:'same-origin',
+      headers:{'Content-Type':'application/json', 'X-Scout-Token':TOKEN}, body:JSON.stringify({betrag:betrag, wiederholungs_id:f.dataset.wid})})
+      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(x){ return {r:r, x:x}; }); })
+      .then(function(o){
+        WARTET = false;
+        if(o.r.status === 503){ knopf.disabled = false; alert((o.x.fehler || 'Kurz belegt') + ' – „Bieten“ erneut drücken (zählt nur einmal).'); return; }
+        if(!o.r.ok) alert(o.x.fehler || ('Fehler ' + o.r.status));
+        else if(o.x.verlaengert) alert('Gebot angenommen – die Auktion wurde verlängert.');
+        lade();
+      }, function(){
+        WARTET = false; knopf.disabled = false;        // Netz weg: ID bleibt, ein erneuter Klick zählt nur einmal
+        alert('Keine Verbindung – „Bieten“ erneut drücken (das Gebot zählt nur einmal).');
+      });
+  });
+  setInterval(function(){
+    var jetzt = Date.now(), neu = false;
+    ENDEN.forEach(function(a){
+      var sek = Math.max(0, Math.round((a.ende - jetzt) / 1000)), el = document.querySelector('[data-rest="' + a.id + '"]');
+      if(el) el.textContent = rest(sek);
+      if(sek === 0 && !a.fertig){ a.fertig = true; neu = true; }
+    });
+    if(neu && !WARTET) lade();
+  }, 1000);
+  setInterval(function(){                 // neue Gebote anderer Standorte sehen – nur sichtbar und ohne offene Eingabe
+    var aktiv = document.activeElement && document.activeElement.name === 'betrag';
+    if(!document.hidden && !aktiv && !WARTET && ENDEN.length) lade();
+  }, 20000);
   document.getElementById('liste').addEventListener('click', function(e){
     var b = e.target.closest('[data-interesse]'); if(!b) return;
     b.disabled = true;

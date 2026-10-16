@@ -6,6 +6,23 @@ Wert „–“.
 
 ---
 
+## Phase D – Demo-Auktionssystem (16.10.2026) · Status: REVIEW
+
+- **Anlass:** Betreiber „Phase D fertigstellen“. Erfolgskriterium der 3.0-Analyse: gleichzeitige Gebote führen zu genau einem
+  gültigen Ergebnis. Standardwerte ohne Rückfrage, alle in `config.yaml` (Abschnitt `auktion`) änderbar (ADR-027).
+  Umgesetzt vom Orchestrator ohne Subagenten.
+- **Geändert/neu:** `wmscout/migrationen.py` (v7: `auktionen`, `gebote`, `auktion_protokoll`, Trigger „nur anfügbar“),
+  `wmscout/auktion.py` (neu: Zustandsmaschine, atomares Gebot, Verlängerung, Abschluss beim Zugriff, Hash-Kette),
+  `wmscout/web/api.py` (Routen Inhaber/Händler, `AuktionsFehler` → HTTP), `vorlagen/haendler.html` (Bieten mit Countdown und
+  Wiederholungs-ID), `vorlagen/anfragen.html` (Starten, Abbrechen, Zuschlag/kein Zuschlag, Protokoll prüfen), `scout.py`
+  (`auktion liste|pruefen`), `config.yaml`, `tests/test_auktion.py` (neu, 18), `tests/prozess_helfer.py` (`bieter`);
+  Migrationstests auf v7. Nebenbei: abgeschnittene Phase-B-Überschrift in diesem Protokoll repariert.
+- **Tests:** `pytest -q` siehe TEST-REPORT, `ruff` grün. Wettlauf mit 4 echten Prozessen × 8 Runden und 3 Threads × 6 Runden:
+  je Runde genau ein angenommenes Gebot, Protokoll gültig. Gegenprobe an 13 Schutzstellen – alle erkannt (die Ende-Prüfung
+  im Gebot erst nach einem zusätzlichen Test, weil der vorgelagerte Abschluss sie verdeckte). Browser-Klicktest Inhaber startet
+  → zwei Standorte bieten (Handybreite) → Überboten-Hinweis → Protokoll prüfen → Zuschlag: bestanden, 0 JS-Fehler.
+- **Nicht geprüft:** Windows-CI (folgt im PR), Safari/iOS, Last mit vielen gleichzeitigen Bietern über das Netz.
+
 ## Phase C – Händlerportal v1 für eigene Standorte (16.10.2026) · Status: REVIEW
 
 - **Anlass:** Betreiber „Phase C“; Entscheidungen per Rückfrage (ADR-026): eigene Standorte, Zustimmung Verkäufer + Freigabe
@@ -22,7 +39,7 @@ Wert „–“.
   Browser-Klicktest Ablauf Erfassen → Freigeben → Standort prüfen → Händler sieht anonym → Interesse: bestanden, 0 JS-Fehler.
 - **Nicht geprüft:** Windows-CI (folgt im PR), Safari/iOS, externe Händler (nicht Teil von v1).
 
-, intern (15.10.2026) · Status: REVIEW
+## Phase B – Verkäuferportal v1, intern (15.10.2026) · Status: REVIEW
 
 - **Anlass:** Betreiber: „mache Phase B das Verkäuferportal“; Entscheidungen per Rückfrage: erst intern, grobe Spanne,
   Preisvorstellung freiwillig (ADR-025). Umgesetzt vom Orchestrator ohne Subagenten.

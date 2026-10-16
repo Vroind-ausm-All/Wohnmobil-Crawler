@@ -28,6 +28,8 @@ from ..ausgabe import render_html
 from .. import verkauf as vk
 from ..verkauf import Eingabefehler, VerkaufSpeicher
 from ..haendler import STANDORT_STATUS, HaendlerSpeicher
+from ..auktion import STANDARD as MINDESTPREIS_STANDARD
+from ..auktion import AuktionSpeicher, AuktionsFehler
 from ..team import HAENDLER
 from ..bearbeitung import (IN_ARBEIT, OFFEN, VORBEREITET, BearbeitungsKonflikt, TeamSicht, ablauf_grenze, darf_erzwingen, darf_status,
                            darf_zuweisen, reservierung_tage)
@@ -77,6 +79,7 @@ class Kontext:
         self.team = TeamSpeicher(db, foto_ordner)
         self.verkauf = VerkaufSpeicher(db, foto_ordner / "anfragen")     # im Fotoordner: mit gesichert
         self.haendler = HaendlerSpeicher(db)
+        self.auktion = AuktionSpeicher(db, cfg)             # ValueError bei falscher Konfiguration (Abschnitt auktion)
         self.reservierung_tage = reservierung_tage(cfg)     # ValueError mit verständlicher Meldung bei falscher Konfiguration
         self.katalog_pfad = basis / "maengel.yaml"
         self.sperre = threading.Lock()          # Datenbankzugriffe nacheinander, Netzwerk parallel
@@ -415,6 +418,10 @@ class Anfrage:
                 standort=k.haendler.standort(self.nutzer.get("standort_id")), standort_status=STANDORT_STATUS))
         if p == "/api/haendler/fahrzeuge":
             return self.json(200, k.haendler.sichtbare(self.standort_freigeschaltet()))
+        if p == "/api/haendler/auktionen":
+            return self.json(200, k.auktion.fuer_standort(self.standort_freigeschaltet()))
+        if m := re.fullmatch(r"/api/auktion/(\d+)", p):
+            return self.json(200, {**k.auktion.lade(int(m.group(1))), "pruefung": k.auktion.pruefe_protokoll()})
         if m := re.fullmatch(r"/api/haendler/fahrzeug/(\d+)", p):
             f = k.haendler.sichtbar(int(m.group(1)), self.standort_freigeschaltet())
             if not f:
@@ -494,7 +501,7 @@ class Anfrage:
         for v in a["verlauf"]:
             v["nutzer"] = namen.get(v["nutzer_id"])
         return {**a, "bewertung": {**b.dict(), **self._bewertung_kurz(b)}, "spanne_verkaeufer": vk.spanne_fuer_verkaeufer(b, k.cfg),
-                "interessen": k.verkauf.interessen(anfrage_id)}
+                "interessen": k.verkauf.interessen(anfrage_id), "auktionen": k.auktion.fuer_anfrage(anfrage_id)}
 
     def ich_mit_kuerzel(self) -> dict:
         if not self.team_aktiv:
@@ -661,6 +668,30 @@ class Anfrage:
                 raise Antwort(403, "Interesse melden nur mit Standort-Zugang", grund="recht")
             if not k.haendler.interesse_melden(int(m.group(1)), standort, self.nutzer["id"]):
                 raise Antwort(404, "Nicht (mehr) freigegeben")
+            return self.json(200, {"ok": True})
+        if m := re.fullmatch(r"/api/haendler/auktion/(\d+)/gebot", p):
+            standort = self.standort_freigeschaltet()
+            if not standort:
+                raise Antwort(403, "Bieten nur mit Standort-Zugang", grund="recht")
+            erg = k.auktion.gebot_abgeben(int(m.group(1)), standort, self.nutzer["id"], daten.get("betrag"), daten.get("wiederholungs_id"))
+            if not erg["wiederholt"]:
+                log.info("Demo-Gebot %s € auf Auktion %s durch %s", erg["betrag"], m.group(1), self.nutzer["name"])
+            return self.json(200, erg)
+        if m := re.fullmatch(r"/api/verkaufsanfrage/(\d+)/auktion", p):
+            self.nur_inhaber()
+            aid = k.auktion.anlegen(int(m.group(1)), self.nutzer["id"], startpreis=daten.get("startpreis"),
+                                    mindestpreis=daten["mindestpreis"] if "mindestpreis" in daten else MINDESTPREIS_STANDARD,
+                                    laufzeit_stunden=daten.get("laufzeit_stunden"))
+            log.info("Demo-Auktion %s für Anfrage %s gestartet durch %s", aid, m.group(1), self.nutzer["name"])
+            return self.json(200, {"id": aid})
+        if m := re.fullmatch(r"/api/auktion/(\d+)/(abbrechen|zuschlag|ablehnen)", p):
+            self.nur_inhaber()
+            aid = int(m.group(1))
+            if m.group(2) == "abbrechen":
+                k.auktion.abbrechen(aid, self.nutzer["id"], str(daten.get("grund") or ""))
+            else:
+                k.auktion.entscheiden(aid, self.nutzer["id"], m.group(2) == "zuschlag")
+            log.info("Demo-Auktion %s: %s durch %s", aid, m.group(2), self.nutzer["name"])
             return self.json(200, {"ok": True})
         if p == "/api/standorte":
             self.nur_inhaber()
@@ -978,6 +1009,9 @@ def bearbeite(handler, k: Kontext, methode: str):
         if e.status == 401 and methode == "GET" and not a.pfad.startswith("/api/"):
             return a.weiterleiten("/login?weiter=" + quote(handler.path))
         a.json(e.status, {"fehler": e.fehler, **({"grund": e.grund} if e.grund else {}), **e.extra})
+    except AuktionsFehler as e:
+        grund = GRUENDE.get(e.status)
+        a.json(e.status, {"fehler": str(e), **({"grund": grund} if grund else {}), **e.extra})
     except sqlite3.OperationalError as e:
         if not ist_gesperrt(e):
             log.exception("Fehler bei %s %s", methode, handler.path)

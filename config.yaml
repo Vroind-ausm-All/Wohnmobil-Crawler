@@ -255,3 +255,13 @@ verkaeuferportal:
   spanne_zeigen: true                # grobe Marktwert-Spanne nach dem Absenden (nie Max-EK oder Angebot)
   spanne_mindest_sicherheit: mittel  # nur bei Datenlage „mittel“ oder „hoch“
   einwilligung_version: "2026-10-entwurf-2" # Stand des Einwilligungstexts (2: + freiwillige Weitergabe an Standorte); bei jeder Textänderung erhöhen
+
+# Demo-Auktionen (Phase D, ADR-027): nur Demo, nichts ist verbindlich; einen Zuschlag bestätigt ausschließlich der Inhaber.
+# Bieten dürfen nur geprüfte Standorte auf Anfragen mit Zustimmung des Verkäufers und Freigabe durch den Inhaber.
+auktion:
+  laufzeit_stunden: 24          # Standard beim Start; je Auktion änderbar innerhalb der Grenzen
+  laufzeit_min_stunden: 1
+  laufzeit_max_stunden: 168
+  schritt: 100                  # Mindestabstand zum Höchstgebot in ganzen Euro
+  verlaengerung_minuten: 2      # Gebot in den letzten N Minuten verlängert die Auktion auf N Minuten ab dem Gebot
+  startpreis_anteil: 0.7        # Startpreis-Vorschlag = Anteil der Preisvorstellung (abgerundet auf den Schritt)

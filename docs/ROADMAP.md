@@ -149,6 +149,16 @@ Freigegeben vom Betreiber am 16.10.2026 („Phase C“); Entscheidungen siehe AD
 | C2 | P1 | **Rolle `haendler` + Positivliste**, Standortprüfung, Verwaltung `/standorte` + CLI | Orchestrator | C1 | Ungeprüfte/gesperrte Standorte sehen nichts; Händler erreichen nichts außer `/haendler` | REVIEW |
 | C3 | P1 | **`/haendler`**: anonymisierte Fahrzeuge mit Preisvorstellung, Fotos, Interesse; Freigabe in `/anfragen` | Orchestrator | C2 | Keine Kontaktdaten/Max-EK; nur zugestimmt + freigegeben + offen | REVIEW |
 
+## Phase D (3.0) – Demo-Auktionssystem
+
+Auftrag des Betreibers am 16.10.2026 („Phase D fertigstellen“); Entscheidungen siehe ADR-027.
+
+| ID | Prio | Arbeitspaket | Agent | Abhängig | Akzeptanz | Status |
+|---|---|---|---|---|---|---|
+| D1 | P1 | **Schema v7**: Auktionen, Gebote, hash-verkettetes Protokoll (nur anfügbar) | Orchestrator | C1 | Altbestand v6 → v7 mit Sicherung, ohne Änderung bestehender Daten | REVIEW |
+| D2 | P1 | **Zustandsmaschine + atomares Gebot** (Schritt, Wiederholungs-ID, Verlängerung, Abschluss beim Zugriff) | Orchestrator | D1 | Gleichzeitige Gebote (Prozesse) → genau ein gültiges Höchstgebot | REVIEW |
+| D3 | P1 | **Oberfläche**: Bieten in `/haendler`, Starten/Entscheiden/Prüfen in `/anfragen`, CLI `auktion` | Orchestrator | D2 | Bieter sehen keinen Mindestpreis und keine anderen Standorte; Zuschlag nur durch Inhaber | REVIEW |
+
 ## Phase 3 – Datenbank und Marktbeobachtung
 
 **Abnahme:** identische Inserate lassen sich ohne Datenverlust erneut importieren; Preis- und Fahrzeughistorie bleiben

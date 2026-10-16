@@ -4,6 +4,17 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## Phase D – Demo-Auktionssystem (16.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux) | 783 bestanden, davon 18 neu (`test_auktion.py`) |
+| Gleichzeitige Gebote: 4 Prozesse (spawn) × 8 Runden, 3 Threads × 6 Runden | je Runde genau 1 Gebot angenommen, keine Fehler, keine offene Transaktion, Protokoll gültig, `integrity_check` ok |
+| Migration v6-Altbestand → v7 | bestanden: Sicherung `vor-v7`, Bestandsdaten unverändert, zweiter Lauf ohne Wirkung |
+| Gegenprobe 13 Schutzstellen | alle erkannt (Ende-Prüfung erst nach Testergänzung) |
+| Browser-Klicktest Auktion (Desktop + Handybreite 390 px) | bestanden, 0 JS-Fehler |
+| Windows-CI, Safari/iOS | nicht geprüft |
+
 ## Phase C – Händlerportal v1 (16.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |
