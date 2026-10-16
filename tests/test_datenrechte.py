@@ -74,3 +74,36 @@ def test_cli_widerruf(cfg, tmp_path):
     assert r.returncode == 0 and "Widerruf ausgeführt" in r.stdout, r.stderr
     r = _scout(cfg, tmp_path, "anfrage", "widerruf", "VA-0000-9999", "--bestaetigt")
     assert r.returncode != 0 and "unbekannt" in r.stderr
+
+
+def test_widerruf_schwaerzt_besichtigung_der_anfrage_und_loescht_ihre_fotos(markt, db):
+    from tests.test_sicherheit import _jpeg_mit_exif
+    anna, anfrage = markt["anna"], markt["anfrage"]
+    b = anna("POST", f"/api/verkaufsanfrage/{anfrage}/besichtigung", {"adresse": "Musterweg 1, Berlin"})[1]
+    bild = "data:image/jpeg;base64," + base64.b64encode(_jpeg_mit_exif()).decode()
+    foto = anna("POST", f"/api/besichtigung/{b['id']}/foto", {"bild": bild})[1]["datei"]
+    datei = markt_foto_ordner(db) / str(b["id"]) / foto
+    assert datei.is_file()
+    erg = anna("POST", f"/api/verkaufsanfrage/{anfrage}/widerruf", {})[1]
+    assert erg["besichtigungen"] == 1 and erg["fotos"] == 1 and not datei.exists()
+    r = db.con.execute("SELECT basis_json, adresse, daten_json FROM besichtigungen WHERE id=?", (b["id"],)).fetchone()
+    assert "Erika" not in r["basis_json"] and r["adresse"] is None and r["daten_json"] == "{}"
+
+
+def test_widerruf_mit_ankauf_auch_storniert_wird_verweigert(markt, db):
+    from tests.test_ankauf import _kauf
+    from tests.test_sicherheit import _jpeg_mit_exif
+    anna, anfrage = markt["anna"], markt["anfrage"]
+    b = anna("POST", f"/api/verkaufsanfrage/{anfrage}/besichtigung", {})[1]
+    aid = anna("POST", f"/api/besichtigung/{b['id']}/abschluss", _kauf())[1]["ankauf"]
+    bild = "data:image/jpeg;base64," + base64.b64encode(_jpeg_mit_exif()).decode()
+    d = anna("POST", f"/api/ankauf/{aid}/dokument", {"art": "vertrag", "datei": bild})[1]           # Vertragsfoto ohne EXIF
+    gespeichert = anna("GET", f"/ankauf-dokumente/{aid}/{d['datei']}")[1]
+    roh = gespeichert if isinstance(gespeichert, bytes) else str(gespeichert).encode("latin-1", "replace")
+    assert b"GPS-DATEN" not in roh and b"BILDDATEN" in roh
+    s, f, _ = anna("POST", f"/api/verkaufsanfrage/{anfrage}/widerruf", {})
+    assert s == 409 and "Ankaufsvorgang" in f["fehler"]
+    assert anna("POST", f"/api/ankauf/{aid}/storno", {"grund": "Verkäufer tritt zurück"})[0] == 200
+    assert anna("POST", f"/api/verkaufsanfrage/{anfrage}/widerruf", {})[0] == 409                  # auch storniert: Einzelfall
+    assert db.con.execute("SELECT name FROM verkaeufer v JOIN verkaufsanfragen a ON a.verkaeufer_id=v.id WHERE a.id=?",
+                          (anfrage,)).fetchone()[0] == "Erika Beispiel"

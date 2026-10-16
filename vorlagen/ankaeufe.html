@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#24524a">
+<link rel="icon" href="/static/icon-192.png">
+<title>Ankäufe – {{ firma }}</title>
+<link rel="stylesheet" href="/static/mobil.css">
+<style>
+main{max-width:1100px;margin:0 auto;padding:16px}
+nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px}
+.spalten{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px;align-items:start}
+@media (max-width:820px){.spalten{grid-template-columns:1fr}}
+#liste .karte{cursor:pointer} .karte.aktiv{outline:2px solid var(--akzent)}
+.weg{list-style:none;padding:0;margin:0} .weg li{padding:6px 0 6px 26px;position:relative;border-left:2px solid var(--line);margin-left:8px}
+.weg li::before{content:"○";position:absolute;left:-9px;top:5px;background:var(--bg);color:var(--mute)} .weg li.ok::before{content:"●";color:var(--gruen)}
+.verlauf{font-size:13px;color:var(--mute);padding-left:18px}
+td.b{text-align:right;white-space:nowrap}
+</style>
+</head>
+<body>
+<main>
+  <nav class="oben"><a href="/anfragen">Verkaufsanfragen</a><a href="/m">Handy-App</a><a href="/">Ankaufsliste</a></nav>
+  <h1>Ankäufe</h1>
+  <p class="leise">Jeder Vorgang beginnt mit einer Besichtigung, die mit „gekauft“ abgeschlossen wurde. Vertrag, Übergabe, Kosten und Verkauf
+    werden hier dokumentiert – das Programm schließt keine Verträge und zahlt nichts.</p>
+  <div id="uebersicht" class="karte" style="cursor:default"></div>
+  <div class="spalten">
+    <div id="liste"><p class="leise">Lade …</p></div>
+    <div id="detail"><p class="leise">Vorgang links auswählen.</p></div>
+  </div>
+</main>
+<script>
+var TOKEN = {{ token | tojson }}, INHABER = {{ 'true' if ich.rolle == 'inhaber' else 'false' }},
+    KOSTEN = {{ kostenarten | tojson }}, STATUS = {{ status | tojson }}, DOKUMENTE = {{ dokumentarten | tojson }};
+(function(){
+  var aktiv = null;
+  function esc(s){ return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function eur(x){ return x === null || x === undefined ? '–' : Math.round(x).toLocaleString('de-DE') + ' €'; }
+  function vz(x){ return x === null || x === undefined ? '–' : (x > 0 ? '+' : '') + Math.round(x).toLocaleString('de-DE'); }
+  function datum(s){ return s ? s.slice(8, 10) + '.' + s.slice(5, 7) + '.' + s.slice(0, 4) : ''; }
+  function heute(){ var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function api(url, d){
+    var opt = {credentials:'same-origin', headers:{}};
+    if(d !== undefined){ opt.method = 'POST'; opt.headers['Content-Type'] = 'application/json'; opt.headers['X-Scout-Token'] = TOKEN; opt.body = JSON.stringify(d); }
+    return fetch(url, opt).then(function(r){
+      if(r.status === 401){ location.href = '/login?weiter=%2Fankaeufe'; throw new Error('Bitte anmelden'); }
+      return r.json().catch(function(){ return {}; }).then(function(x){ if(!r.ok) throw new Error(x.fehler || ('Fehler ' + r.status)); return x; });
+    });
+  }
+  function liste(){
+    return api('/api/ankaeufe').then(function(d){
+      var u = d.uebersicht;
+      document.getElementById('uebersicht').innerHTML = '<div class="zahlen"><div><span>Vorgänge</span><b>' + u.anzahl + '</b></div>' +
+        '<div><span>offen / im Bestand / verkauft</span><b>' + u.gekauft_offen + ' / ' + u.im_bestand + ' / ' + u.verkauft + '</b></div>' +
+        '<div><span>Gewinn verkauft: Ist (Plan)</span><b>' + eur(u.gewinn_ist) + '</b> <span class="leise">(' + eur(u.gewinn_plan) + ')</span></div>' +
+        '<div><span>Kapital im Bestand</span><b>' + eur(u.kapital_im_bestand) + '</b></div></div>' +
+        '<p class="leise">Verkaufte Fahrzeuge im Mittel: VK ' + (u.vk_abweichung_prozent === null ? '–' : vz(u.vk_abweichung_prozent) + ' %') +
+        ' gegenüber Plan · Kosten ' + vz(u.kosten_abweichung) + ' € · Standzeit ' + (u.standzeit_tage === null ? '–' : u.standzeit_tage + ' Tage') +
+        '. Nur Anzeige – Kalkulationsparameter bewusst in config.yaml nachstellen.</p>';
+      document.getElementById('liste').innerHTML = d.vorgaenge.length ? d.vorgaenge.map(function(a){
+        return '<div class="karte' + (a.id === aktiv ? ' aktiv' : '') + '" data-id="' + a.id + '" tabindex="0"><div class="zeile"><span class="titel">' + esc(a.fahrzeug) +
+          '</span><span class="tag">' + esc(a.status_text) + '</span></div><p class="leise">' + esc(a.referenz) + ' · ' + (a.herkunft === 'anfrage' ? 'Verkaufsanfrage' : 'Inserat') +
+          ' · gekauft ' + datum(a.erstellt_am) + '</p><div class="zahlen"><div><span>Kaufpreis</span>' + eur(a.kaufpreis) + '</div><div><span>VK</span>' + eur(a.vk_preis) +
+          '</div><div><span>Gewinn' + (a.vorlaeufig ? ' (vorläufig)' : '') + '</span><b>' + eur(a.gewinn) + '</b></div></div></div>';
+      }).join('') : '<p class="leise">Noch keine Ankäufe. Ein Vorgang entsteht, wenn eine Besichtigung mit „gekauft“ abgeschlossen wird.</p>';
+    }).catch(function(e){ document.getElementById('liste').innerHTML = '<p class="hinweis warn">' + esc(e.message) + '</p>'; });
+  }
+  function schritte(a){
+    var h = '';
+    if(a.status === 'gekauft'){
+      h += '<h3>Kaufvertrag</h3><p><a class="knopf klein" href="/ankauf/' + a.id + '/vertrag" target="_blank" rel="noopener">Vertragsmuster öffnen / drucken</a></p>';
+      h += a.vertrag_am ? '<p class="hinweis ok">Unterschriebener Vertrag bestätigt am ' + datum(a.vertrag_am) + '</p>'
+                        : '<button class="knopf klein primaer" data-schritt="vertrag">Unterschriebenen Vertrag bestätigen</button>';
+      if(a.vertrag_am) h += '<h3>Übergabe und Zahlung</h3><div class="reihe"><label style="flex:1">Übergabe am<input type="date" id="u-am" value="' + heute() + '"></label>' +
+        '<label style="flex:1">Zahlung am<input type="date" id="z-am" value="' + heute() + '"></label><label style="flex:1">km-Stand<input id="u-km" type="number" min="0" step="1"></label></div>' +
+        '<button class="knopf klein primaer" data-schritt="uebergabe">Übergabe und Zahlung bestätigen</button>';
+      if(INHABER) h += '<p><button class="knopf klein" data-schritt="storno">Vorgang stornieren</button></p>';
+    }
+    if(a.status === 'uebergeben') h += '<h3>Verkauf</h3><div class="reihe"><label style="flex:1">Verkaufspreis €<input id="v-preis" type="number" min="1" step="1"></label>' +
+      '<label style="flex:1">Verkauft am<input type="date" id="v-am" value="' + heute() + '"></label></div><button class="knopf klein primaer" data-schritt="verkauf">Verkauf erfassen</button>';
+    if(a.status !== 'storniert') h += '<h3>Ist-Kosten</h3><div class="reihe"><label style="flex:1">Art<select id="k-art">' +
+      Object.keys(KOSTEN).map(function(k){ return '<option value="' + k + '">' + esc(KOSTEN[k]) + '</option>'; }).join('') + '</select></label>' +
+      '<label style="flex:1">Betrag € (− = Korrektur)<input id="k-betrag" type="number" step="1"></label><label style="flex:1">Datum<input type="date" id="k-datum" value="' + heute() + '"></label></div>' +
+      '<label>Notiz<input id="k-notiz" maxlength="300"></label><button class="knopf klein" data-schritt="kosten">Kosten erfassen</button>' +
+      '<h3>Dokument hochladen</h3><div class="reihe"><select id="d-art">' + Object.keys(DOKUMENTE).map(function(k){ return '<option value="' + k + '">' + esc(DOKUMENTE[k]) + '</option>'; }).join('') +
+      '</select><input type="file" id="d-datei" accept="application/pdf,image/jpeg,image/png,image/webp"><button class="knopf klein" data-schritt="dokument">Hochladen</button></div>';
+    return h;
+  }
+  function detail(id){
+    aktiv = id;
+    document.querySelectorAll('#liste .karte').forEach(function(k){ k.classList.toggle('aktiv', +k.dataset.id === id); });
+    return api('/api/ankauf/' + id).then(function(a){
+      var v = a.vergleich, p = v.plan, i = v.ist, ab = v.abweichung;
+      document.getElementById('detail').innerHTML =
+        '<div class="karte"><h2 style="margin-top:0">' + esc(a.fahrzeug) + ' <span class="tag">' + esc(a.status_text) + '</span></h2>' +
+        '<p class="leise">' + esc(a.referenz) + ' · Kaufpreis ' + eur(a.kaufpreis) + (a.verkaeufer ? ' · Verkäufer ' + esc(a.verkaeufer.name) : '') + '</p>' +
+        '<h3>Weg vom Angebot zum Ankauf</h3><ul class="weg">' + a.weg.map(function(w){
+          return '<li class="' + (w.erledigt ? 'ok' : '') + '"><b>' + esc(w.schritt) + '</b> · ' + (w.erledigt ? datum(w.erledigt) : 'offen') + '<br><span class="leise">' + esc(w.text) +
+            (w.link ? ' · <a href="' + esc(w.link) + '" target="_blank" rel="noopener">Beleg</a>' : '') + '</span></li>';
+        }).join('') + '</ul></div>' +
+        '<div class="karte"><h3>Ergebnis: Plan gegen Ist</h3><table><tr><th></th><th class="b">Plan</th><th class="b">Ist</th><th class="b">Abweichung</th></tr>' +
+        '<tr><td>Einkauf (Max-EK / Kaufpreis)</td><td class="b">' + eur(p.max_ek) + '</td><td class="b">' + eur(i.kaufpreis) + '</td><td class="b">' + vz(ab.unter_max_ek === null ? null : -ab.unter_max_ek) + '</td></tr>' +
+        '<tr><td>Kosten</td><td class="b">' + eur(p.kosten) + '</td><td class="b">' + eur(i.kosten) + '</td><td class="b">' + vz(ab.kosten) + '</td></tr>' +
+        '<tr><td>Verkaufspreis</td><td class="b">' + eur(p.haendler_vk) + '</td><td class="b">' + eur(i.vk) + '</td><td class="b">' + vz(ab.vk) + (ab.vk_prozent !== null ? ' (' + vz(ab.vk_prozent) + ' %)' : '') + '</td></tr>' +
+        '<tr><td>Gewinn' + (i.vorlaeufig ? ' (vorläufig)' : '') + '</td><td class="b">' + eur(p.gewinn) + '</td><td class="b"><b>' + eur(i.gewinn) + '</b></td><td class="b">' + vz(ab.gewinn) + '</td></tr>' +
+        '<tr><td>Standzeit (Tage)</td><td class="b">' + p.standzeit_tage + '</td><td class="b">' + (i.standzeit_tage === null ? '–' : i.standzeit_tage) + '</td><td class="b">' + vz(ab.standzeit_tage) + '</td></tr></table>' +
+        '<p class="leise">Plan: ' + esc(p.quelle) + (p.kalkulation_id ? ' · <a href="/api/kalkulation/' + p.kalkulation_id + '" target="_blank" rel="noopener">nachrechnen</a>' : '') + '</p>' +
+        v.hinweise.map(function(t){ return '<p class="hinweis info">' + esc(t) + '</p>'; }).join('') +
+        (a.kosten.length ? '<ul class="verlauf">' + a.kosten.map(function(k){ return '<li>' + datum(k.datum) + ' · ' + esc(KOSTEN[k.art] || k.art) + ' ' + eur(k.betrag) + (k.notiz ? ' · ' + esc(k.notiz) : '') + '</li>'; }).join('') + '</ul>' : '') +
+        (a.dokumente.length ? '<p>Dokumente: ' + a.dokumente.map(function(d){ return '<a href="/ankauf-dokumente/' + a.id + '/' + encodeURIComponent(d.datei) + '" target="_blank" rel="noopener">' + esc(DOKUMENTE[d.art]) + '</a>'; }).join(' · ') + '</p>' : '') +
+        '</div><div class="karte">' + schritte(a) + '<p id="s-fehler" class="fehler"></p></div>' +
+        '<div class="karte"><h3>Verlauf</h3><ul class="verlauf">' + a.verlauf.map(function(x){ return '<li>' + esc(x.zeitpunkt.replace('T', ' ').slice(0, 16)) + ' · ' + esc(x.ereignis) + (x.nutzer ? ' (' + esc(x.nutzer) + ')' : '') + '</li>'; }).join('') + '</ul></div>';
+    }).catch(function(e){ document.getElementById('detail').innerHTML = '<p class="hinweis warn">' + esc(e.message) + '</p>'; });
+  }
+  function wert(id){ var el = document.getElementById(id); return el ? el.value.trim() : ''; }
+  function zahl(id){ var w = wert(id); return w === '' ? null : parseInt(w, 10); }
+  function schritt(art){
+    var d = {}, frage = null;
+    if(art === 'vertrag') frage = 'Liegt der Kaufvertrag von beiden Seiten unterschrieben vor?';
+    if(art === 'uebergabe'){ d = {uebergabe_am: wert('u-am'), zahlung_am: wert('z-am'), km: zahl('u-km')}; frage = 'Übergabe und Zahlung bestätigen?'; }
+    if(art === 'verkauf'){ d = {vk_preis: zahl('v-preis'), verkauft_am: wert('v-am')}; frage = 'Verkauf über ' + eur(d.vk_preis) + ' erfassen?'; }
+    if(art === 'kosten') d = {art: wert('k-art'), betrag: zahl('k-betrag'), datum: wert('k-datum'), notiz: wert('k-notiz')};
+    if(art === 'storno'){ var g = prompt('Grund für das Storno'); if(!g) return; d = {grund: g}; }
+    if(frage && !confirm(frage)) return;
+    var p;
+    if(art === 'dokument'){
+      var f = document.getElementById('d-datei').files[0];
+      if(!f){ alert('Bitte eine Datei wählen'); return; }
+      p = new Promise(function(ok, fehler){ var r = new FileReader(); r.onload = function(){ ok(r.result); }; r.onerror = fehler; r.readAsDataURL(f); })
+        .then(function(url){ return api('/api/ankauf/' + aktiv + '/dokument', {art: wert('d-art'), datei: url}); });
+    } else p = api('/api/ankauf/' + aktiv + '/' + art, d);
+    p.then(function(){ return Promise.all([liste(), detail(aktiv)]); }, function(err){ var el = document.getElementById('s-fehler'); if(el) el.textContent = err.message; else alert(err.message); });
+  }
+  document.getElementById('liste').addEventListener('click', function(e){ var k = e.target.closest('.karte'); if(k) detail(+k.dataset.id); });
+  document.getElementById('detail').addEventListener('click', function(e){ var t = e.target.closest('[data-schritt]'); if(t && aktiv) schritt(t.dataset.schritt); });
+  liste().then(function(){ var m = /^#(\d+)$/.exec(location.hash); if(m) detail(+m[1]); });
+})();
+</script>
+</body>
+</html>

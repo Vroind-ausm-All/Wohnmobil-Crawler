@@ -287,8 +287,8 @@
       "<h1>" + esc(B.basis.fahrzeug) + "</h1>" +
       '<p class="leise">' + esc(datum(i.termin)) + (i.adresse ? " · " + esc(i.adresse) : "") + (i.zustaendig ? " · " + esc(i.zustaendig.name) : "") + "</p>" +
       '<div class="reihe">' + (i.karte ? '<a class="knopf klein" href="' + link(i.karte) + '" target="_blank" rel="noopener">Navigation</a>' : "") +
-      '<a class="knopf klein" href="' + link(B.basis.url) + '" target="_blank" rel="noopener">Inserat</a>' +
-      (fertig ? '<a class="knopf klein primaer" href="/protokoll/' + B.id + '" target="_blank">Protokoll</a>' : "") + "</div>" +
+      (B.basis.url ? '<a class="knopf klein" href="' + link(B.basis.url) + '" target="_blank" rel="noopener">Inserat</a>' : '<span class="tag">Verkaufsanfrage ' + esc(B.basis.referenz || "") + "</span>") +
+      (fertig ? '<a class="knopf klein primaer" href="/protokoll/' + B.id + '" target="_blank">Protokoll</a><a class="knopf klein" href="/ankaeufe">Ankäufe</a>' : "") + "</div>" +
       '<p class="hinweis info">Vorbehaltliches Angebot ' + eur(B.basis.angebot) + " · Max-EK " + eur(B.basis.max_ek) + " · Wunschpreis " + eur(B.basis.preis) + "</p>" +
       (fertig ? '<p class="hinweis ok">Diese Besichtigung ist abgeschlossen.</p>' : "") +
 
@@ -485,6 +485,8 @@
         '<p id="a-fehler" class="fehler"></p><button class="knopf primaer voll" data-aktion="abschliessen">Abschließen</button>' +
         '<p class="leise">Das Protokoll ist ein Muster – vor dem ersten Einsatz rechtlich prüfen lassen.</p>';
       document.getElementById("a-entscheidung").onchange = function (ev) { document.getElementById("a-kauf").hidden = ev.target.value !== "gekauft"; };
+      var vk = B.basis.verkaeufer;          // Verkaufsanfrage: Verkäufer ist bekannt – vorbelegen, vor Ort prüfen
+      if (vk) { document.getElementById("a-v-name").value = vk.name || ""; document.getElementById("a-v-tel").value = vk.telefon || ""; }
       ["u-verkaeufer", "u-ankaeufer"].forEach(unterschriftFeld);
     });
   }
@@ -514,9 +516,9 @@
     }
     if (!navigator.onLine) { fehler.textContent = "Für den Abschluss wird Netz gebraucht – alle Eingaben sind lokal gesichert."; return; }
     entwurfSchreiben(B.id, { daten: B.daten, offen: true, zeit: Date.now() });
-    speichereServer(B.id).then(function () { return api("/api/besichtigung/" + B.id + "/abschluss", daten); }).then(function () {
+    speichereServer(B.id).then(function () { return api("/api/besichtigung/" + B.id + "/abschluss", daten); }).then(function (r) {
       // kein automatisches Fenster (Handy-Browser blockieren das) – Protokoll-Knopf steht in der Besichtigung
-      toast("Abgeschlossen – Protokoll oben öffnen"); location.hash = "#/besichtigung/" + B.id;
+      toast(r && r.ankauf ? "Abgeschlossen – Ankaufsvorgang angelegt (Ankäufe)" : "Abgeschlossen – Protokoll oben öffnen"); location.hash = "#/besichtigung/" + B.id;
     }, function (e) { fehler.textContent = e.message; });
   }
 

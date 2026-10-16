@@ -169,6 +169,16 @@ Auftrag des Betreibers am 16.10.2026 („Phase E“); Entscheidungen siehe ADR-0
 | E2 | P1 | **Nachrechenbar**: eingefrorene Eingabe (Stichtag, Parameter, Vergleichsauszug), Schema v8, Prüfung + CLI | Orchestrator | E1 | Gespeicherte Kalkulation unabhängig von späterer Config/Datenlage; Manipulation erkannt | REVIEW |
 | E3 | P1 | **Am Gebotsfeld**: Standorte live zum Betrag (Transport ab Standort), Team in `/anfragen`, Gebot speichert Kalkulation | Orchestrator | E2 | Jedes angenommene Gebot hat genau eine Kalkulation | REVIEW |
 
+## Phase F (3.0) – Besichtigung und Abwicklung
+
+Auftrag des Betreibers am 16.10.2026 („Phase F“); Entscheidungen siehe ADR-029.
+
+| ID | Prio | Arbeitspaket | Agent | Abhängig | Akzeptanz | Status |
+|---|---|---|---|---|---|---|
+| F1 | P1 | **Handy-Besichtigung für Verkaufsanfragen** (Grundlage aus Bewertung/Zuschlag, Rechte über Bearbeiter) | Orchestrator | B1, D2 | Inserate unverändert; Anfrage-Besichtigung nur durch Inhaber/Bearbeiter | REVIEW |
+| F2 | P1 | **Ankaufsvorgang** (Schema v9): Vertrag (Muster + Bestätigung + Scan), Übergabe/Zahlung, Kosten, Verkauf, Storno | Orchestrator | F1, E2 | Weg vom Gebot zum Ankauf lückenlos mit Belegen; Verlauf/Kosten nur anfügbar | REVIEW |
+| F3 | P1 | **Ergebnisvergleich** Plan (eingefrorene Kalkulation) gegen Ist, Übersicht | Orchestrator | F2 | Nur Anzeige; Gewinn mit derselben Formel wie der Rechner, gerundet | REVIEW |
+
 ## Phase G (3.0) – Skalierung (Voraussetzungen, Echtzeit, Mandanten)
 
 Auftrag des Betreibers am 16.10.2026 („Phase G“); Entscheidungen siehe ADR-030. Reihenfolge: G0 → G1 → G2, je eigener PR.
@@ -176,7 +186,7 @@ Auftrag des Betreibers am 16.10.2026 („Phase G“); Entscheidungen siehe ADR-0
 | ID | Prio | Arbeitspaket | Agent | Abhängig | Akzeptanz | Status |
 |---|---|---|---|---|---|---|
 | G0 | P1 | **Voraussetzungen**: Härtung nach Sicherheitsprüfung, Datenrechte + Widerruf, API-Rahmen, Pilot-Checkliste | Orchestrator | E3 | Befunde H1–H3, M4, M8–M10 behoben und getestet; keine Quelle aktiv | REVIEW |
-| G0b | P1 | Audit-Protokoll (Schema v10), Rechte je Ankaufsschritt, PDF als Anhang, Widerruf mit Ankauf testen | Orchestrator | Phase F | – | TODO |
+| G0b | P1 | Audit-Protokoll (Schema v10), Rechte je Ankaufsschritt, PDF als Anhang (Widerruf mit Ankauf: in G0 erledigt) | Orchestrator | Phase F | – | TODO |
 | G1 | P1 | **Echtzeit per SSE** (Auktion, Team, Ankäufe) + **Nutzungszähler** | Orchestrator | Phase F | – | TODO |
 | G2 | P1 | **Mandantenfähigkeit**: Daten je Firma getrennt, Rechte je Mandant | Orchestrator | G0, G1 | – | TODO |
 

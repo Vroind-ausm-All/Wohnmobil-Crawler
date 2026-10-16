@@ -388,6 +388,34 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   zwischenspeichern. Provision wirkt als Kosten ohne eigene Umsatzsteuer (Annahme). Tatsächlicher EK/VK zur Kalibrierung folgt mit
   Phase F. Nebenbei behoben: Verkaufsanfragen verloren ihre PLZ (Transport immer pauschal) – deren Bewertungen ändern sich.
 
+## ADR-029 – Besichtigung und Abwicklung: ein Vorgang je Kauf, Weg mit Belegen, Plan gegen Ist · vorgeschlagen (16.10.2026)
+
+* **Kontext:** 3.0-Analyse Phase F: Fahrzeugzustand, Verhandlung, Übergabe, Kaufvorgang und Ergebnisvergleich; Erfolgskriterium
+  „nachvollziehbarer Weg vom Gebot zum abgeschlossenen Ankauf“. Projektregel 10 (keine automatischen rechtsverbindlichen Aktionen).
+  Betreiberentscheidungen 16.10.2026: **Handy-Besichtigung auch für Verkaufsanfragen**, **gekaufte Inserate automatisch als
+  Vorgang**, **Vertragsmuster zum Ausdrucken**, **Vorgang bis zum Verkauf mit Vergleich**.
+* **Entscheidung:**
+  1. Besichtigungen von Verkaufsanfragen nutzen Tabelle, Rechnung, Fotos, Protokoll und Handy-App der Inserate unverändert;
+     Kennung `anfrage-<id>` plus neue Spalte `besichtigungen.anfrage_id` (v9). Grundlage beim Anlegen eingefroren: Bewertung der
+     Anfrage, Angebot = bestätigter Demo-Zuschlag oder Erstangebot, Verkäufer (nur Team). Rechte: Inhaber oder Bearbeiter der
+     Anfrage statt Halter des Inserats; je Anfrage eine offene Besichtigung; nur offene Anfragen.
+  2. **Ankaufsvorgang** entsteht ausschließlich beim Abschluss „gekauft“ (vereinbarter Preis, beide Unterschriften) – in derselben
+     Transaktion wie Protokoll und Status (Anfrage bzw. Inserat). Zustände `gekauft → uebergeben → verkauft`, `storniert` nur vor
+     der Übergabe und nur durch den Inhaber. Übergabe erst nach bestätigtem Vertrag; Daten nicht in der Zukunft und in zeitlicher
+     Reihenfolge. Verlauf und Ist-Kosten nur anfügbar (Trigger), Korrekturen als Gegenbuchung.
+  3. **Plan eingefroren:** Bei Anfragen eine neue, nachrechenbare Kalkulation (ADR-028) zum Kaufpreis – Transport ab dem Standort des
+     Zuschlags, Provision nur bei Auktion; bei Inseraten die Bewertung zum Kaufzeitpunkt; ohne Bewertung die Grundlage der Besichtigung.
+  4. **Weg** je Vorgang: Anfrage/Inserat → Zuschlag mit Gebotskalkulation → Kalkulation zum Kaufpreis (nachgerechnet) → Besichtigung
+     und Protokoll → Vertrag → Übergabe/Zahlung → Verkauf, jeweils mit Zeitpunkt und Beleg-Link oder „offen“.
+  5. **Vertrag:** druckbares Muster aus Vorgangsdaten (Parteien, Fahrzeug, Preis, Mängel aus dem Protokoll, Felder zum Ausfüllen) mit
+     deutlichem Hinweis „Muster ohne Rechtsgewähr“; Sachmängelhaftung bleibt ein Freifeld. Ein Mensch bestätigt die Unterschriften und
+     lädt den Scan hoch (PDF/Bild, Inhalt geprüft, nur über den Vorgang abrufbar).
+  6. **Ergebnisvergleich** (`bewertung/ergebnis.py`, rein): Plan gegen Ist für Einkauf/Max-EK, Kosten, VK, Gewinn (gleiche Formel
+     wie der Rechner, auf 50 € gerundet; vor dem Verkauf „vorläufig“), Standzeit; Übersicht über alle Vorgänge. Nur Anzeige – keine
+     automatische Kalibrierung; Parameter werden bewusst in `config.yaml` nachgestellt.
+* **Folgen / offen:** Vertragsmuster vor Einsatz juristisch prüfen lassen. Kein Abschluss ohne Netz (wie bisher). Gekaufte Inserate
+  ohne Handy-Besichtigung (nur Status „gekauft“) erhalten keinen Vorgang. Fahrzeugidentität rückt auf v10.
+
 ## ADR-030 – Phase G0: Voraussetzungen für Skalierung – Härtung, Datenrechte, API-Rahmen · vorgeschlagen (16.10.2026)
 
 * **Kontext:** 3.0-Analyse Phase G (Skalierung/B2B): „Freigegebene API-Quellen, Echtzeit-Betrieb, mandantenfähige Nutzung und
@@ -408,7 +436,8 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
      Aufgabe von G2.
   4. **Datenrechte:** Register `docs/DATENRECHTE.md`; **Widerruf** einer Verkaufsanfrage (Inhaber, Web und CLI) anonymisiert den
      Verkäufer (nur ohne weitere Anfrage), löscht Freitexte, Notizverlauf, Fotos samt Dateien und schwärzt die Besichtigung,
-     bricht laufende Auktionen ab und nimmt die Freigabe zurück. Mit Ankauf wird verweigert (Aufbewahrungspflichten).
+     bricht laufende Auktionen ab und nimmt die Freigabe zurück. Mit Ankaufsvorgang – auch storniert – wird verweigert
+     (Aufbewahrungspflichten, Einzelfall klären).
      Fotos verlieren beim Speichern EXIF/GPS (JPEG, PNG); Kalkulationen frieren Freitexte ohne Kontaktdaten ein; der
      Offline-Speicher der Handy-App nimmt nur eine Positivliste auf und wird bei 401 geleert; Links aus fremden Seiten nur http(s).
   5. **API-Rahmen** `wmscout/quellen/api_rahmen.py`: `ApiQuelle` ist standardmäßig nicht freigegeben, verlangt den Zugang per
@@ -416,4 +445,4 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   6. **Pilotbetrieb** nur nach `docs/PILOTBETRIEB.md` (TLS-Proxy, HSTS, Ratenlimits, verschlüsselte Sicherungen außer Haus,
      pip-audit, Datenschutzerklärung, Löschfristen).
 * **Folgen / offen:** Bremse beginnt nach Neustart neu (Proxy-Limits ergänzen). Offen: CSP-Nonce, Leerlauf-Zeitlimit der
-  Sitzung, CSRF-Token je Sitzung, Audit-Protokoll und Rechte je Ankaufsschritt (nach Phase F, Schema v10), Auskunft Art. 15.
+  Sitzung, CSRF-Token je Sitzung, Audit-Protokoll (Schema v10) und Rechte je Ankaufsschritt (G0b), Auskunft Art. 15.

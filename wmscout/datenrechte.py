@@ -19,7 +19,7 @@ def widerruf(db: Datenbank, cfg: dict, foto_ordner: Path, anfrage_id: int, nutze
     if not verkauf.lade(anfrage_id):
         raise LookupError("Anfrage nicht gefunden")
     tabellen = {r[0] for r in db.con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    if "ankaeufe" in tabellen and db.con.execute("SELECT 1 FROM ankaeufe WHERE anfrage_id=? AND status != 'storniert'",
+    if "ankaeufe" in tabellen and db.con.execute("SELECT 1 FROM ankaeufe WHERE anfrage_id=?",
                                                  (anfrage_id,)).fetchone():
         raise ValueError("Für diese Anfrage gibt es einen Ankaufsvorgang – Kaufunterlagen unterliegen der Aufbewahrungspflicht; "
                          "nicht automatisch löschen, Einzelfall klären")

@@ -272,9 +272,9 @@ class VerkaufSpeicher:
             if not a:
                 raise LookupError("Anfrage nicht gefunden")
             if "ankaeufe" in tabellen:
-                k = self.con.execute("SELECT referenz FROM ankaeufe WHERE anfrage_id=? AND status != 'storniert'", (anfrage_id,)).fetchone()
+                k = self.con.execute("SELECT referenz FROM ankaeufe WHERE anfrage_id=?", (anfrage_id,)).fetchone()
                 if k:
-                    raise ValueError(f"Ankaufsvorgang {k[0]} vorhanden – Kaufunterlagen unterliegen der Aufbewahrungspflicht; "
+                    raise ValueError(f"Ankaufsvorgang {k[0]} vorhanden (auch storniert) – Kaufunterlagen können der Aufbewahrungspflicht unterliegen; "
                                      "Daten nicht automatisch löschen, Einzelfall klären")
             # andere Anfragen desselben Verkäufers bleiben unberührt – der Verkäufer wird nur anonymisiert, wenn keine mehr übrig ist
             weitere = self.con.execute("SELECT COUNT(*) FROM verkaufsanfragen WHERE verkaeufer_id=? AND id != ?",

@@ -2,7 +2,8 @@
 
 Versionen: 1 = ZIP-Stand (Tabelle ``anzeigen`` im Ur-Schema), 2 = Stand vor Phase 1 (ergänzte Spalten + Team-Tabellen),
 3 = Phase 1 (``schema_version``, ``bearbeitung``), 4 = vorbereiteter Mehrquellen-Ereigniseingang, 5 = Verkäuferportal,
-6 = Händlerportal (Standorte), 7 = Demo-Auktionen, 8 = gespeicherte Kalkulationen (Deal Intelligence).
+6 = Händlerportal (Standorte), 7 = Demo-Auktionen, 8 = gespeicherte Kalkulationen (Deal Intelligence),
+9 = Ankaufsvorgänge (Besichtigung bis Verkauf).
 Jeder Schritt läuft in einer eigenen Transaktion, ist idempotent
 (``IF NOT EXISTS``, Spaltenprüfung) und wird erst nach erfolgreicher Sicherung der Datenbank ausgeführt.
 Die DDL der Schritte ist eingefroren: spätere Änderungen gehören in einen neuen Schritt, nicht in einen alten.
@@ -16,7 +17,7 @@ from pathlib import Path
 
 from .sicherung import SicherungsFehler, oeffne_lesend, sichere
 
-AKTUELLE_VERSION = 8
+AKTUELLE_VERSION = 9
 
 
 class MigrationsFehler(RuntimeError):
@@ -217,8 +218,43 @@ def _schritt_8(con: sqlite3.Connection):
             BEGIN SELECT RAISE(ABORT, 'kalkulationen ist nur anfügbar'); END""")
 
 
+def _schritt_9(con: sqlite3.Connection):
+    """Additive v9 (Phase F, ADR-029): Ankaufsvorgang vom Kauf bis zum Verkauf; Besichtigungen auch für Verkaufsanfragen.
+    Neue Tabellen und eine neue, leere Spalte ``besichtigungen.anfrage_id`` – nichts Bestehendes wird verändert.
+    Verlauf und Kosten sind nur anfügbar (Korrekturen als Gegenbuchung)."""
+    _neue_spalte(con, "besichtigungen", "anfrage_id", "INTEGER REFERENCES verkaufsanfragen(id)")
+    con.execute("""CREATE TABLE IF NOT EXISTS ankaeufe (
+        id INTEGER PRIMARY KEY, referenz TEXT UNIQUE, herkunft TEXT NOT NULL, anfrage_id INTEGER REFERENCES verkaufsanfragen(id),
+        anzeige_id TEXT, besichtigung_id INTEGER NOT NULL UNIQUE REFERENCES besichtigungen(id), auktion_id INTEGER REFERENCES auktionen(id),
+        standort_id INTEGER REFERENCES standorte(id), kalkulation_id INTEGER REFERENCES kalkulationen(id),
+        status TEXT NOT NULL DEFAULT 'gekauft', kaufpreis INTEGER NOT NULL, plan_json TEXT NOT NULL,
+        vertrag_am TEXT, vertrag_von INTEGER, uebergabe_am TEXT, zahlung_am TEXT, km_uebergabe INTEGER,
+        vk_preis INTEGER, verkauft_am TEXT, storno_grund TEXT, erstellt_am TEXT NOT NULL, erstellt_von INTEGER,
+        CHECK(herkunft IN ('anfrage', 'anzeige')),
+        CHECK(status IN ('gekauft', 'uebergeben', 'verkauft', 'storniert')),
+        CHECK(typeof(kaufpreis) = 'integer' AND kaufpreis > 0),
+        CHECK(vk_preis IS NULL OR (typeof(vk_preis) = 'integer' AND vk_preis > 0)),
+        CHECK(km_uebergabe IS NULL OR km_uebergabe >= 0))""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_ankaeufe_status ON ankaeufe(status, id)")
+    con.execute("""CREATE TABLE IF NOT EXISTS ankauf_kosten (
+        id INTEGER PRIMARY KEY, ankauf_id INTEGER NOT NULL REFERENCES ankaeufe(id), art TEXT NOT NULL, betrag INTEGER NOT NULL,
+        notiz TEXT, datum TEXT NOT NULL, nutzer_id INTEGER, erstellt_am TEXT NOT NULL,
+        CHECK(typeof(betrag) = 'integer' AND betrag != 0))""")
+    con.execute("""CREATE TABLE IF NOT EXISTS ankauf_verlauf (
+        id INTEGER PRIMARY KEY, ankauf_id INTEGER NOT NULL REFERENCES ankaeufe(id), zeitpunkt TEXT NOT NULL, nutzer_id INTEGER,
+        ereignis TEXT NOT NULL, daten_json TEXT NOT NULL DEFAULT '{}')""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_ankauf_verlauf ON ankauf_verlauf(ankauf_id, id)")
+    con.execute("""CREATE TABLE IF NOT EXISTS ankauf_dokumente (
+        id INTEGER PRIMARY KEY, ankauf_id INTEGER NOT NULL REFERENCES ankaeufe(id), art TEXT NOT NULL, datei TEXT NOT NULL,
+        nutzer_id INTEGER, erstellt_am TEXT NOT NULL, CHECK(art IN ('vertrag', 'uebergabe', 'sonstiges')))""")
+    for tabelle in ("ankauf_kosten", "ankauf_verlauf"):
+        for art in ("UPDATE", "DELETE"):
+            con.execute(f"""CREATE TRIGGER IF NOT EXISTS {tabelle}_kein_{art.lower()} BEFORE {art} ON {tabelle}
+                BEGIN SELECT RAISE(ABORT, '{tabelle} ist nur anfügbar'); END""")
+
+
 SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4, 5: _schritt_5,
-                                                             6: _schritt_6, 7: _schritt_7, 8: _schritt_8}
+                                                             6: _schritt_6, 7: _schritt_7, 8: _schritt_8, 9: _schritt_9}
 
 _SCHEMA_VERSION = ("CREATE TABLE IF NOT EXISTS schema_version ("
                    "version INTEGER PRIMARY KEY, angewendet_am TEXT NOT NULL)")
