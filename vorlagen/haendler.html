@@ -31,6 +31,7 @@ nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px}
   <div id="beendet"></div>
 </main>
 <script src="/static/kalkulation.js"></script>
+<script src="/static/live.js"></script>
 <script>
 var TOKEN = {{ token | tojson }}, HAENDLER = {{ 'true' if haendler else 'false' }};
 (function(){
@@ -155,8 +156,12 @@ var TOKEN = {{ token | tojson }}, HAENDLER = {{ 'true' if haendler else 'false' 
   }, 1000);
   setInterval(function(){                 // neue Gebote anderer Standorte sehen – nur sichtbar und ohne offene Eingabe
     var aktiv = document.activeElement && document.activeElement.name === 'betrag';
-    if(!document.hidden && !aktiv && !WARTET && ENDEN.length) lade();
+    if(!document.hidden && !aktiv && !WARTET && ENDEN.length && !Live.verbunden()) lade();
   }, 20000);
+  Live.an(['auktion'], function(){             // Live (G1): neue Gebote sofort – nicht während eine Eingabe offen ist
+    var aktiv = document.activeElement && document.activeElement.name === 'betrag';
+    if(!aktiv && !WARTET) lade();
+  });
   document.getElementById('liste').addEventListener('click', function(e){
     var b = e.target.closest('[data-interesse]'); if(!b) return;
     b.disabled = true;

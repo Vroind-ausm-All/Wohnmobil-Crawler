@@ -206,6 +206,8 @@ app:
   login_sperre_minuten: 15
   vertrauter_proxy: false          # true NUR hinter eigenem Reverse-Proxy: dann zählen X-Forwarded-For/-Proto
   nur_https: false                 # true, wenn die App nur über HTTPS erreichbar ist: Anmelde-Cookie immer „Secure“
+  live_max_je_nutzer: 4            # Live-Aktualisierung (SSE): offene Verbindungen je Zugang und insgesamt
+  live_max_gesamt: 40
   sitzung_leerlauf_stunden: 72     # nach so vielen Stunden ohne Nutzung neu anmelden (0 = aus); spätestens nach 30 Tagen
 
 # --- 7b. Team ---------------------------------------------------

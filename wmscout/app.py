@@ -148,6 +148,7 @@ def baue_handler(k: Kontext):
         def do_POST(self):
             bearbeite(self, k, "POST")
 
+    Handler.kontext = k                  # für Diagnose und Tests (z. B. Live-Verbindungen zählen)
     return Handler
 
 
@@ -167,7 +168,7 @@ def erstelle_server(cfg: dict, db: Datenbank, basis: Path, port: int = 8765) -> 
     db_pfad = basis / cfg["ausgabe"]["datenbank"]
     suchlauf = Suchlauf(cfg, str(db_pfad), basis)
     k = Kontext(cfg, db, basis, token, suchlauf, db_pfad.parent / "fotos")
-    suchlauf.bei_ende.append(lambda zeilen: (k.veraendert(), k.whatsapp.neue_treffer(zeilen)))
+    suchlauf.bei_ende.append(lambda zeilen: (k.veraendert(), k.whatsapp.neue_treffer(zeilen), k.live.melde("suchlauf")))
     server = Server(("127.0.0.1", port), baue_handler(k))
     return server, token, suchlauf
 

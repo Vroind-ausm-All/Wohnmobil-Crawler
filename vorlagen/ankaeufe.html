@@ -31,6 +31,7 @@ td.b{text-align:right;white-space:nowrap}
     <div id="detail"><p class="leise">Vorgang links auswählen.</p></div>
   </div>
 </main>
+<script src="/static/live.js"></script>
 <script>
 var TOKEN = {{ token | tojson }}, INHABER = {{ 'true' if ich.rolle == 'inhaber' else 'false' }},
     KOSTEN = {{ kostenarten | tojson }}, STATUS = {{ status | tojson }}, DOKUMENTE = {{ dokumentarten | tojson }};
@@ -136,6 +137,8 @@ var TOKEN = {{ token | tojson }}, INHABER = {{ 'true' if ich.rolle == 'inhaber' 
   document.getElementById('liste').addEventListener('click', function(e){ var k = e.target.closest('.karte'); if(k) detail(+k.dataset.id); });
   document.getElementById('detail').addEventListener('click', function(e){ var t = e.target.closest('[data-schritt]'); if(t && aktiv) schritt(t.dataset.schritt); });
   liste().then(function(){ var m = /^#(\d+)$/.exec(location.hash); if(m) detail(+m[1]); });
+  function tippt(){ var x = document.activeElement; return !!x && /^(INPUT|TEXTAREA|SELECT)$/.test(x.tagName) && document.getElementById('detail').contains(x); }
+  Live.an(['ankauf'], function(){ liste(); if(aktiv && !tippt()) detail(aktiv); });
 })();
 </script>
 </body>

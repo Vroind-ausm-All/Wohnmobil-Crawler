@@ -25,7 +25,9 @@ Die App begrenzt selbst: JSON 1 MB, Fotos/Dokumente ca. 8 MB je Bild, Lesezeitli
 
 - [ ] Proxy-Ratenlimit für `/api/login` (z. B. 10/min je IP) und allgemein (z. B. 300/min je IP).
 - [ ] Proxy-Grenze für die Größe des Inhalts (z. B. 15 MB) und für Kopfzeilen.
-- [ ] Proxy-Timeouts (Lesen/Senden) gesetzt.
+- [ ] Proxy-Timeouts (Lesen/Senden) gesetzt – für `/api/ereignisse` (Live, SSE) Lesezeit über 15 s und **keine Pufferung**
+      (nginx: `proxy_buffering off;`, die App sendet zusätzlich `X-Accel-Buffering: no`). Ohne das fällt die Seite still auf
+      Abfragen in Abständen zurück.
 
 ## 3. Zugänge
 

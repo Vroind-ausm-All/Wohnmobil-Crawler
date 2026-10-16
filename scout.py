@@ -54,6 +54,7 @@ from wmscout.auktion import STATUS as AUKTION_STATUS
 from wmscout.auktion import AuktionSpeicher
 from wmscout import datenrechte
 from wmscout.audit import AuditSpeicher
+from wmscout.nutzung import nutzung
 from wmscout.deal import DealSpeicher
 from wmscout.haendler import STANDORT_STATUS, HaendlerSpeicher
 from wmscout.importer import Importer
@@ -331,6 +332,19 @@ def cmd_audit(cfg, db, args):
     print(f"{len(zeilen)} Einträge (letzte {args.tage} Tage)")
 
 
+def cmd_nutzung(cfg, db, args):
+    """Nutzungszähler (G1): Kennzahlen eines Monats aus den vorhandenen Daten – Grundlage für eine spätere Abrechnung."""
+    try:
+        n = nutzung(db, args.monat)
+    except ValueError as e:
+        sys.exit(str(e))
+    print(f"Nutzung {n['monat']}:")
+    for name, wert in n["zaehler"].items():
+        print(f"  {name.replace('_', ' '):<24} {'–' if wert is None else wert}")
+    for z in n["je_nutzer"]:
+        print(f"  · {z['nutzer']:<16} {z['rolle'] or '':<12} {z['zugriffe']} Zugriffe, {z['aenderungen']} Änderungen")
+
+
 def cmd_status(cfg, db, args):
     """Ohne ``--nutzer`` wie bisher: kein Eintrag in `bearbeitung`, ein kontaktiertes Inserat gilt im Team als „ohne Zuordnung“.
     Mit ``--nutzer`` gilt die Team-Regel wie in der App (Übernahme, Konflikt mit Kollegen, Kontakt durch wen)."""
@@ -395,6 +409,8 @@ def main():
     ad.add_argument("--nutzer")
     ad.add_argument("--objekt", help="z. B. anfrage:12, ankauf:3")
     ad.add_argument("--limit", type=int, default=500)
+    nz = sub.add_parser("nutzung", help="Nutzungszähler eines Monats (Anfragen, Auktionen, Gebote, Ankäufe, Zugriffe, aktive Nutzer)")
+    nz.add_argument("--monat", help="JJJJ-MM, Standard: laufender Monat")
     ka = sub.add_parser("kalkulation", help="gespeicherte Kalkulationen (Gebote) nachrechnen")
     ka.add_argument("aktion", choices=["pruefen"])
     s = sub.add_parser("status", help="Status einer Anzeige setzen")
@@ -426,7 +442,7 @@ def main():
         sys.exit(f"Datenbank-Start abgebrochen: {e}")
     {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "rechne": cmd_rechne,
      "nutzer": cmd_nutzer, "status": cmd_status, "standort": cmd_standort,
-     "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage, "audit": cmd_audit}[args.cmd](cfg, db, args)
+     "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage, "audit": cmd_audit, "nutzung": cmd_nutzung}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":
