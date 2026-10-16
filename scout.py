@@ -51,6 +51,7 @@ from wmscout.laufsperre import Laufsperre
 from wmscout.eingang import import_ordner
 from wmscout.auktion import STATUS as AUKTION_STATUS
 from wmscout.auktion import AuktionSpeicher
+from wmscout.deal import DealSpeicher
 from wmscout.haendler import STANDORT_STATUS, HaendlerSpeicher
 from wmscout.importer import Importer
 from wmscout.migrationen import MigrationsFehler
@@ -293,6 +294,15 @@ def cmd_auktion(cfg, db, args):
     print("Protokoll unverändert (Kette und Gebote stimmen überein). Letzten Hash notieren, um späteres Abschneiden zu erkennen.")
 
 
+def cmd_kalkulation(cfg, db, args):
+    """Alle gespeicherten Kalkulationen aus ihrer eingefrorenen Eingabe nachrechnen (Phase E) – nur lesen."""
+    p = DealSpeicher(db, cfg).pruefe_alle()
+    if not p["ok"]:
+        sys.exit(f"{len(p['abweichend'])} von {p['anzahl']} Kalkulationen weichen ab (Eingabe verändert oder andere Rechenversion): "
+                 + ", ".join(map(str, p["abweichend"])))
+    print(f"{p['anzahl']} gespeicherte Kalkulationen – alle identisch nachgerechnet.")
+
+
 def cmd_status(cfg, db, args):
     """Ohne ``--nutzer`` wie bisher: kein Eintrag in `bearbeitung`, ein kontaktiertes Inserat gilt im Team als „ohne Zuordnung“.
     Mit ``--nutzer`` gilt die Team-Regel wie in der App (Übernahme, Konflikt mit Kollegen, Kontakt durch wen)."""
@@ -348,6 +358,8 @@ def main():
     st.add_argument("--ort")
     au = sub.add_parser("auktion", help="Demo-Auktionen auflisten oder das Auktionsprotokoll prüfen")
     au.add_argument("aktion", choices=["liste", "pruefen"])
+    ka = sub.add_parser("kalkulation", help="gespeicherte Kalkulationen (Gebote) nachrechnen")
+    ka.add_argument("aktion", choices=["pruefen"])
     s = sub.add_parser("status", help="Status einer Anzeige setzen")
     s.add_argument("id")
     s.add_argument("status", choices=list(STATUS))
@@ -377,7 +389,7 @@ def main():
         sys.exit(f"Datenbank-Start abgebrochen: {e}")
     {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "rechne": cmd_rechne,
      "nutzer": cmd_nutzer, "status": cmd_status, "standort": cmd_standort,
-     "auktion": cmd_auktion}[args.cmd](cfg, db, args)
+     "auktion": cmd_auktion, "kalkulation": cmd_kalkulation}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":

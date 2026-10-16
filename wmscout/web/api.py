@@ -30,12 +30,14 @@ from ..verkauf import Eingabefehler, VerkaufSpeicher
 from ..haendler import STANDORT_STATUS, HaendlerSpeicher
 from ..auktion import STANDARD as MINDESTPREIS_STANDARD
 from ..auktion import AuktionSpeicher, AuktionsFehler
+from ..deal import DealSpeicher
 from ..team import HAENDLER
 from ..bearbeitung import (IN_ARBEIT, OFFEN, VORBEREITET, BearbeitungsKonflikt, TeamSicht, ablauf_grenze, darf_erzwingen, darf_status,
                            darf_zuweisen, reservierung_tage)
 from ..benachrichtigung import WhatsAppCloud, whatsapp_link
 from ..bewertung.anschreiben import euro, tsd
 from ..bewertung.auswertung import bewerte_alle, dubletten_ids
+from ..bewertung import kalkulation as kalk
 from ..bewertung.besichtigung import berechne, lade_katalog
 from ..datenbank import STATUS, Datenbank
 from ..eingang import import_ordner, relativ_zum_projekt
@@ -80,6 +82,7 @@ class Kontext:
         self.verkauf = VerkaufSpeicher(db, foto_ordner / "anfragen")     # im Fotoordner: mit gesichert
         self.haendler = HaendlerSpeicher(db)
         self.auktion = AuktionSpeicher(db, cfg)             # ValueError bei falscher Konfiguration (Abschnitt auktion)
+        self.deal = DealSpeicher(db, cfg)                   # ValueError bei falscher Konfiguration (Abschnitt kalkulation)
         self.reservierung_tage = reservierung_tage(cfg)     # ValueError mit verständlicher Meldung bei falscher Konfiguration
         self.katalog_pfad = basis / "maengel.yaml"
         self.sperre = threading.Lock()          # Datenbankzugriffe nacheinander, Netzwerk parallel
@@ -422,6 +425,27 @@ class Anfrage:
             return self.json(200, k.auktion.fuer_standort(self.standort_freigeschaltet()))
         if m := re.fullmatch(r"/api/auktion/(\d+)", p):
             return self.json(200, {**k.auktion.lade(int(m.group(1))), "pruefung": k.auktion.pruefe_protokoll()})
+        if m := re.fullmatch(r"/api/haendler/auktion/(\d+)/kalkulation", p):
+            standort = self.standort_freigeschaltet()
+            a = k.auktion.lade(int(m.group(1)))
+            if a["status"] != "laeuft" or not k.haendler.sichtbar(a["anfrage_id"], standort):
+                raise Antwort(404, "Auktion nicht (mehr) offen")
+            e, erg = k.deal.berechne(a["anfrage_id"], self.betrag_aus_query(), standort)
+            return self.json(200, {"ergebnis": erg, "eingabe_hash": kalk.eingabe_hash(e)[:12]})
+        if m := re.fullmatch(r"/api/verkaufsanfrage/(\d+)/kalkulation", p):
+            standort = (self.query.get("standort") or ["0"])[0]
+            if not standort.isdigit() or (int(standort) and not k.haendler.standort(int(standort))):
+                raise Antwort(400, "Standort ungültig")
+            try:
+                e, erg = k.deal.berechne(int(m.group(1)), self.betrag_aus_query(), int(standort))
+            except LookupError as fehler:
+                raise Antwort(404, str(fehler)) from fehler
+            return self.json(200, {"ergebnis": erg, "eingabe_hash": kalk.eingabe_hash(e)[:12]})
+        if m := re.fullmatch(r"/api/kalkulation/(\d+)", p):
+            x = k.deal.lade(int(m.group(1)))
+            if not x:
+                raise Antwort(404, "Kalkulation nicht gefunden")
+            return self.json(200, x)
         if m := re.fullmatch(r"/api/haendler/fahrzeug/(\d+)", p):
             f = k.haendler.sichtbar(int(m.group(1)), self.standort_freigeschaltet())
             if not f:
@@ -451,6 +475,33 @@ class Anfrage:
                 raise Antwort(404, "Foto nicht gefunden")
             return self.senden(200, pfad.read_bytes(), mimetypes.guess_type(pfad.name)[0] or "image/jpeg")
         raise Antwort(404, "nicht gefunden")
+
+    # ----- Deal Intelligence (Phase E)
+    def betrag_aus_query(self) -> int | None:
+        wert = ((self.query.get("betrag") or [""])[0]).strip()
+        if not wert:
+            return None
+        if not wert.isdigit() or not 0 < int(wert) <= 10_000_000:
+            raise Antwort(400, "Betrag muss ein ganzer Euro-Betrag sein")
+        return int(wert)
+
+    def gebot_mit_kalkulation(self, auktion_id: int, standort: int, daten: dict) -> dict:
+        """Gebot und die dabei gezeigte Kalkulation in EINER Transaktion: jedes angenommene Gebot hat seine nachrechenbare Kalkulation.
+        Die Kalkulation wird vorher (ohne Schreibsperre) gerechnet; scheitert sie, zählt das Gebot trotzdem (Protokoll im Log)."""
+        k, betrag = self.k, daten.get("betrag")
+        anfrage_id = k.auktion.lade(auktion_id)["anfrage_id"]           # AuktionsFehler 404, wenn es die Auktion nicht gibt
+        kalkulation = None
+        if isinstance(betrag, int) and not isinstance(betrag, bool) and 0 < betrag <= 10_000_000:
+            try:
+                kalkulation = k.deal.berechne(anfrage_id, betrag, standort)
+            except Exception:  # noqa: BLE001 – die Kalkulation ist Hilfe, kein Teil der Gebotsregeln
+                log.exception("Kalkulation zum Gebot auf Auktion %s fehlgeschlagen", auktion_id)
+        with k.db.transaktion():
+            erg = k.auktion.gebot_abgeben(auktion_id, standort, self.nutzer["id"], betrag, daten.get("wiederholungs_id"))
+            if not erg["wiederholt"] and kalkulation:
+                erg["kalkulation_id"] = k.deal.speichern(*kalkulation, anlass="gebot", anfrage_id=anfrage_id, auktion_id=auktion_id,
+                                                         gebot_id=erg["gebot_id"], standort_id=standort, nutzer_id=self.nutzer["id"])
+        return erg
 
     # ----- Händlerportal (Phase C)
     def nur_inhaber(self):
@@ -501,7 +552,8 @@ class Anfrage:
         for v in a["verlauf"]:
             v["nutzer"] = namen.get(v["nutzer_id"])
         return {**a, "bewertung": {**b.dict(), **self._bewertung_kurz(b)}, "spanne_verkaeufer": vk.spanne_fuer_verkaeufer(b, k.cfg),
-                "interessen": k.verkauf.interessen(anfrage_id), "auktionen": k.auktion.fuer_anfrage(anfrage_id)}
+                "interessen": k.verkauf.interessen(anfrage_id), "auktionen": k.auktion.fuer_anfrage(anfrage_id),
+                "kalkulationen": k.deal.liste(anfrage_id)}
 
     def ich_mit_kuerzel(self) -> dict:
         if not self.team_aktiv:
@@ -673,10 +725,21 @@ class Anfrage:
             standort = self.standort_freigeschaltet()
             if not standort:
                 raise Antwort(403, "Bieten nur mit Standort-Zugang", grund="recht")
-            erg = k.auktion.gebot_abgeben(int(m.group(1)), standort, self.nutzer["id"], daten.get("betrag"), daten.get("wiederholungs_id"))
+            erg = self.gebot_mit_kalkulation(int(m.group(1)), standort, daten)
             if not erg["wiederholt"]:
                 log.info("Demo-Gebot %s € auf Auktion %s durch %s", erg["betrag"], m.group(1), self.nutzer["name"])
             return self.json(200, erg)
+        if m := re.fullmatch(r"/api/verkaufsanfrage/(\d+)/kalkulation", p):
+            betrag, standort = daten.get("betrag"), daten.get("standort_id") or 0
+            if (betrag is not None and (isinstance(betrag, bool) or not isinstance(betrag, int) or not 0 < betrag <= 10_000_000)) \
+                    or isinstance(standort, bool) or not isinstance(standort, int) or (standort and not k.haendler.standort(standort)):
+                raise Antwort(400, "Betrag oder Standort ungültig")
+            try:
+                e, erg = k.deal.berechne(int(m.group(1)), betrag, standort)
+            except LookupError as fehler:
+                raise Antwort(404, str(fehler)) from fehler
+            kid = k.deal.speichern(e, erg, anlass="gespeichert", anfrage_id=int(m.group(1)), standort_id=standort, nutzer_id=self.nutzer["id"])
+            return self.json(200, {"id": kid})
         if m := re.fullmatch(r"/api/verkaufsanfrage/(\d+)/auktion", p):
             self.nur_inhaber()
             aid = k.auktion.anlegen(int(m.group(1)), self.nutzer["id"], startpreis=daten.get("startpreis"),

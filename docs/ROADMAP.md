@@ -159,6 +159,16 @@ Auftrag des Betreibers am 16.10.2026 („Phase D fertigstellen“); Entscheidung
 | D2 | P1 | **Zustandsmaschine + atomares Gebot** (Schritt, Wiederholungs-ID, Verlängerung, Abschluss beim Zugriff) | Orchestrator | D1 | Gleichzeitige Gebote (Prozesse) → genau ein gültiges Höchstgebot | REVIEW |
 | D3 | P1 | **Oberfläche**: Bieten in `/haendler`, Starten/Entscheiden/Prüfen in `/anfragen`, CLI `auktion` | Orchestrator | D2 | Bieter sehen keinen Mindestpreis und keine anderen Standorte; Zuschlag nur durch Inhaber | REVIEW |
 
+## Phase E (3.0) – Deal Intelligence
+
+Auftrag des Betreibers am 16.10.2026 („Phase E“); Entscheidungen siehe ADR-028.
+
+| ID | Prio | Arbeitspaket | Agent | Abhängig | Akzeptanz | Status |
+|---|---|---|---|---|---|---|
+| E1 | P1 | **Kalkulation zum Betrag**: Szenarien aus der Marktspanne, Max-EK inkl. Provision, Korridor, Risiko, Annahmen | Orchestrator | D2 | Rein, ohne Datenbank; Auszug rechnet wie die ganze Datenbank | REVIEW |
+| E2 | P1 | **Nachrechenbar**: eingefrorene Eingabe (Stichtag, Parameter, Vergleichsauszug), Schema v8, Prüfung + CLI | Orchestrator | E1 | Gespeicherte Kalkulation unabhängig von späterer Config/Datenlage; Manipulation erkannt | REVIEW |
+| E3 | P1 | **Am Gebotsfeld**: Standorte live zum Betrag (Transport ab Standort), Team in `/anfragen`, Gebot speichert Kalkulation | Orchestrator | E2 | Jedes angenommene Gebot hat genau eine Kalkulation | REVIEW |
+
 ## Phase 3 – Datenbank und Marktbeobachtung
 
 **Abnahme:** identische Inserate lassen sich ohne Datenverlust erneut importieren; Preis- und Fahrzeughistorie bleiben

@@ -412,8 +412,8 @@ def test_migration_v6_altbestand_auf_v7_mit_sicherung(tmp_path, monkeypatch):
     con = sqlite3.connect(pfad)
     vorher = {t: con.execute(f"SELECT * FROM {t} ORDER BY id").fetchall() for t in ("verkaufsanfragen", "standorte")}
     con.close()
-    assert migrationen.migriere(pfad, tmp_path / "s") == [7]
-    assert [p.name for p in (tmp_path / "s").iterdir() if "vor-v7" in p.name]
+    assert migrationen.migriere(pfad, tmp_path / "s") == list(range(7, migrationen.AKTUELLE_VERSION + 1))
+    assert [p.name for p in (tmp_path / "s").iterdir() if f"vor-v{migrationen.AKTUELLE_VERSION}" in p.name]
     assert migrationen.migriere(pfad, tmp_path / "s") == []
     con = sqlite3.connect(pfad)
     assert {t: con.execute(f"SELECT * FROM {t} ORDER BY id").fetchall() for t in vorher} == vorher

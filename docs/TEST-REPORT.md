@@ -4,6 +4,18 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## Phase E – Deal Intelligence (16.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux) | 796 bestanden, davon 13 neu (`test_deal.py`) |
+| Auszug der Vergleichsangebote = ganze Datenbank | gleiche Szenarien und gleicher Risikowert |
+| Nachrechnen nach Änderung von Konfiguration und Marktdaten | gespeicherte Kalkulation unverändert, neue ändert sich |
+| Manipulation (Ergebnis, Eingabe, Rechenversion, Trigger) | erkannt; CLI `kalkulation pruefen` meldet Abweichung mit Exit-Code ≠ 0 |
+| Gegenprobe 14 Schutzstellen | alle erkannt |
+| Browser-Klicktest Team + Standort (390 px) | bestanden, 0 JS-Fehler |
+| Windows-CI, Safari/iOS, große Datenbank | nicht geprüft |
+
 ## Phase D – Demo-Auktionssystem (16.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

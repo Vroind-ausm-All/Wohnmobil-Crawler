@@ -6,6 +6,26 @@ Wert „–“.
 
 ---
 
+## Phase E – Deal Intelligence (16.10.2026) · Status: REVIEW
+
+- **Anlass:** Betreiber „Phase E“. 3.0-Analyse: Gewinnkalkulation und Max-EK unmittelbar neben dem Gebotsfeld; Erfolgskriterium:
+  jede Kalkulation mit Annahmen und Unsicherheit reproduzierbar. Entscheidungen per Rückfrage (ADR-028): Standorte und Team sehen
+  die volle Kalkulation (hebt ADR-026 Nr. 4 für Max-EK auf), Provision als Prozent vom Zuschlag (Standard 2 %).
+  Umgesetzt vom Orchestrator ohne Subagenten.
+- **Geändert/neu:** `wmscout/bewertung/kalkulation.py` (neu, rein: Szenarien, Max-EK inkl. Provision, Korridor, Risiko, Annahmen,
+  eingefrorene Eingabe), `wmscout/bewertung/rechner.py` (optionaler Stichtag, ohne Angabe unverändert), `wmscout/deal.py` (neu:
+  Eingabe je Anfrage/Standort, speichern, nachrechnen), `wmscout/migrationen.py` (v8 `kalkulationen`, nur anfügbar),
+  `wmscout/web/api.py` (Kalkulation für Standorte und Team, Gebot + Kalkulation in einer Transaktion), `wmscout/web/static/kalkulation.js`
+  (neu, gemeinsame Anzeige), `vorlagen/haendler.html`, `vorlagen/anfragen.html`, `scout.py` (`kalkulation pruefen`), `config.yaml`
+  (`kalkulation.provision_prozent`), `tests/test_deal.py` (neu, 13); Migrationstests auf v8.
+- **Nebenbei behoben:** `verkauf.als_fahrzeug` verlor die PLZ des Verkäufers (überschrieben aus dem leeren Ort) – Verkaufsanfragen
+  rechneten seit Phase B immer mit der Transportpauschale statt nach Entfernung. Bewertungen von Anfragen ändern sich dadurch.
+- **Tests:** siehe TEST-REPORT, `ruff` grün. Gegenprobe an 14 Schutzstellen – alle erkannt (Stichtag-Test erst nach Verlegung des
+  Test-Stichtags in ein anderes Jahr aussagekräftig). Browser-Klicktest Team rechnet/speichert/rechnet nach → Auktion → Standort
+  sieht Kalkulation live zum Betrag (Handybreite) → Gebot speichert Kalkulation → Team rechnet sie nach: bestanden, 0 JS-Fehler.
+  Zwei eigene Fehler im Klickskript (Selektor) bzw. Test (Entfernung) korrigiert; Spaltenreihenfolge gespeicherter Kalkulationen behoben.
+- **Nicht geprüft:** Windows-CI (folgt im PR), Safari/iOS, Antwortzeiten mit großer Datenbank (jede Kalkulation liest alle Vergleichsangebote).
+
 ## Phase D – Demo-Auktionssystem (16.10.2026) · Status: REVIEW
 
 - **Anlass:** Betreiber „Phase D fertigstellen“. Erfolgskriterium der 3.0-Analyse: gleichzeitige Gebote führen zu genau einem

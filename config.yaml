@@ -265,3 +265,7 @@ auktion:
   schritt: 100                  # Mindestabstand zum Höchstgebot in ganzen Euro
   verlaengerung_minuten: 2      # Gebot in den letzten N Minuten verlängert die Auktion auf N Minuten ab dem Gebot
   startpreis_anteil: 0.7        # Startpreis-Vorschlag = Anteil der Preisvorstellung (abgerundet auf den Schritt)
+
+# Deal Intelligence (Phase E, ADR-028): Gewinn und Max-EK zum Gebotsbetrag, jede gespeicherte Kalkulation nachrechenbar.
+kalkulation:
+  provision_prozent: 0.02       # Provision/Gebühr vom Zuschlag (0.02 = 2 %), als Kosten im Max-EK enthalten; 0 = keine
