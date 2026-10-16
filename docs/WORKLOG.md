@@ -6,6 +6,20 @@ Wert „–“.
 
 ---
 
+## Phase G1 – Echtzeit per SSE und Nutzungszähler (16.10.2026) · Status: REVIEW
+
+- **Anlass:** Fortsetzung „Phase G“ (Betreiber: „G1 weitermachen“; Entscheidungen „Live per SSE“, „Nur Nutzungszähler“), ADR-032.
+- **Geändert/neu:** `wmscout/web/live.py` (neu: Ereignisse im Speicher, Grenzen, SSE-Format), `wmscout/web/api.py` (`/api/ereignisse`,
+  Meldung nach erfolgreichem POST, `/api/nutzung`), `wmscout/app.py` (Meldung am Suchlauf-Ende, Kontext am Handler),
+  `wmscout/web/static/live.js` (neu), `vorlagen/anfragen.html`, `ankaeufe.html`, `haendler.html`, `report.html` (Live nachladen,
+  Abfragen pausiert solange verbunden), `wmscout/nutzung.py` (neu), `scout.py` (`nutzung`), `config.yaml` (`app.live_max_*`),
+  Tests `test_live.py` (7).
+- **Tests:** siehe TEST-REPORT, `ruff` grün, `node --check live.js` ok. Gegenprobe an 7 Schutzstellen – alle erkannt.
+  Browser-Klicktest: Notiz eines Kollegen erscheint in `/anfragen` nach 0,44 s, neue Auktion im Händlerportal (390 px) nach
+  0,8 s, fremdes Gebot nach 0,45 s (vorher bis zu 20 s bzw. gar nicht), 0 JS-Fehler, 0 CSP-Verstöße. Zwei eigene Fehler im
+  Klickskript (wartete auf „Netz ruhig“, das mit offener SSE-Verbindung nie eintritt; Countdown statt Gebot als Änderung erkannt).
+- **Nicht geprüft:** Betrieb hinter echtem Reverse-Proxy (Pufferung), Safari/iOS, 40 gleichzeitige Verbindungen (Last).
+
 ## Phase G0b – Audit-Protokoll, Leerlauf, Rechte je Ankaufsschritt (16.10.2026) · Status: REVIEW
 
 - **Anlass:** Fortsetzung „Phase G“ (Betreiber: G0 → Mandanten nacheinander, ohne Zwischenfreigabe); Restpunkte aus ADR-030,

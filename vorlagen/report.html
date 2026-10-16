@@ -764,7 +764,10 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
       };
     });
     document.addEventListener('visibilitychange', function(){ if(!document.hidden) ladeTeam(); });
-    setInterval(function(){ if(!document.hidden) ladeTeam(); }, 60000);
+    setInterval(function(){ if(!document.hidden && !(window.Live && Live.verbunden())) ladeTeam(); }, 60000);
+    // Live (G1): nur mit Server – die Datei-Fassung des Berichts lädt kein Skript nach
+    var live = document.createElement('script'); live.src = '/static/live.js';
+    live.onload = function(){ Live.an(['team'], ladeTeam); }; document.head.appendChild(live);
   }
   function teamKlick(id, art){ ({uebernehmen:uebernehmen, abgeben:abgeben, erzwingen:erzwingen})[art](id); }
 {% endif %}

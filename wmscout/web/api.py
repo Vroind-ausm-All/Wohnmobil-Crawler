@@ -32,8 +32,10 @@ from ..auktion import STANDARD as MINDESTPREIS_STANDARD
 from ..auktion import AuktionSpeicher, AuktionsFehler
 from .. import datenrechte
 from ..audit import AuditSpeicher, einordnen
+from ..nutzung import nutzung
 from ..deal import DealSpeicher
 from ..team import pruefe_passwort
+from .live import Ereignisse, art_fuer, sse_block
 from .sicherheit import SICHERHEITS_KOPF, LoginBremse
 from ..ankauf import DOKUMENTARTEN, AnkaufFehler, AnkaufSpeicher
 from ..ankauf import STATUS as ANKAUF_STATUS
@@ -88,6 +90,8 @@ class Kontext:
         app = cfg.get("app") or {}
         self.team = TeamSpeicher(db, foto_ordner, float(app.get("sitzung_leerlauf_stunden", LEERLAUF_STUNDEN) or 0))
         self.audit = AuditSpeicher(db)
+        self.live = Ereignisse(int(app.get("live_max_je_nutzer", 4)), int(app.get("live_max_gesamt", 40)))
+        self.live_lebensdauer, self.live_ping = 300.0, 15.0      # Sekunden; Tests verkürzen
         self.verkauf = VerkaufSpeicher(db, foto_ordner / "anfragen")     # im Fotoordner: mit gesichert
         self.haendler = HaendlerSpeicher(db)
         self.auktion = AuktionSpeicher(db, cfg)             # ValueError bei falscher Konfiguration (Abschnitt auktion)
@@ -209,7 +213,7 @@ def karten_link(adresse: str | None) -> str | None:
 
 
 def _haendler_erlaubt(pfad: str) -> bool:
-    return pfad in ("/", "/m", "/haendler", "/api/ich", "/api/logout") or pfad.startswith(("/api/haendler/", "/haendler-fotos/"))
+    return pfad in ("/", "/m", "/haendler", "/api/ich", "/api/logout", "/api/ereignisse") or pfad.startswith(("/api/haendler/", "/haendler-fotos/"))
 
 
 def _bild_bytes(daten_url: str) -> bytes:
@@ -507,6 +511,12 @@ class Anfrage:
             if pfad.suffix.lower() == ".pdf":
                 kopf["Content-Disposition"] = f'attachment; filename="{pfad.name}"'
             return self.senden(200, pfad.read_bytes(), mimetypes.guess_type(pfad.name)[0] or "application/octet-stream", kopf)
+        if p == "/api/nutzung":
+            self.nur_inhaber()
+            try:
+                return self.json(200, nutzung(k.db, (self.query.get("monat") or [None])[0]))
+            except ValueError as e:
+                raise Antwort(400, str(e)) from e
         if p == "/api/audit":
             self.nur_inhaber()
             q = {k2: (v[0] if v else None) for k2, v in self.query.items()}
@@ -1264,13 +1274,61 @@ def ist_gesperrt(fehler: sqlite3.OperationalError) -> bool:
 
 def bearbeite(handler, k: Kontext, methode: str):
     a = Anfrage(handler, k)
+    if methode == "GET" and a.pfad == "/api/ereignisse":
+        return _ereignisse(a, handler, k)
     a.puffern = True                    # Reihenfolge: erst Audit-Eintrag festschreiben, dann antworten (kein Wettlauf danach)
     try:
         _bearbeite(a, handler, k, methode)
     finally:
         _protokolliere(a, k, methode)
+        if methode == "POST" and a.status and a.status < 400 and (art := art_fuer(a.pfad)):
+            k.live.melde(*art)
         if a.puffer:
             a.schreiben(*a.puffer)
+
+
+def _ereignisse(a: Anfrage, handler, k: Kontext):
+    """Server-Sent Events (G1): nach Anmeldung und Rechteprüfung ohne globale Sperre offen halten; nur „etwas hat sich geändert“."""
+    try:
+        with k.sperre:
+            a.pruefe_zugriff(aendernd=False)
+    except Antwort as e:
+        return a.json(e.status, {"fehler": e.fehler, **({"grund": e.grund} if e.grund else {})})
+    schluessel = a.nutzer.get("id") or "lokal"
+    if not k.live.oeffnen(schluessel):
+        return a.json(429, {"fehler": "Zu viele Live-Verbindungen – die Seite fragt stattdessen in Abständen ab"})
+    try:
+        haendler = a.nutzer.get("rolle") == HAENDLER
+        try:
+            stand = int(handler.headers.get("Last-Event-ID") or -1)
+        except ValueError:
+            stand = -1
+        if stand < 0 or stand > k.live.stand:          # erste Verbindung oder Server neu gestartet: ab jetzt
+            stand = k.live.stand
+        handler.send_response(200)
+        for name, wert in {"Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-store",
+                           "X-Accel-Buffering": "no", **SICHERHEITS_KOPF}.items():
+            handler.send_header(name, wert)
+        handler.end_headers()
+        handler.wfile.write(sse_block(kommentar="verbunden", retry_ms=5000))
+        handler.wfile.flush()
+        ende = time.monotonic() + k.live_lebensdauer
+        while time.monotonic() < ende:
+            neu, luecke, aktuell = k.live.seit(stand, haendler)
+            if luecke:
+                neu = [{"stand": aktuell, "art": "alles"}]
+            for e in neu:
+                handler.wfile.write(sse_block(e))
+            if neu:
+                handler.wfile.flush()
+            stand = aktuell
+            if not k.live.warte(stand, min(k.live_ping, max(0.0, ende - time.monotonic()))):
+                handler.wfile.write(sse_block(kommentar="ping"))
+                handler.wfile.flush()
+    except (ConnectionError, OSError):
+        pass                                          # Browser weg – er verbindet sich bei Bedarf selbst neu
+    finally:
+        k.live.schliessen(schluessel)
 
 
 def _protokolliere(a: Anfrage, k: Kontext, methode: str):

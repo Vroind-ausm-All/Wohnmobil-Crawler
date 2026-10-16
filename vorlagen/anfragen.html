@@ -33,6 +33,7 @@ nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px}
   </div>
 </main>
 <script src="/static/kalkulation.js"></script>
+<script src="/static/live.js"></script>
 <script>
 var TOKEN = {{ token | tojson }}, STATUS = {{ status | tojson }}, KANAELE = {{ kanaele | tojson }}, INHABER = {{ 'true' if ich.rolle == 'inhaber' else 'false' }};
 (function(){
@@ -226,6 +227,9 @@ var TOKEN = {{ token | tojson }}, STATUS = {{ status | tojson }}, KANAELE = {{ k
   });
   api('/api/nutzer').then(function(n){ NUTZER = n; }, function(){ NUTZER = []; });
   liste().then(function(){ var m = /^#(\d+)$/.exec(location.hash); if(m) detail(+m[1]); });
+  // Live (G1): Änderungen von Kollegen und Geboten sofort sehen – das Detail nur, solange hier nichts eingegeben wird
+  function tippt(){ var x = document.activeElement; return !!x && /^(INPUT|TEXTAREA|SELECT)$/.test(x.tagName) && document.getElementById('detail').contains(x); }
+  Live.an(['anfrage', 'auktion', 'ankauf', 'besichtigung'], function(){ liste(); if(aktiv && !tippt()) detail(aktiv); });
 })();
 </script>
 </body>

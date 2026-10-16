@@ -469,3 +469,26 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   5. **Hochgeladene Dokumente** werden mit `Content-Security-Policy: sandbox` ausgeliefert, PDFs nur als Download.
 * **Folgen / offen:** Das Protokoll wächst ohne Löschung – Aufbewahrungsfrist und Wartungsschritt festlegen. Kein Manipulationsschutz
   über Hash-Kette (anders als das Auktionsprotokoll); wer Dateizugriff auf die Datenbank hat, kann Trigger umgehen.
+
+## ADR-032 – G1: Echtzeit per Server-Sent Events, Nutzungszähler aus vorhandenen Daten · vorgeschlagen (16.10.2026)
+
+* **Kontext:** 3.0-Analyse Phase G „Echtzeit-Betrieb“ und „optionale Abrechnung“. Betreiberentscheidungen 16.10.2026:
+  **Live per SSE**, **nur Nutzungszähler** (keine Abrechnung). Bisher fragten Seiten in Abständen ab (Händlerportal alle 20 s,
+  Team-Übersicht alle 60 s, `/anfragen` und `/ankaeufe` gar nicht).
+* **Entscheidung:**
+  1. **SSE statt WebSocket:** Standardbibliothek reicht (`http.server`), läuft durch `tailscale serve` und übliche Proxys, der
+     Browser verbindet selbst neu (`EventSource`, `Last-Event-ID`). Endpunkt `/api/ereignisse` mit derselben Anmeldung und
+     Positivliste wie jede Route; ohne globale Sperre offen gehalten.
+  2. **Nur „etwas hat sich geändert“:** Ereignis = Art (`anfrage`, `auktion`, `ankauf`, `besichtigung`, `team`, `suchlauf`) und
+     beim Team die ID – nie Inhalte. Die Seite lädt über ihre rechtegeprüften Routen nach. Standorte erhalten nur `auktion` ohne
+     ID. Gemeldet wird nach jedem erfolgreichen POST (Status < 400) aus dem Pfad und am Ende eines Suchlaufs.
+  3. **Im Speicher, begrenzt:** Ringpuffer der letzten 500 Ereignisse; fällt etwas heraus, meldet der Server „alles“ (neu laden).
+     Je Verbindung ein Thread – daher höchstens 4 je Zugang und 40 insgesamt (`app.live_max_*`), Lebensdauer 5 min (danach neue
+     Verbindung, Anmeldung wird neu geprüft), Lebenszeichen alle 15 s.
+  4. **Rückfall bleibt:** Das Abfragen in Abständen bleibt bestehen und pausiert nur, solange die Live-Verbindung steht. Eingaben
+     werden nicht überschrieben (Detail lädt nur nach, wenn dort kein Feld den Fokus hat).
+  5. **Nutzungszähler** (`wmscout/nutzung.py`, `scout.py nutzung`, `/api/nutzung` nur Inhaber) zählt je Monat aus den vorhandenen
+     Tabellen (Anfragen, Auktionen, Gebote, Kalkulationen, Besichtigungen, Ankäufe, Verkäufe) und dem Audit-Protokoll (Anmeldungen,
+     Zugriffe, Änderungen, aktive Nutzer) – keine eigene Zähltabelle, die auseinanderlaufen könnte; keine Preise, keine Rechnung.
+* **Folgen / offen:** Mehrere App-Prozesse teilen keine Ereignisse (es läuft ohnehin nur einer). Mit Mandanten (G2) müssen
+  Ereignisse und Zähler je Mandant getrennt werden. Handy-App (`/m`) nutzt Live noch nicht (offline-orientiert).

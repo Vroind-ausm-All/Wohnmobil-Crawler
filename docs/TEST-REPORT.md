@@ -4,6 +4,18 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## Phase G1 – Echtzeit per SSE und Nutzungszähler (16.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux) | 847 bestanden, davon 7 neu (`test_live.py`) |
+| SSE: Ereignis je Rolle, keine Inhalte, kein Ereignis bei abgelehnter Änderung, Wiederaufnahme mit `Last-Event-ID` | bestanden |
+| SSE: nur angemeldet (401), Grenze je Zugang (429), Platz nach Ablauf der Lebensdauer frei | bestanden |
+| Nutzungszähler aus vorhandenen Daten, nur Inhaber, Monatsformat | bestanden |
+| Gegenprobe 7 Schutzstellen | alle erkannt |
+| Browser-Klicktest Live (Desktop + Händler 390 px) | Notiz 0,44 s, Auktion 0,8 s, Gebot 0,45 s; 0 JS-Fehler, 0 CSP-Verstöße |
+| Reverse-Proxy, Safari/iOS, Last mit vielen Verbindungen, Windows-CI | nicht geprüft (Windows-CI folgt im PR) |
+
 ## Phase G0b – Audit-Protokoll, Leerlauf, Rechte je Ankaufsschritt (16.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |
