@@ -55,6 +55,17 @@ def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def bild_endung(daten: bytes) -> str:
+    """Dateiendung nach dem Inhalt (nicht nach Namen oder Content-Type); andere Formate werden abgelehnt."""
+    if daten[:3] == b"\xff\xd8\xff":
+        return "jpg"
+    if daten[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if daten[:4] == b"RIFF" and daten[8:12] == b"WEBP":
+        return "webp"
+    raise ValueError("Nur JPEG, PNG oder WebP")
+
+
 class TeamSpeicher:
     def __init__(self, db: Datenbank, foto_ordner: Path):
         self.db = db
@@ -200,14 +211,7 @@ class TeamSpeicher:
     def foto_speichern(self, bid: int, daten: bytes, mangel_key: str | None, nutzer_id: int | None) -> dict:
         if len(daten) > MAX_FOTO_BYTES:
             raise ValueError("Foto zu groß (max. 8 MB)")
-        if daten[:3] == b"\xff\xd8\xff":
-            endung = "jpg"
-        elif daten[:8] == b"\x89PNG\r\n\x1a\n":
-            endung = "png"
-        elif daten[:4] == b"RIFF" and daten[8:12] == b"WEBP":
-            endung = "webp"
-        else:
-            raise ValueError("Nur JPEG, PNG oder WebP")
+        endung = bild_endung(daten)
         ordner = self.foto_ordner / str(int(bid))
         ordner.mkdir(parents=True, exist_ok=True)
         name = f"{uuid.uuid4().hex}.{endung}"

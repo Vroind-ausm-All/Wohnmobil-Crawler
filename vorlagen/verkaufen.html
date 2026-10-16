@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#24524a">
+<link rel="icon" href="/static/icon-192.png">
+<title>Wohnmobil verkaufen – {{ firma }}</title>
+<link rel="stylesheet" href="/static/mobil.css">
+<style>
+main{max-width:640px;margin:0 auto;padding:16px}
+.schritte{display:flex;gap:6px;margin:8px 0 16px;font-size:13px;color:var(--mute)} .schritte span{flex:1;border-top:4px solid var(--line);padding-top:4px}
+.schritte span.an{border-color:var(--akzent);color:var(--ink);font-weight:600}
+fieldset{border:0;padding:0;margin:0} legend{font-weight:700;font-size:18px;margin-bottom:6px}
+.maengel label{display:flex;gap:8px;align-items:center;font-weight:400} .maengel input{width:auto}
+.vorschau{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px} .vorschau img{width:84px;height:64px;object-fit:cover;border-radius:6px}
+.knopfreihe{display:flex;gap:8px;margin-top:16px} .knopfreihe .knopf{flex:1}
+.spanne{font-size:24px;font-weight:700;margin:6px 0} .klein{font-size:13px}
+nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px}
+</style>
+</head>
+<body>
+<main>
+  <nav class="oben"><a href="/anfragen">Verkaufsanfragen</a><a href="/">Ankaufsliste</a></nav>
+  <h1>Wohnmobil verkaufen</h1>
+  <p class="leise">{{ firma }} kauft Wohnmobile von privat. Angaben eintragen – wir melden uns persönlich. Unverbindlich und kostenlos.</p>
+  <div class="schritte" aria-hidden="true"><span data-s="1" class="an">1 Fahrzeug</span><span data-s="2">2 Zustand &amp; Fotos</span><span data-s="3">3 Kontakt</span></div>
+
+  <form id="f" novalidate>
+    <fieldset data-schritt="1">
+      <legend>Fahrzeug</legend>
+      <label>Fahrzeugart *<select name="art" required><option value="">bitte wählen</option>{% for a in arten %}<option>{{ a }}</option>{% endfor %}</select></label>
+      <label>Marke *<input name="marke" required maxlength="60" placeholder="z. B. Hymer, Knaus, Dethleffs"></label>
+      <label>Modell<input name="modell" maxlength="80" placeholder="z. B. B 678 DL"></label>
+      <label>Erstzulassung (Jahr) *<input name="ez_jahr" inputmode="numeric" required maxlength="4" placeholder="z. B. 2016"></label>
+      <label>Kilometerstand<input name="km" inputmode="numeric" maxlength="9" placeholder="z. B. 85000"></label>
+    </fieldset>
+
+    <fieldset data-schritt="2" hidden>
+      <legend>Zustand &amp; Fotos</legend>
+      <p class="leise klein">Bekannte Mängel ehrlich angeben – das vermeidet spätere Nachverhandlungen bei der Besichtigung.</p>
+      <div class="maengel">{% for key, text in maengel.items() %}<label><input type="checkbox" name="maengel" value="{{ key }}"> {{ text }}</label>{% endfor %}</div>
+      <label>Beschreibung, Ausstattung<textarea name="beschreibung" maxlength="3000" style="min-height:90px" placeholder="z. B. Markise, Solar, Fahrradträger, letzte Wartung …"></textarea></label>
+      <label>Fotos (bis zu 12)<input type="file" id="fotos" accept="image/*" multiple></label>
+      <div class="vorschau" id="vorschau"></div>
+    </fieldset>
+
+    <fieldset data-schritt="3" hidden>
+      <legend>Preis &amp; Kontakt</legend>
+      <label>Ihre Preisvorstellung (freiwillig)<input name="preisvorstellung" inputmode="numeric" maxlength="9" placeholder="in Euro"></label>
+      <label>Name *<input name="name" required maxlength="100" autocomplete="name"></label>
+      <label>Telefon<input name="telefon" type="tel" maxlength="40" autocomplete="tel"></label>
+      <label>E-Mail<input name="email" type="email" maxlength="200" autocomplete="email"></label>
+      <p class="leise klein">Telefon oder E-Mail – eins von beiden genügt.</p>
+      <label>PLZ des Standorts *<input name="plz" inputmode="numeric" required maxlength="5" autocomplete="postal-code"></label>
+      <label>Ort<input name="ort" maxlength="80" autocomplete="address-level2"></label>
+      {% if team or ich %}<label>Eingang<select name="kanal">{% for key, text in kanaele.items() %}<option value="{{ key }}"{{ ' selected' if key == 'telefon' }}>{{ text }}</option>{% endfor %}</select></label>{% endif %}
+      <label style="display:flex;gap:8px;align-items:flex-start;font-weight:400;margin-top:12px"><input type="checkbox" name="einwilligung" style="width:auto;margin-top:4px">
+        <span>Ich bin damit einverstanden, dass {{ firma }} meine Angaben und Fotos speichert, um mein Fahrzeug zu bewerten und mich wegen eines möglichen Ankaufs zu kontaktieren. Die Einwilligung kann ich jederzeit widerrufen; dann werden die Angaben gelöscht. *</span></label>
+    </fieldset>
+
+    <p id="fehler" class="hinweis warn" role="alert" hidden></p>
+    <div class="knopfreihe">
+      <button type="button" class="knopf" id="zurueck" hidden>Zurück</button>
+      <button type="button" class="knopf primaer" id="weiter">Weiter</button>
+      <button type="submit" class="knopf primaer" id="senden" hidden>Anfrage senden</button>
+    </div>
+  </form>
+
+  <section id="fertig" hidden>
+    <h2>Vielen Dank!</h2>
+    <p>Ihre Anfrage ist eingegangen. Referenz: <b id="referenz"></b></p>
+    <div id="spanne-box" hidden>
+      <p class="leise">Vergleichbare Angebote liegen derzeit etwa bei</p>
+      <p class="spanne" id="spanne"></p>
+      <p class="leise klein">Grobe, unverbindliche Einschätzung aus Marktdaten – kein Kaufangebot. Ein Angebot bekommen Sie nach Prüfung von uns persönlich.</p>
+    </div>
+    <p id="fotostatus" class="leise"></p>
+    <div class="knopfreihe"><a class="knopf primaer" href="/verkaufen">Weitere Anfrage erfassen</a><a class="knopf" href="/anfragen">Zu den Anfragen</a></div>
+  </section>
+</main>
+<script>
+var TOKEN = {{ token | tojson }};
+(function(){
+  var f = document.getElementById('f'), schritt = 1, fotos = [];
+  var fehler = document.getElementById('fehler');
+  function zeige(n){
+    schritt = n;
+    f.querySelectorAll('[data-schritt]').forEach(function(x){ x.hidden = +x.dataset.schritt !== n; });
+    document.querySelectorAll('.schritte span').forEach(function(s){ s.classList.toggle('an', +s.dataset.s <= n); });
+    document.getElementById('zurueck').hidden = n === 1;
+    document.getElementById('weiter').hidden = n === 3;
+    document.getElementById('senden').hidden = n !== 3;
+    fehler.hidden = true; window.scrollTo(0, 0);
+  }
+  function meldung(t){ fehler.textContent = t; fehler.hidden = false; }
+  // Vorprüfung je Schritt (der Server prüft alles noch einmal)
+  function pruefe(n){
+    var d = daten(), f = [];
+    if(n === 1){
+      if(!d.art) f.push('Fahrzeugart wählen'); if(!d.marke) f.push('Marke angeben');
+      if(!/^\d{4}$/.test(d.ez_jahr || '')) f.push('Erstzulassung als Jahr angeben (z. B. 2016)');
+    }
+    if(n === 3){
+      if(!d.name) f.push('Name angeben'); if(!d.telefon && !d.email) f.push('Telefon oder E-Mail angeben');
+      if(!/^\d{5}$/.test(d.plz || '')) f.push('PLZ fünfstellig angeben'); if(!d.einwilligung) f.push('Einwilligung bestätigen');
+    }
+    if(f.length){ meldung(f.join(' · ')); return false; }
+    return true;
+  }
+  function daten(){
+    var d = {};
+    ['art','marke','modell','ez_jahr','km','beschreibung','preisvorstellung','name','telefon','email','plz','ort','kanal'].forEach(function(n){
+      var el = f.elements[n]; if(el) d[n] = el.value.trim();
+    });
+    d.maengel = [].slice.call(f.querySelectorAll('[name=maengel]:checked')).map(function(x){ return x.value; });
+    d.einwilligung = f.elements.einwilligung.checked;
+    return d;
+  }
+  document.getElementById('weiter').onclick = function(){ if(pruefe(schritt)) zeige(schritt + 1); };
+  document.getElementById('zurueck').onclick = function(){ zeige(schritt - 1); };
+
+  // Fotos im Browser verkleinern (max. 1600 px, JPEG) – schneller Upload, keine Originaldaten (EXIF/GPS) auf dem Server
+  function verkleinere(datei){
+    return new Promise(function(ok, fehl){
+      var url = URL.createObjectURL(datei), img = new Image();
+      img.onload = function(){
+        var s = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+        c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+        ok(c.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = function(){ URL.revokeObjectURL(url); fehl(new Error('Bild nicht lesbar')); };
+      img.src = url;
+    });
+  }
+  document.getElementById('fotos').onchange = function(e){
+    var neu = [].slice.call(e.target.files).slice(0, 12 - fotos.length);
+    Promise.all(neu.map(verkleinere)).then(function(liste){
+      fotos = fotos.concat(liste);
+      var v = document.getElementById('vorschau'); v.textContent = '';
+      fotos.forEach(function(src){ var i = document.createElement('img'); i.src = src; i.alt = 'Foto'; v.appendChild(i); });
+    }, function(err){ meldung(err.message); });
+    e.target.value = '';
+  };
+
+  function post(url, d){
+    return fetch(url, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','X-Scout-Token':TOKEN}, body:JSON.stringify(d)})
+      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(x){ if(!r.ok) throw new Error(x.fehler || ('Fehler ' + r.status)); return x; }); });
+  }
+  function euro(x){ return x.toLocaleString('de-DE') + ' €'; }
+  f.onsubmit = function(e){
+    e.preventDefault();
+    if(!pruefe(3)) return;
+    var knopf = document.getElementById('senden'); knopf.disabled = true; knopf.textContent = 'Wird gesendet …';
+    post('/api/verkaufsanfrage', daten()).then(function(r){
+      document.getElementById('referenz').textContent = r.referenz;
+      if(r.spanne){ document.getElementById('spanne').textContent = euro(r.spanne[0]) + ' – ' + euro(r.spanne[1]); document.getElementById('spanne-box').hidden = false; }
+      f.hidden = true; document.querySelector('.schritte').hidden = true; document.getElementById('fertig').hidden = false;
+      var st = document.getElementById('fotostatus'), fertig = 0;
+      if(!fotos.length) return;
+      st.textContent = 'Fotos werden übertragen …';
+      return fotos.reduce(function(p, bild){
+        return p.then(function(){ return post('/api/verkaufsanfrage/' + r.id + '/foto', {bild:bild}).then(function(){ fertig++; st.textContent = fertig + ' von ' + fotos.length + ' Fotos übertragen'; }); });
+      }, Promise.resolve()).then(function(){ st.textContent = 'Alle ' + fotos.length + ' Fotos übertragen ✓'; },
+                                function(err){ st.textContent = fertig + ' von ' + fotos.length + ' Fotos übertragen – ' + err.message; });
+    }, function(err){ meldung(err.message); knopf.disabled = false; knopf.textContent = 'Anfrage senden'; });
+  };
+})();
+</script>
+</body>
+</html>

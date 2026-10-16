@@ -128,6 +128,17 @@ aktivierbar; unzulässige Direkt-Crawler standardmäßig aus.
 | P2-09 | P3 | Stubs/Anfragen AutoScout24, Caraworld, Quoka; Volumenprüfung regionaler Portale | source-researcher | – | TODO |
 | P2-10 | P2 | Datenqualität je Quelle messen (Anteil Preis/EZ/km/PLZ/Anbieterart) | source-integrations | P2-03 | TODO |
 
+## Phase B (3.0) – Verkäuferportal
+
+Freigegeben vom Betreiber am 15.10.2026 („mache Phase B das Verkäuferportal“); Entscheidungen siehe ADR-025.
+
+| ID | Prio | Arbeitspaket | Agent | Abhängig | Akzeptanz | Status |
+|---|---|---|---|---|---|---|
+| B1 | P1 | **Datenmodell v5**: `verkaeufer`, `verkaufsanfragen`, `anfrage_fotos`, `anfrage_verlauf` (Sicherung vor Migration, additiv) | Orchestrator | P1-04b | Migration Altbestand v1/v2/v4 → v5 ohne Verlust, je Schritt genau einmal (auch parallel) | REVIEW |
+| B2 | P1 | **Erfassungsassistent `/verkaufen`**: Fahrzeug, Zustand/Mängel, Fotos, Preis (freiwillig), Kontakt, Einwilligung; Referenz; grobe Spanne nur bei sicherer Datenlage | Orchestrator | B1 | Vollständige Anfrage ohne manuelle Datenbankarbeit; nie Max-EK/Angebot an den Verkäufer | REVIEW |
+| B3 | P1 | **Team-Ansicht `/anfragen`**: Liste mit Bewertung, Detail mit Fotos, Kontakt, Status, Bearbeiter, Notiz, Verlauf | Orchestrator | B1 | Statuswechsel nachvollziehbar (Verlauf); nur angemeldet | REVIEW |
+| B4 | P2 | Öffentlicher Betrieb: Hosting/HTTPS, Spam-Schutz, Status-Link, Datenschutzerklärung, Widerruf/Löschung | – | B1–B3, Sicherheitsprüfung | Betreiberfreigabe + Rechtsprüfung | TODO (Freigabe nötig) |
+
 ## Phase 3 – Datenbank und Marktbeobachtung
 
 **Abnahme:** identische Inserate lassen sich ohne Datenverlust erneut importieren; Preis- und Fahrzeughistorie bleiben

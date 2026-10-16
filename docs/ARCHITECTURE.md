@@ -161,7 +161,8 @@ nur nach ausdrücklicher Bestätigung (P1-02) und, dank Laufsperre (P1-04) nicht
 **Stand 15.10.2026 (Plan nachgeführt):** Tatsächlich umgesetzt sind v3 (`schema_version`) und v4 (PR #7: `quellen`,
 `inserate`, `beobachtungen`, `preis_historie` parallel zu `anzeigen`). WAL und Laufsperre kamen ohne Schemaänderung
 (P1-04a/P1-04, Dateisperre statt `suchlaeufe`). `anzeigen` und v4 werden seit ADR-024 in denselben Transaktionen
-geschrieben. Die nächste freie Version für Fahrzeugidentitäten ist **v5**; die Zeilen unten sind der ursprüngliche Plan.
+geschrieben. **v5** (Phase B, ADR-025) enthält das Verkäuferportal (`verkaeufer`, `verkaufsanfragen`, `anfrage_fotos`,
+`anfrage_verlauf`). Die nächste freie Version für Fahrzeugidentitäten ist damit **v6**; die Zeilen unten sind der ursprüngliche Plan.
 
 | Version | Phase | Inhalt |
 |---|---|---|
