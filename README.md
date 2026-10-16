@@ -174,6 +174,14 @@ Standort-Zugang sieht nur **`/haendler`**: Verkaufsanfragen, bei denen der Verk�
 Inhaber sie in `/anfragen` freigegeben hat – anonym (Region „12xxx“, ohne Name/Telefon/E-Mail) mit Preisvorstellung und
 Fotos; „Interesse melden“ ist unverbindlich und erscheint bei der Anfrage. Sperren eines Standorts wirkt sofort (ADR-026).
 
+**Demo-Auktionen (Phase D, nur Demo – nicht verbindlich):** Bei einer freigegebenen Anfrage startet der Inhaber in
+`/anfragen` eine Demo-Auktion (Startpreis, Mindestpreis – Standard: Preisvorstellung –, Laufzeit 1–168 h). Geprüfte
+Standorte bieten in `/haendler` in ganzen Euro, mindestens 100 € über dem Höchstgebot; ein Gebot in den letzten 2 Minuten
+verlängert um 2 Minuten. Bieter sehen das Höchstgebot und „Mindestpreis erreicht ja/nein“, nie den Mindestpreis oder andere
+Standorte. Nach dem Ende entscheidet allein der Inhaber („Zuschlag bestätigen (Demo)“ oder „Kein Zuschlag“); es geht keine
+Nachricht hinaus. Jedes Gebot steht in einem hash-verketteten Protokoll: `python scout.py auktion pruefen` (oder „Protokoll
+prüfen“) zeigt, ob etwas verändert wurde. Einstellungen: `config.yaml` → `auktion` (ADR-027).
+
 **Team (nur mit angelegten Nutzern):** An jedem Fahrzeug zeigt ein Abzeichen mit Symbol und Kürzel, wer es bearbeitet
 (◔ reserviert, ✉ kontaktiert, ⧉ Dublette, ? ohne Zuordnung, ! verwaist; eigene gefüllt, fremde umrandet). „Ich übernehme“ /
 „Abgeben“ auf Karte und im Fenster; der Inhaber kann zusätzlich zuweisen und eine Übernahme erzwingen. Oben stehen die

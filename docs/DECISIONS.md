@@ -324,3 +324,39 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   6. Verkäuferformular: freiwillige Zustimmung zur Weitergabe (Einwilligungstext Version `2026-10-entwurf-2`).
 * **Folgen / offen:** Fahrzeugidentität rückt auf v7. Externe Partnerhändler (Marktplatz) wären eine eigene Entscheidung
   (Gewerbenachweis, Verträge, Datenschutz). Öffentlicher Betrieb weiter erst mit B4.
+
+## ADR-027 – Demo-Auktionen: Schreibsperre statt Dienst, Ganzzahlen, UTC, Hash-Kette, Zuschlag nur durch den Inhaber · vorgeschlagen (16.10.2026)
+
+* **Kontext:** 3.0-Analyse Phase D: simulierte Gebote, Zustandsmaschine, Timer, Höchstgebot, Audit-Log; gleichzeitige
+  Gebote müssen genau ein gültiges Ergebnis liefern. Projektregeln 10 (keine selbstständigen Kaufzusagen) und 13 (keine
+  Dauerprozesse ohne Freigabe). Betreiberauftrag „Phase D fertigstellen“ ohne Detailvorgaben → Standardwerte, alle in
+  `config.yaml` → `auktion` änderbar.
+* **Entscheidung:**
+  1. Schema **v7** (nur neue Tabellen): `auktionen` (Status `laeuft` → `beendet` → `zugeschlagen`/`abgelehnt`, `laeuft` →
+     `abgebrochen`; `demo = 1` per CHECK; Ergebnis `kein_gebot`/`unter_mindestpreis`/`mindestpreis_erreicht`), `gebote`,
+     `auktion_protokoll`. Je Anfrage höchstens eine laufende, offene oder zugeschlagene Auktion (partieller UNIQUE-Index).
+  2. **Beträge ganze Euro** (CHECK `typeof = 'integer'`, API lehnt Kommazahlen, Texte und Wahrheitswerte ab), **Zeiten UTC**
+     als `JJJJ-MM-TTThh:mm:ssZ` (als Text sortierbar).
+  3. **Atomares Gebot** unter `BEGIN IMMEDIATE`: Status, Ende, Standort geprüft, Anfrage noch freigegeben, Höchstgebot,
+     Mindestschritt (Standard 100 €) und Wiederholungs-ID werden in derselben Transaktion geprüft und geschrieben – auch
+     gegen andere Prozesse. Zweite Sicherung in der Datenbank: `UNIQUE(auktion_id, betrag)` (Gebote steigen streng),
+     `UNIQUE(auktion_id, nutzer_id, wiederholungs_id)`. Wer führt (Standort), kann sich nicht selbst überbieten.
+  4. **Wiederholungs-ID** je Gebotsabsicht (Browser erzeugt sie, behält sie bei Netzfehler/503, verwirft sie bei neuem Betrag):
+     gleiche ID + gleicher Betrag = dasselbe Ergebnis ohne zweites Gebot; gleiche ID + anderer Betrag = 409.
+  5. **Kein Dienst, kein Timer im Server:** Abgelaufene Auktionen werden bei jedem Zugriff (Liste, Detail, Gebot, CLI)
+     idempotent beendet (`UPDATE … WHERE status = 'laeuft'`). Gebot in den letzten 2 Minuten verlängert auf 2 Minuten ab dem
+     Gebot. Laufzeit Standard 24 h, erlaubt 1–168 h. Der Countdown im Browser ist nur Anzeige (Restzeit vom Server).
+  6. **Mindestpreis** Standard = Preisvorstellung (Inhaber kann ändern oder weglassen); Bieter sehen nur „erreicht ja/nein“,
+     nie den Betrag, nie andere Standorte. Da Standorte die Preisvorstellung seit ADR-026 sehen, ist der Standard-Mindestpreis
+     für sie erschließbar – wer das nicht will, setzt einen anderen Mindestpreis.
+  7. **Zuschlag nur durch den Inhaber** nach dem Ende, ausdrücklich und einmal; auch unter Mindestpreis möglich (Entscheidung
+     des Inhabers). Alles ist als **Demo – nicht verbindlich** gekennzeichnet; es entsteht keine Zusage gegenüber Verkäufer
+     oder Standort und keine automatische Nachricht. Start, Abbruch und Entscheidung stehen zusätzlich im Anfrage-Verlauf.
+  8. **Protokoll:** jede Zustandsänderung und jedes Gebot als Eintrag mit SHA-256 über (vorheriger Hash, ID, Auktion, Zeit,
+     Ereignis, Nutzer, Daten). Trigger verhindern UPDATE/DELETE an `gebote` und `auktion_protokoll`. `pruefe_protokoll`
+     erkennt Lücken, gebrochene Verkettung, veränderte Einträge und Gebote, die nicht zum Protokoll passen
+     (`scout.py auktion pruefen`, Knopf „Protokoll prüfen“).
+* **Folgen / offen:** Wer Schreibzugriff auf die Datei hat, kann Trigger entfernen und die **letzten** Einträge samt Kette
+  abschneiden; dagegen hilft nur, den letzten Hash außerhalb festzuhalten (CLI zeigt ihn). Echte, verbindliche Auktionen
+  (AGB, Widerruf, Zahlungsabwicklung, externe Bieter) sind ausdrücklich nicht Teil von Phase D und brauchen eine eigene
+  Entscheidung samt rechtlicher Prüfung. Fahrzeugidentität rückt auf v8.

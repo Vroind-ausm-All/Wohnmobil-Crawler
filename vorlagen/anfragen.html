@@ -65,6 +65,54 @@ var TOKEN = {{ token | tojson }}, STATUS = {{ status | tojson }}, KANAELE = {{ k
       }).join('') : '<p class="leise leer">Keine Anfragen.</p>';
     }).catch(function(e){ document.getElementById('liste').innerHTML = '<p class="hinweis warn">' + esc(e.message) + '</p>'; });
   }
+  function zeit(u){ return u ? new Date(u).toLocaleString('de-DE', {dateStyle:'short', timeStyle:'short'}) : ''; }
+  function auktionBlock(x){
+    var mp = x.mindestpreis ? eur(x.mindestpreis) + (x.mindestpreis_erreicht ? ' ✓ erreicht' : ' (nicht erreicht)') : 'ohne';
+    return '<div class="auktionsblock" style="border-top:1px solid var(--linie,#ddd);padding-top:6px;margin-top:6px">' +
+      '<p><b>' + esc(x.status_text) + '</b>' + (x.ergebnis_text ? ' · ' + esc(x.ergebnis_text) : '') + (x.grund ? ' · ' + esc(x.grund) : '') + '</p>' +
+      '<div class="zahlen"><div><span>Höchstgebot</span><b>' + (x.hoechstgebot ? eur(x.hoechstgebot) : '–') + '</b></div><div><span>Mindestpreis</span>' + mp +
+      '</div><div><span>Start</span>' + eur(x.startpreis) + '</div></div>' +
+      '<p class="leise">' + zeit(x.start_utc) + ' bis ' + zeit(x.ende_utc) + ' · ' + x.gebote_anzahl + ' Gebote' + (x.fuehrend ? ' · führend: ' + esc(x.fuehrend) : '') + '</p>' +
+      (x.gebote.length ? '<ul class="verlauf">' + x.gebote.map(function(g){ return '<li>' + eur(g.betrag) + ' · ' + esc(g.standort) + (g.nutzer ? ' (' + esc(g.nutzer) + ')' : '') + ' · ' + zeit(g.zeitpunkt_utc) + '</li>'; }).join('') + '</ul>' : '') +
+      '<div class="reihe">' + (INHABER && x.status === 'laeuft' ? '<button class="knopf klein" data-auktion-aktion="abbrechen" data-auktion-id="' + x.id + '">Abbrechen</button>' : '') +
+      (INHABER && x.status === 'beendet' ? (x.gewinner_gebot_id ? '<button class="knopf klein primaer" data-auktion-aktion="zuschlag" data-auktion-id="' + x.id + '">Zuschlag bestätigen (Demo)</button>' : '') +
+        '<button class="knopf klein" data-auktion-aktion="ablehnen" data-auktion-id="' + x.id + '">Kein Zuschlag</button>' : '') +
+      '<button class="knopf klein" data-auktion-aktion="pruefen" data-auktion-id="' + x.id + '">Protokoll prüfen</button></div><div data-protokoll="' + x.id + '"></div></div>';
+  }
+  function auktionKarte(a){
+    var aktiv = a.auktionen.some(function(x){ return x.status === 'laeuft' || x.status === 'beendet' || x.status === 'zugeschlagen'; });
+    var start = INHABER && !aktiv && a.freigegeben_am && OFFEN[a.status];
+    return '<div class="karte" id="auktion"><h3>Demo-Auktion <span class="tag">nicht verbindlich</span></h3>' +
+      (start ? '<p class="leise">Geprüfte Standorte bieten; ein Zuschlag gilt erst nach deiner Bestätigung und ist nur eine Demo.</p>' +
+        '<div class="reihe"><label style="flex:1">Startpreis €<input id="a-start" type="number" min="1" step="1" placeholder="automatisch"></label>' +
+        '<label style="flex:1">Mindestpreis € (leer = ohne)<input id="a-mindest" type="number" min="1" step="1" value="' + esc(a.preisvorstellung || '') + '"></label>' +
+        '<label style="flex:1">Laufzeit Std.<input id="a-laufzeit" type="number" min="1" step="1" value="24"></label></div>' +
+        '<button class="knopf klein primaer" data-auktion-aktion="starten">Demo-Auktion starten</button>'
+        : (!a.auktionen.length ? '<p class="leise">' + (a.freigegeben_am ? 'Noch keine Auktion.' + (INHABER ? '' : ' Starten kann nur der Inhaber.') : 'Erst nach Freigabe für Standorte möglich.') + '</p>' : '')) +
+      a.auktionen.map(auktionBlock).join('') + '</div>';
+  }
+  function zahl(id){ var v = document.getElementById(id).value.trim(); return v === '' ? null : parseInt(v, 10); }
+  function auktionAktion(t){
+    var id = t.dataset.auktionId, art = t.dataset.auktionAktion;
+    if(art === 'pruefen') return api('/api/auktion/' + id).then(function(x){
+      var p = x.pruefung;
+      document.querySelector('[data-protokoll="' + id + '"]').innerHTML = '<p class="hinweis ' + (p.ok ? 'ok">Protokoll unverändert ✓ (' + p.eintraege + ' Einträge insgesamt)' : 'warn">Protokoll beschädigt: ' + p.fehler.map(esc).join('; ')) + '</p>' +
+        '<ul class="verlauf">' + x.protokoll.map(function(e){ return '<li>' + zeit(e.zeitpunkt_utc) + ' · ' + esc(e.ereignis) + (e.daten.betrag ? ' ' + eur(e.daten.betrag) : '') + ' · <code>' + esc(e.hash.slice(0, 12)) + '</code></li>'; }).join('') + '</ul>';
+    }, function(err){ alert(err.message); });
+    var p;
+    if(art === 'starten'){
+      var d = {startpreis: zahl('a-start'), mindestpreis: zahl('a-mindest'), laufzeit_stunden: zahl('a-laufzeit')};
+      if(d.startpreis === null) delete d.startpreis;
+      if(d.laufzeit_stunden === null) delete d.laufzeit_stunden;
+      if(!confirm('Demo-Auktion starten? Geprüfte Standorte können dann bieten.')) return;
+      p = api('/api/verkaufsanfrage/' + aktiv + '/auktion', d);
+    } else {
+      var frage = {abbrechen:'Auktion abbrechen? Bisherige Gebote bleiben im Protokoll.', zuschlag:'Zuschlag für das Höchstgebot bestätigen? (Demo – nicht verbindlich)', ablehnen:'Ohne Zuschlag abschließen?'}[art];
+      if(!confirm(frage)) return;
+      p = api('/api/auktion/' + id + '/' + art, art === 'abbrechen' ? {grund: prompt('Grund (optional)') || ''} : {});
+    }
+    p.then(function(){ return detail(aktiv); }, function(err){ alert(err.message); });
+  }
   function detail(id){
     aktiv = id;
     document.querySelectorAll('#liste .karte').forEach(function(k){ k.classList.toggle('aktiv', +k.dataset.id === id); });
@@ -91,6 +139,7 @@ var TOKEN = {{ token | tojson }}, STATUS = {{ status | tojson }}, KANAELE = {{ k
         (INHABER && a.weitergabe_einwilligung_am ? (a.freigegeben_am ? '<button class="knopf klein" data-freigabe="0">Freigabe zurücknehmen</button>'
             : '<p class="leise">Vor der Freigabe Beschreibung und Fotos auf Kontaktdaten prüfen.</p><button class="knopf klein primaer" data-freigabe="1">Für Standorte freigeben</button>') : '') +
         (a.interessen.length ? '<p>Interesse: ' + a.interessen.map(function(i){ return esc(i.standort) + ' (' + datum(i.zeitpunkt) + ')'; }).join(', ') + '</p>' : '') + '</div>' +
+        auktionKarte(a) +
         '<div class="karte"><h3>Bearbeitung</h3><p class="leise">Bearbeiter: ' + esc(a.bearbeiter || '–') + '</p>' +
         '<div class="reihe"><button class="knopf klein" data-aktion="uebernehmen">Ich übernehme</button>' + (a.bearbeiter_id ? '<button class="knopf klein" data-aktion="abgeben">Abgeben</button>' : '') + '</div>' +
         '<div class="reihe">' + Object.keys(STATUS).map(function(k){ return '<button class="knopf klein' + (k === a.status ? ' primaer' : '') + '" data-status="' + k + '">' + esc(STATUS[k]) + '</button>'; }).join('') + '</div>' +
@@ -104,7 +153,8 @@ var TOKEN = {{ token | tojson }}, STATUS = {{ status | tojson }}, KANAELE = {{ k
   document.getElementById('liste').addEventListener('click', function(e){ var k = e.target.closest('.karte'); if(k) detail(+k.dataset.id); });
   document.getElementById('liste').addEventListener('keydown', function(e){ var k = e.target.closest('.karte'); if(k && e.key === 'Enter') detail(+k.dataset.id); });
   document.getElementById('detail').addEventListener('click', function(e){
-    var t = e.target.closest('[data-status],[data-aktion],[data-freigabe]'); if(!t || !aktiv) return;
+    var t = e.target.closest('[data-status],[data-aktion],[data-freigabe],[data-auktion-aktion]'); if(!t || !aktiv) return;
+    if(t.dataset.auktionAktion) return auktionAktion(t);
     var p = t.dataset.freigabe ? api('/api/verkaufsanfrage/' + aktiv + '/freigabe', {freigeben: t.dataset.freigabe === '1'})
           : t.dataset.status ? api('/api/verkaufsanfrage/' + aktiv + '/status', {status:t.dataset.status})
                              : api('/api/verkaufsanfrage/' + aktiv + '/uebernehmen', {abgeben: t.dataset.aktion === 'abgeben'});

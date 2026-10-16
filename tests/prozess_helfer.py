@@ -54,3 +54,22 @@ def halte_laufsperre(db_pfad: str, bereit, ende):
     else:
         ende.wait(120)
     sperre.freigeben()
+
+
+def bieter(pfad: str, nr: int, auktion_id: int, standort_id: int, nutzer_id: int, betraege: list, barriere, ergebnisse):
+    """Bietet je Runde ``betraege[i]``, nachdem alle Bieter an der Barriere stehen; meldet (nr, [gebot_id | 'abgelehnt' | 'FEHLER …'])."""
+    from wmscout.auktion import AuktionSpeicher, AuktionsFehler
+    db = Datenbank(pfad)
+    speicher = AuktionSpeicher(db, {})
+    erg = []
+    for runde, betrag in enumerate(betraege):
+        barriere.wait(60)
+        try:
+            erg.append(speicher.gebot_abgeben(auktion_id, standort_id, nutzer_id, betrag, f"runde-{runde}-bieter-{nr}")["gebot_id"])
+        except AuktionsFehler:
+            erg.append("abgelehnt")
+        except Exception as e:  # noqa: BLE001 – wird vom Test als Fehler gemeldet
+            erg.append(f"FEHLER {type(e).__name__}: {e}")
+        erg[-1] = (erg[-1], db.con.in_transaction)
+    db.con.close()
+    ergebnisse.put((nr, erg))

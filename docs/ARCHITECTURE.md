@@ -163,7 +163,8 @@ nur nach ausdrücklicher Bestätigung (P1-02) und, dank Laufsperre (P1-04) nicht
 (P1-04a/P1-04, Dateisperre statt `suchlaeufe`). `anzeigen` und v4 werden seit ADR-024 in denselben Transaktionen
 geschrieben. **v5** (Phase B, ADR-025) enthält das Verkäuferportal (`verkaeufer`, `verkaufsanfragen`, `anfrage_fotos`,
 `anfrage_verlauf`), **v6** (Phase C, ADR-026) das Händlerportal (`standorte`, `anfrage_interesse`, `nutzer.standort_id`,
-Weitergabe/Freigabe an `verkaufsanfragen`). Die nächste freie Version für Fahrzeugidentitäten ist damit **v7**; die Zeilen unten sind
+Weitergabe/Freigabe an `verkaufsanfragen`), **v7** (Phase D, ADR-027) die Demo-Auktionen (`auktionen`, `gebote`,
+`auktion_protokoll`). Die nächste freie Version für Fahrzeugidentitäten ist damit **v8**; die Zeilen unten sind
 der ursprüngliche Plan.
 
 | Version | Phase | Inhalt |

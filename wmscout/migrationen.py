@@ -1,7 +1,8 @@
 """Versionierte Schema-Migrationen (ADR-009).
 
 Versionen: 1 = ZIP-Stand (Tabelle ``anzeigen`` im Ur-Schema), 2 = Stand vor Phase 1 (ergänzte Spalten + Team-Tabellen),
-3 = Phase 1 (``schema_version``, ``bearbeitung``), 4 = vorbereiteter Mehrquellen-Ereigniseingang.
+3 = Phase 1 (``schema_version``, ``bearbeitung``), 4 = vorbereiteter Mehrquellen-Ereigniseingang, 5 = Verkäuferportal,
+6 = Händlerportal (Standorte), 7 = Demo-Auktionen.
 Jeder Schritt läuft in einer eigenen Transaktion, ist idempotent
 (``IF NOT EXISTS``, Spaltenprüfung) und wird erst nach erfolgreicher Sicherung der Datenbank ausgeführt.
 Die DDL der Schritte ist eingefroren: spätere Änderungen gehören in einen neuen Schritt, nicht in einen alten.
@@ -15,7 +16,7 @@ from pathlib import Path
 
 from .sicherung import SicherungsFehler, oeffne_lesend, sichere
 
-AKTUELLE_VERSION = 6
+AKTUELLE_VERSION = 7
 
 
 class MigrationsFehler(RuntimeError):
@@ -163,8 +164,46 @@ def _schritt_6(con: sqlite3.Connection):
         UNIQUE(anfrage_id, standort_id))""")
 
 
+def _schritt_7(con: sqlite3.Connection):
+    """Additive v7 (Phase D, ADR-027): Demo-Auktionen für freigegebene Verkaufsanfragen. Beträge ganze Euro, Zeiten UTC.
+    Gebote und Protokoll sind nur anfügbar (Trigger); das Protokoll ist zusätzlich hash-verkettet. Nur neue Tabellen."""
+    con.execute("""CREATE TABLE IF NOT EXISTS auktionen (
+        id INTEGER PRIMARY KEY, anfrage_id INTEGER NOT NULL REFERENCES verkaufsanfragen(id),
+        status TEXT NOT NULL DEFAULT 'laeuft', demo INTEGER NOT NULL DEFAULT 1,
+        startpreis INTEGER NOT NULL, mindestpreis INTEGER, schritt INTEGER NOT NULL,
+        start_utc TEXT NOT NULL, ende_utc TEXT NOT NULL, verlaengerung_sek INTEGER NOT NULL DEFAULT 0,
+        erstellt_von INTEGER, ergebnis TEXT, gewinner_gebot_id INTEGER, beendet_utc TEXT,
+        entschieden_utc TEXT, entschieden_von INTEGER, grund TEXT,
+        CHECK(status IN ('laeuft', 'beendet', 'zugeschlagen', 'abgelehnt', 'abgebrochen')),
+        CHECK(demo = 1),
+        CHECK(typeof(startpreis) = 'integer' AND startpreis > 0),
+        CHECK(mindestpreis IS NULL OR (typeof(mindestpreis) = 'integer' AND mindestpreis > 0)),
+        CHECK(typeof(schritt) = 'integer' AND schritt > 0), CHECK(verlaengerung_sek >= 0),
+        CHECK(ende_utc > start_utc),
+        CHECK(ergebnis IS NULL OR ergebnis IN ('kein_gebot', 'unter_mindestpreis', 'mindestpreis_erreicht')))""")
+    # je Anfrage höchstens eine Auktion, die läuft, auf Entscheidung wartet oder zugeschlagen ist
+    con.execute("""CREATE UNIQUE INDEX IF NOT EXISTS idx_auktion_aktiv ON auktionen(anfrage_id)
+        WHERE status IN ('laeuft', 'beendet', 'zugeschlagen')""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_auktion_status ON auktionen(status, ende_utc)")
+    con.execute("""CREATE TABLE IF NOT EXISTS gebote (
+        id INTEGER PRIMARY KEY, auktion_id INTEGER NOT NULL REFERENCES auktionen(id),
+        standort_id INTEGER NOT NULL REFERENCES standorte(id), nutzer_id INTEGER NOT NULL,
+        betrag INTEGER NOT NULL, zeitpunkt_utc TEXT NOT NULL, wiederholungs_id TEXT NOT NULL,
+        CHECK(typeof(betrag) = 'integer' AND betrag > 0), CHECK(length(wiederholungs_id) BETWEEN 8 AND 64),
+        UNIQUE(auktion_id, nutzer_id, wiederholungs_id),
+        UNIQUE(auktion_id, betrag))""")      # Gebote steigen streng: zwei gleich hohe Gebote kann es nicht geben
+    con.execute("""CREATE TABLE IF NOT EXISTS auktion_protokoll (
+        id INTEGER PRIMARY KEY, auktion_id INTEGER NOT NULL, zeitpunkt_utc TEXT NOT NULL, ereignis TEXT NOT NULL,
+        nutzer_id INTEGER, daten_json TEXT NOT NULL, vorher_hash TEXT NOT NULL, hash TEXT NOT NULL UNIQUE)""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_auktion_protokoll ON auktion_protokoll(auktion_id, id)")
+    for tabelle in ("gebote", "auktion_protokoll"):
+        for art in ("UPDATE", "DELETE"):
+            con.execute(f"""CREATE TRIGGER IF NOT EXISTS {tabelle}_kein_{art.lower()} BEFORE {art} ON {tabelle}
+                BEGIN SELECT RAISE(ABORT, '{tabelle} ist nur anfügbar'); END""")
+
+
 SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4, 5: _schritt_5,
-                                                             6: _schritt_6}
+                                                             6: _schritt_6, 7: _schritt_7}
 
 _SCHEMA_VERSION = ("CREATE TABLE IF NOT EXISTS schema_version ("
                    "version INTEGER PRIMARY KEY, angewendet_am TEXT NOT NULL)")

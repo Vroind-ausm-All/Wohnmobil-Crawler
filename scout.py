@@ -49,6 +49,8 @@ from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import STATUS, Datenbank, wal_aktiv
 from wmscout.laufsperre import Laufsperre
 from wmscout.eingang import import_ordner
+from wmscout.auktion import STATUS as AUKTION_STATUS
+from wmscout.auktion import AuktionSpeicher
 from wmscout.haendler import STANDORT_STATUS, HaendlerSpeicher
 from wmscout.importer import Importer
 from wmscout.migrationen import MigrationsFehler
@@ -275,6 +277,22 @@ def cmd_standort(cfg, db, args):
     print("geprüft – Zugang frei" if args.aktion == "pruefen" else "gesperrt – Zugang sofort beendet")
 
 
+def cmd_auktion(cfg, db, args):
+    """Demo-Auktionen nur ansehen und das Protokoll prüfen – starten, bieten und entscheiden nur in der App."""
+    a = AuktionSpeicher(db, cfg)
+    a.abschliessen_faellige()
+    if args.aktion == "liste":
+        for r in db.con.execute("SELECT a.id, v.referenz, a.status, a.ende_utc, (SELECT MAX(betrag) FROM gebote g WHERE g.auktion_id=a.id) "
+                                "FROM auktionen a JOIN verkaufsanfragen v ON v.id=a.anfrage_id ORDER BY a.id"):
+            print(f"{r[0]:>4} {r[1]:<14} {AUKTION_STATUS[r[2]]:<30} Ende {r[3]}  Höchstgebot {r[4] or '–'}")
+        return
+    p = a.pruefe_protokoll()
+    print(f"{p['eintraege']} Protokolleinträge, letzter Hash {p['letzter_hash']}")
+    if not p["ok"]:
+        sys.exit("PROTOKOLL BESCHÄDIGT:\n  " + "\n  ".join(p["fehler"]))
+    print("Protokoll unverändert (Kette und Gebote stimmen überein). Letzten Hash notieren, um späteres Abschneiden zu erkennen.")
+
+
 def cmd_status(cfg, db, args):
     """Ohne ``--nutzer`` wie bisher: kein Eintrag in `bearbeitung`, ein kontaktiertes Inserat gilt im Team als „ohne Zuordnung“.
     Mit ``--nutzer`` gilt die Team-Regel wie in der App (Übernahme, Konflikt mit Kollegen, Kontakt durch wen)."""
@@ -328,6 +346,8 @@ def main():
     st.add_argument("name", nargs="?")
     st.add_argument("--plz")
     st.add_argument("--ort")
+    au = sub.add_parser("auktion", help="Demo-Auktionen auflisten oder das Auktionsprotokoll prüfen")
+    au.add_argument("aktion", choices=["liste", "pruefen"])
     s = sub.add_parser("status", help="Status einer Anzeige setzen")
     s.add_argument("id")
     s.add_argument("status", choices=list(STATUS))
@@ -356,7 +376,8 @@ def main():
     except (MigrationsFehler, ValueError, sqlite3.Error) as e:
         sys.exit(f"Datenbank-Start abgebrochen: {e}")
     {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "rechne": cmd_rechne,
-     "nutzer": cmd_nutzer, "status": cmd_status, "standort": cmd_standort}[args.cmd](cfg, db, args)
+     "nutzer": cmd_nutzer, "status": cmd_status, "standort": cmd_standort,
+     "auktion": cmd_auktion}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":
