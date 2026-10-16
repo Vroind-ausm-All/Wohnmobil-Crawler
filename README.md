@@ -283,6 +283,7 @@ Nachrichten verschicken, und viele Verkäufer reagieren auf Massenanfragen aller
 - **Betrieb über das eigene Büro hinaus** (öffentliche Adresse, weitere Firmen): erst die Checkliste
   `docs/PILOTBETRIEB.md` abarbeiten. Was gespeichert wird und wie es sich löschen lässt: `docs/DATENRECHTE.md`
   (Widerruf einer Verkaufsanfrage: `/anfragen` → „Widerruf: personenbezogene Daten löschen“ oder `scout.py anfrage widerruf REF --bestaetigt`).
+  Wer wann Verkäuferdaten gelesen oder etwas geändert hat, zeigt `scout.py audit --tage 7` (nur Metadaten, ohne Inhalte).
 - **Wenn plötzlich 0 Anzeigen gefunden werden**, hat Kleinanzeigen vermutlich das Seitenlayout
   geändert. Die App meldet das als „Seitenlayout geändert“ und legt
   die Seite als `ausgabe/diagnose_suchseite.html` ab. Alle Selektoren liegen in

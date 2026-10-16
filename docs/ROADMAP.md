@@ -186,7 +186,7 @@ Auftrag des Betreibers am 16.10.2026 („Phase G“); Entscheidungen siehe ADR-0
 | ID | Prio | Arbeitspaket | Agent | Abhängig | Akzeptanz | Status |
 |---|---|---|---|---|---|---|
 | G0 | P1 | **Voraussetzungen**: Härtung nach Sicherheitsprüfung, Datenrechte + Widerruf, API-Rahmen, Pilot-Checkliste | Orchestrator | E3 | Befunde H1–H3, M4, M8–M10 behoben und getestet; keine Quelle aktiv | REVIEW |
-| G0b | P1 | Audit-Protokoll (Schema v10), Rechte je Ankaufsschritt, PDF als Anhang (Widerruf mit Ankauf: in G0 erledigt) | Orchestrator | Phase F | – | TODO |
+| G0b | P1 | Audit-Protokoll (Schema v10), Leerlauf der Sitzung, Rechte je Ankaufsschritt, Dokumente als Download (ADR-031) | Orchestrator | Phase F | Personendaten-Zugriffe nachvollziehbar, ohne Inhalte; Migration v9→v10 ohne Verlust | REVIEW |
 | G1 | P1 | **Echtzeit per SSE** (Auktion, Team, Ankäufe) + **Nutzungszähler** | Orchestrator | Phase F | – | TODO |
 | G2 | P1 | **Mandantenfähigkeit**: Daten je Firma getrennt, Rechte je Mandant | Orchestrator | G0, G1 | – | TODO |
 

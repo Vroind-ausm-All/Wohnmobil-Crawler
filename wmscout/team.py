@@ -21,6 +21,7 @@ HAENDLER = "haendler"          # sieht nur das Händlerportal (/haendler); nie T
 BESICHTIGUNG_STATUS = {"geplant": "geplant", "laeuft": "läuft", "abgeschlossen": "abgeschlossen",
                        "abgebrochen": "abgebrochen"}
 SITZUNG_TAGE = 30
+LEERLAUF_STUNDEN = 72          # Standard: nach 3 Tagen ohne Nutzung neu anmelden (G0b; config app.sitzung_leerlauf_stunden, 0 = aus)
 MAX_FOTO_BYTES = 8 * 1024 * 1024
 
 
@@ -97,10 +98,11 @@ def ohne_metadaten(daten: bytes) -> bytes:
 
 
 class TeamSpeicher:
-    def __init__(self, db: Datenbank, foto_ordner: Path):
+    def __init__(self, db: Datenbank, foto_ordner: Path, leerlauf_stunden: float = LEERLAUF_STUNDEN):
         self.db = db
         self.con = db.con
         self.foto_ordner = Path(foto_ordner)
+        self.leerlauf = timedelta(hours=leerlauf_stunden) if leerlauf_stunden else None
 
     # ---------- Nutzer ----------
     def hat_nutzer(self) -> bool:
@@ -173,16 +175,31 @@ class TeamSpeicher:
         token = secrets.token_urlsafe(32)
         ablauf = (datetime.now() + timedelta(days=SITZUNG_TAGE)).isoformat(timespec="seconds")
         self.con.execute("DELETE FROM sitzungen WHERE ablauf < ?", (_jetzt(),))
-        self.con.execute("INSERT INTO sitzungen VALUES (?,?,?)", (_token_hash(token), nutzer_id, ablauf))
+        self.con.execute("INSERT INTO sitzungen (token_hash, nutzer_id, ablauf, zuletzt) VALUES (?,?,?,?)",
+                         (_token_hash(token), nutzer_id, ablauf, _jetzt()))
         self.con.commit()
         return token
 
     def nutzer_zu_token(self, token: str | None) -> dict | None:
         if not token:
             return None
-        r = self.con.execute("SELECT n.id, n.name, n.rolle, n.telefon, n.standort_id FROM sitzungen s JOIN nutzer n ON n.id=s.nutzer_id "
-                             "WHERE s.token_hash=? AND s.ablauf>=? AND n.aktiv=1", (_token_hash(token), _jetzt())).fetchone()
-        return dict(r) if r else None
+        jetzt, h = datetime.now(), _token_hash(token)
+        r = self.con.execute("SELECT n.id, n.name, n.rolle, n.telefon, n.standort_id, s.zuletzt FROM sitzungen s "
+                             "JOIN nutzer n ON n.id=s.nutzer_id WHERE s.token_hash=? AND s.ablauf>=? AND n.aktiv=1",
+                             (h, jetzt.isoformat(timespec="seconds"))).fetchone()
+        if not r:
+            return None
+        zuletzt = datetime.fromisoformat(r["zuletzt"]) if r["zuletzt"] else None      # Sitzungen vor v10: ab jetzt gezählt
+        if self.leerlauf and zuletzt and jetzt - zuletzt > self.leerlauf:
+            self.con.execute("DELETE FROM sitzungen WHERE token_hash=?", (h,))
+            self.con.commit()
+            return None
+        if not zuletzt or jetzt - zuletzt > timedelta(minutes=5):      # nicht bei jeder Anfrage schreiben
+            self.con.execute("UPDATE sitzungen SET zuletzt=? WHERE token_hash=?", (jetzt.isoformat(timespec="seconds"), h))
+            self.con.commit()
+        n = dict(r)
+        del n["zuletzt"]
+        return n
 
     def abmelden(self, token: str):
         self.con.execute("DELETE FROM sitzungen WHERE token_hash=?", (_token_hash(token),))

@@ -446,3 +446,26 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
      pip-audit, Datenschutzerklärung, Löschfristen).
 * **Folgen / offen:** Bremse beginnt nach Neustart neu (Proxy-Limits ergänzen). Offen: CSP-Nonce, Leerlauf-Zeitlimit der
   Sitzung, CSRF-Token je Sitzung, Audit-Protokoll (Schema v10) und Rechte je Ankaufsschritt (G0b), Auskunft Art. 15.
+
+## ADR-031 – G0b: Audit-Protokoll, Leerlauf der Sitzung, Rechte je Ankaufsschritt · vorgeschlagen (16.10.2026)
+
+* **Kontext:** Restpunkte der Sicherheitsprüfung aus ADR-030, die Phase F voraussetzten (M6, N16, Audit, Dokument-Download).
+  Für einen Pilot mit mehreren Personen muss nachvollziehbar sein, wer Verkäuferdaten gelesen oder geändert hat.
+* **Entscheidung:**
+  1. Schema **v10** (additiv): Tabelle `audit` (nur anfügbar per Trigger) und Spalte `sitzungen.zuletzt`.
+  2. **Zentral im Router** statt in jeder Route: jede Änderung (POST), Anmeldung/Abmeldung und jedes Lesen von Personendaten
+     (Anfrage-Detail und -Fotos, Besichtigung, Protokoll, Fahrzeugsicht einer Anfrage, Ankauf, Vertrag, Dokumente, Audit selbst)
+     – auch abgelehnte Zugriffe. Gespeichert werden nur Metadaten, nie Inhalte, Passwörter oder Kontaktdaten. Ohne angelegte
+     Nutzer kein Protokoll. Die Antwort wird zwischengespeichert; der Eintrag wird **vor** dem Senden festgeschrieben – außerhalb
+     der globalen Sperre und jeder App-Transaktion, über eine **eigene Verbindung** (autocommit, 3 s Wartezeit). Er kann die
+     Transaktion der App nie offen lassen und läuft nie parallel zur nächsten Anfrage desselben Clients; scheitert er bei
+     gesperrter Datenbank, steht das im Log (bei 503 entfällt er).
+     Listen (z. B. `/api/verkaufsanfragen`, `/api/heute`) werden bewusst nicht protokolliert (Rauschen).
+  3. **Leerlauf:** Sitzung endet nach `app.sitzung_leerlauf_stunden` (Standard 72) ohne Nutzung, spätestens nach 30 Tagen;
+     `zuletzt` wird höchstens alle 5 Minuten geschrieben. Sitzungen aus der Zeit vor v10 zählen ab der ersten Nutzung.
+  4. **Ankaufsschritte** (Vertrag, Übergabe, Kosten, Verkauf, Dokument; Storno weiter nur Inhaber) nur für Inhaber, Zuständigen
+     der Besichtigung oder Bearbeiter der Anfrage/des Inserats – dieselbe Regel wie für das Schreiben der Besichtigung.
+     Lesen bleibt teamweit (Trennung je Firma: G2).
+  5. **Hochgeladene Dokumente** werden mit `Content-Security-Policy: sandbox` ausgeliefert, PDFs nur als Download.
+* **Folgen / offen:** Das Protokoll wächst ohne Löschung – Aufbewahrungsfrist und Wartungsschritt festlegen. Kein Manipulationsschutz
+  über Hash-Kette (anders als das Auktionsprotokoll); wer Dateizugriff auf die Datenbank hat, kann Trigger umgehen.
