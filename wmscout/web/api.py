@@ -27,6 +27,8 @@ from jinja2 import Environment, FileSystemLoader
 from ..ausgabe import render_html
 from .. import verkauf as vk
 from ..verkauf import Eingabefehler, VerkaufSpeicher
+from ..haendler import STANDORT_STATUS, HaendlerSpeicher
+from ..team import HAENDLER
 from ..bearbeitung import (IN_ARBEIT, OFFEN, VORBEREITET, BearbeitungsKonflikt, TeamSicht, ablauf_grenze, darf_erzwingen, darf_status,
                            darf_zuweisen, reservierung_tage)
 from ..benachrichtigung import WhatsAppCloud, whatsapp_link
@@ -74,6 +76,7 @@ class Kontext:
         self.cfg, self.db, self.basis, self.token, self.suchlauf = cfg, db, basis, token, suchlauf
         self.team = TeamSpeicher(db, foto_ordner)
         self.verkauf = VerkaufSpeicher(db, foto_ordner / "anfragen")     # im Fotoordner: mit gesichert
+        self.haendler = HaendlerSpeicher(db)
         self.reservierung_tage = reservierung_tage(cfg)     # ValueError mit verständlicher Meldung bei falscher Konfiguration
         self.katalog_pfad = basis / "maengel.yaml"
         self.sperre = threading.Lock()          # Datenbankzugriffe nacheinander, Netzwerk parallel
@@ -185,6 +188,10 @@ def karten_link(adresse: str | None) -> str | None:
     return f"https://www.google.com/maps/search/?api=1&query={quote(adresse)}" if adresse else None
 
 
+def _haendler_erlaubt(pfad: str) -> bool:
+    return pfad in ("/", "/m", "/haendler", "/api/ich", "/api/logout") or pfad.startswith(("/api/haendler/", "/haendler-fotos/"))
+
+
 def _bild_bytes(daten_url: str) -> bytes:
     roh = daten_url.split(",", 1)[1] if daten_url.startswith("data:") else daten_url
     try:
@@ -246,6 +253,9 @@ class Anfrage:
             return
         if not self.nutzer:
             raise Antwort(401, "Bitte anmelden")
+        if self.nutzer.get("rolle") == HAENDLER and not _haendler_erlaubt(self.pfad):
+            # Positivliste (ADR-026): Standort-Zugänge sehen nie Ankaufsliste, Team, Besichtigungen oder Kontaktdaten
+            raise Antwort(403, "Dieser Bereich ist für Standort-Zugänge nicht freigegeben", grund="recht")
         if aendernd and self.h.headers.get("X-Scout-Token") != self.k.token:
             raise Antwort(403, "Zugriff verweigert – Seite bitte neu laden", grund="csrf")
 
@@ -352,6 +362,8 @@ class Anfrage:
         k, p = self.k, self.pfad
         if p == "/login":
             return self.html(k.env.get_template("login.html").render(firma=k.cfg["anschreiben"]["firma"]))
+        if self.nutzer.get("rolle") == HAENDLER and p in ("/", "/m"):
+            return self.weiterleiten("/haendler")
         if p == "/":
             zeilen = k.zeilen()
             team = self.team_uebersicht() if self.team_aktiv else None
@@ -395,6 +407,29 @@ class Anfrage:
             return self.senden(200, pfad.read_bytes(), mimetypes.guess_type(pfad.name)[0] or "image/jpeg")
         if m := re.fullmatch(r"/protokoll/(\d+)", p):
             return self.html(self.protokoll(self.besichtigung(m.group(1))))
+        if p in ("/haendler", "/standorte"):
+            if p == "/standorte":
+                self.nur_inhaber()
+            return self.html(k.env.get_template(p[1:] + ".html").render(
+                firma=k.cfg["anschreiben"]["firma"], token=k.token, ich=self.nutzer, haendler=self.nutzer.get("rolle") == HAENDLER,
+                standort=k.haendler.standort(self.nutzer.get("standort_id")), standort_status=STANDORT_STATUS))
+        if p == "/api/haendler/fahrzeuge":
+            return self.json(200, k.haendler.sichtbare(self.standort_freigeschaltet()))
+        if m := re.fullmatch(r"/api/haendler/fahrzeug/(\d+)", p):
+            f = k.haendler.sichtbar(int(m.group(1)), self.standort_freigeschaltet())
+            if not f:
+                raise Antwort(404, "Nicht (mehr) freigegeben")
+            return self.json(200, f)
+        if m := re.fullmatch(r"/haendler-fotos/(\d+)/([\w.-]+)", p):
+            f = k.haendler.sichtbar(int(m.group(1)), self.standort_freigeschaltet())
+            pfad = k.verkauf.foto_pfad(int(m.group(1)), m.group(2)) if f and m.group(2) in f["fotos"] else None
+            if not pfad:
+                raise Antwort(404, "Foto nicht gefunden")
+            return self.senden(200, pfad.read_bytes(), mimetypes.guess_type(pfad.name)[0] or "image/jpeg")
+        if p == "/api/standorte":
+            self.nur_inhaber()
+            return self.json(200, {"standorte": k.haendler.standorte(),
+                                   "nutzer": [n for n in k.team.nutzer_liste(nur_aktive=False, auch_haendler=True) if n["rolle"] == HAENDLER]})
         if p in ("/verkaufen", "/anfragen"):
             return self.html(k.env.get_template(p[1:] + ".html").render(
                 firma=k.cfg["anschreiben"]["firma"], token=k.token, arten=vk.ARTEN, maengel=vk.MAENGEL, kanaele=vk.KANAELE,
@@ -409,6 +444,20 @@ class Anfrage:
                 raise Antwort(404, "Foto nicht gefunden")
             return self.senden(200, pfad.read_bytes(), mimetypes.guess_type(pfad.name)[0] or "image/jpeg")
         raise Antwort(404, "nicht gefunden")
+
+    # ----- Händlerportal (Phase C)
+    def nur_inhaber(self):
+        if self.nutzer.get("rolle") != "inhaber":
+            raise Antwort(403, "Nur für den Inhaber", grund="recht")
+
+    def standort_freigeschaltet(self) -> int:
+        """Standort-ID eines Händler-Zugangs – nur, wenn der Standort geprüft ist (bei JEDER Anfrage neu, Sperre wirkt sofort).
+        Team-Mitglieder bekommen die Vorschau (0 = kein Standort, kein Interesse)."""
+        if self.nutzer.get("rolle") != HAENDLER:
+            return 0
+        if not self.k.haendler.ist_freigeschaltet(self.nutzer):
+            raise Antwort(403, "Ihr Standort ist noch nicht geprüft oder gesperrt – Zugang erst nach Prüfung durch den Inhaber", grund="recht")
+        return self.nutzer["standort_id"]
 
     # ----- Verkäuferportal (Phase B)
     def _bewertung_kurz(self, b) -> dict:
@@ -444,7 +493,8 @@ class Anfrage:
         a["bearbeiter"] = namen.get(a["bearbeiter_id"])
         for v in a["verlauf"]:
             v["nutzer"] = namen.get(v["nutzer_id"])
-        return {**a, "bewertung": {**b.dict(), **self._bewertung_kurz(b)}, "spanne_verkaeufer": vk.spanne_fuer_verkaeufer(b, k.cfg)}
+        return {**a, "bewertung": {**b.dict(), **self._bewertung_kurz(b)}, "spanne_verkaeufer": vk.spanne_fuer_verkaeufer(b, k.cfg),
+                "interessen": k.verkauf.interessen(anfrage_id)}
 
     def ich_mit_kuerzel(self) -> dict:
         if not self.team_aktiv:
@@ -605,7 +655,32 @@ class Anfrage:
             return self.json(200, self.besichtigung_anlegen(daten))
         if p == "/api/verkaufsanfrage":
             return self.json(200, self.verkaufsanfrage_anlegen(daten))
-        if m := re.fullmatch(r"/api/verkaufsanfrage/(\d+)/(status|notiz|uebernehmen|foto)", p):
+        if m := re.fullmatch(r"/api/haendler/fahrzeug/(\d+)/interesse", p):
+            standort = self.standort_freigeschaltet()
+            if not standort:
+                raise Antwort(403, "Interesse melden nur mit Standort-Zugang", grund="recht")
+            if not k.haendler.interesse_melden(int(m.group(1)), standort, self.nutzer["id"]):
+                raise Antwort(404, "Nicht (mehr) freigegeben")
+            return self.json(200, {"ok": True})
+        if p == "/api/standorte":
+            self.nur_inhaber()
+            try:
+                return self.json(200, {"id": k.haendler.standort_anlegen(str(daten.get("name") or ""), daten.get("plz"), daten.get("ort"))})
+            except ValueError as e:
+                raise Antwort(400, str(e)) from e
+            except sqlite3.IntegrityError as e:
+                raise Antwort(409, "Diesen Standort gibt es schon") from e
+        if m := re.fullmatch(r"/api/standorte/(\d+)/status", p):
+            self.nur_inhaber()
+            try:
+                ok = k.haendler.setze_standort_status(int(m.group(1)), str(daten.get("status")), self.nutzer["id"])
+            except ValueError as e:
+                raise Antwort(400, str(e)) from e
+            if not ok:
+                raise Antwort(404, "Standort nicht gefunden")
+            log.info("Standort %s: Status %s durch %s", m.group(1), daten.get("status"), self.nutzer["name"])
+            return self.json(200, {"ok": True})
+        if m := re.fullmatch(r"/api/verkaufsanfrage/(\d+)/(status|notiz|uebernehmen|foto|freigabe)", p):
             return self.json(200, self.verkaufsanfrage_aendern(int(m.group(1)), m.group(2), daten))
         if m := re.fullmatch(r"/api/besichtigung/(\d+)/(planen|speichern|foto|abschluss)", p):
             b = self.besichtigung(m.group(1), schreiben=True)
@@ -690,6 +765,9 @@ class Anfrage:
                 ok = k.verkauf.setze_notiz(anfrage_id, str(daten.get("notiz") or ""), nid)
             elif art == "uebernehmen":
                 ok = k.verkauf.setze_bearbeiter(anfrage_id, None if daten.get("abgeben") is True else nid, nid)
+            elif art == "freigabe":
+                self.nur_inhaber()
+                ok = k.verkauf.setze_freigabe(anfrage_id, daten.get("freigeben") is True, nid)
             else:
                 return k.verkauf.foto_speichern(anfrage_id, _bild_bytes(str(daten.get("bild") or "")), nid)
         except LookupError as e:

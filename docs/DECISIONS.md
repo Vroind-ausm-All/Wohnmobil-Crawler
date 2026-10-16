@@ -303,3 +303,24 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Folgen / offen:** Fahrzeugidentität rückt auf v6. Vor einem **öffentlichen** Betrieb: eigene Sicherheits- und
   Betriebsarchitektur (Hosting, HTTPS, Spam-/Missbrauchsschutz, Status-Link mit Geheimnis), Datenschutzerklärung und
   Einwilligungstext rechtlich prüfen, Löschung/Widerruf (Anonymisieren) umsetzen.
+
+## ADR-026 – Händlerportal v1 für eigene Standorte: Positivliste, doppelte Freigabe, anonymisiert · vorgeschlagen (16.10.2026)
+
+* **Kontext:** 3.0-Analyse Phase C. Betreiberentscheidungen 16.10.2026: „Händler“ sind die **eigenen Standorte/Filialen**
+  (kein externer Marktplatz); Freigabe einer Anfrage nur mit **Zustimmung des Verkäufers UND Freigabe des Inhabers**;
+  Standorte sehen **anonymisiert mit Preisvorstellung**; Version 1 **erst intern**.
+* **Entscheidung:**
+  1. Schema **v6** (additiv): `standorte` (Status offen/geprüft/gesperrt), `nutzer.standort_id`, an `verkaufsanfragen`
+     `weitergabe_einwilligung_am`, `freigegeben_am`, `freigegeben_von`, Tabelle `anfrage_interesse` (je Standort einmal).
+  2. Neue Rolle `haendler` (nur mit Standort). **Positivliste im Server** (`_haendler_erlaubt`): solche Zugänge erreichen nur
+     `/haendler`, `/api/haendler/…`, `/haendler-fotos/…`, `/api/ich`, `/api/logout`; alles andere 403, `/` leitet um.
+     Händler erscheinen nie in Team-Listen (Kürzel, Zähler, Zuweisen, Besichtigungen).
+  3. Sichtbar nur, wenn Standort **geprüft** (bei jeder Anfrage neu geprüft – Sperre wirkt sofort) und die Anfrage
+     zugestimmt, freigegeben und offen ist (eingegangen/in Prüfung/Angebot). Sonst 404 statt 403 (kein Hinweis auf Existenz).
+  4. Anonyme Sicht als **Positivliste** (`haendler.anonym`): Fahrzeug, Mängel, Fotos, Preisvorstellung, PLZ-Bereich
+     („12xxx“) – nie Name, Telefon, E-Mail, genaue PLZ/Ort, Max-EK/Erstangebot. Telefonnummern, E-Mails und Links in
+     Freitexten werden zusätzlich maskiert; der Inhaber prüft vor der Freigabe.
+  5. Freigeben/zurücknehmen nur der Inhaber; jede Änderung im Verlauf. „Interesse melden“ ist unverbindlich (Vorstufe zu D).
+  6. Verkäuferformular: freiwillige Zustimmung zur Weitergabe (Einwilligungstext Version `2026-10-entwurf-2`).
+* **Folgen / offen:** Fahrzeugidentität rückt auf v7. Externe Partnerhändler (Marktplatz) wären eine eigene Entscheidung
+  (Gewerbenachweis, Verträge, Datenschutz). Öffentlicher Betrieb weiter erst mit B4.

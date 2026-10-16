@@ -25,6 +25,7 @@ MAENGEL = {"feuchtigkeit": "Feuchtigkeit/Wasserschaden", "unfall": "Unfallschade
 KANAELE = {"telefon": "Telefon", "vor_ort": "vor Ort", "formular": "Formular"}
 STATUS = {"eingegangen": "eingegangen", "in_pruefung": "in Prüfung", "angebot": "Angebot gemacht", "abgelehnt": "abgelehnt",
           "zurueckgezogen": "vom Verkäufer zurückgezogen", "gekauft": "gekauft"}
+OFFEN = ("eingegangen", "in_pruefung", "angebot")    # für Standorte sichtbar, solange freigegeben
 MAX_FOTOS = 12
 SICHERHEIT_RANG = {"keine": 0, "niedrig": 1, "manuell": 1, "mittel": 2, "hoch": 3}
 
@@ -98,9 +99,11 @@ def pruefe_anfrage(daten: dict, jahr: int | None = None) -> dict:
     if not isinstance(maengel, list) or any(m not in MAENGEL for m in maengel):
         f.append("Unbekannter Mangel")
         maengel = []
+    if daten.get("weitergabe") not in (None, True, False):
+        f.append("Weitergabe: nur ja oder nein")
     if f:
         raise Eingabefehler(f)
-    return {"art": art, "marke": marke, "modell": _text(daten, "modell", 80), "ez_jahr": ez_jahr, "km": km,
+    return {"weitergabe": daten.get("weitergabe") is True, "art": art, "marke": marke, "modell": _text(daten, "modell", 80), "ez_jahr": ez_jahr, "km": km,
             "preisvorstellung": preis, "beschreibung": _text(daten, "beschreibung", 3000), "maengel": sorted(set(maengel)),
             "name": name, "email": email, "telefon": telefon, "plz": plz, "ort": _text(daten, "ort", 80), "kanal": kanal}
 
@@ -159,9 +162,9 @@ class VerkaufSpeicher:
                 (a["name"], a["email"], a["telefon"], a["plz"], a["ort"], jetzt, einwilligung_version, jetzt)).lastrowid
             aid = self.con.execute(
                 "INSERT INTO verkaufsanfragen (verkaeufer_id, kanal, art, marke, modell, ez_jahr, km, preisvorstellung, beschreibung, "
-                "maengel, erfasst_von, erstellt_am, aktualisiert_am) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "maengel, erfasst_von, erstellt_am, aktualisiert_am, weitergabe_einwilligung_am) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (vid, a["kanal"], a["art"], a["marke"], a["modell"], a["ez_jahr"], a["km"], a["preisvorstellung"], a["beschreibung"],
-                 json.dumps(a["maengel"]), nutzer_id, jetzt, jetzt)).lastrowid
+                 json.dumps(a["maengel"]), nutzer_id, jetzt, jetzt, jetzt if a.get("weitergabe") else None)).lastrowid
             referenz = f"VA-{jetzt[:4]}-{aid:04d}"
             self.con.execute("UPDATE verkaufsanfragen SET referenz=? WHERE id=?", (referenz, aid))
             self._verlauf(aid, nutzer_id, "angelegt", None, a["kanal"])
@@ -210,6 +213,29 @@ class VerkaufSpeicher:
 
     def setze_notiz(self, anfrage_id: int, notiz: str, nutzer_id: int | None) -> bool:
         return self._aendere(anfrage_id, "notiz", notiz[:3000] or None, "notiz", nutzer_id)
+
+    def setze_freigabe(self, anfrage_id: int, freigeben: bool, nutzer_id: int | None) -> bool:
+        """Freigabe für die Standorte (ADR-026): nur mit Einwilligung des Verkäufers zur Weitergabe und nur für offene Anfragen.
+        Zurücknehmen geht immer."""
+        with self.db.transaktion():
+            r = self.con.execute("SELECT weitergabe_einwilligung_am, freigegeben_am, status FROM verkaufsanfragen WHERE id=?",
+                                 (anfrage_id,)).fetchone()
+            if not r:
+                return False
+            if freigeben and not r["weitergabe_einwilligung_am"]:
+                raise ValueError("Der Verkäufer hat der Weitergabe an Standorte nicht zugestimmt – Freigabe nicht möglich")
+            if freigeben and r["status"] not in OFFEN:
+                raise ValueError(f"Anfrage ist „{STATUS[r['status']]}“ – nur offene Anfragen können freigegeben werden")
+            if bool(r["freigegeben_am"]) != freigeben:
+                self.con.execute("UPDATE verkaufsanfragen SET freigegeben_am=?, freigegeben_von=?, aktualisiert_am=? WHERE id=?",
+                                 (_jetzt() if freigeben else None, nutzer_id if freigeben else None, _jetzt(), anfrage_id))
+                self._verlauf(anfrage_id, nutzer_id, "freigabe", None, "freigegeben" if freigeben else "zurückgenommen")
+        return True
+
+    def interessen(self, anfrage_id: int) -> list[dict]:
+        return [dict(r) for r in self.con.execute(
+            "SELECT i.zeitpunkt, s.name AS standort, n.name AS nutzer FROM anfrage_interesse i JOIN standorte s ON s.id=i.standort_id "
+            "LEFT JOIN nutzer n ON n.id=i.nutzer_id WHERE i.anfrage_id=? ORDER BY i.zeitpunkt", (anfrage_id,))]
 
     def foto_speichern(self, anfrage_id: int, daten: bytes, nutzer_id: int | None) -> dict:
         if len(daten) > MAX_FOTO_BYTES:
