@@ -456,8 +456,10 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   2. **Zentral im Router** statt in jeder Route: jede Änderung (POST), Anmeldung/Abmeldung und jedes Lesen von Personendaten
      (Anfrage-Detail und -Fotos, Besichtigung, Protokoll, Fahrzeugsicht einer Anfrage, Ankauf, Vertrag, Dokumente, Audit selbst)
      – auch abgelehnte Zugriffe. Gespeichert werden nur Metadaten, nie Inhalte, Passwörter oder Kontaktdaten. Ohne angelegte
-     Nutzer kein Protokoll. Der Eintrag entsteht nach der Antwort über eine **eigene Verbindung** (autocommit, 5 s Wartezeit):
-     Er kann die Transaktion der App nie offen lassen; scheitert er bei gesperrter Datenbank, steht das im Log.
+     Nutzer kein Protokoll. Die Antwort wird zwischengespeichert; der Eintrag wird **vor** dem Senden festgeschrieben – außerhalb
+     der globalen Sperre und jeder App-Transaktion, über eine **eigene Verbindung** (autocommit, 3 s Wartezeit). Er kann die
+     Transaktion der App nie offen lassen und läuft nie parallel zur nächsten Anfrage desselben Clients; scheitert er bei
+     gesperrter Datenbank, steht das im Log (bei 503 entfällt er).
      Listen (z. B. `/api/verkaufsanfragen`, `/api/heute`) werden bewusst nicht protokolliert (Rauschen).
   3. **Leerlauf:** Sitzung endet nach `app.sitzung_leerlauf_stunden` (Standard 72) ohne Nutzung, spätestens nach 30 Tagen;
      `zuletzt` wird höchstens alle 5 Minuten geschrieben. Sitzungen aus der Zeit vor v10 zählen ab der ersten Nutzung.

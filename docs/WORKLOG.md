@@ -16,7 +16,9 @@ Wert „–“.
   `config.yaml` (`app.sitzung_leerlauf_stunden`), Tests `test_audit.py` (6), Migrationstests auf v10.
 - **Behoben nebenbei:** Test-Hilfe `versionen()` sortierte Schemaversionen als Text (10 vor 2).
 - **Erster Ansatz verworfen:** Audit-Eintrag über die gemeinsame Verbindung – bei gesperrter Datenbank blieb kurz eine
-  Transaktion offen (drei bestehende Sperr-Tests schlugen an). Jetzt eigene Verbindung im Autocommit.
+  Transaktion offen (drei bestehende Sperr-Tests schlugen an). Jetzt eigene Verbindung im Autocommit. Zweiter Befund (Windows-CI):
+  Eintrag nach dem Senden lief parallel zum nächsten Schreibzugriff des Tests („database is locked“) – jetzt wird die Antwort
+  zwischengespeichert und erst nach dem Audit-Eintrag gesendet; Test prüft den Eintrag ohne Warten (Gegenprobe erkannt).
 - **Tests:** siehe TEST-REPORT, `ruff` grün. Gegenprobe an 6 Schutzstellen – alle erkannt; eine siebte (404 für fehlenden
   Ankauf) war wirkungslos, weil `AnkaufSpeicher.lade` schon 404 meldet – die doppelte Prüfung wurde entfernt.
 - **Nicht geprüft:** Browser-Klicktest (keine Oberflächenänderung außer Download-Kopfzeilen), Safari/iOS, Verhalten bei sehr großem

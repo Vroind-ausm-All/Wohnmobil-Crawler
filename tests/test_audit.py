@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import sqlite3
-import time
 from datetime import datetime, timedelta
 
 import pytest
@@ -20,15 +19,10 @@ from wmscout.team import TeamSpeicher
 PDF = "data:application/pdf;base64," + base64.b64encode(b"%PDF-1.4\n%Test\n").decode()
 
 
-def eintraege(db, warten=True, **filter_) -> list[dict]:
-    """Der Eintrag entsteht nach dem Senden der Antwort – kurz darauf warten."""
-    ende = time.monotonic() + (3 if warten else 0)
-    while True:
-        zeilen = [dict(r) for r in db.con.execute("SELECT * FROM audit ORDER BY id")]
-        treffer = [z for z in zeilen if all(z.get(k) == v for k, v in filter_.items())]
-        if treffer or time.monotonic() > ende:
-            return treffer
-        time.sleep(0.05)
+def eintraege(db, **filter_) -> list[dict]:
+    """Ohne Warten: Der Eintrag ist festgeschrieben, bevor der Client die Antwort erhält."""
+    zeilen = [dict(r) for r in db.con.execute("SELECT * FROM audit ORDER BY id")]
+    return [z for z in zeilen if all(z.get(k) == v for k, v in filter_.items())]
 
 
 def test_einordnen():
@@ -50,7 +44,7 @@ def test_zugriffe_werden_protokolliert_ohne_inhalte(markt, db, server):
     assert eintraege(db, nutzer="Hugo", status=403)
     s, _, _ = Client(server.server_address[1])("POST", "/api/login", {"name": "Ben", "passwort": "falsch-falsch"})
     assert s == 401 and eintraege(db, aktion="login", nutzer="Ben", status=401)
-    roh = " ".join(str(v) for z in eintraege(db, warten=False) for v in z.values())
+    roh = " ".join(str(v) for z in eintraege(db) for v in z.values())
     assert "Geheimnis" not in roh and "falsch-falsch" not in roh and "sicher1234" not in roh
     # nur der Inhaber liest das Protokoll; nur anfügbar
     assert ben("GET", "/api/audit")[0] == 403 and hugo("GET", "/api/audit")[0] == 403
@@ -67,8 +61,7 @@ def test_ohne_team_kein_protokoll(server, db):
     from tests.test_team_bearbeitung import lokal
     c = lokal(server)
     assert c("GET", "/api/fahrzeuge")[0] == 200 and c("POST", "/api/notiz", {"id": "x", "notiz": "y"})[0] in (200, 404)
-    time.sleep(0.3)
-    assert eintraege(db, warten=False) == []
+    assert eintraege(db) == []
 
 
 def test_leerlauf_beendet_sitzung(db, tmp_path):

@@ -231,12 +231,20 @@ class Anfrage:
         self.nutzer: dict | None = None
         self.verzoegern = False          # nach Fehlanmeldung – außerhalb der Sperre warten
         self.status: int | None = None   # gesendeter Status (Audit-Protokoll)
+        self.puffer: tuple | None = None   # Antwort erst nach dem Audit-Eintrag senden (bearbeite)
+        self.puffern = False
         self.audit_name: str | None = None
 
     # ----- Antworten
     def senden(self, status: int, body: bytes, typ: str, kopf: dict | None = None):
-        h = self.h
         self.status = status
+        if self.puffern:
+            self.puffer = (status, body, typ, kopf)
+            return
+        self.schreiben(status, body, typ, kopf)
+
+    def schreiben(self, status: int, body: bytes, typ: str, kopf: dict | None = None):
+        h = self.h
         h.send_response(status)
         h.send_header("Content-Type", typ)
         h.send_header("Content-Length", str(len(body)))
@@ -1256,16 +1264,20 @@ def ist_gesperrt(fehler: sqlite3.OperationalError) -> bool:
 
 def bearbeite(handler, k: Kontext, methode: str):
     a = Anfrage(handler, k)
+    a.puffern = True                    # Reihenfolge: erst Audit-Eintrag festschreiben, dann antworten (kein Wettlauf danach)
     try:
         _bearbeite(a, handler, k, methode)
     finally:
         _protokolliere(a, k, methode)
+        if a.puffer:
+            a.schreiben(*a.puffer)
 
 
 def _protokolliere(a: Anfrage, k: Kontext, methode: str):
-    """Audit-Eintrag nach der Antwort über eine eigene Verbindung – auch abgelehnte Zugriffe (401/403) werden festgehalten.
+    """Audit-Eintrag vor dem Senden der (zwischengespeicherten) Antwort, außerhalb der Sperre und jeder App-Transaktion, über eine
+    eigene Verbindung – auch abgelehnte Zugriffe (401/403) werden festgehalten. Bei „Datenbank belegt“ (503) entfällt er.
     Ein Fehler hier darf die (schon gesendete) Antwort nicht beeinflussen."""
-    art = einordnen(methode, a.pfad) if a.status else None
+    art = einordnen(methode, a.pfad) if a.status and a.status != 503 else None
     if not art:
         return
     try:

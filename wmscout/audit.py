@@ -44,10 +44,10 @@ def einordnen(methode: str, pfad: str) -> tuple[str, str | None] | None:
 
 
 class AuditSpeicher:
-    """Eigene Verbindung: Ein Audit-Eintrag nach der Antwort berührt nie die Transaktion der gemeinsamen App-Verbindung und
-    wartet bei gesperrter Datenbank höchstens kurz (der Eintrag geht dann verloren und wird im Log vermerkt)."""
+    """Eigene Verbindung: Ein Audit-Eintrag berührt nie die Transaktion der gemeinsamen App-Verbindung und wartet bei gesperrter
+    Datenbank höchstens kurz (der Eintrag geht dann verloren und wird im Log vermerkt)."""
 
-    def __init__(self, db: Datenbank, wartezeit: float = 5):
+    def __init__(self, db: Datenbank, wartezeit: float = 3):
         pfad = db.con.execute("PRAGMA database_list").fetchone()[2]
         self.con = sqlite3.connect(pfad, check_same_thread=False, timeout=wartezeit, isolation_level=None)
         self.con.row_factory = sqlite3.Row
