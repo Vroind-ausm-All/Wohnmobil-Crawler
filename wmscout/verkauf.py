@@ -16,7 +16,7 @@ from .bewertung.rechner import Bewertung, Rechner
 from .datenbank import IMPORT_ARTEN, Datenbank
 from .normalisierung.fahrzeug import ergaenze_fahrzeug
 from .normalisierung.geo import entfernung_km
-from .team import MAX_FOTO_BYTES, bild_endung
+from .team import MAX_FOTO_BYTES, bild_endung, ohne_metadaten
 
 ARTEN = IMPORT_ARTEN
 MAENGEL = {"feuchtigkeit": "Feuchtigkeit/Wasserschaden", "unfall": "Unfallschaden", "motor": "Motor/Getriebe defekt",
@@ -245,6 +245,7 @@ class VerkaufSpeicher:
         if len(daten) > MAX_FOTO_BYTES:
             raise ValueError("Foto zu groß (max. 8 MB)")
         endung = bild_endung(daten)
+        daten = ohne_metadaten(daten)
         with self.db.transaktion():
             if not self.con.execute("SELECT 1 FROM verkaufsanfragen WHERE id=?", (anfrage_id,)).fetchone():
                 raise LookupError("Anfrage nicht gefunden")

@@ -6,6 +6,32 @@ Wert „–“.
 
 ---
 
+## Phase G0 – Voraussetzungen für Skalierung (16.10.2026) · Status: REVIEW
+
+- **Anlass:** Betreiber „Phase G“, Entscheidung „Beides nacheinander“ (G0 Voraussetzungen, dann Mandanten), SSE, nur
+  Nutzungszähler, keine konkrete API-Quelle (ADR-030). Sicherheitsprüfung durch `qa-security-reviewer` (nur lesend):
+  interner Betrieb mit Auflagen vertretbar, öffentlicher/mandantenfähiger Betrieb abgelehnt.
+- **Geändert/neu:** `wmscout/web/sicherheit.py` (neu: Login-Bremse, Sicherheits-Header), `wmscout/web/api.py` (Login als eigener
+  Ablauf, Host-Prüfung vor dem Lesen, Längenprüfung, `ist_lokal` ohne Proxy-Köpfe, Secure-Cookie, Bearbeiterrecht für Anfragen,
+  Widerruf-Route, Eingabegrenzen Foto/Adresse), `wmscout/app.py` (kein Versionskopf, Zeitlimit, abgebrochene Verbindungen
+  ohne Traceback), `wmscout/team.py` (gleiche Rechenzeit, EXIF-Bereinigung), `wmscout/verkauf.py` + `wmscout/datenrechte.py`
+  (Widerruf), `wmscout/deal.py` (Freitexte ohne Kontakt), `wmscout/quellen/api_rahmen.py` (neu), `wmscout/quellen/basis.py`
+  + Kleinanzeigen-Parser (nur http(s)-Links), `wmscout/benachrichtigung.py` (Nummern maskiert, keine Antworttexte im Log),
+  `scout.py` (rotierendes Log, `anfrage widerruf`), `wmscout/web/static/sw.js` (Positivliste, Leeren bei 401),
+  `vorlagen/login.html` (Weiterleitung nur gleiche Herkunft), `vorlagen/report.html`, `vorlagen/anfragen.html`
+  (Widerruf-Knopf), `config.yaml` (`app.login_*`, `vertrauter_proxy`, `nur_https`), CI-Job pip-audit (nicht blockierend),
+  `docs/DATENRECHTE.md`, `docs/PILOTBETRIEB.md` (neu), Tests `test_sicherheit.py` (17), `test_datenrechte.py` (4),
+  `test_api_quellen.py` (7).
+- **Bewusst nicht geändert:** Notizen bleiben für das ganze Team frei (ein Versuch, sie an den Bearbeiter zu binden, brach den
+  bestehenden Test „Notizen bleiben frei“ und wurde zurückgenommen – Betreiberentscheidung). Lesen bleibt firmenweit (G2).
+- **Tests:** siehe TEST-REPORT, `ruff` grün, `node --check sw.js` ok, `pip-audit` lokal: keine bekannten Schwachstellen.
+  Gegenprobe an 9 Schutzstellen – alle erkannt. Ein sporadischer Traceback im Testlauf (Gegenseite schließt nach früher 400)
+  ist behoben.
+  Browser-Klicktest (Anmeldung über die Login-Seite → Auktion starten → Widerruf-Knopf; fremde Weiterleitung nach Login bleibt
+  auf `/m`): bestanden, 0 JS-Fehler, 0 CSP-Verstöße.
+- **Nicht geprüft:** Betrieb hinter echtem Reverse-Proxy, Windows-CI (folgt im PR),
+  Safari/iOS (Service Worker). Phase-F-Teile (Ankauf) sind in diesem Zweig nicht enthalten.
+
 ## Phase E – Deal Intelligence (16.10.2026) · Status: REVIEW
 
 - **Anlass:** Betreiber „Phase E“. 3.0-Analyse: Gewinnkalkulation und Max-EK unmittelbar neben dem Gebotsfeld; Erfolgskriterium:

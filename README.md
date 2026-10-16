@@ -273,6 +273,9 @@ Nachrichten verschicken, und viele Verkäufer reagieren auf Massenanfragen aller
   mit Brief) und – nach dem Kontakt – im gespeicherten Anschreibentext der Datenbank. **Eine Lösch- oder Anonymisierungsfunktion gibt es noch nicht** (geplant als Paket P1-14a, Backlog): der Status „gelöscht“ markiert nur
   das Inserat und entfernt den Namen **nicht** aus `details_json`. Die App selbst lauscht nur auf dem eigenen Rechner (127.0.0.1;
   Handys über `tailscale serve`); Mail-Anhang und Handy-Speicher liegen außerhalb davon.
+- **Betrieb über das eigene Büro hinaus** (öffentliche Adresse, weitere Firmen): erst die Checkliste
+  `docs/PILOTBETRIEB.md` abarbeiten. Was gespeichert wird und wie es sich löschen lässt: `docs/DATENRECHTE.md`
+  (Widerruf einer Verkaufsanfrage: `/anfragen` → „Widerruf: personenbezogene Daten löschen“ oder `scout.py anfrage widerruf REF --bestaetigt`).
 - **Wenn plötzlich 0 Anzeigen gefunden werden**, hat Kleinanzeigen vermutlich das Seitenlayout
   geändert. Die App meldet das als „Seitenlayout geändert“ und legt
   die Seite als `ausgabe/diagnose_suchseite.html` ab. Alle Selektoren liegen in

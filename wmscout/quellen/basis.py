@@ -24,6 +24,12 @@ ZUGRIFFSARTEN = {
 ART_QUELLE_KATEGORIE = "kategorie"
 
 
+def http_url(url: str | None) -> str | None:
+    """Nur ``http(s)://``-Adressen – ``javascript:`` oder ``data:`` aus einer (manipulierten) Seite landen nie als Link in der App."""
+    url = (url or "").strip()
+    return url if url.lower().startswith(("http://", "https://")) else None
+
+
 class QuellenFehler(Exception):
     """Basis für alle Fehler einer Quelle – der Importer fängt sie je Quelle ab."""
 

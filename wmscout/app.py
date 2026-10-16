@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+import sys
 import threading
 import time
 import webbrowser
@@ -135,6 +136,8 @@ class AutoSuche:
 def baue_handler(k: Kontext):
     class Handler(BaseHTTPRequestHandler):
         server_version = "WohnmobilScout"
+        sys_version = ""                 # keine Python-Version im Server-Kopf (G0)
+        timeout = 30                     # langsame/hängende Verbindungen nach 30 s schließen (Slowloris, G0)
 
         def log_message(self, fmt, *args):
             log.debug("app: " + fmt, *args)
@@ -148,6 +151,16 @@ def baue_handler(k: Kontext):
     return Handler
 
 
+class Server(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        """Abgebrochene Verbindungen (Gegenseite schließt nach früher 400/403/413) sind kein Serverfehler."""
+        if isinstance(sys.exc_info()[1], ConnectionError):
+            return
+        super().handle_error(request, client_address)
+
+
 def erstelle_server(cfg: dict, db: Datenbank, basis: Path, port: int = 8765) -> tuple[HTTPServer, str, Suchlauf]:
     """Lauscht nur auf 127.0.0.1. Handys erreichen die App über `tailscale serve` (HTTPS), siehe docs/HANDY-APP.md."""
     token = secrets.token_urlsafe(18)
@@ -155,8 +168,7 @@ def erstelle_server(cfg: dict, db: Datenbank, basis: Path, port: int = 8765) -> 
     suchlauf = Suchlauf(cfg, str(db_pfad), basis)
     k = Kontext(cfg, db, basis, token, suchlauf, db_pfad.parent / "fotos")
     suchlauf.bei_ende.append(lambda zeilen: (k.veraendert(), k.whatsapp.neue_treffer(zeilen)))
-    server = ThreadingHTTPServer(("127.0.0.1", port), baue_handler(k))
-    server.daemon_threads = True
+    server = Server(("127.0.0.1", port), baue_handler(k))
     return server, token, suchlauf
 
 

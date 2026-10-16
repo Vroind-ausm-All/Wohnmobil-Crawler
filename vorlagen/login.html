@@ -31,8 +31,11 @@ document.getElementById('f').onsubmit = function(e){
     body: JSON.stringify({name: f.name.value, passwort: f.passwort.value})})
     .then(function(r){ return r.json().then(function(d){ if(!r.ok) throw new Error(d.fehler); }); })
     .then(function(){
-      var weiter = new URLSearchParams(location.search).get('weiter') || '/m';
-      location.href = weiter.charAt(0) === '/' && weiter.charAt(1) !== '/' ? weiter : '/m';
+      // nur Ziele auf diesem Server (auch „/\\evil.example“ würde der Browser sonst zu einer fremden Adresse machen)
+      var ziel = '/m';
+      try { var u = new URL(new URLSearchParams(location.search).get('weiter') || '/m', location.origin);
+            if(u.origin === location.origin) ziel = u.pathname + u.search + u.hash; } catch(ex){ /* ungültig: /m */ }
+      location.href = ziel;
     }, function(err){ fehler.textContent = err.message || 'Anmeldung fehlgeschlagen'; });
 };
 </script>

@@ -99,6 +99,16 @@ Adapter holen Daten nie direkt mit `requests`, sondern über `self.abruf.hole(ur
 API-Quellen mit eigener Authentifizierung können einen eigenen Abruf mitbringen. Er muss dieselben
 Fehlerklassen werfen.
 
+### Offizielle APIs: `ApiQuelle` (Phase G0)
+
+Für Quellen mit Vertrag oder schriftlicher Erlaubnis gibt es `wmscout/quellen/api_rahmen.py`. Eine Unterklasse setzt
+`kennung`, `name`, `basis_url` (nur HTTPS), `zugang_variable` (Name der **Umgebungsvariable** mit dem Schlüssel – nie in
+`config.yaml` oder im Repository) und erst nach Klärung der Rechte `freigegeben = True`; sie implementiert `kopfzeilen`,
+`suchparameter` und `inserate_aus`. Der Rahmen blättert bis zur leeren Seite, hält das Kontingent
+(`api_quellen.<kennung>.max_abrufe_je_lauf`, Standard 50) und die Pause (`pause_sek`) ein, wiederholt nur Serverfehler (5xx)
+und bricht bei 401/403/429 ohne Wiederholung ab. Ohne Freigabe oder Schlüssel wird die Quelle gar nicht erst erzeugt.
+Beispiel mit Fake-Antworten: `tests/test_api_quellen.py`. Derzeit ist keine API-Quelle angebunden.
+
 ## 4. Testen
 
 1. Beispielantworten der Quelle (anonymisiert) als Testdaten anlegen. Keine echten Abrufe in Tests.

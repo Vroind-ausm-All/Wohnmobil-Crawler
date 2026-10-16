@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from wmscout.quellen import api
+from wmscout.quellen import api_rahmen as api
 from wmscout.quellen.basis import HttpFehler, Inserat, QuelleGesperrt, QuellenFehler, Suchauftrag
 
 

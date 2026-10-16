@@ -350,7 +350,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
           {% endif %}
           {% if z.brief or a.anschreiben_text %}<button class="btn" data-erneut hidden>✉ Erneut kopieren &amp; Anzeige öffnen</button>{% endif %}
           <button class="btn primaer" data-gesendet hidden title="Erst klicken, wenn die Nachricht wirklich abgeschickt ist">gesendet ✓</button>
-          <a class="btn" href="{{ a.url }}" target="_blank" rel="noopener">Anzeige öffnen ↗</a>
+          <a class="btn" href="{{ a.url if (a.url or '').lower().startswith(('http://', 'https://')) else '#' }}" target="_blank" rel="noopener">Anzeige öffnen ↗</a>
         </div>
         <div class="status-zeile">Status:
           {% for schluessel, name in status_liste %}<button data-status="{{ schluessel }}">{{ name }}</button>{% endfor %}

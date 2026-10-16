@@ -35,6 +35,7 @@ if _fehlt:
 
 import argparse
 import logging
+import logging.handlers
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -74,7 +75,8 @@ def logging_einrichten(cfg: dict):
     ordner.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S",
-        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(ordner / "scout.log", encoding="utf-8")])
+        handlers=[logging.StreamHandler(sys.stdout),        # Protokoll rotiert: höchstens 6 × 5 MB (G0)
+                  logging.handlers.RotatingFileHandler(ordner / "scout.log", maxBytes=5_000_000, backupCount=5, encoding="utf-8")])
 
 
 def _team(cfg, db):

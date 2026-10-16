@@ -169,6 +169,17 @@ Auftrag des Betreibers am 16.10.2026 („Phase E“); Entscheidungen siehe ADR-0
 | E2 | P1 | **Nachrechenbar**: eingefrorene Eingabe (Stichtag, Parameter, Vergleichsauszug), Schema v8, Prüfung + CLI | Orchestrator | E1 | Gespeicherte Kalkulation unabhängig von späterer Config/Datenlage; Manipulation erkannt | REVIEW |
 | E3 | P1 | **Am Gebotsfeld**: Standorte live zum Betrag (Transport ab Standort), Team in `/anfragen`, Gebot speichert Kalkulation | Orchestrator | E2 | Jedes angenommene Gebot hat genau eine Kalkulation | REVIEW |
 
+## Phase G (3.0) – Skalierung (Voraussetzungen, Echtzeit, Mandanten)
+
+Auftrag des Betreibers am 16.10.2026 („Phase G“); Entscheidungen siehe ADR-030. Reihenfolge: G0 → G1 → G2, je eigener PR.
+
+| ID | Prio | Arbeitspaket | Agent | Abhängig | Akzeptanz | Status |
+|---|---|---|---|---|---|---|
+| G0 | P1 | **Voraussetzungen**: Härtung nach Sicherheitsprüfung, Datenrechte + Widerruf, API-Rahmen, Pilot-Checkliste | Orchestrator | E3 | Befunde H1–H3, M4, M8–M10 behoben und getestet; keine Quelle aktiv | REVIEW |
+| G0b | P1 | Audit-Protokoll (Schema v10), Rechte je Ankaufsschritt, PDF als Anhang, Widerruf mit Ankauf testen | Orchestrator | Phase F | – | TODO |
+| G1 | P1 | **Echtzeit per SSE** (Auktion, Team, Ankäufe) + **Nutzungszähler** | Orchestrator | Phase F | – | TODO |
+| G2 | P1 | **Mandantenfähigkeit**: Daten je Firma getrennt, Rechte je Mandant | Orchestrator | G0, G1 | – | TODO |
+
 ## Phase 3 – Datenbank und Marktbeobachtung
 
 **Abnahme:** identische Inserate lassen sich ohne Datenverlust erneut importieren; Preis- und Fahrzeughistorie bleiben

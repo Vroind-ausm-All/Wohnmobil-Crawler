@@ -72,3 +72,17 @@ jobs:
           python-version: "3.13"
       - run: ./installieren.sh && ./installieren.sh
       - run: .venv/bin/python scout.py --help
+
+  pip-audit:
+    name: Abhängigkeiten auf bekannte Schwachstellen (pip-audit, nicht blockierend)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: pip-audit gegen die gesperrten Abhängigkeiten
+        run: |
+          python -m pip install --disable-pip-version-check pip-audit
+          python -m pip_audit --strict -r requirements.txt

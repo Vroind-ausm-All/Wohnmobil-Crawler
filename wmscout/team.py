@@ -44,6 +44,9 @@ def pruefe_passwort(passwort: str, gespeichert: str) -> bool:
     return hmac.compare_digest(neu.hex(), h)
 
 
+_ERSATZ_HASH = hash_passwort(secrets.token_urlsafe(16))      # für unbekannte Namen: gleiche Rechenzeit wie ein echter Versuch
+
+
 def lade_team_sicht(db: Datenbank, tage: int, ich: dict | None = None, jetzt: datetime | None = None) -> TeamSicht | None:
     """Team-Sicht aus der Datenbank (zwei SELECTs). ``None``, wenn kein aktiver Nutzer existiert (= Team-Funktionen aus)."""
     nutzer = [dict(r) for r in db.con.execute("SELECT id, name, rolle, aktiv FROM nutzer WHERE rolle != 'haendler' ORDER BY id")]
@@ -65,6 +68,32 @@ def bild_endung(daten: bytes) -> str:
     if daten[:4] == b"RIFF" and daten[8:12] == b"WEBP":
         return "webp"
     raise ValueError("Nur JPEG, PNG oder WebP")
+
+
+def ohne_metadaten(daten: bytes) -> bytes:
+    """EXIF/GPS, XMP, IPTC und Kommentare aus JPEG und PNG entfernen (G0) – der Browser tut es beim Verkleinern, ein anderer Client
+    aber nicht; sonst verriete ein Foto z. B. den Wohnort des Verkäufers. Bildinhalt bleibt unverändert, andere Formate unverändert."""
+    if daten[:2] == b"\xff\xd8":
+        aus, i = bytearray(b"\xff\xd8"), 2
+        while i + 4 <= len(daten) and daten[i] == 0xFF:
+            marker = daten[i + 1]
+            if marker == 0xDA:                               # Start of Scan: Rest sind Bilddaten
+                break
+            laenge = int.from_bytes(daten[i + 2:i + 4], "big")
+            if marker not in (0xE1, 0xED, 0xFE):             # APP1 (EXIF/XMP), APP13 (IPTC), COM weglassen
+                aus += daten[i:i + 2 + laenge]
+            i += 2 + laenge
+        return bytes(aus + daten[i:])
+    if daten[:8] == b"\x89PNG\r\n\x1a\n":
+        aus, i = bytearray(daten[:8]), 8
+        while i + 8 <= len(daten):
+            laenge = int.from_bytes(daten[i:i + 4], "big")
+            typ = daten[i + 4:i + 8]
+            if typ not in (b"eXIf", b"tEXt", b"iTXt", b"zTXt", b"tIME"):
+                aus += daten[i:i + 12 + laenge]
+            i += 12 + laenge
+        return bytes(aus)
+    return daten
 
 
 class TeamSpeicher:
@@ -128,13 +157,23 @@ class TeamSpeicher:
 
     # ---------- Anmeldung ----------
     def anmelden(self, name: str, passwort: str) -> str | None:
-        r = self.con.execute("SELECT * FROM nutzer WHERE name=? AND aktiv=1", (name.strip(),)).fetchone()
-        if not r or not pruefe_passwort(passwort, r["passwort_hash"]):
+        """Prüfen und Sitzung anlegen in einem Schritt (Kommandozeile, Tests). Die Web-App trennt beides (``login_daten``,
+        ``sitzung_anlegen``), damit das teure scrypt nicht unter der globalen Sperre läuft."""
+        nid, gespeichert = self.login_daten(name)
+        if not pruefe_passwort(passwort, gespeichert) or nid is None:
             return None
+        return self.sitzung_anlegen(nid)
+
+    def login_daten(self, name: str) -> tuple[int | None, str]:
+        """(Nutzer-ID, Hash) – bei unbekanntem oder gesperrtem Namen ein Ersatz-Hash, damit die Antwortzeit nichts verrät."""
+        r = self.con.execute("SELECT id, passwort_hash FROM nutzer WHERE name=? AND aktiv=1", (name.strip(),)).fetchone()
+        return (r["id"], r["passwort_hash"]) if r else (None, _ERSATZ_HASH)
+
+    def sitzung_anlegen(self, nutzer_id: int) -> str:
         token = secrets.token_urlsafe(32)
         ablauf = (datetime.now() + timedelta(days=SITZUNG_TAGE)).isoformat(timespec="seconds")
         self.con.execute("DELETE FROM sitzungen WHERE ablauf < ?", (_jetzt(),))
-        self.con.execute("INSERT INTO sitzungen VALUES (?,?,?)", (_token_hash(token), r["id"], ablauf))
+        self.con.execute("INSERT INTO sitzungen VALUES (?,?,?)", (_token_hash(token), nutzer_id, ablauf))
         self.con.commit()
         return token
 
@@ -218,6 +257,7 @@ class TeamSpeicher:
         if len(daten) > MAX_FOTO_BYTES:
             raise ValueError("Foto zu groß (max. 8 MB)")
         endung = bild_endung(daten)
+        daten = ohne_metadaten(daten)
         ordner = self.foto_ordner / str(int(bid))
         ordner.mkdir(parents=True, exist_ok=True)
         name = f"{uuid.uuid4().hex}.{endung}"
