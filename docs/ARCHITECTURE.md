@@ -164,8 +164,9 @@ nur nach ausdrücklicher Bestätigung (P1-02) und, dank Laufsperre (P1-04) nicht
 geschrieben. **v5** (Phase B, ADR-025) enthält das Verkäuferportal (`verkaeufer`, `verkaufsanfragen`, `anfrage_fotos`,
 `anfrage_verlauf`), **v6** (Phase C, ADR-026) das Händlerportal (`standorte`, `anfrage_interesse`, `nutzer.standort_id`,
 Weitergabe/Freigabe an `verkaufsanfragen`), **v7** (Phase D, ADR-027) die Demo-Auktionen (`auktionen`, `gebote`,
-`auktion_protokoll`), **v8** (Phase E, ADR-028) gespeicherte Kalkulationen (`kalkulationen`). Die nächste freie Version für
-Fahrzeugidentitäten ist damit **v9**; die Zeilen unten sind
+`auktion_protokoll`), **v8** (Phase E, ADR-028) gespeicherte Kalkulationen (`kalkulationen`), **v9** (Phase F, ADR-029)
+Ankaufsvorgänge (`ankaeufe`, `ankauf_kosten`, `ankauf_verlauf`, `ankauf_dokumente`, `besichtigungen.anfrage_id`). Die nächste freie
+Version für Fahrzeugidentitäten ist damit **v10**; die Zeilen unten sind
 der ursprüngliche Plan.
 
 | Version | Phase | Inhalt |

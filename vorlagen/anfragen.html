@@ -21,7 +21,7 @@ nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px}
 </head>
 <body>
 <main>
-  <nav class="oben"><a href="/verkaufen">+ Anfrage erfassen</a>{% if ich.rolle == 'inhaber' %}<a href="/standorte">Standorte</a>{% endif %}<a href="/haendler">Händlerportal</a><a href="/">Ankaufsliste</a></nav>
+  <nav class="oben"><a href="/verkaufen">+ Anfrage erfassen</a>{% if ich.rolle == 'inhaber' %}<a href="/standorte">Standorte</a>{% endif %}<a href="/haendler">Händlerportal</a><a href="/ankaeufe">Ankäufe</a><a href="/">Ankaufsliste</a></nav>
   <h1>Verkaufsanfragen</h1>
   <p class="leise">Fahrzeuge, die Verkäufer uns selbst anbieten – getrennt von beobachteten Inseraten. Keine automatische Nachricht an Verkäufer.</p>
   <div class="reihe" role="group" aria-label="Status">
@@ -122,6 +122,21 @@ var TOKEN = {{ token | tojson }}, STATUS = {{ status | tojson }}, KANAELE = {{ k
     return api('/api/verkaufsanfrage/' + aktiv + '/kalkulation?betrag=' + betrag).then(function(x){ ziel.innerHTML = Kalkulation.html(x.ergebnis, x.eingabe_hash); },
       function(err){ ziel.innerHTML = '<p class="hinweis warn">' + esc(err.message) + '</p>'; });
   }
+  var NUTZER = null;
+  function besichtigungKarte(a){
+    var offen = a.besichtigungen.some(function(b){ return b.status === 'geplant' || b.status === 'laeuft'; });
+    return '<div class="karte" id="besichtigungkarte"><h3>Besichtigung und Ankauf</h3>' +
+      (a.besichtigungen.length ? '<ul class="verlauf">' + a.besichtigungen.map(function(b){
+        return '<li>#' + b.id + ' · ' + esc({geplant:'geplant', laeuft:'läuft', abgeschlossen:'abgeschlossen', abgebrochen:'abgebrochen'}[b.status] || b.status) +
+          (b.termin ? ' · ' + esc(b.termin.replace('T', ' ')) : '') + (b.zustaendig ? ' · ' + esc(b.zustaendig.name) : '') +
+          ' · <a href="/m#/besichtigung/' + b.id + '">in der Handy-App öffnen</a>' + (b.status === 'abgeschlossen' ? ' · <a href="/protokoll/' + b.id + '" target="_blank" rel="noopener">Protokoll</a>' : '') + '</li>';
+      }).join('') + '</ul>' : '') +
+      (a.ankaeufe.length ? '<p>' + a.ankaeufe.map(function(k){ return '<a class="knopf klein primaer" href="/ankaeufe#' + k.id + '">Ankauf ' + esc(k.referenz) + ' – ' + esc(k.status_text) + '</a>'; }).join(' ') + '</p>' : '') +
+      (OFFEN[a.status] && !offen ? '<p class="leise">Die Besichtigung läuft in der Handy-App (Prüfpunkte, Messungen, Fotos, Unterschriften). Grundlage: Bewertung bzw. bestätigter Zuschlag.</p>' +
+        '<div class="reihe"><label style="flex:1">Termin<input id="b-termin" type="datetime-local"></label><label style="flex:2">Adresse<input id="b-adresse" maxlength="200" value="' + esc([a.plz, a.ort].filter(Boolean).join(' ')) + '"></label></div>' +
+        '<label>Zuständig<select id="b-zustaendig"><option value="">ich</option>' + (NUTZER || []).map(function(n){ return '<option value="' + n.id + '">' + esc(n.name) + '</option>'; }).join('') + '</select></label>' +
+        '<button class="knopf klein primaer" data-besichtigung="planen">Besichtigung planen</button>' : '') + '</div>';
+  }
   function zahl(id){ var v = document.getElementById(id).value.trim(); return v === '' ? null : parseInt(v, 10); }
   function auktionAktion(t){
     var id = t.dataset.auktionId, art = t.dataset.auktionAktion;
@@ -170,7 +185,7 @@ var TOKEN = {{ token | tojson }}, STATUS = {{ status | tojson }}, KANAELE = {{ k
         (INHABER && a.weitergabe_einwilligung_am ? (a.freigegeben_am ? '<button class="knopf klein" data-freigabe="0">Freigabe zurücknehmen</button>'
             : '<p class="leise">Vor der Freigabe Beschreibung und Fotos auf Kontaktdaten prüfen.</p><button class="knopf klein primaer" data-freigabe="1">Für Standorte freigeben</button>') : '') +
         (a.interessen.length ? '<p>Interesse: ' + a.interessen.map(function(i){ return esc(i.standort) + ' (' + datum(i.zeitpunkt) + ')'; }).join(', ') + '</p>' : '') + '</div>' +
-        auktionKarte(a) + kalkKarte(a) +
+        auktionKarte(a) + kalkKarte(a) + besichtigungKarte(a) +
         '<div class="karte"><h3>Bearbeitung</h3><p class="leise">Bearbeiter: ' + esc(a.bearbeiter || '–') + '</p>' +
         '<div class="reihe"><button class="knopf klein" data-aktion="uebernehmen">Ich übernehme</button>' + (a.bearbeiter_id ? '<button class="knopf klein" data-aktion="abgeben">Abgeben</button>' : '') + '</div>' +
         '<div class="reihe">' + Object.keys(STATUS).map(function(k){ return '<button class="knopf klein' + (k === a.status ? ' primaer' : '') + '" data-status="' + k + '">' + esc(STATUS[k]) + '</button>'; }).join('') + '</div>' +
@@ -185,8 +200,13 @@ var TOKEN = {{ token | tojson }}, STATUS = {{ status | tojson }}, KANAELE = {{ k
   document.getElementById('liste').addEventListener('click', function(e){ var k = e.target.closest('.karte'); if(k) detail(+k.dataset.id); });
   document.getElementById('liste').addEventListener('keydown', function(e){ var k = e.target.closest('.karte'); if(k && e.key === 'Enter') detail(+k.dataset.id); });
   document.getElementById('detail').addEventListener('click', function(e){
-    var t = e.target.closest('[data-status],[data-aktion],[data-freigabe],[data-auktion-aktion],[data-kalk-aktion]'); if(!t || !aktiv) return;
+    var t = e.target.closest('[data-status],[data-aktion],[data-freigabe],[data-auktion-aktion],[data-kalk-aktion],[data-besichtigung]'); if(!t || !aktiv) return;
     if(t.dataset.kalkAktion){ e.preventDefault(); return kalkAktion(t); }
+    if(t.dataset.besichtigung){
+      var d = {termin: document.getElementById('b-termin').value || null, adresse: document.getElementById('b-adresse').value,
+               zustaendig_id: document.getElementById('b-zustaendig').value || null};
+      return api('/api/verkaufsanfrage/' + aktiv + '/besichtigung', d).then(function(){ return detail(aktiv); }, function(err){ alert(err.message); });
+    }
     if(t.dataset.auktionAktion) return auktionAktion(t);
     var p = t.dataset.freigabe ? api('/api/verkaufsanfrage/' + aktiv + '/freigabe', {freigeben: t.dataset.freigabe === '1'})
           : t.dataset.status ? api('/api/verkaufsanfrage/' + aktiv + '/status', {status:t.dataset.status})
@@ -199,6 +219,7 @@ var TOKEN = {{ token | tojson }}, STATUS = {{ status | tojson }}, KANAELE = {{ k
       b.classList.add('primaer'); filter = b.dataset.filter; liste();
     };
   });
+  api('/api/nutzer').then(function(n){ NUTZER = n; }, function(){ NUTZER = []; });
   liste().then(function(){ var m = /^#(\d+)$/.exec(location.hash); if(m) detail(+m[1]); });
 })();
 </script>

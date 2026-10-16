@@ -31,6 +31,9 @@ from ..haendler import STANDORT_STATUS, HaendlerSpeicher
 from ..auktion import STANDARD as MINDESTPREIS_STANDARD
 from ..auktion import AuktionSpeicher, AuktionsFehler
 from ..deal import DealSpeicher
+from ..ankauf import DOKUMENTARTEN, AnkaufFehler, AnkaufSpeicher
+from ..ankauf import STATUS as ANKAUF_STATUS
+from ..bewertung.ergebnis import KOSTENARTEN
 from ..team import HAENDLER
 from ..bearbeitung import (IN_ARBEIT, OFFEN, VORBEREITET, BearbeitungsKonflikt, TeamSicht, ablauf_grenze, darf_erzwingen, darf_status,
                            darf_zuweisen, reservierung_tage)
@@ -83,6 +86,7 @@ class Kontext:
         self.haendler = HaendlerSpeicher(db)
         self.auktion = AuktionSpeicher(db, cfg)             # ValueError bei falscher Konfiguration (Abschnitt auktion)
         self.deal = DealSpeicher(db, cfg)                   # ValueError bei falscher Konfiguration (Abschnitt kalkulation)
+        self.ankauf = AnkaufSpeicher(db, cfg, foto_ordner / "ankaeufe")    # im Fotoordner: mit gesichert
         self.reservierung_tage = reservierung_tage(cfg)     # ValueError mit verständlicher Meldung bei falscher Konfiguration
         self.katalog_pfad = basis / "maengel.yaml"
         self.sperre = threading.Lock()          # Datenbankzugriffe nacheinander, Netzwerk parallel
@@ -329,6 +333,9 @@ class Anfrage:
         nicht selbst eintragen: Die Ausnahme beim Abschluss (``b_abschluss``) beruht darauf, dass die Zuständigkeit legitim vergeben wurde."""
         if not self.team_aktiv or self.nutzer["rolle"] == "inhaber":
             return True
+        if anzeige_id.startswith("anfrage-"):           # Besichtigung einer Verkaufsanfrage: deren Bearbeiter statt Inserats-Halter
+            r = self.k.db.con.execute("SELECT bearbeiter_id FROM verkaufsanfragen WHERE id=?", (anzeige_id[8:],)).fetchone()
+            return bool(r) and r[0] == self.nutzer["id"]
         sicht = sicht or self.team_sicht()
         return sicht.halter(anzeige_id) == self.nutzer["id"]
 
@@ -441,6 +448,25 @@ class Anfrage:
             except LookupError as fehler:
                 raise Antwort(404, str(fehler)) from fehler
             return self.json(200, {"ergebnis": erg, "eingabe_hash": kalk.eingabe_hash(e)[:12]})
+        if p == "/ankaeufe":
+            return self.html(k.env.get_template("ankaeufe.html").render(
+                firma=k.cfg["anschreiben"]["firma"], token=k.token, ich=self.nutzer, kostenarten=KOSTENARTEN, status=ANKAUF_STATUS,
+                dokumentarten=DOKUMENTARTEN))
+        if p == "/api/ankaeufe":
+            return self.json(200, k.ankauf.liste())
+        if m := re.fullmatch(r"/api/ankauf/(\d+)", p):
+            return self.json(200, k.ankauf.lade(int(m.group(1))))
+        if m := re.fullmatch(r"/ankauf/(\d+)/vertrag", p):
+            a = k.ankauf.lade(int(m.group(1)))
+            b = k.team.besichtigung(a["besichtigung_id"])
+            e = b["ergebnis"] or berechne(k.katalog(), b["daten"] or {}, b["basis"])
+            return self.html(k.env.get_template("vertrag.html").render(a=a, b=b, e=e, d=b["daten"] or {}, firma=k.cfg["anschreiben"],
+                                                                         jetzt=datetime.now()))
+        if m := re.fullmatch(r"/ankauf-dokumente/(\d+)/([\w.-]+)", p):
+            pfad = k.ankauf.dokument_pfad(int(m.group(1)), m.group(2))
+            if not pfad:
+                raise Antwort(404, "Dokument nicht gefunden")
+            return self.senden(200, pfad.read_bytes(), mimetypes.guess_type(pfad.name)[0] or "application/octet-stream")
         if m := re.fullmatch(r"/api/kalkulation/(\d+)", p):
             x = k.deal.lade(int(m.group(1)))
             if not x:
@@ -475,6 +501,52 @@ class Anfrage:
                 raise Antwort(404, "Foto nicht gefunden")
             return self.senden(200, pfad.read_bytes(), mimetypes.guess_type(pfad.name)[0] or "image/jpeg")
         raise Antwort(404, "nicht gefunden")
+
+    # ----- Besichtigung und Abwicklung (Phase F)
+    def anfrage_besichtigung(self, anfrage_id: int, daten: dict) -> dict:
+        """Handy-Besichtigung für eine offene Verkaufsanfrage – anlegen dürfen Inhaber und Bearbeiter der Anfrage (wie bei Inseraten
+        der Halter). Je Anfrage höchstens eine offene Besichtigung."""
+        k = self.k
+        a = k.verkauf.lade(anfrage_id)
+        if not a:
+            raise Antwort(404, "Anfrage nicht gefunden")
+        if a["status"] not in vk.OFFEN:
+            raise Antwort(409, f"Anfrage ist „{vk.STATUS[a['status']]}“ – Besichtigung nur für offene Anfragen")
+        if not self.ist_inhaber_oder_bearbeiter(f"anfrage-{anfrage_id}"):
+            raise Antwort(403, "Besichtigungen einer Anfrage planen nur ihr Bearbeiter oder der Inhaber – bitte zuerst übernehmen")
+        termin, adresse = self._termin(daten.get("termin")), (daten.get("adresse") or "").strip()[:200] or None
+        zustaendig = self._zustaendig(daten.get("zustaendig_id"))
+        try:
+            basis = k.ankauf.basis_fuer_anfrage(anfrage_id)
+        except AnkaufFehler as e:
+            raise Antwort(e.status, str(e)) from e
+        with k.db.transaktion():
+            if k.db.con.execute("SELECT 1 FROM besichtigungen WHERE anfrage_id=? AND status IN ('geplant', 'laeuft')", (anfrage_id,)).fetchone():
+                raise Antwort(409, "Für diese Anfrage ist schon eine Besichtigung geplant")
+            bid = k.team.besichtigung_anlegen(f"anfrage-{anfrage_id}", basis, termin, adresse, zustaendig, self.nutzer["id"], anfrage_id)
+            k.verkauf._verlauf(anfrage_id, self.nutzer["id"], "besichtigung", None, f"#{bid} geplant")
+        b = k.team.besichtigung(bid)
+        self._zuweisung_melden(b)
+        return self.besichtigung_kurz(b)
+
+    def ankauf_schritt(self, aid: int, art: str, daten: dict) -> dict:
+        k, nid = self.k, self.nutzer["id"]
+        if art == "vertrag":
+            k.ankauf.vertrag_bestaetigen(aid, nid)
+        elif art == "uebergabe":
+            k.ankauf.uebergabe(aid, daten.get("uebergabe_am"), daten.get("zahlung_am"), daten.get("km"), nid)
+        elif art == "kosten":
+            return {"id": k.ankauf.kosten_erfassen(aid, str(daten.get("art") or ""), daten.get("betrag"), daten.get("notiz"),
+                                                  daten.get("datum"), nid)}
+        elif art == "verkauf":
+            k.ankauf.verkaufen(aid, daten.get("vk_preis"), daten.get("verkauft_am"), nid)
+        elif art == "storno":
+            self.nur_inhaber()
+            k.ankauf.stornieren(aid, str(daten.get("grund") or ""), nid)
+        else:
+            return k.ankauf.dokument_speichern(aid, str(daten.get("art") or ""), _bild_bytes(str(daten.get("datei") or "")), nid)
+        log.info("Ankauf %s: %s durch %s", aid, art, self.nutzer["name"])
+        return {"ok": True}
 
     # ----- Deal Intelligence (Phase E)
     def betrag_aus_query(self) -> int | None:
@@ -553,7 +625,8 @@ class Anfrage:
             v["nutzer"] = namen.get(v["nutzer_id"])
         return {**a, "bewertung": {**b.dict(), **self._bewertung_kurz(b)}, "spanne_verkaeufer": vk.spanne_fuer_verkaeufer(b, k.cfg),
                 "interessen": k.verkauf.interessen(anfrage_id), "auktionen": k.auktion.fuer_anfrage(anfrage_id),
-                "kalkulationen": k.deal.liste(anfrage_id)}
+                "kalkulationen": k.deal.liste(anfrage_id), "ankaeufe": k.ankauf.zu_anfrage(anfrage_id),
+                "besichtigungen": [self.besichtigung_kurz(b) for b in k.team.besichtigungen(offen=False, anzeige_id=f"anfrage-{anfrage_id}")]}
 
     def ich_mit_kuerzel(self) -> dict:
         if not self.team_aktiv:
@@ -740,6 +813,10 @@ class Anfrage:
                 raise Antwort(404, str(fehler)) from fehler
             kid = k.deal.speichern(e, erg, anlass="gespeichert", anfrage_id=int(m.group(1)), standort_id=standort, nutzer_id=self.nutzer["id"])
             return self.json(200, {"id": kid})
+        if m := re.fullmatch(r"/api/verkaufsanfrage/(\d+)/besichtigung", p):
+            return self.json(200, self.anfrage_besichtigung(int(m.group(1)), daten))
+        if m := re.fullmatch(r"/api/ankauf/(\d+)/(vertrag|uebergabe|kosten|verkauf|storno|dokument)", p):
+            return self.json(200, self.ankauf_schritt(int(m.group(1)), m.group(2), daten))
         if m := re.fullmatch(r"/api/verkaufsanfrage/(\d+)/auktion", p):
             self.nur_inhaber()
             aid = k.auktion.anlegen(int(m.group(1)), self.nutzer["id"], startpreis=daten.get("startpreis"),
@@ -1014,6 +1091,9 @@ class Anfrage:
                          abgeschlossen_von=self.nutzer["name"])
         endpreis = daten.get("endpreis") if entscheidung == "gekauft" else None
         status = "abgebrochen" if entscheidung == "abgebrochen" else "abgeschlossen"
+        vorbereitet = self.ankauf_vorbereiten(b, endpreis) if endpreis else None
+        if b.get("anfrage_id"):
+            return self.anfrage_abschliessen(b, protokoll, endpreis, status, entscheidung, vorbereitet)
         ad_status = {"gekauft": "gekauft", "abgelehnt": "abgesagt", "offen": "verhandlung"}.get(entscheidung)
         team = self.team_parameter({}, b["anzeige_id"]) if ad_status else {}
         if team:
@@ -1027,10 +1107,37 @@ class Anfrage:
                 if ad_status:
                     self.k.db.setze_status(b["anzeige_id"], ad_status, betrag=endpreis, **team)
                 self.k.team.besichtigung_abschliessen(b["id"], protokoll, endpreis, status)
+                ankauf = self.k.ankauf.anlegen({**b, "protokoll": protokoll}, endpreis, vorbereitet, self.nutzer["id"]) if vorbereitet else None
         except BearbeitungsKonflikt:
             raise self.konflikt(b["anzeige_id"], team["dubletten"] if ad_status in IN_ARBEIT else ()) from None
         self.k.veraendert()
-        return {"ok": True, "protokoll": f"/protokoll/{b['id']}"}
+        return {"ok": True, "protokoll": f"/protokoll/{b['id']}", "ankauf": ankauf}
+
+    def ankauf_vorbereiten(self, b: dict, kaufpreis: int) -> dict:
+        """Plan für den Ankaufsvorgang vor der Schreibsperre rechnen; scheitert die Rechnung, gilt die eingefrorene Grundlage."""
+        bewertung = None
+        if not b.get("anfrage_id"):
+            try:
+                bewertung = self.k.zeile(b["anzeige_id"])["b"]
+            except Exception:  # noqa: BLE001 – Inserat nicht mehr in der Bewertung: Grundlage der Besichtigung genügt
+                bewertung = None
+        try:
+            return self.k.ankauf.plan_vorbereiten(b, kaufpreis, bewertung)
+        except Exception:  # noqa: BLE001 – ohne Plan kein Abbruch des Kaufs; Vergleich dann nur gegen die Grundlage
+            log.exception("Plan für Ankauf aus Besichtigung %s nicht berechenbar", b["id"])
+            from ..bewertung.ergebnis import plan_aus_basis
+            return {"herkunft": "anfrage" if b.get("anfrage_id") else "anzeige", "zuschlag": None, "kalkulation": None,
+                    "plan": plan_aus_basis(b["basis"], standzeit_tage=90)}
+
+    def anfrage_abschliessen(self, b: dict, protokoll: dict, endpreis: int | None, status: str, entscheidung: str, vorbereitet) -> dict:
+        """Abschluss einer Anfrage-Besichtigung: Status der Anfrage, Protokoll und (bei „gekauft“) Ankaufsvorgang in EINER Transaktion."""
+        neu = {"gekauft": "gekauft", "abgelehnt": "abgelehnt", "offen": "angebot"}.get(entscheidung)
+        with self.k.db.transaktion():
+            if neu:
+                self.k.verkauf.setze_status(b["anfrage_id"], neu, self.nutzer["id"])
+            self.k.team.besichtigung_abschliessen(b["id"], protokoll, endpreis, status)
+            ankauf = self.k.ankauf.anlegen({**b, "protokoll": protokoll}, endpreis, vorbereitet, self.nutzer["id"]) if vorbereitet else None
+        return {"ok": True, "protokoll": f"/protokoll/{b['id']}", "ankauf": ankauf}
 
 
 def ist_gesperrt(fehler: sqlite3.OperationalError) -> bool:
@@ -1047,7 +1154,7 @@ def bearbeite(handler, k: Kontext, methode: str):
         daten = {}
         if methode == "POST":
             laenge = int(handler.headers.get("Content-Length") or 0)
-            if laenge > (MAX_FOTO if a.pfad.endswith("/foto") else MAX_JSON):
+            if laenge > (MAX_FOTO if a.pfad.endswith(("/foto", "/dokument")) else MAX_JSON):
                 raise Antwort(413, "Anfrage zu groß")
             roh = handler.rfile.read(laenge) if laenge else b""      # Übertragung ohne Sperre
             try:
@@ -1072,9 +1179,9 @@ def bearbeite(handler, k: Kontext, methode: str):
         if e.status == 401 and methode == "GET" and not a.pfad.startswith("/api/"):
             return a.weiterleiten("/login?weiter=" + quote(handler.path))
         a.json(e.status, {"fehler": e.fehler, **({"grund": e.grund} if e.grund else {}), **e.extra})
-    except AuktionsFehler as e:
+    except (AuktionsFehler, AnkaufFehler) as e:
         grund = GRUENDE.get(e.status)
-        a.json(e.status, {"fehler": str(e), **({"grund": grund} if grund else {}), **e.extra})
+        a.json(e.status, {"fehler": str(e), **({"grund": grund} if grund else {}), **getattr(e, "extra", {})})
     except sqlite3.OperationalError as e:
         if not ist_gesperrt(e):
             log.exception("Fehler bei %s %s", methode, handler.path)

@@ -387,3 +387,31 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Folgen / offen:** Jede Kalkulation liest alle Vergleichsangebote (wie die bestehende Bewertung) – bei sehr großer Datenbank
   zwischenspeichern. Provision wirkt als Kosten ohne eigene Umsatzsteuer (Annahme). Tatsächlicher EK/VK zur Kalibrierung folgt mit
   Phase F. Nebenbei behoben: Verkaufsanfragen verloren ihre PLZ (Transport immer pauschal) – deren Bewertungen ändern sich.
+
+## ADR-029 – Besichtigung und Abwicklung: ein Vorgang je Kauf, Weg mit Belegen, Plan gegen Ist · vorgeschlagen (16.10.2026)
+
+* **Kontext:** 3.0-Analyse Phase F: Fahrzeugzustand, Verhandlung, Übergabe, Kaufvorgang und Ergebnisvergleich; Erfolgskriterium
+  „nachvollziehbarer Weg vom Gebot zum abgeschlossenen Ankauf“. Projektregel 10 (keine automatischen rechtsverbindlichen Aktionen).
+  Betreiberentscheidungen 16.10.2026: **Handy-Besichtigung auch für Verkaufsanfragen**, **gekaufte Inserate automatisch als
+  Vorgang**, **Vertragsmuster zum Ausdrucken**, **Vorgang bis zum Verkauf mit Vergleich**.
+* **Entscheidung:**
+  1. Besichtigungen von Verkaufsanfragen nutzen Tabelle, Rechnung, Fotos, Protokoll und Handy-App der Inserate unverändert;
+     Kennung `anfrage-<id>` plus neue Spalte `besichtigungen.anfrage_id` (v9). Grundlage beim Anlegen eingefroren: Bewertung der
+     Anfrage, Angebot = bestätigter Demo-Zuschlag oder Erstangebot, Verkäufer (nur Team). Rechte: Inhaber oder Bearbeiter der
+     Anfrage statt Halter des Inserats; je Anfrage eine offene Besichtigung; nur offene Anfragen.
+  2. **Ankaufsvorgang** entsteht ausschließlich beim Abschluss „gekauft“ (vereinbarter Preis, beide Unterschriften) – in derselben
+     Transaktion wie Protokoll und Status (Anfrage bzw. Inserat). Zustände `gekauft → uebergeben → verkauft`, `storniert` nur vor
+     der Übergabe und nur durch den Inhaber. Übergabe erst nach bestätigtem Vertrag; Daten nicht in der Zukunft und in zeitlicher
+     Reihenfolge. Verlauf und Ist-Kosten nur anfügbar (Trigger), Korrekturen als Gegenbuchung.
+  3. **Plan eingefroren:** Bei Anfragen eine neue, nachrechenbare Kalkulation (ADR-028) zum Kaufpreis – Transport ab dem Standort des
+     Zuschlags, Provision nur bei Auktion; bei Inseraten die Bewertung zum Kaufzeitpunkt; ohne Bewertung die Grundlage der Besichtigung.
+  4. **Weg** je Vorgang: Anfrage/Inserat → Zuschlag mit Gebotskalkulation → Kalkulation zum Kaufpreis (nachgerechnet) → Besichtigung
+     und Protokoll → Vertrag → Übergabe/Zahlung → Verkauf, jeweils mit Zeitpunkt und Beleg-Link oder „offen“.
+  5. **Vertrag:** druckbares Muster aus Vorgangsdaten (Parteien, Fahrzeug, Preis, Mängel aus dem Protokoll, Felder zum Ausfüllen) mit
+     deutlichem Hinweis „Muster ohne Rechtsgewähr“; Sachmängelhaftung bleibt ein Freifeld. Ein Mensch bestätigt die Unterschriften und
+     lädt den Scan hoch (PDF/Bild, Inhalt geprüft, nur über den Vorgang abrufbar).
+  6. **Ergebnisvergleich** (`bewertung/ergebnis.py`, rein): Plan gegen Ist für Einkauf/Max-EK, Kosten, VK, Gewinn (gleiche Formel
+     wie der Rechner, auf 50 € gerundet; vor dem Verkauf „vorläufig“), Standzeit; Übersicht über alle Vorgänge. Nur Anzeige – keine
+     automatische Kalibrierung; Parameter werden bewusst in `config.yaml` nachgestellt.
+* **Folgen / offen:** Vertragsmuster vor Einsatz juristisch prüfen lassen. Kein Abschluss ohne Netz (wie bisher). Gekaufte Inserate
+  ohne Handy-Besichtigung (nur Status „gekauft“) erhalten keinen Vorgang. Fahrzeugidentität rückt auf v10.

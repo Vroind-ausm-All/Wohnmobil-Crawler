@@ -6,6 +6,24 @@ Wert „–“.
 
 ---
 
+## Phase F – Besichtigung und Abwicklung (16.10.2026) · Status: REVIEW
+
+- **Anlass:** Betreiber „Phase F“. 3.0-Analyse: Fahrzeugzustand, Verhandlung, Übergabe, Kaufvorgang und Ergebnisvergleich;
+  Erfolgskriterium: nachvollziehbarer Weg vom Gebot zum abgeschlossenen Ankauf. Entscheidungen per Rückfrage (ADR-029):
+  Handy-Besichtigung für Verkaufsanfragen öffnen, gekaufte Inserate automatisch als Vorgang, Vertragsmuster zum Ausdrucken,
+  Vorgang bis zum Verkauf mit Vergleich. Umgesetzt vom Orchestrator ohne Subagenten.
+- **Geändert/neu:** `wmscout/migrationen.py` (v9: `ankaeufe`, `ankauf_kosten`, `ankauf_verlauf`, `ankauf_dokumente`,
+  `besichtigungen.anfrage_id`), `wmscout/ankauf.py` (neu: Grundlage einer Anfrage-Besichtigung, Plan, Schritte, Dokumente, Weg),
+  `wmscout/bewertung/ergebnis.py` (neu, rein: Plan gegen Ist, Übersicht), `wmscout/team.py` (`besichtigung_anlegen` mit Anfrage),
+  `wmscout/web/api.py` (Rechte für Anfrage-Besichtigungen, Abschluss legt Vorgang an, Routen `/ankaeufe`, `/api/ankauf/…`, Vertrag,
+  Dokumente), `vorlagen/ankaeufe.html` und `vorlagen/vertrag.html` (neu), `vorlagen/anfragen.html`, `vorlagen/protokoll.html`,
+  `vorlagen/report.html` (Link), `wmscout/web/static/mobil.js`, `tests/test_ankauf.py` (neu, 8); Migrationstests auf v9.
+- **Tests:** siehe TEST-REPORT, `ruff` grün. Gegenprobe an 18 Schutzstellen – alle erkannt. Browser-Klicktest Anfrage → Besichtigung
+  planen → Handy-Besichtigung (390 px, Unterschriften) → Vorgang → Vertragsmuster → Vertrag → Übergabe → Kosten → Verkauf → Plan/Ist:
+  bestanden, 0 JS-Fehler. Unterwegs: Klickskript scrollte nicht zu den Unterschriftsfeldern (korrigiert); Ist-Gewinn wurde centgenau
+  angezeigt – jetzt auf 50 € gerundet.
+- **Nicht geprüft:** Windows-CI (folgt im PR), Safari/iOS, Offline-Abschluss (wie bisher: Abschluss braucht Netz).
+
 ## Phase E – Deal Intelligence (16.10.2026) · Status: REVIEW
 
 - **Anlass:** Betreiber „Phase E“. 3.0-Analyse: Gewinnkalkulation und Max-EK unmittelbar neben dem Gebotsfeld; Erfolgskriterium:

@@ -18,6 +18,14 @@ dem Büro-PC.
 | **Abschluss** | Ergebnis (gekauft / offen / kein Kauf / abgebrochen), Kaufpreis, Verkäuferdaten und -erklärungen, Unterschriften auf dem Display → **Ankaufprotokoll** mit Mängeln und Fotos, druckbar bzw. als PDF speicherbar |
 | **Team** | Anmeldung je Mitarbeiter; Inhaber sieht alle Besichtigungen, Mitarbeiter ihre eigenen; nur Zuständige und Inhaber dürfen eine Besichtigung bearbeiten |
 
+### Besichtigung einer Verkaufsanfrage (Phase F)
+
+Auch Fahrzeuge, die Verkäufer selbst anbieten, werden mit der Handy-App besichtigt. Geplant wird in `/anfragen` (Karte
+„Besichtigung und Ankauf“) durch den Inhaber oder den Bearbeiter der Anfrage; danach steht der Termin unter „Heute“. Statt des
+Inserat-Links zeigt die Besichtigung „Verkaufsanfrage VA-…“, Name und Telefon des Verkäufers sind im Abschluss vorbelegt, das
+Angebot ist ein bestätigter Demo-Zuschlag oder das Erstangebot. Abschluss mit „gekauft“ legt automatisch einen Ankaufsvorgang
+an (`/ankaeufe`) – bei Inseraten genauso.
+
 ## So rechnet der Mängelabzug
 
 Die Rechnung ist regelbasiert und im Protokoll nachvollziehbar. Die Richtwerte stehen in **`maengel.yaml`** und
