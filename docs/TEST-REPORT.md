@@ -4,6 +4,20 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## Phase G0 – Voraussetzungen für Skalierung (16.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, nach Merge mit Phase F) | 834 bestanden, davon 30 neu (`test_sicherheit.py` 17, `test_datenrechte.py` 6, `test_api_quellen.py` 7) |
+| Rohe Verbindung: negative/ungültige Länge, fremder Host | 400 bzw. 403 sofort, Inhalt wird nicht gelesen |
+| Login-Bremse, JSON-Pflicht, Origin/Sec-Fetch-Site, Proxy nicht „lokal“, Secure-Cookie | bestanden |
+| Widerruf (Web + CLI): Personendaten, Fotos samt Dateien, Auktion, Freigabe | bestanden; zweite Anfrage desselben Verkäufers bleibt |
+| Gegenprobe 12 Schutzstellen (9 + 3 nach Merge: Vertragsfoto-EXIF, Storno-Regel, Schwärzung der Besichtigung) | alle erkannt |
+| `pip-audit -r requirements.txt` | keine bekannten Schwachstellen |
+| Browser-Klicktest Login-Seite + Widerruf-Knopf (mit laufender Auktion) | bestanden, 0 JS-Fehler, 0 CSP-Verstöße |
+| Widerruf mit Ankaufsvorgang (auch storniert) | verweigert (409), Verkäuferdaten bleiben |
+| Reverse-Proxy, Safari/iOS | nicht geprüft |
+
 ## Phase F – Besichtigung und Abwicklung (16.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

@@ -179,6 +179,17 @@ Auftrag des Betreibers am 16.10.2026 („Phase F“); Entscheidungen siehe ADR-0
 | F2 | P1 | **Ankaufsvorgang** (Schema v9): Vertrag (Muster + Bestätigung + Scan), Übergabe/Zahlung, Kosten, Verkauf, Storno | Orchestrator | F1, E2 | Weg vom Gebot zum Ankauf lückenlos mit Belegen; Verlauf/Kosten nur anfügbar | REVIEW |
 | F3 | P1 | **Ergebnisvergleich** Plan (eingefrorene Kalkulation) gegen Ist, Übersicht | Orchestrator | F2 | Nur Anzeige; Gewinn mit derselben Formel wie der Rechner, gerundet | REVIEW |
 
+## Phase G (3.0) – Skalierung (Voraussetzungen, Echtzeit, Mandanten)
+
+Auftrag des Betreibers am 16.10.2026 („Phase G“); Entscheidungen siehe ADR-030. Reihenfolge: G0 → G1 → G2, je eigener PR.
+
+| ID | Prio | Arbeitspaket | Agent | Abhängig | Akzeptanz | Status |
+|---|---|---|---|---|---|---|
+| G0 | P1 | **Voraussetzungen**: Härtung nach Sicherheitsprüfung, Datenrechte + Widerruf, API-Rahmen, Pilot-Checkliste | Orchestrator | E3 | Befunde H1–H3, M4, M8–M10 behoben und getestet; keine Quelle aktiv | REVIEW |
+| G0b | P1 | Audit-Protokoll (Schema v10), Rechte je Ankaufsschritt, PDF als Anhang (Widerruf mit Ankauf: in G0 erledigt) | Orchestrator | Phase F | – | TODO |
+| G1 | P1 | **Echtzeit per SSE** (Auktion, Team, Ankäufe) + **Nutzungszähler** | Orchestrator | Phase F | – | TODO |
+| G2 | P1 | **Mandantenfähigkeit**: Daten je Firma getrennt, Rechte je Mandant | Orchestrator | G0, G1 | – | TODO |
+
 ## Phase 3 – Datenbank und Marktbeobachtung
 
 **Abnahme:** identische Inserate lassen sich ohne Datenverlust erneut importieren; Preis- und Fahrzeughistorie bleiben

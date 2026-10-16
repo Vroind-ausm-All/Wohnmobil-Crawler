@@ -839,8 +839,19 @@ def test_http_kuerzel_bleiben_stabil_wenn_kollegen_dazukommen(server, team, db):
 
 
 def test_service_worker_speichert_team_stand_nicht_zwischen():
+    """Positivliste (G0): nur Daten für die Arbeit vor Ort; Team-Stand und Personendaten nie im Speicher des Geräts."""
     sw = (BASIS / "wmscout" / "web" / "static" / "sw.js").read_text(encoding="utf-8")
-    assert "/api/team" in sw and "'/api/team') return" in sw
+    muster = [re.compile(m) for m in re.findall(r"/(\^.*?)/\.test\(url\.pathname\)", sw)]
+    assert len(muster) == 4
+
+    def lesbar(pfad):
+        return any(m.search(pfad) for m in muster)
+    for pfad in ("/m", "/static/mobil.js", "/manifest.webmanifest", "/fotos/3/a.jpg", "/api/besichtigung/3", "/api/fahrzeug/k-1", "/api/heute"):
+        assert lesbar(pfad), pfad
+    for pfad in ("/api/team", "/api/suchlauf", "/api/verkaufsanfrage/1", "/api/verkaufsanfragen", "/api/ankauf/1", "/api/ankaeufe",
+                 "/api/kalkulation/1", "/anfrage-fotos/1/a.jpg", "/protokoll/1", "/api/haendler/fahrzeuge", "/api/auktion/1", "/mx"):
+        assert not lesbar(pfad), pfad
+    assert "antwort.status === 401" in sw and "wm-scout-4" in sw
 
 
 def test_zwischenspeicher_wird_von_uebernahme_nicht_verworfen_team_aber_frisch(server, team, db):

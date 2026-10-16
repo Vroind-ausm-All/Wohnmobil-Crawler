@@ -16,7 +16,7 @@ from .bewertung.rechner import Bewertung, Rechner
 from .datenbank import IMPORT_ARTEN, Datenbank
 from .normalisierung.fahrzeug import ergaenze_fahrzeug
 from .normalisierung.geo import entfernung_km
-from .team import MAX_FOTO_BYTES, bild_endung
+from .team import MAX_FOTO_BYTES, bild_endung, ohne_metadaten
 
 ARTEN = IMPORT_ARTEN
 MAENGEL = {"feuchtigkeit": "Feuchtigkeit/Wasserschaden", "unfall": "Unfallschaden", "motor": "Motor/Getriebe defekt",
@@ -245,6 +245,7 @@ class VerkaufSpeicher:
         if len(daten) > MAX_FOTO_BYTES:
             raise ValueError("Foto zu groß (max. 8 MB)")
         endung = bild_endung(daten)
+        daten = ohne_metadaten(daten)
         with self.db.transaktion():
             if not self.con.execute("SELECT 1 FROM verkaufsanfragen WHERE id=?", (anfrage_id,)).fetchone():
                 raise LookupError("Anfrage nicht gefunden")
@@ -258,6 +259,59 @@ class VerkaufSpeicher:
                                    (anfrage_id, name, _jetzt())).lastrowid
             self._verlauf(anfrage_id, nutzer_id, "foto", None, name)
         return {"id": fid, "datei": name}
+
+    def widerruf(self, anfrage_id: int, nutzer_id: int | None) -> dict:
+        """Widerruf der Einwilligung (Datenrechte, G0): Verkäufer anonymisieren, Freitexte, Notiz und Fotos löschen, Freigabe für
+        Standorte zurücknehmen, Status „zurückgezogen“. Fahrzeugdaten ohne Personenbezug (Art, Marke, EZ, km, Preisvorstellung)
+        bleiben für Statistik und nachrechenbare Kalkulationen. Besteht ein nicht stornierter Ankauf, wird NICHT gelöscht
+        (gesetzliche Aufbewahrung – im Einzelfall klären). Laufende Auktionen bricht der Aufrufer vorher ab."""
+        tabellen = {r[0] for r in self.con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        dateien = []
+        with self.db.transaktion():
+            a = self.con.execute("SELECT verkaeufer_id FROM verkaufsanfragen WHERE id=?", (anfrage_id,)).fetchone()
+            if not a:
+                raise LookupError("Anfrage nicht gefunden")
+            if "ankaeufe" in tabellen:
+                k = self.con.execute("SELECT referenz FROM ankaeufe WHERE anfrage_id=?", (anfrage_id,)).fetchone()
+                if k:
+                    raise ValueError(f"Ankaufsvorgang {k[0]} vorhanden (auch storniert) – Kaufunterlagen können der Aufbewahrungspflicht unterliegen; "
+                                     "Daten nicht automatisch löschen, Einzelfall klären")
+            # andere Anfragen desselben Verkäufers bleiben unberührt – der Verkäufer wird nur anonymisiert, wenn keine mehr übrig ist
+            weitere = self.con.execute("SELECT COUNT(*) FROM verkaufsanfragen WHERE verkaeufer_id=? AND id != ?",
+                                       (a["verkaeufer_id"], anfrage_id)).fetchone()[0]
+            if not weitere:
+                self.con.execute("UPDATE verkaeufer SET name='(gelöscht)', email=NULL, telefon='(gelöscht)', plz=NULL, ort=NULL WHERE id=?",
+                                 (a["verkaeufer_id"],))
+            self.con.execute("UPDATE verkaufsanfragen SET beschreibung=NULL, notiz=NULL, freigegeben_am=NULL, freigegeben_von=NULL, "
+                             "status='zurueckgezogen', aktualisiert_am=? WHERE id=?", (_jetzt(), anfrage_id))
+            self.con.execute("UPDATE anfrage_verlauf SET alt=NULL, neu=NULL WHERE anfrage_id=? AND ereignis='notiz'", (anfrage_id,))
+            dateien = [r[0] for r in self.con.execute("SELECT datei FROM anfrage_fotos WHERE anfrage_id=?", (anfrage_id,))]
+            self.con.execute("DELETE FROM anfrage_fotos WHERE anfrage_id=?", (anfrage_id,))
+            geschwaerzt, besichtigungs_fotos = 0, []
+            if "anfrage_id" in {r[1] for r in self.con.execute("PRAGMA table_info(besichtigungen)")}:
+                for b in self.con.execute("SELECT id, basis_json, protokoll_json FROM besichtigungen WHERE anfrage_id=?", (anfrage_id,)).fetchall():
+                    basis = json.loads(b["basis_json"] or "{}")
+                    basis.pop("verkaeufer", None)
+                    basis["ort"] = None
+                    protokoll = json.loads(b["protokoll_json"]) if b["protokoll_json"] else None
+                    if protokoll:
+                        for feld in ("verkaeufer", "unterschrift_verkaeufer", "unterschrift_ankaeufer", "bemerkung"):
+                            protokoll.pop(feld, None)
+                    # Eingaben (FIN, Kennzeichen, Notizen) und Fotos der Besichtigung gehören ohne Ankauf ebenfalls nicht mehr hierher
+                    self.con.execute("UPDATE besichtigungen SET basis_json=?, protokoll_json=?, adresse=NULL, daten_json='{}', ergebnis_json=NULL "
+                                     "WHERE id=?", (json.dumps(basis, ensure_ascii=False),
+                                                    json.dumps(protokoll, ensure_ascii=False) if protokoll else None, b["id"]))
+                    besichtigungs_fotos += [(b["id"], r[0]) for r in
+                                            self.con.execute("SELECT datei FROM fotos WHERE besichtigung_id=?", (b["id"],))]
+                    self.con.execute("DELETE FROM fotos WHERE besichtigung_id=?", (b["id"],))
+                    geschwaerzt += 1
+            self._verlauf(anfrage_id, nutzer_id, "widerruf", None, "personenbezogene Daten gelöscht")
+        # Dateien erst nach erfolgreichem Commit entfernen (Besichtigungsfotos liegen im Fotoordner des Teams, eine Ebene höher)
+        for pfad in [self.foto_ordner / str(int(anfrage_id)) / d for d in dateien] + \
+                    [self.foto_ordner.parent / str(int(bid)) / d for bid, d in besichtigungs_fotos]:
+            if pfad.is_file():
+                pfad.unlink()
+        return {"fotos": len(dateien) + len(besichtigungs_fotos), "besichtigungen": geschwaerzt, "verkaeufer_anonymisiert": not weitere}
 
     def foto_pfad(self, anfrage_id: int, datei: str) -> Path | None:
         """Nur Dateien, die zu dieser Anfrage gespeichert sind (kein Pfad-Trick möglich)."""

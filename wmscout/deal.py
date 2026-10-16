@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from . import verkauf as vk
 from .bewertung import kalkulation as kalk
 from .datenbank import Datenbank
+from .haendler import ohne_kontakt
 from .normalisierung.geo import entfernung_km
 
 
@@ -37,6 +38,8 @@ class DealSpeicher:
 
     def eingabe(self, anfrage_id: int, betrag: int | None, standort_id: int = 0, stichtag: datetime | None = None) -> dict:
         f = vk.als_fahrzeug(self._anfrage(anfrage_id))
+        # gespeicherte Kalkulationen sind nur anfügbar: Telefon, E-Mail und Links aus Freitexten nie hineinschreiben (Widerruf, G0)
+        f["kurzbeschreibung"], f["beschreibung"] = ohne_kontakt(f.get("kurzbeschreibung")), ohne_kontakt(f.get("beschreibung"))
         s = self.con.execute("SELECT name, plz FROM standorte WHERE id=?", (standort_id,)).fetchone() if standort_id else None
         if s:
             km = entfernung_km(s["plz"], f.get("plz")) if s["plz"] else None

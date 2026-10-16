@@ -65,6 +65,12 @@ def whatsapp_link(text: str, telefon: str | None = None) -> str:
     return f"https://wa.me/{nummer or ''}?text={quote(text)}"
 
 
+def _maskiert(nummer: str) -> str:
+    """Telefonnummer fürs Protokoll: nur Anfang und Ende (G0)."""
+    n = str(nummer or "")
+    return n[:4] + "…" + n[-2:] if len(n) > 6 else "…"
+
+
 class WhatsAppCloud:
     """Versand über die offizielle WhatsApp Business Platform (Cloud API) mit freigegebenen Vorlagen.
 
@@ -97,11 +103,11 @@ class WhatsAppCloud:
             r = self.sitzung.post(url, json=self.nachricht(an, vorlage, parameter), timeout=20,
                                   headers={"Authorization": f"Bearer {token}"})
             if r.status_code >= 400:
-                log.warning("WhatsApp an %s fehlgeschlagen: HTTP %s %s", an, r.status_code, r.text[:300])
+                log.warning("WhatsApp an %s fehlgeschlagen: HTTP %s", _maskiert(an), r.status_code)
                 return False
             return True
         except requests.RequestException as e:
-            log.warning("WhatsApp an %s fehlgeschlagen: %s", an, e)
+            log.warning("WhatsApp an %s fehlgeschlagen: %s", _maskiert(an), type(e).__name__)
             return False
 
     def neue_treffer(self, zeilen: list[dict]) -> int:

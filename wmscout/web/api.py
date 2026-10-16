@@ -30,7 +30,10 @@ from ..verkauf import Eingabefehler, VerkaufSpeicher
 from ..haendler import STANDORT_STATUS, HaendlerSpeicher
 from ..auktion import STANDARD as MINDESTPREIS_STANDARD
 from ..auktion import AuktionSpeicher, AuktionsFehler
+from .. import datenrechte
 from ..deal import DealSpeicher
+from ..team import pruefe_passwort
+from .sicherheit import SICHERHEITS_KOPF, LoginBremse
 from ..ankauf import DOKUMENTARTEN, AnkaufFehler, AnkaufSpeicher
 from ..ankauf import STATUS as ANKAUF_STATUS
 from ..bewertung.ergebnis import KOSTENARTEN
@@ -85,6 +88,11 @@ class Kontext:
         self.verkauf = VerkaufSpeicher(db, foto_ordner / "anfragen")     # im Fotoordner: mit gesichert
         self.haendler = HaendlerSpeicher(db)
         self.auktion = AuktionSpeicher(db, cfg)             # ValueError bei falscher Konfiguration (Abschnitt auktion)
+        app = cfg.get("app") or {}
+        self.bremse = LoginBremse(int(app.get("login_max_fehlversuche", 5)), int(app.get("login_max_fehlversuche_je_ip", 20)),
+                                  int(app.get("login_sperre_minuten", 15)) * 60)
+        self.vertrauter_proxy = app.get("vertrauter_proxy") is True     # nur dann X-Forwarded-For/-Proto auswerten
+        self.nur_https = app.get("nur_https") is True                    # Cookie immer „Secure“ (Betrieb hinter HTTPS)
         self.deal = DealSpeicher(db, cfg)                   # ValueError bei falscher Konfiguration (Abschnitt kalkulation)
         self.ankauf = AnkaufSpeicher(db, cfg, foto_ordner / "ankaeufe")    # im Fotoordner: mit gesichert
         self.reservierung_tage = reservierung_tage(cfg)     # ValueError mit verständlicher Meldung bei falscher Konfiguration
@@ -228,9 +236,7 @@ class Anfrage:
         h.send_header("Content-Type", typ)
         h.send_header("Content-Length", str(len(body)))
         h.send_header("Cache-Control", "no-store")
-        h.send_header("X-Content-Type-Options", "nosniff")
-        h.send_header("Referrer-Policy", "no-referrer")
-        for k, v in (kopf or {}).items():
+        for k, v in {**SICHERHEITS_KOPF, **(kopf or {})}.items():
             h.send_header(k, v)
         h.end_headers()
         h.wfile.write(body)
@@ -246,12 +252,29 @@ class Anfrage:
         self.senden(303, b"", "text/plain", {"Location": ziel})
 
     # ----- Zugriff
-    def pruefe_zugriff(self, aendernd: bool):
-        port = self.h.server.server_address[1]
-        host = self.h.headers.get("Host") or ""
-        lokal = host in (f"127.0.0.1:{port}", f"localhost:{port}")
-        if host not in self.k.erlaubte_hosts(port):
+    def client_ip(self) -> str:
+        """Absender; hinter einem ausdrücklich vertrauten Reverse-Proxy dessen letzter X-Forwarded-For-Eintrag."""
+        weitergeleitet = self.h.headers.get("X-Forwarded-For")
+        if self.k.vertrauter_proxy and weitergeleitet:
+            return weitergeleitet.split(",")[-1].strip()
+        return self.h.client_address[0]
+
+    def pruefe_host(self):
+        """Vor allem anderen (auch vor dem Lesen des Inhalts): nur freigegebene Hostnamen."""
+        if (self.h.headers.get("Host") or "") not in self.k.erlaubte_hosts(self.h.server.server_address[1]):
             raise Antwort(403, "Dieser Hostname ist nicht freigegeben (config.yaml → app → oeffentliche_url)", grund="zugriff")
+
+    def ist_lokal(self) -> bool:
+        """Wirklich dieser Rechner: Host-Kopf UND Absender Loopback UND keine Proxy-Kopfzeilen – ein Reverse-Proxy mit
+        Standard-Host (nginx ``proxy_pass http://127.0.0.1:8765``) macht so niemanden ohne Anmeldung zum Inhaber."""
+        port = self.h.server.server_address[1]
+        return (self.h.headers.get("Host") or "") in (f"127.0.0.1:{port}", f"localhost:{port}") \
+            and self.h.client_address[0] in ("127.0.0.1", "::1") \
+            and not any(self.h.headers.get(k) for k in ("X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto", "Forwarded"))
+
+    def pruefe_zugriff(self, aendernd: bool):
+        self.pruefe_host()
+        lokal = self.ist_lokal()
         team = self.k.team.hat_nutzer()
         if not team:
             if not lokal:
@@ -548,6 +571,48 @@ class Anfrage:
         log.info("Ankauf %s: %s durch %s", aid, art, self.nutzer["name"])
         return {"ok": True}
 
+    def anfrage_widerruf(self, anfrage_id: int) -> dict:
+        """Widerruf der Einwilligung (G0, ``datenrechte.widerruf``) – nur der Inhaber."""
+        try:
+            erg = datenrechte.widerruf(self.k.db, self.k.cfg, self.k.verkauf.foto_ordner.parent, anfrage_id, self.nutzer["id"])
+        except LookupError as e:
+            raise Antwort(404, str(e)) from e
+        except ValueError as e:
+            raise Antwort(409, str(e)) from e
+        log.info("Widerruf für Anfrage %s ausgeführt durch %s", anfrage_id, self.nutzer["name"])
+        return {"ok": True, **erg}
+
+    # ----- Anmeldung (G0: Bremse je IP und Name, scrypt außerhalb der globalen Sperre, Herkunftsprüfung)
+    def login(self, daten: dict):
+        k = self.k
+        if not (self.h.headers.get("Content-Type") or "").startswith("application/json"):
+            raise Antwort(415, "Anmeldung nur als JSON")
+        if self.h.headers.get("Sec-Fetch-Site") == "cross-site":
+            raise Antwort(403, "Anmeldung von fremden Seiten nicht erlaubt", grund="csrf")
+        herkunft = self.h.headers.get("Origin")
+        if herkunft and urlparse(herkunft).netloc not in k.erlaubte_hosts(self.h.server.server_address[1]):
+            raise Antwort(403, "Anmeldung von fremden Seiten nicht erlaubt", grund="csrf")
+        name, passwort, ip = str(daten.get("name") or "")[:100], str(daten.get("passwort") or ""), self.client_ip()
+        warten = k.bremse.wartezeit(ip, name)
+        if warten:
+            log.warning("Anmeldung gebremst: %r von %s (%s s)", name[:40], ip, warten)
+            raise Antwort(429, f"Zu viele Fehlversuche – bitte in {max(1, warten // 60)} Minute(n) erneut versuchen",
+                          {"warten_sek": warten})
+        with k.sperre:
+            nid, gespeichert = k.team.login_daten(name)
+        if not pruefe_passwort(passwort, gespeichert) or nid is None:      # teuer – bewusst ohne Sperre
+            k.bremse.fehlschlag(ip, name)
+            log.warning("Fehlgeschlagene Anmeldung: %r von %s", name[:40], ip)
+            time.sleep(1)
+            raise Antwort(401, "Name oder Passwort falsch")
+        with k.sperre:
+            token = k.team.sitzung_anlegen(nid)
+        k.bremse.erfolg(ip, name)
+        log.info("Anmeldung: %s von %s", name[:40], ip)
+        https = k.nur_https or (k.vertrauter_proxy and self.h.headers.get("X-Forwarded-Proto") == "https")
+        return self.json(200, {"ok": True}, {"Set-Cookie": f"{COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; "
+                                                           f"Max-Age={30 * 86400}{'; Secure' if https else ''}"})
+
     # ----- Deal Intelligence (Phase E)
     def betrag_aus_query(self) -> int | None:
         wert = ((self.query.get("betrag") or [""])[0]).strip()
@@ -731,14 +796,6 @@ class Anfrage:
         k, p = self.k, self.pfad
         text = str(daten["text"])[:5000] if daten.get("text") else None
         betrag = daten.get("betrag") if isinstance(daten.get("betrag"), int) else None
-        if p == "/api/login":
-            token = k.team.anmelden(str(daten.get("name") or ""), str(daten.get("passwort") or ""))
-            if not token:
-                self.verzoegern = True                        # Raten verlangsamen (ohne andere zu blockieren)
-                raise Antwort(401, "Name oder Passwort falsch")
-            sicher = "; Secure" if self.h.headers.get("X-Forwarded-Proto") == "https" else ""
-            return self.json(200, {"ok": True}, {"Set-Cookie": f"{COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; "
-                                                               f"Max-Age={30 * 86400}{sicher}"})
         if p == "/api/logout":
             if self.sitzung:
                 k.team.abmelden(self.sitzung)
@@ -813,6 +870,9 @@ class Anfrage:
                 raise Antwort(404, str(fehler)) from fehler
             kid = k.deal.speichern(e, erg, anlass="gespeichert", anfrage_id=int(m.group(1)), standort_id=standort, nutzer_id=self.nutzer["id"])
             return self.json(200, {"id": kid})
+        if m := re.fullmatch(r"/api/verkaufsanfrage/(\d+)/widerruf", p):
+            self.nur_inhaber()
+            return self.json(200, self.anfrage_widerruf(int(m.group(1))))
         if m := re.fullmatch(r"/api/verkaufsanfrage/(\d+)/besichtigung", p):
             return self.json(200, self.anfrage_besichtigung(int(m.group(1)), daten))
         if m := re.fullmatch(r"/api/ankauf/(\d+)/(vertrag|uebergabe|kosten|verkauf|storno|dokument)", p):
@@ -928,6 +988,25 @@ class Anfrage:
         return {**neu, "spanne": vk.spanne_fuer_verkaeufer(b, k.cfg)}
 
     def verkaufsanfrage_aendern(self, anfrage_id: int, art: str, daten: dict) -> dict:
+        """Ändern nur durch den Bearbeiter, bei freier Anfrage durch jeden im Team (Übernehmen macht zum Bearbeiter), immer durch den
+        Inhaber. Prüfung und Änderung in EINER Transaktion – zwei Kollegen können eine freie Anfrage nicht gleichzeitig übernehmen."""
+        with self.k.db.transaktion():
+            self._anfrage_recht(anfrage_id, art, daten)
+            return self._verkaufsanfrage_aendern(anfrage_id, art, daten)
+
+    def _anfrage_recht(self, anfrage_id: int, art: str, daten: dict):
+        if art == "freigabe" or not self.team_aktiv or self.nutzer["rolle"] == "inhaber":
+            return
+        r = self.k.db.con.execute("SELECT v.bearbeiter_id, n.name FROM verkaufsanfragen v LEFT JOIN nutzer n ON n.id=v.bearbeiter_id "
+                                  "WHERE v.id=?", (anfrage_id,)).fetchone()
+        if not r:
+            raise Antwort(404, "Anfrage nicht gefunden")
+        abgeben = art == "uebernehmen" and daten.get("abgeben") is True
+        if (r["bearbeiter_id"] and r["bearbeiter_id"] != self.nutzer["id"]) or (abgeben and r["bearbeiter_id"] != self.nutzer["id"]):
+            raise Antwort(403, f"Diese Anfrage bearbeitet {r['name'] or 'niemand'} – ändern oder übernehmen kann sie nur der Bearbeiter "
+                               "oder der Inhaber", grund="recht")
+
+    def _verkaufsanfrage_aendern(self, anfrage_id: int, art: str, daten: dict) -> dict:
         k, nid = self.k, self.nutzer["id"]
         try:
             if art == "status":
@@ -1002,7 +1081,7 @@ class Anfrage:
         k = self.k
         z = k.zeile(str(daten.get("anzeige_id")))
         ad_id = z["a"]["id"]
-        termin, adresse = self._termin(daten.get("termin")), (daten.get("adresse") or "").strip() or None
+        termin, adresse = self._termin(daten.get("termin")), str(daten.get("adresse") or "").strip()[:200] or None
         zustaendig = self._zustaendig(daten.get("zustaendig_id"))              # prüfen, bevor etwas geändert wird (400)
         basis = basis_fuer(z, k.cfg)
         status = k.db.status_von(ad_id) or "neu"
@@ -1042,7 +1121,7 @@ class Anfrage:
                                   [b["basis"].get("fahrzeug", ""), termin, b.get("adresse") or b["basis"].get("ort") or ""])
 
     def b_planen(self, b: dict, daten: dict) -> dict:
-        termin, adresse = self._termin(daten.get("termin")), (daten.get("adresse") or "").strip() or None
+        termin, adresse = self._termin(daten.get("termin")), str(daten.get("adresse") or "").strip()[:200] or None
         self.k.team.besichtigung_planen(b["id"], termin, adresse, self._zustaendig_planen(b, daten.get("zustaendig_id")))
         neu = self.k.team.besichtigung(b["id"])
         if neu["zustaendig_id"] != b["zustaendig_id"]:
@@ -1061,6 +1140,8 @@ class Anfrage:
         return {"ergebnis": ergebnis, "version": version, "konflikt": konflikt}
 
     def b_foto(self, b: dict, daten: dict) -> dict:
+        if daten.get("mangel_key") is not None and not isinstance(daten["mangel_key"], str):
+            raise Antwort(400, "mangel_key muss Text sein")
         try:
             return self.k.team.foto_speichern(b["id"], _bild_bytes(str(daten.get("bild") or "")),
                                               daten.get("mangel_key") or None, self.nutzer["id"])
@@ -1152,8 +1233,14 @@ def bearbeite(handler, k: Kontext, methode: str):
         if methode == "GET" and a.statisch():
             return
         daten = {}
+        a.pruefe_host()                        # vor dem Lesen des Inhalts: fremde Hosts bekommen nicht einmal das zu sehen
         if methode == "POST":
-            laenge = int(handler.headers.get("Content-Length") or 0)
+            try:
+                laenge = int(handler.headers.get("Content-Length") or 0)
+            except ValueError:
+                raise Antwort(400, "ungültige Länge") from None
+            if laenge < 0:
+                raise Antwort(400, "ungültige Länge")
             if laenge > (MAX_FOTO if a.pfad.endswith(("/foto", "/dokument")) else MAX_JSON):
                 raise Antwort(413, "Anfrage zu groß")
             roh = handler.rfile.read(laenge) if laenge else b""      # Übertragung ohne Sperre
@@ -1163,6 +1250,8 @@ def bearbeite(handler, k: Kontext, methode: str):
                 raise Antwort(400, "ungültige Anfrage") from e
             if not isinstance(daten, dict):
                 raise Antwort(400, "ungültige Anfrage")
+            if a.pfad == "/api/login":
+                return a.login(daten)              # eigene Sperrführung (scrypt ohne globale Sperre)
         with k.sperre:
             try:
                 a.pruefe_zugriff(aendernd=methode == "POST" and a.pfad != "/api/login")

@@ -415,3 +415,34 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
      automatische Kalibrierung; Parameter werden bewusst in `config.yaml` nachgestellt.
 * **Folgen / offen:** Vertragsmuster vor Einsatz juristisch prüfen lassen. Kein Abschluss ohne Netz (wie bisher). Gekaufte Inserate
   ohne Handy-Besichtigung (nur Status „gekauft“) erhalten keinen Vorgang. Fahrzeugidentität rückt auf v10.
+
+## ADR-030 – Phase G0: Voraussetzungen für Skalierung – Härtung, Datenrechte, API-Rahmen · vorgeschlagen (16.10.2026)
+
+* **Kontext:** 3.0-Analyse Phase G (Skalierung/B2B): „Freigegebene API-Quellen, Echtzeit-Betrieb, mandantenfähige Nutzung und
+  optionale Abrechnung. Abhängigkeit: Sicherheitsprüfung, Datenrechte und belastbarer Pilotbetrieb.“ Betreiberentscheidungen
+  16.10.2026: erst Voraussetzungen (G0), dann Mandantenfähigkeit, je eigener PR; Echtzeit per SSE; Abrechnung nur als
+  Nutzungszähler; **keine** konkrete API-Quelle anbinden, nur den Rahmen. Eine unabhängige Sicherheitsprüfung (Rolle
+  `qa-security-reviewer`) urteilte: interner Tailnet-Betrieb mit Auflagen vertretbar, öffentlicher oder mandantenfähiger
+  Betrieb **abgelehnt**, bis u. a. Login-Bremse, Proxy-Erkennung, Bearbeiterrecht und Löschweg umgesetzt sind.
+* **Entscheidung:**
+  1. **Härtung ohne neue Dienste** (`wmscout/web/sicherheit.py`): Login-Bremse im Speicher je (Gerät, Name) und je Gerät (429),
+     gleiche Rechenzeit für unbekannte Namen, Login nur als JSON mit Origin- und Sec-Fetch-Site-Prüfung, Sicherheits-Header
+     (CSP – vorerst mit `'unsafe-inline'` –, `frame-ancestors 'none'`, nosniff, no-referrer), kein Server-Versionskopf,
+     Lesezeitlimit 30 s, Host-Prüfung **vor** dem Lesen des Inhalts, negative/ungültige Längen → 400.
+  2. **„Lokal“ heißt wirklich lokal:** Host-Kopf und Loopback-Absender und **keine** Proxy-Kopfzeilen. `X-Forwarded-*` zählt nur
+     mit `app.vertrauter_proxy: true`; `app.nur_https` erzwingt das Secure-Cookie.
+  3. **Bearbeiterrecht:** Eine Verkaufsanfrage mit Bearbeiter ändert nur dieser oder der Inhaber (Prüfung und Änderung in einer
+     Transaktion). Notizen bleiben teamweit frei (bestehender Ablauf); Lesen bleibt firmenweit – Trennung zwischen Firmen ist
+     Aufgabe von G2.
+  4. **Datenrechte:** Register `docs/DATENRECHTE.md`; **Widerruf** einer Verkaufsanfrage (Inhaber, Web und CLI) anonymisiert den
+     Verkäufer (nur ohne weitere Anfrage), löscht Freitexte, Notizverlauf, Fotos samt Dateien und schwärzt die Besichtigung,
+     bricht laufende Auktionen ab und nimmt die Freigabe zurück. Mit Ankaufsvorgang – auch storniert – wird verweigert
+     (Aufbewahrungspflichten, Einzelfall klären).
+     Fotos verlieren beim Speichern EXIF/GPS (JPEG, PNG); Kalkulationen frieren Freitexte ohne Kontaktdaten ein; der
+     Offline-Speicher der Handy-App nimmt nur eine Positivliste auf und wird bei 401 geleert; Links aus fremden Seiten nur http(s).
+  5. **API-Rahmen** `wmscout/quellen/api_rahmen.py`: `ApiQuelle` ist standardmäßig nicht freigegeben, verlangt den Zugang per
+     Umgebungsvariable, nur HTTPS, Kontingent je Lauf, Pause, bricht bei 401/403/429 **ohne Wiederholung** ab. Keine Quelle aktiv.
+  6. **Pilotbetrieb** nur nach `docs/PILOTBETRIEB.md` (TLS-Proxy, HSTS, Ratenlimits, verschlüsselte Sicherungen außer Haus,
+     pip-audit, Datenschutzerklärung, Löschfristen).
+* **Folgen / offen:** Bremse beginnt nach Neustart neu (Proxy-Limits ergänzen). Offen: CSP-Nonce, Leerlauf-Zeitlimit der
+  Sitzung, CSRF-Token je Sitzung, Audit-Protokoll (Schema v10) und Rechte je Ankaufsschritt (G0b), Auskunft Art. 15.

@@ -13,6 +13,8 @@ Detailseite: `#viewad-…`-Elemente; die Merkmalsliste kennt beide Formen (Label
 """
 from __future__ import annotations
 
+from ..basis import http_url
+
 import json
 import re
 from urllib.parse import urljoin
@@ -150,7 +152,7 @@ def _parse_treffer_neu(art, ld: tuple[dict, dict]) -> dict | None:
 
     return {
         "id": ad_id,
-        "url": urljoin(BASIS, href),
+        "url": http_url(urljoin(BASIS, href)),
         "titel": titel,
         "preis": preis,
         "vb": vb,
@@ -189,7 +191,7 @@ def _parse_treffer_alt(art) -> dict | None:
 
     return {
         "id": ad_id,
-        "url": urljoin(BASIS, href),
+        "url": http_url(urljoin(BASIS, href)),
         "titel": titel,
         "preis": preis,
         "vb": vb,

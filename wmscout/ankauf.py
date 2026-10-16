@@ -22,7 +22,7 @@ from . import verkauf as vk
 from .bewertung import ergebnis
 from .datenbank import Datenbank
 from .deal import DealSpeicher
-from .team import MAX_FOTO_BYTES, bild_endung
+from .team import MAX_FOTO_BYTES, bild_endung, ohne_metadaten
 
 STATUS = {"gekauft": "gekauft – Vertrag/Übergabe offen", "uebergeben": "im Bestand", "verkauft": "verkauft", "storniert": "storniert"}
 DOKUMENTARTEN = {"vertrag": "Kaufvertrag (unterschrieben)", "uebergabe": "Übergabe", "sonstiges": "Sonstiges"}
@@ -226,7 +226,7 @@ class AnkaufSpeicher:
         ordner = self.ordner / str(int(aid))
         ordner.mkdir(parents=True, exist_ok=True)
         name = f"{uuid.uuid4().hex}.{endung}"
-        (ordner / name).write_bytes(daten)
+        (ordner / name).write_bytes(ohne_metadaten(daten))            # Vertragsfoto: kein GPS/EXIF (G0)
         with self.db.transaktion():
             did = self.con.execute("INSERT INTO ankauf_dokumente (ankauf_id, art, datei, nutzer_id, erstellt_am) VALUES (?,?,?,?,?)",
                                    (aid, art, name, nutzer_id, _jetzt())).lastrowid

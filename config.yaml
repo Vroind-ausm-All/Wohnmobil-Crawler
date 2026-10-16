@@ -200,6 +200,12 @@ app:
   # z. B. "https://buero-pc.tail1234.ts.net". Wird in WhatsApp-Nachrichten verlinkt und als Host freigegeben.
   oeffentliche_url: ""
   erlaubte_hosts: []               # weitere Hostnamen, über die die App erreichbar sein darf
+  # Härtung (Phase G0, docs/PILOTBETRIEB.md). Bremse gegen Passwort-Raten: Fehlversuche je Gerät+Name bzw. je Gerät.
+  login_max_fehlversuche: 5
+  login_max_fehlversuche_je_ip: 20
+  login_sperre_minuten: 15
+  vertrauter_proxy: false          # true NUR hinter eigenem Reverse-Proxy: dann zählen X-Forwarded-For/-Proto
+  nur_https: false                 # true, wenn die App nur über HTTPS erreichbar ist: Anmelde-Cookie immer „Secure“
 
 # --- 7b. Team ---------------------------------------------------
 # Gilt nur, wenn Nutzer angelegt sind (python scout.py nutzer anlegen …). Wer ein Inserat übernimmt, reserviert es für
