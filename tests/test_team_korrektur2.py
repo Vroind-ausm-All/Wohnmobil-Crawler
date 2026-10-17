@@ -218,9 +218,9 @@ def test_http_erzwingen_bei_verhandlung_und_besichtigung_uebernimmt_und_protokol
         assert anna("POST", "/api/status", {"id": x, "status": "besichtigung", "erzwingen": True})[0] == 200
         assert len(erzwungen(caplog)) == 3
         # Besichtigung auf einem abgeschlossenen Inserat des Kollegen: Status/Bearbeiter bleiben → nicht als erzwungen melden
-        assert ben("POST", "/api/status", {"id": w, "status": "gekauft"})[0] == 200
+        assert ben("POST", "/api/status", {"id": w, "status": "abgesagt"})[0] == 200                      # „gekauft“ nur Inhaber (P1-15)
         assert anna("POST", "/api/besichtigung", {"anzeige_id": w, "erzwingen": True})[0] == 200
-        assert bearbeitung(db, w)[0] == bi and status_von(db, w) == "gekauft" and len(erzwungen(caplog)) == 3
+        assert bearbeitung(db, w)[0] == bi and status_von(db, w) == "abgesagt" and len(erzwungen(caplog)) == 3
         # Übernehmen-Endpunkt: nur bei tatsächlichem Wechsel
         a = ids_der_liste(anna, "alle", n=5)[4]
         assert anna("POST", f"/api/bearbeitung/{a}/uebernehmen", {"erzwingen": True})[0] == 200               # frei: nichts zu erzwingen
@@ -333,7 +333,8 @@ def test_http_seitenimport_macht_neue_dublette_sofort_wirksam(cfg, db, importier
         assert b["id"] not in dubletten_ids(db).get(a["id"], [])
         (ordner / "suche.html").write_text(such_html([b]), encoding="utf-8")
         (ordner / "anzeige.html").write_text(detailseite(b), encoding="utf-8")                              # km kommt von der Detailseite
-        s, stat, _ = carl("POST", "/api/import", {})
+        assert carl("POST", "/api/import", {})[0] == 403                                                 # Import nur Inhaber (P1-15)
+        s, stat, _ = anmelden(srv, "Anna")("POST", "/api/import", {})
         assert s == 200 and stat["neu"] == 1 and stat["detailseiten"] == 1, stat
         assert dubletten_ids(db)[a["id"]] == [b["id"]]
         s, antwort, _ = carl("POST", f"/api/bearbeitung/{b['id']}/uebernehmen", {})

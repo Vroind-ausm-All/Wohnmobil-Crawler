@@ -149,11 +149,12 @@ def test_http_besichtigung_auf_abgeschlossenem_inserat_eines_kollegen(server, te
     anna, ben, carl = (anmelden(server, n) for n in ("Anna", "Ben", "Carl"))
     x = ids_der_liste(ben, "alle", n=1)[0]
     ben("POST", f"/api/bearbeitung/{x}/uebernehmen", {})
-    ben("POST", "/api/status", {"id": x, "status": "gekauft"})
+    assert ben("POST", "/api/status", {"id": x, "status": "gekauft"})[0] == 403        # P1-15: „gekauft“ nur Inhaber/Abschluss
+    assert ben("POST", "/api/status", {"id": x, "status": "abgesagt"})[0] == 200        # abgeschlossen, Ben hält das Inserat
     s, antwort, _ = carl("POST", "/api/besichtigung", {"anzeige_id": x})
-    assert s == 409 and team.besichtigungen(offen=False, anzeige_id=x) == [] and status_von(db, x) == "gekauft"
-    assert anna("POST", "/api/besichtigung", {"anzeige_id": x})[0] == 200               # Inhaber darf, Status bleibt „gekauft“
-    assert status_von(db, x) == "gekauft" and bearbeitung(db, x)[0] == team.ids["Ben"]
+    assert s == 409 and team.besichtigungen(offen=False, anzeige_id=x) == [] and status_von(db, x) == "abgesagt"
+    assert anna("POST", "/api/besichtigung", {"anzeige_id": x})[0] == 200               # Inhaber darf, Status bleibt
+    assert status_von(db, x) == "abgesagt" and bearbeitung(db, x)[0] == team.ids["Ben"]
 
 
 def test_http_verhandlung_und_besichtigung_beachten_dubletten(server, team, db):
