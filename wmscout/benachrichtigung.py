@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import smtplib
+import threading
 from email.message import EmailMessage
 from urllib.parse import quote
 
@@ -109,6 +110,14 @@ class WhatsAppCloud:
         except requests.RequestException as e:
             log.warning("WhatsApp an %s fehlgeschlagen: %s", _maskiert(an), type(e).__name__)
             return False
+
+    def sende_im_hintergrund(self, an: str | None, vorlage: str | None, parameter: list[str]) -> threading.Thread | None:
+        """Für Aufrufe aus einer Web-Anfrage (P1-05): der Netzaufruf (bis 20 s) läuft nie unter der globalen Sperre der App."""
+        if not self.bereit or not vorlage or not whatsapp_nummer(an):
+            return None
+        t = threading.Thread(target=self.sende, args=(an, vorlage, parameter), daemon=True, name="whatsapp")
+        t.start()
+        return t
 
     def neue_treffer(self, zeilen: list[dict]) -> int:
         """Nach einem Suchlauf: bei neuen Treffern mit fertigem Anschreiben alle Empfänger informieren."""

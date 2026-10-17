@@ -1178,7 +1178,7 @@ class Anfrage:
         z = b["zustaendig"]
         if z and z["id"] != self.nutzer["id"] and z.get("telefon"):
             termin = datetime.fromisoformat(b["termin"]).strftime("%d.%m. %H:%M") if b.get("termin") else "offen"
-            self.k.whatsapp.sende(z["telefon"], self.k.cfg.get("whatsapp", {}).get("vorlage_zuweisung"),
+            self.k.whatsapp.sende_im_hintergrund(z["telefon"], self.k.cfg.get("whatsapp", {}).get("vorlage_zuweisung"),
                                   [b["basis"].get("fahrzeug", ""), termin, b.get("adresse") or b["basis"].get("ort") or ""])
 
     def b_planen(self, b: dict, daten: dict) -> dict:

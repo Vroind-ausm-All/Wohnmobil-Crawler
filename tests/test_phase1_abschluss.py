@@ -111,3 +111,37 @@ def test_cli_inserat_anonymisieren(cfg, db, importiert, team, tmp_path):
     assert r.returncode == 0 and "anonymisiert" in r.stdout, r.stderr
     r = _scout(cfg, tmp_path, "inserat", "anonymisieren", "--aelter-als", "6", "--bestaetigt")
     assert r.returncode == 0 and "0 Inserat(e)" in r.stdout, r.stderr
+
+
+# ---------------------------------------------------------------- P1-05
+def test_langsamer_whatsapp_versand_blockiert_keine_anfrage(server, team, db, monkeypatch):
+    import threading
+    import time
+    k = server.RequestHandlerClass.kontext
+    gestartet, frei = threading.Event(), threading.Event()
+
+    class LangsamerVersand:
+        bereit = True
+
+        def sende(self, an, vorlage, parameter):
+            gestartet.set()
+            frei.wait(10)                                        # simuliert einen hängenden WhatsApp-Server
+            return True
+
+    langsam = LangsamerVersand()
+    monkeypatch.setattr(k.whatsapp, "sende", langsam.sende)
+    monkeypatch.setattr(type(k.whatsapp), "bereit", property(lambda self: True))
+    k.cfg.setdefault("whatsapp", {})["vorlage_zuweisung"] = "besichtigung_zugewiesen"
+    db.con.execute("UPDATE nutzer SET telefon='+491712222222' WHERE name='Ben'")
+    db.con.commit()
+    anna, carl = anmelden(server, "Anna"), anmelden(server, "Carl")
+    x = ids_der_liste(anna, "alle", n=1)[0]
+    t0 = time.monotonic()
+    s, _, _ = anna("POST", "/api/besichtigung", {"anzeige_id": x, "zustaendig_id": team.ids["Ben"]})
+    dauer = time.monotonic() - t0
+    try:
+        assert s == 200 and gestartet.wait(5) and dauer < 3                          # Antwort, während der Versand noch hängt
+        t1 = time.monotonic()
+        assert carl("GET", "/api/team")[0] == 200 and time.monotonic() - t1 < 3      # andere Anfragen laufen weiter
+    finally:
+        frei.set()
