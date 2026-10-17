@@ -130,6 +130,7 @@
         '<a class="kachel" href="#/liste/bereit"><b>' + d.bereit + "</b><span>Anschreiben bereit</span></a>" +
         '<a class="kachel" href="#/liste/nachfassen"><b>' + d.nachfassen + "</b><span>Nachfassen</span></a>" +
         '<a class="kachel" href="#/liste/arbeit"><b>' + d.arbeit + "</b><span>In Arbeit</span></a></div>" +
+        (textDarf() ? '<div class="reihe"><a class="knopf primaer" href="#/einlesen">＋ Inserat einlesen (Link + Text)</a></div>' : "") +
         '<p><a class="knopf klein" href="/anfragen">Verkaufsanfragen</a> <a class="knopf klein" href="/verkaufen">+ Anfrage erfassen</a></p>' +
         "<h2>Besichtigungen heute</h2>" + (heutige.length ? heutige.map(terminKarte).join("") : '<p class="leise">Keine Termine für heute.</p>') +
         (d.termine.length > heutige.length ? '<p><a href="#/termine">Alle ' + d.termine.length + " offenen Besichtigungen →</a></p>" : "") +
@@ -139,6 +140,20 @@
           '<div class="reihe"><button class="knopf" data-aktion="suchen">↻ Neue Anzeigen suchen</button></div>') +
         (S.ich.team ? '<p class="leise mitte"><a href="#" data-aktion="abmelden">Abmelden</a></p>' : "");
     });
+  }
+
+  // Inserat einlesen (P2-05): jedes Teammitglied, nie Standort-Zugänge (der Server prüft die Rolle ohnehin). Online-Aktion, nichts wird gepuffert.
+  function textDarf() { var n = S.ich && S.ich.nutzer; return !!n && (n.rolle === "inhaber" || n.rolle === "mitarbeiter"); }
+  function einlesen() {
+    if (!textDarf()) { inhalt.innerHTML = '<p class="hinweis warn">Inserate einlesen dürfen nur Inhaber und Mitarbeiter.</p>'; return Promise.resolve(); }
+    if (!window.TextImport) { inhalt.innerHTML = '<p class="hinweis warn">Das Formular konnte nicht geladen werden – bitte die Seite neu laden.</p>'; return Promise.resolve(); }
+    inhalt.innerHTML = '<h1>Inserat einlesen</h1><div id="ti-wurzel"></div>';
+    var f = window.TextImport.baue(document.getElementById("ti-wurzel"), {
+      post: function (pfad, daten) { return api(pfad, daten); },
+      aktionen: function (d) { return [{ text: "Fahrzeug öffnen", href: d.fahrzeug_url }, { text: "Zur Startseite", href: "/m#/heute" }]; }
+    });
+    f.fokus();
+    return Promise.resolve();
   }
 
   function terminKarte(b) {
@@ -661,6 +676,7 @@
     else if (teile[0] === "besichtigung" && teile[2] === "abschluss") seite = abschluss(teile[1]);
     else if (teile[0] === "besichtigung") seite = besichtigung(teile[1]);
     else if (teile[0] === "termine") seite = termine();
+    else if (teile[0] === "einlesen") seite = einlesen();
     else seite = heute();
     window.scrollTo(0, 0);
     seite.catch(function (e) {

@@ -38,7 +38,10 @@ class Lesung:
     art: 'suche', 'detail' – oder 'unbekannt'/'detail_ohne_id' (nichts zu speichern; `hinweise` nennt den Grund).
     art_filter: Fahrzeugart-Angaben der Suchseite (bestätigter Filter bzw. vorläufiger Hinweis); None = keine.
     haupttreffer: Anzeigen-IDs, für die der Art-Filter gilt (nur die Haupttabelle); None = keine.
-    plattform: Plattform der gelesenen Seite, soweit erkannt (für Meldungen)."""
+    plattform: Plattform der gelesenen Seite, soweit erkannt (für Meldungen).
+    nur_leere_felder: bereits gespeicherte Felder des Inserats bleiben (der Kanal liefert nur grobe, heuristisch gelesene Werte); leere
+    werden gefüllt, der Preis läuft wie immer über Preis- und Beobachtungshistorie.
+    preis_status: nur Text-Eingang: 'eingetragen' (vom Nutzer), 'text' (sicher erkannt), 'unsicher' oder 'fehlt' (dann ohne Preis)."""
 
     art: str
     inserate: list[Inserat] = field(default_factory=list)
@@ -46,6 +49,8 @@ class Lesung:
     art_filter: SuchseitenArt | None = None
     haupttreffer: frozenset[str] | None = None
     plattform: str | None = None
+    nur_leere_felder: bool = False
+    preis_status: str | None = None
 
 
 @runtime_checkable

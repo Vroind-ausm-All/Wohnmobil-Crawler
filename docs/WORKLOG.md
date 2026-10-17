@@ -6,6 +6,28 @@ Wert „–“.
 
 ---
 
+## P2-05 – Import per URL + eingefügtem Text, Desktop und Handy (17.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Backend `source-integrations`, Oberfläche `scout-ui-engineer`, zwei QA-Runden `qa-security-reviewer`;
+  Abschluss (Tests, Doku, PR) Orchestrator. Die dritte Korrekturrunde wurde auf Wunsch des Betreibers ohne weitere QA-Runde beendet.
+- **Geänderte Dateien:** `wmscout/eingang/text.py` (neu: Adressprüfung, Bereinigung, Felder, Gesuche), `wmscout/eingang/basis.py`
+  (`Lesung.nur_leere_felder`), `wmscout/importer.py`, `wmscout/datenbank.py` (`nur_leere`), `wmscout/web/api.py`
+  (`POST /api/import/text`), `wmscout/web/live.py`, `wmscout/web/static/textimport.js/.css` (neu), `mobil.js`, `sw.js` (wm-scout-8),
+  `vorlagen/report.html`, `vorlagen/mobil.html`, Tests `test_text_import.py`, `test_text_import_korrektur.py`, `test_text_import_r2.py`,
+  `test_text_import_oberflaeche.py` (neu), Doku README, QUELLEN, SOURCES, ROLLEN, DATENRECHTE, ARCHITECTURE, HANDY-APP, ADR-038.
+- **Implementierte Funktionen:** Formular „Inserat einlesen (Link + Text)“ auf Desktop und Handy für Inhaber und Mitarbeiter; die
+  Adresse wird nie abgerufen, nur Plattform und ID werden daraus gelesen. Kontaktdaten werden vor dem Speichern entfernt.
+  Preise nur, wenn sicher erkannt (VB, Preis-Label, allein in einer Zeile) oder vom Nutzer im Formular eingetragen – sonst kein Preis
+  und keine Preisänderung, mit Hinweis. Gesuche werden nicht gespeichert. Angaben aus Suchlauf, Seiten- und Mail-Import bleiben
+  erhalten; ein Text-Import ergänzt nur Leeres und den Preis. Schalter `eingaenge.text`.
+- **Tests:** siehe TEST-REPORT (Gesamtsuite vom Orchestrator nachgestellt).
+- **Review-Ergebnis:** QA Runde 1 ABLEHNUNG (K1 falscher Preis aus Fließtext, H1 Regex-Laufzeit 17 s) → behoben; Runde 2 ABLEHNUNG
+  (R2-K1 geschätzter Preis überschreibt bestätigten, R2-H1 „24 900“ → 900) → in Runde 3 behoben (Preisfeld, keine geschätzten Preise,
+  Tausenderleerzeichen). Runde 3 nicht mehr von der QA nachgeprüft.
+- **Bekannte Risiken:** nur nachgebaute Texte; Namen im Fließtext ohne Anker werden nicht erkannt (DATENRECHTE.md); Gesuch- und
+  Preisregeln doppelt zu P2-06 (Backlog P2-05e).
+- **Nächster sinnvoller Schritt:** P2-06 (E-Mail-Eingang) auf diesen Stand bringen und abschließen.
+
 ## P2-04 – Quellen und Eingänge schaltbar (17.10.2026) · Status: REVIEW
 
 - **Verantwortlicher Agent:** Umsetzung `source-integrations`; QA `qa-security-reviewer`; Prüfung und Doku Orchestrator.
