@@ -581,3 +581,42 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   Der Kanalwert wird nicht aus dem Eingang geraten, der Aufrufer nennt ihn. `Datenbank.speichere_treffer` prüft Plattformen nicht
   selbst (Suchlauf und Altbestand); die Prüfung sitzt im `Importer`. Ein E-Mail-Eingang braucht eigene Regeln, was er aus
   Benachrichtigungen lesen darf (ADR-010: verlinkte Anzeigen werden nicht nachgeladen).
+
+## ADR-036 – Quellen und Eingänge schaltbar: Freigabe im Code, Aktivierung in Tabelle bzw. config · gilt (17.10.2026)
+
+* **Kontext:** Die Code-Freigabe (`Quelle.freigegeben`) wurde geprüft, aber ein Suchlauf mit der Standard-Konfiguration endete
+  deshalb mit einem Fehlertext „nicht freigegeben“. Die Spalte `quellen.aktiv` (Schema v4) las nur der `EreignisSpeicher` für
+  `api`/`stream`; Seitenimport und der kommende Text-/E-Mail-Eingang (P2-05/P2-06) hatten keinen Schalter.
+* **Entscheidung:**
+  1. **Zwei Ebenen, strikt getrennt:** Die *Freigabe* (Nutzungsrechte, Regel 12) steht im Code und ändert nur ein Entwickler nach
+     Klärung (`docs/SOURCES.md`) – eine bewusste Code-Änderung, die der Betreiber per Pull Request prüft. Der *Schalter* gehört dem
+     Betreiber: für Pull-Quellen in der Tabelle `quellen` (`python scout.py quellen an|aus KENNUNG`), für Eingänge in
+     `config.yaml → eingaenge → seiten|text|email → aktiv`. Eine Pull-Quelle läuft, sobald sie im Code freigegeben ist und in
+     `suchen` steht; abgeschaltet wird sie mit `quellen aus`. `quellen an` **und** `quellen aus` werden für nicht freigegebene
+     Quellen abgelehnt (Exit ≠ 0, Tabelle unverändert): „an“ wäre eine Umgehung, „aus“ ließe sich als 0/0 nicht von „nicht
+     entschieden“ unterscheiden, und eine spätere Code-Freigabe liefe ohne Zustimmung. Ein von Hand gesetztes `aktiv=1` gibt nichts frei.
+  2. **Übersprungen ist kein Fehler:** `Importer.lauf` prüft je Quelle vor dem Abruf und meldet `uebersprungen`
+     (`[{quelle, grund}]`, Grund „nicht freigegeben“ oder „deaktiviert“, eine Meldung je Quelle). `fehler` bleibt Auffälligkeiten
+     (Layout, Sperre, Netz) vorbehalten und ist ohne solche `None`. Der Detailabruf des Suchlaufs betrifft nur laufende Quellen;
+     `Importer.details()` ohne Einschränkung sperrt nicht freigegebene Quellen weiterhin mit `QuellenFehler`.
+  3. **Fehlende Zeile bzw. Seed-Zeile = „nicht entschieden“:** Schema v4 legt `kleinanzeigen` mit freigegeben=0, aktiv=0 an, das
+     ist von einem ausdrücklichen „aus“ nicht zu unterscheiden. Deshalb entscheidet bei fehlender oder 0/0-Zeile der Code
+     (freigegeben ⇒ läuft), damit bestehende Installationen und Testquellen weiterlaufen; `quellen an|aus` schreibt die
+     Entscheidung (nur für im Code freigegebene Quellen) mit `freigegeben` = 1, `aktiv` = Wunsch und `zugriffsart` der Klasse, danach
+     gilt die Tabelle. Keine Schemaänderung.
+  3a. **Push-Kanäle `api`/`stream`** (`EreignisSpeicher`): Tabelle (`freigegeben`, `aktiv`, Zugriffsart `api`) *und*, wenn für die
+     Plattform ein Adapter in `quellen.QUELLEN` steht, dessen Code-Freigabe. Pull-Suchlauf: Code + Tabelle.
+  4. **Eingänge:** Hilfsfunktion `schalter.eingang_aktiv(cfg, name)`; Standard seiten=an, text=an, email=aus; ungültige Werte
+     scheitern beim Start (`scout.py`), wie `datenschutz`. Abgeschaltet liest der Eingang nichts, Dateien bleiben liegen
+     (CLI: Hinweis, Exit 0; API: 409 mit `grund: deaktiviert`, die Oberfläche zeigt den Hinweis 15 s als Warnung;
+     `Importer.importiere_seiten` wirft `EingangDeaktiviert`). Die Konfiguration wird beim Start jedes Kontexts geprüft
+     (`scout.py`, `Kontext`, bei Mandanten `mandanten.alle` mit Mandantenname im Fehler).
+  5. **Detailabruf im Suchlauf:** `Datenbank.ohne_details(limit, kennungen)` filtert nach laufenden Quellen schon in SQL, Zeilen
+     gesperrter Quellen verbrauchen das LIMIT nicht und werden nicht mitgezählt.
+* **Alternativen:** Schalter nur in `config.yaml` (zwei Wahrheiten neben `quellen`, Tabelle bliebe tot); Seed-Zeile per
+  Migration ändern (Schemaänderung ohne Not, bestehende Datenbanken behielten die alte Zeile); alle Fehler weiter als `fehler`
+  melden (die Standard-Konfiguration endete rot).
+* **Folgen / offen:** Der Report von `scout.py lauf` (und die CSV) weist übersprungene Quellen nicht aus – sie stehen nur im Log
+  und in der Meldung des App-Suchlaufs (QA-Befund F8, bewusst offen). Das CLI schreibt `config.yaml` nicht; Eingänge werden von Hand (oder `config.local.yaml`) geschaltet.
+  P2-05 prüft vor dem Text-Eingang `eingang_pruefen(cfg, "text")`, P2-06 für `email`. Die Oberfläche zeigt `uebersprungen` nur
+  in der Meldung des App-Suchlaufs.

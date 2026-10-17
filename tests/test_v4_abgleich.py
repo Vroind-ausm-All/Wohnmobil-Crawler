@@ -7,11 +7,13 @@ from datetime import datetime, timezone
 
 import pytest
 
+from wmscout import quellen
 from wmscout.datenbank import IMPORT_SUCHE, Datenbank
 from wmscout.ereignis_speicher import EreignisSpeicher
 from wmscout.ereignisse import InseratEreignis
 from wmscout.migrationen import AKTUELLE_VERSION, lese_version
 from wmscout.quellen import Inserat
+from wmscout.quellen.kleinanzeigen import KleinanzeigenQuelle
 
 ZEIT = datetime(2026, 10, 15, 9, 0, tzinfo=timezone.utc)
 
@@ -36,7 +38,10 @@ def _anzahl(db, tabelle) -> int:
 
 
 @pytest.fixture
-def db(tmp_path):
+def db(tmp_path, monkeypatch):
+    # P2-04 (F4): bei Plattformen mit Adapter zählt zusätzlich dessen Code-Freigabe. Dieses Modul prüft den Abgleich, nicht die
+    # Freigabe – deshalb gilt der Kleinanzeigen-Adapter hier als freigegeben (Freigabeprüfung: tests/test_schalter.py).
+    monkeypatch.setitem(quellen.QUELLEN, "kleinanzeigen", type("FreigegebenerTestAdapter", (KleinanzeigenQuelle,), {"freigegeben": True}))
     d = Datenbank(str(tmp_path / "anzeigen.sqlite"))
     # Ereignisse kommen nur über freigegebene automatische Kanäle (ADR-035); Push-Eingänge prüft tests/test_eingang.py
     for k in ("mobile.de", "kleinanzeigen"):

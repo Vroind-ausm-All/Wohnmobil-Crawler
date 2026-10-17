@@ -15,6 +15,8 @@ from urllib.parse import urlparse
 
 import yaml
 
+from .schalter import pruefe_eingaenge
+
 ORDNER = "mandanten"
 KENNUNG = re.compile(r"[a-z0-9][a-z0-9-]{1,30}")
 # Diese Abschnitte bestimmt das Programm je Mandant – in mandant.yaml verboten
@@ -101,6 +103,10 @@ def alle(grund_cfg: dict, basis: Path) -> list[dict]:
     gesehen: dict[str, str] = {}
     for cfg in liste:
         k = cfg["mandant"]["kennung"]
+        try:
+            pruefe_eingaenge(cfg)
+        except ValueError as e:
+            raise MandantenFehler(f"Mandant „{k}“: {e}") from e
         eigene = hosts(cfg)
         if not eigene:
             raise MandantenFehler(f"Mandant „{k}“ hat keine Adresse (mandant.yaml → app → oeffentliche_url)")

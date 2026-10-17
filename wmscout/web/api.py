@@ -31,6 +31,7 @@ from ..haendler import STANDORT_STATUS, HaendlerSpeicher
 from ..auktion import STANDARD as MINDESTPREIS_STANDARD
 from ..auktion import AuktionSpeicher, AuktionsFehler
 from .. import datenrechte
+from ..schalter import EingangDeaktiviert, eingang_pruefen, pruefe_eingaenge
 from ..audit import AuditSpeicher, einordnen
 from ..nutzung import nutzung
 from ..deal import DealSpeicher
@@ -69,6 +70,7 @@ MAX_IMPORT_SEKUNDEN = 20       # Zeitbudget je Klick (die Anfrage hält die Date
 #   recht     403  fachlich nicht erlaubt (Erzwingen/Zuweisen nur Inhaber, fremde Besichtigung, fremdes Inserat abgeben)
 #   zugriff   403  Hostname/Zugang nicht freigegeben
 #   konflikt  409  Zustand passt nicht (Kollege hält das Inserat bzw. eine Dublette, Besichtigung abgeschlossen, Suchlauf läuft)
+#   deaktiviert 409  Eingang ist in config.yaml abgeschaltet (eingaenge → … → aktiv) – nichts wurde gelesen
 #   belegt    503  Datenbank kurz von einem anderen Vorgang gesperrt – später erneut versuchen
 GRUENDE = {403: "recht", 409: "konflikt", 503: "belegt"}
 
@@ -128,6 +130,7 @@ class Kontext:
         self.deal = DealSpeicher(db, cfg)                   # ValueError bei falscher Konfiguration (Abschnitt kalkulation)
         self.ankauf = AnkaufSpeicher(db, cfg, foto_ordner / "ankaeufe")    # im Fotoordner: mit gesichert
         self.reservierung_tage = reservierung_tage(cfg)     # ValueError mit verständlicher Meldung bei falscher Konfiguration
+        pruefe_eingaenge(cfg)                               # ebenso „eingaenge“ (Einzel- und Mandantenbetrieb, P2-04)
         self.katalog_pfad = basis / "maengel.yaml"
         self.sperre = threading.Lock()          # Datenbankzugriffe nacheinander, Netzwerk parallel
         self._zeilen: tuple[float, list[dict]] | None = None
@@ -1118,6 +1121,10 @@ class Anfrage:
         k = self.k
         if k.suchlauf.stand["laeuft"]:
             raise Antwort(409, "Gerade läuft ein Suchlauf – bitte danach einlesen")
+        try:
+            eingang_pruefen(k.cfg, "seiten")                 # abgeschaltet: nichts lesen, Ordner nicht anlegen (ADR-036)
+        except EingangDeaktiviert as e:
+            raise Antwort(409, str(e), grund="deaktiviert") from e
         ordner = import_ordner(k.cfg)
         ordner.mkdir(parents=True, exist_ok=True)
         stat = Importer(k.cfg, k.db).importiere_seiten(ordner, max_dateien=MAX_IMPORT_DATEIEN,

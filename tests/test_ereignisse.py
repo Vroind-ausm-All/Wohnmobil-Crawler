@@ -82,7 +82,8 @@ def test_kleinanzeigen_web_gesperrt_auch_mit_fake_und_detailabruf(cfg, db, monke
     abruf = FakeAbruf(ads)
     importer = Importer(cfg, db, abruf=abruf)
     stat = importer.lauf(cfg["suchen"])
-    assert stat["fehler"] and "nicht freigegeben" in stat["fehler"]
+    # P2-04: eine nicht freigegebene Quelle wird vor dem Abruf übersprungen und gemeldet – kein Fehler mehr, aber weiterhin kein Abruf
+    assert stat["fehler"] is None and stat["uebersprungen"] == [{"quelle": "kleinanzeigen", "grund": "nicht freigegeben"}]
     assert abruf.abrufe == []
     db.speichere_treffer({"id": ads[0]["id"], "quelle": "kleinanzeigen",
                          "url": f"https://www.kleinanzeigen.de/s-anzeige/foo/{ads[0]['id']}-220-1234",

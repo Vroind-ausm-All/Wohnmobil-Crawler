@@ -145,3 +145,44 @@ def test_cli_mandanten(grund, tmp_path):
     assert r.returncode == 0 and "firma-a" in r.stdout and "verkaufsanfragen=0" in r.stdout, r.stderr
     r = _scout(grund, tmp_path, "--mandant", "firma-x", "nutzung")
     assert r.returncode != 0 and "unbekannt" in r.stderr
+
+
+# ---------------------------------------------------------------- Eingänge schaltbar (P2-04)
+def test_ungueltige_eingaenge_in_mandant_yaml_stoppen_den_start(grund, tmp_path):
+    _zwei(grund, tmp_path)
+    datei = tmp_path / "mandanten" / "firma-b" / "mandant.yaml"
+    inhalt = yaml.safe_load(datei.read_text(encoding="utf-8"))
+    datei.write_text(yaml.safe_dump({**inhalt, "eingaenge": {"seiten": {"aktiv": "vielleicht"}}}, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(mandanten.MandantenFehler, match="firma-b.*eingaenge"):
+        mandanten.alle(grund, tmp_path)
+    with pytest.raises(mandanten.MandantenFehler, match="eingaenge"):
+        erstelle_server_mandanten(grund, tmp_path, port=0)
+    # auch ohne die Mandantenprüfung: der Kontext (Einzelbetrieb) bricht beim Start ab
+    from wmscout.app import erstelle_server
+    from wmscout.datenbank import Datenbank
+    c = {**copy.deepcopy(grund), "eingaenge": {"seiten": {"aktiv": "vielleicht"}}}
+    with pytest.raises(ValueError, match="eingaenge"):
+        erstelle_server(c, Datenbank(str(tmp_path / "x.sqlite")), tmp_path, port=0)
+
+
+def test_mandant_mit_abgeschaltetem_seitenimport_antwortet_409(grund, tmp_path):
+    _zwei(grund, tmp_path)
+    datei = tmp_path / "mandanten" / "firma-a" / "mandant.yaml"
+    inhalt = yaml.safe_load(datei.read_text(encoding="utf-8"))
+    datei.write_text(yaml.safe_dump({**inhalt, "eingaenge": {"seiten": {"aktiv": False}}}, allow_unicode=True), encoding="utf-8")
+    ordner_a = tmp_path / "mandanten" / "firma-a" / "import"
+    ordner_a.mkdir(parents=True)
+    (ordner_a / "x.html").write_text("<html></html>", encoding="utf-8")
+    srv = erstelle_server_mandanten(grund, tmp_path, port=0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        port = srv.server_address[1]
+        srv.mandanten["firma-a"][0].team.nutzer_anlegen("Anna", "sicher1234", "inhaber")
+        srv.mandanten["firma-b"][0].team.nutzer_anlegen("Bert", "sicher1234", "inhaber")
+        s, d, _ = Client(port, host="a.test").anmelden("Anna")("POST", "/api/import", {})
+        assert s == 409 and d["grund"] == "deaktiviert" and (ordner_a / "x.html").is_file()
+        s, d, _ = Client(port, host="b.test").anmelden("Bert")("POST", "/api/import", {})      # anderer Mandant: Standard (an)
+        assert s == 200 and d["dateien"] == 0
+    finally:
+        srv.shutdown()
+        srv.server_close()

@@ -5,6 +5,7 @@
   python scout.py lauf                      Crawlen + bewerten + Report (+ Mail)
   python scout.py report                    Nur Report neu erzeugen (ohne Internet)
   python scout.py import [--ordner PFAD]    Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten einlesen (ohne Internet)
+  python scout.py quellen liste|an|aus [KENNUNG]   Pull-Quellen und Eingänge anzeigen; Quellen schalten (nur im Code freigegebene)
   python scout.py rechne --preis 32900 --ez 2016 --km 98000 --titel "Knaus Sky TI 650 MEG" [--anschreiben]
   python scout.py nutzer anlegen <Name> [--rolle inhaber]   Team-Zugang für Handy-App anlegen
   python scout.py sichern                   Datenbank (und Fotos) sichern -> daten/sicherungen
@@ -59,6 +60,9 @@ from wmscout.nutzung import nutzung
 from wmscout.deal import DealSpeicher
 from wmscout.haendler import STANDORT_STATUS, HaendlerSpeicher
 from wmscout.importer import Importer
+from wmscout.quellen import QUELLEN
+from wmscout.schalter import (EingangDeaktiviert, QuelleNichtSchaltbar, bewerte_quelle, eingaenge, eingang_pruefen, pruefe_eingaenge,
+                              quelle_zeile, setze_quelle)
 from wmscout.migrationen import MigrationsFehler
 from wmscout.normalisierung.fahrzeug import ergaenze_fahrzeug
 from wmscout.sicherung import SicherungsFehler, einstellungen, sichere, sicherung_ordner, wiederherstellen
@@ -127,6 +131,8 @@ def _lauf(cfg, db):
     datenrechte.frist_anwenden(db, cfg, BASIS, foto_ordner(cfg))
     logging.info("Crawl fertig: %d neu, %d Preissenkungen, %d bekannt, %d Detailseiten",
                  stat["neu"], stat["preis"], stat["bekannt"], stat["details"])
+    for u in stat["uebersprungen"]:
+        logging.info("Übersprungen: Quelle %s (%s) – kein Fehler; Übersicht: python scout.py quellen liste", u["quelle"], u["grund"])
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
     erg = schreibe_ausgaben(cfg, zeilen, BASIS, fehler=stat["fehler"], team=_team(cfg, db))
     logging.info("Report: %s  (%s)", erg["html"], erg["zaehl"])
@@ -138,6 +144,11 @@ def _anzahl(n: int, einzahl: str, mehrzahl: str) -> str:
 
 
 def cmd_import(cfg, db, args):
+    try:
+        eingang_pruefen(cfg, "seiten")
+    except EingangDeaktiviert as e:
+        print(e)                                    # nichts lesen, Import-Ordner nicht anlegen, Dateien bleiben liegen
+        return
     ordner = Path(args.ordner).expanduser().resolve() if args.ordner else import_ordner(cfg)
     if not ordner.is_dir():
         ordner.mkdir(parents=True, exist_ok=True)
@@ -163,6 +174,37 @@ def cmd_import(cfg, db, args):
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
     erg = schreibe_ausgaben(cfg, zeilen, BASIS, team=_team(cfg, db))
     print(f"Report: {erg['html']}  ({erg['zaehl']})")
+
+
+def cmd_quellen(cfg, db, args):
+    """Pull-Quellen (Suchlauf) und Eingänge anzeigen bzw. Quellen ein-/ausschalten (ADR-036).
+    Die Freigabe steht im Code (Nutzungsrechte); `an` schaltet nur freigegebene Quellen. Eingänge werden in config.yaml geschaltet."""
+    if args.aktion in ("an", "aus"):
+        if not args.kennung:
+            sys.exit(f"Kennung fehlt – Aufruf: python scout.py quellen {args.aktion} KENNUNG (verfügbar: {', '.join(sorted(QUELLEN))})")
+        klasse = QUELLEN.get(args.kennung)
+        if klasse is None:
+            sys.exit(f"Unbekannte Quelle „{args.kennung}“ – verfügbar: {', '.join(sorted(QUELLEN))}")
+        try:
+            setze_quelle(db, klasse, args.aktion == "an")
+        except QuelleNichtSchaltbar as e:
+            sys.exit(f"Nicht geändert: {e}")
+        print(f"Quelle {klasse.kennung}: {'eingeschaltet' if args.aktion == 'an' else 'ausgeschaltet'}")
+        return
+    if args.kennung:
+        sys.exit("„quellen liste“ nimmt keine Kennung – zum Schalten: python scout.py quellen an|aus KENNUNG")
+    print("Pull-Quellen (Suchlauf) – schalten: python scout.py quellen an|aus KENNUNG")
+    print(f"  {'Kennung':<16}{'Zugriff':<9}{'Code-Freigabe':<15}{'Schalter':<16}Suchlauf")
+    for kennung in sorted(QUELLEN):
+        klasse = QUELLEN[kennung]
+        zeile = quelle_zeile(db, kennung)
+        laeuft, grund = bewerte_quelle(bool(klasse.freigegeben), zeile)
+        schalter = "nicht entschieden" if zeile is None or (not zeile["freigegeben"] and not zeile["aktiv"]) else ("an" if zeile["aktiv"] else "aus")
+        print(f"  {kennung:<16}{klasse.zugriffsart:<9}{'ja' if klasse.freigegeben else 'nein':<15}{schalter:<16}"
+              f"{'läuft' if laeuft else 'übersprungen (' + grund + ')'}")
+    print("\nEingänge – schalten in config.yaml bzw. config.local.yaml → eingaenge → <name> → aktiv: true|false")
+    for name, an in eingaenge(cfg).items():
+        print(f"  {name:<10}{'an' if an else 'aus'}")
 
 
 def cmd_report(cfg, db, args):
@@ -466,6 +508,9 @@ def main():
     sub.add_parser("report", help="Report aus vorhandenen Daten neu erzeugen")
     im = sub.add_parser("import", help="im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten einlesen (ohne Internet)")
     im.add_argument("--ordner", help="Ordner mit den gespeicherten Seiten (Standard: config.yaml → import → ordner)")
+    qu = sub.add_parser("quellen", help="Pull-Quellen und Eingänge anzeigen; Quellen ein-/ausschalten (nur im Code freigegebene)")
+    qu.add_argument("aktion", choices=["liste", "an", "aus"])
+    qu.add_argument("kennung", nargs="?", help="Quelle für an/aus, z. B. kleinanzeigen")
     r = sub.add_parser("rechne", help="Einzelfahrzeug durchrechnen")
     r.add_argument("--preis", type=int, help="Angebotspreis des Verkäufers")
     r.add_argument("--ez", type=int, help="Erstzulassungsjahr")
@@ -550,10 +595,11 @@ def main():
         reservierung_tage(cfg)              # ungültiges „team“ in config.yaml ebenso sofort melden
         einstellungen(cfg, BASIS)           # ungültiges „sicherung“ in config.yaml sofort melden, nicht erst bei der Sicherung
         datenrechte.frist_aus(cfg)          # ebenso „datenschutz“
+        pruefe_eingaenge(cfg)               # und „eingaenge“ (P2-04)
         db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]), str(sicherung_ordner(cfg, BASIS)), wal=wal_aktiv(cfg))
     except (MigrationsFehler, ValueError, sqlite3.Error) as e:
         sys.exit(f"Datenbank-Start abgebrochen: {e}")
-    {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "rechne": cmd_rechne,
+    {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "quellen": cmd_quellen, "rechne": cmd_rechne,
      "nutzer": cmd_nutzer, "status": cmd_status, "standort": cmd_standort,
      "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage, "audit": cmd_audit, "nutzung": cmd_nutzung,
      "inserat": cmd_inserat}[args.cmd](cfg, db, args)
