@@ -557,10 +557,19 @@
                                                                            function (err) { teamFehler(err, id); });
     } else if (a === "planen") {
       var termin = document.getElementById("b-termin").value;
-      api("/api/besichtigung", { anzeige_id: id, termin: termin || null, adresse: document.getElementById("b-adresse").value,
-                                  zustaendig_id: document.getElementById("b-wer").value || null })
-        .then(function (b) { toast("Besichtigung geplant"); fahrzeug(id); if (b.zustaendig && b.zustaendig.id !== S.ich.nutzer.id && b.whatsapp) window.open(b.whatsapp, "_blank", "noopener"); },
-              function (err) { toast(err.message); });
+      var planen = function (marktwert) {
+        return api("/api/besichtigung", { anzeige_id: id, termin: termin || null, adresse: document.getElementById("b-adresse").value,
+                                          zustaendig_id: document.getElementById("b-wer").value || null, marktwert: marktwert });
+      };
+      var geplant = function (b) { toast("Besichtigung geplant"); fahrzeug(id); if (b.zustaendig && b.zustaendig.id !== S.ich.nutzer.id && b.whatsapp) window.open(b.whatsapp, "_blank", "noopener"); };
+      planen(undefined).then(geplant, function (err) {
+        if (err.grund !== "marktwert") return toast(err.message);
+        // P1-12: Erstzulassung fehlt – ohne eigenen Marktwert keine Beträge
+        var eingabe = prompt(err.message + "\n\nMarktwert in €:");
+        var mw = parseInt(String(eingabe || "").replace(/[^0-9]/g, ""), 10);
+        if (!mw) return;
+        planen(mw).then(geplant, function (e2) { toast(e2.message); });
+      });
     } else if (a === "suchen") {
       api("/api/suchlauf", {}).then(function () { toast("Suche gestartet – dauert einige Minuten"); });
     } else if (a === "abmelden") {

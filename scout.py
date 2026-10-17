@@ -158,6 +158,11 @@ def cmd_rechne(cfg, db, args):
         print(f"Referenzwert (Modell)    : {euro(b.modellwert)}   (km-Korrektur {b.km_korrektur:+.1%})")
     for n, w in b.wertfaktoren.items():
         print(f"  {n:<23}: {w:+.1%}")
+    if b.sicherheit == "keine":
+        print(f"  {b.vergleich_basis}\n  Keine Beträge – mit --marktwert einen eigenen Marktwert angeben (P1-12).")
+        if args.anschreiben:
+            print("\n--- Anschreiben ---\n" + Anschreiber(cfg, BASIS).text(a, b))
+        return
     print(f"Marktniveau Angebote     : {euro(b.marktwert_angebote)}   Sicherheit {b.sicherheit}"
           + (f", plausibel {euro(b.spanne_von)} – {euro(b.spanne_bis)}" if b.spanne_von else ""))
     print(f"  Basis: {b.vergleich_basis}")

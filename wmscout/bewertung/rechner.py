@@ -264,7 +264,7 @@ class Rechner:
         if not ref:
             return {**info, "niveau": a.get("preis"), "n": 0, "n_marke": 0, "faktor": None, "gewicht": 0.0,
                     "sicherheit": "keine", "spanne": None,
-                    "basis": "Erstzulassung fehlt – keine unabhängige Bewertung möglich (Angebotspreis als Basis)"}
+                    "basis": "Erstzulassung fehlt – keine unabhängige Bewertung, daher keine Beträge (Marktwert manuell eingeben)"}
         vgl = self.vergleiche(a, alle)
         n, n_marke = len(vgl), sum(1 for v in vgl if v[2])
         u = self.mm["unsicherheit_ohne_vergleich"]
@@ -298,6 +298,11 @@ class Rechner:
         if marktwert_manuell:
             mn.update(niveau=marktwert_manuell, n=0, n_marke=0, gewicht=0.0, sicherheit="manuell", spanne=None,
                       basis="manuell eingegebener Marktwert")
+        if mn["sicherheit"] == "keine":
+            # P1-12: ohne Erstzulassung gibt es keinen unabhängigen Marktwert. Max-EK und Erstangebot aus dem Angebotspreis
+            # des Verkäufers zu rechnen, hieße seinen Wunschpreis zu bestätigen – daher keine Beträge, bis ein Marktwert vorliegt.
+            return Bewertung(None, 0, mn["basis"], 0, 0, 0, angebotspreis=a.get("preis"), sicherheit="keine", art=mn["art"],
+                             wertfaktoren=mn["wertfaktoren"])
         if not mn["niveau"]:
             return Bewertung(None, 0, "kein Preis", 0, 0, 0, angebotspreis=a.get("preis"))
 

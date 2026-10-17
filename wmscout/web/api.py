@@ -45,7 +45,7 @@ from ..bearbeitung import (IN_ARBEIT, OFFEN, VORBEREITET, BearbeitungsKonflikt, 
                            darf_zuweisen, reservierung_tage)
 from ..benachrichtigung import WhatsAppCloud, whatsapp_link
 from ..bewertung.anschreiben import euro, tsd
-from ..bewertung.auswertung import bewerte_alle, dubletten_ids
+from ..bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids
 from ..bewertung import kalkulation as kalk
 from ..bewertung.besichtigung import berechne, lade_katalog
 from ..datenbank import STATUS, Datenbank
@@ -1128,7 +1128,16 @@ class Anfrage:
         ad_id = z["a"]["id"]
         termin, adresse = self._termin(daten.get("termin")), str(daten.get("adresse") or "").strip()[:200] or None
         zustaendig = self._zustaendig(daten.get("zustaendig_id"))              # prüfen, bevor etwas geändert wird (400)
+        if z["b"].sicherheit == "keine":
+            # P1-12: ohne Erstzulassung kein Marktwert – die Besichtigung braucht einen manuell angegebenen (Angebotsniveau)
+            mw = daten.get("marktwert")
+            if isinstance(mw, bool) or not isinstance(mw, int) or not 1000 <= mw <= 1_000_000:
+                raise Antwort(409, "Erstzulassung fehlt – ohne Marktwert keine Beträge. Bitte einen Marktwert (Angebotsniveau in €) "
+                                   "angeben, z. B. aus mobile.de oder DAT.", grund="marktwert")
+            z = {**z, "b": bewerte_anzeige(vk.Rechner(k.cfg), z["a"], [], marktwert_manuell=mw)}
         basis = basis_fuer(z, k.cfg)
+        if z["b"].sicherheit == "manuell":
+            basis["marktwert_manuell"] = z["b"].marktwert_angebote
         status = k.db.status_von(ad_id) or "neu"
         # Status/Übernahme und Besichtigungsdatensatz in EINER Transaktion: bei Konflikt, Fehler oder „database is locked“ bleibt
         # beides unverändert (nie ein Status „Besichtigung“ ohne Besichtigung).
