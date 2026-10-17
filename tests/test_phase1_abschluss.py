@@ -145,3 +145,28 @@ def test_langsamer_whatsapp_versand_blockiert_keine_anfrage(server, team, db, mo
         assert carl("GET", "/api/team")[0] == 200 and time.monotonic() - t1 < 3      # andere Anfragen laufen weiter
     finally:
         frei.set()
+
+
+# ---------------------------------------------------------------- P1-08
+def test_bewertung_ohne_datenbank(cfg, db, importiert):
+    import subprocess
+    import sys
+    from datetime import datetime
+    from scout import BASIS
+    from wmscout.bewertung.auswertung import bewerte_alle, bewerte_zeilen
+    r = subprocess.run([sys.executable, "-c", "import sys, wmscout.bewertung.auswertung, wmscout.bewertung.rechner, "
+                        "wmscout.bewertung.anschreiben, wmscout.bewertung.kalkulation, wmscout.domaene; "
+                        "print('wmscout.datenbank' in sys.modules, 'sqlite3' in sys.modules)"],
+                       capture_output=True, text=True, cwd=BASIS, timeout=60)
+    assert r.stdout.strip() == "False False", r.stderr
+    # gleiche Ergebnisse aus einfachen Listen wie aus der Datenbank
+    mit_preis, aktive = [dict(x) for x in db.alle_mit_preis()], [dict(x) for x in db.aktive()]
+    jetzt = datetime.now()
+    aus_listen = bewerte_zeilen(cfg, BASIS, mit_preis, aktive, jetzt=jetzt)
+    aus_db = bewerte_alle(cfg, db, BASIS)
+    assert len(aus_listen) == len(aus_db) > 10
+    assert [(z["a"]["id"], z["b"].max_ek, z["b"].ampel, z["bereit"]) for z in aus_listen] == \
+        [(z["a"]["id"], z["b"].max_ek, z["b"].ampel, z["bereit"]) for z in aus_db]
+    from wmscout.datenbank import STATUS, import_art
+    from wmscout import domaene
+    assert STATUS is domaene.STATUS and import_art is domaene.import_art                          # alte Importe gelten weiter

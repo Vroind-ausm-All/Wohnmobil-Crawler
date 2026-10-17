@@ -9,7 +9,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from .bewertung.anschreiben import euro, tsd
 from .bearbeitung import IN_ARBEIT
-from .datenbank import STATUS
+from .domaene import STATUS
 
 
 def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None = None, app: dict | None = None,

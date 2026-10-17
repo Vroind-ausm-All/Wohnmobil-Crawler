@@ -5,12 +5,16 @@ from collections import defaultdict
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from ..datenbank import STATUS, UNBEKANNT, Datenbank, import_art
+from ..domaene import STATUS, UNBEKANNT, import_art
 from ..normalisierung.fahrzeug import arten_im_text, ergaenze_fahrzeug
 from ..normalisierung.geo import entfernung_km
 from .anschreiben import Anschreiber, betrag_im_brief, euro, hinweise, sperrgrund
 from .rechner import Bewertung, Rechner
+
+if TYPE_CHECKING:                      # nur für Typangaben – die Bewertung selbst braucht keine Datenbank (P1-08)
+    from ..datenbank import Datenbank
 
 
 BEARBEITET = {"vorbereitet", "kontaktiert", "verhandlung", "besichtigung", "gekauft", "abgesagt", "uninteressant"}
@@ -149,14 +153,22 @@ def nachfass_grund(a: dict, cfg: dict, jetzt: datetime) -> str | None:
 
 
 def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None = None) -> list[dict]:
+    """Liest die Inserate aus der Datenbank und bewertet sie (``bewerte_zeilen``)."""
+    return bewerte_zeilen(cfg, basis, [dict(r) for r in db.alle_mit_preis()], [dict(r) for r in db.aktive()], lauf_start)
+
+
+def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[dict], lauf_start: str | None = None,
+                   jetzt: datetime | None = None) -> list[dict]:
+    """Bewertung ohne Datenbank (P1-08, ADR-015): ``mit_preis`` = alle Inserate mit Preis (Vergleichsbasis, Dubletten),
+    ``aktive`` = die zu bewertenden Inserate – beide als einfache Dicts mit den Spalten der Tabelle ``anzeigen``."""
     rechner, schreiber = Rechner(cfg), Anschreiber(cfg, basis)
-    jetzt = datetime.now()
+    jetzt = jetzt or datetime.now()
     standort = str(cfg["anschreiben"].get("plz") or "") or None
-    alle = [ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()]
+    alle = [ergaenze_fahrzeug(dict(r)) for r in mit_preis]
     duplikate = finde_duplikate(alle)
     vergleich = vergleichsbasis(alle, duplikate)
     zeilen = []
-    for r in db.aktive():
+    for r in aktive:
         a = ergaenze_fahrzeug(dict(r))
         if a.get("status") == "gelöscht":
             continue
