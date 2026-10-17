@@ -4,6 +4,21 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P2-04 – Quellen und Eingänge schaltbar (17.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13) | 940 bestanden (vorher 907), neu `test_schalter.py` (31), Ergänzungen in `test_mandanten.py` |
+| `ruff check .` | grün |
+| Nicht freigegebene Quelle im Suchlauf: kein Abruf, `uebersprungen` gemeldet, `fehler` bleibt leer | bestanden |
+| `quellen an`/`aus` für nicht freigegebene Quelle → Exit ≠ 0, Tabelle unverändert; `aus` für freigegebene Quelle bleibt nach Neustart wirksam | bestanden |
+| Detailabruf: gesperrte Zeilen verbrauchen das Limit nicht, werden nicht abgerufen | bestanden |
+| Ereignis-Eingang `api` mit Tabellenfreigabe, aber gesperrter Adapterklasse → abgewiesen | bestanden |
+| Eingang `seiten` abgeschaltet: `/api/import` → 409 `deaktiviert`, CLI liest nichts; Mandant A aus, Mandant B an | bestanden |
+| Ungültiges `eingaenge` (Einzelbetrieb, `mandant.yaml`) → Start bricht mit Meldung ab | bestanden |
+| Gegenproben (7 nach QA) | alle erkannt |
+| Warnhinweis (15 s) im Browser, Windows-CI | nicht geprüft (CI folgt im PR) |
+
 ## P2-00 – Eingang-Schnittstelle (17.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

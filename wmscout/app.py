@@ -90,9 +90,10 @@ class Suchlauf:
                 except Exception:  # noqa: BLE001 – Benachrichtigungen dürfen den Lauf nicht stören
                     log.exception("Nachbearbeitung nach Suchlauf fehlgeschlagen")
             neue = sum(1 for z in zeilen if z["neu"] and z["bereit"])
+            uebersprungen = "".join(f" · übersprungen: {u['quelle']} ({u['grund']})" for u in stat.get("uebersprungen", []))
             self.stand.update(fehler=stat["fehler"], neue_treffer=neue,
                               nachfassen=sum(1 for z in zeilen if z["nachfassen"]), meldung=(
-                f"Fertig: {stat['neu']} neue Anzeigen, davon {neue} mit Anschreiben · {stat['preis']} Preissenkungen"))
+                f"Fertig: {stat['neu']} neue Anzeigen, davon {neue} mit Anschreiben · {stat['preis']} Preissenkungen{uebersprungen}"))
         except Exception as e:  # noqa: BLE001 – Fehler in der Oberfläche anzeigen statt Thread sterben lassen
             log.exception("Suchlauf fehlgeschlagen")
             self.stand.update(fehler=str(e), meldung="Suchlauf fehlgeschlagen")

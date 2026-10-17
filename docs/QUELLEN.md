@@ -109,6 +109,24 @@ Für Quellen mit Vertrag oder schriftlicher Erlaubnis gibt es `wmscout/quellen/a
 und bricht bei 401/403/429 ohne Wiederholung ab. Ohne Freigabe oder Schlüssel wird die Quelle gar nicht erst erzeugt.
 Beispiel mit Fake-Antworten: `tests/test_api_quellen.py`. Derzeit ist keine API-Quelle angebunden.
 
+### Quellen und Eingänge schalten (P2-04, ADR-036)
+
+Eine Pull-Quelle läuft im Suchlauf, sobald sie im Code freigegeben ist (`freigegeben = True`: bewusste Code-Änderung nach geklärten
+Nutzungsrechten, Regel 12, Eintrag in `docs/SOURCES.md`, vom Betreiber per Pull Request geprüft) und in `suchen` eingetragen ist;
+der Betreiber kann sie mit `quellen aus` abschalten. Sonst wird sie vor dem Abruf übersprungen und im Ergebnis
+unter `uebersprungen` gemeldet (`[{"quelle": …, "grund": "nicht freigegeben" | "deaktiviert"}]`) – das ist kein Fehler.
+
+* `python scout.py quellen liste` zeigt Kennung, Zugriffsart, Code-Freigabe, Schalter und ob der Suchlauf die Quelle ausführt.
+* `python scout.py quellen an|aus KENNUNG` schreibt die Zeile in der Tabelle `quellen`. Für nicht freigegebene Quellen werden
+  **beide** Befehle abgelehnt (Exit ≠ 0, nichts gespeichert): `an` wäre eine Umgehung der Freigabe, `aus` bewirkt nichts, solange die
+  Quelle ohnehin nicht läuft. Fehlt die Zeile (oder steht dort nur der Ausgangswert 0/0), gilt der Code: freigegebene Quelle ⇒ läuft.
+* Der Push-Kanal `api`/`stream` (`EreignisSpeicher`) verlangt die Tabelle (freigegeben, aktiv, Zugriffsart `api`) und, wenn es
+  einen Adapter gibt, zusätzlich dessen Code-Freigabe.
+* Eingänge ohne Portalabruf (`seiten`, `text`, `email`) schaltet `config.yaml → eingaenge → <name> → aktiv` (Standard: an, an,
+  aus). Abgeschaltet liest der Eingang nichts; Dateien bleiben liegen. Neue Eingänge fragen `schalter.eingang_pruefen(cfg, name)`.
+* Neue Pull-Quelle: `freigegeben = True` nur setzen, wenn die Rechte geklärt sind – damit läuft sie, sobald eine Suche auf sie zeigt.
+  Der Report des CLI-Suchlaufs nennt übersprungene Quellen nicht (nur Log und App-Meldung).
+
 ## 4. Testen
 
 1. Beispielantworten der Quelle (anonymisiert) als Testdaten anlegen. Keine echten Abrufe in Tests.

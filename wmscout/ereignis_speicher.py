@@ -10,6 +10,7 @@ import logging
 from .datenbank import IMPORT_SUCHE, STANDARD_PLATTFORM, inhalt_hash
 from .domaene import PUSH_KANAELE
 from .ereignisse import InseratEreignis
+from .quellen import QUELLEN
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +41,8 @@ class EreignisSpeicher:
         if ereignis.kanal in ("stream", "api"):
             q = con.execute("SELECT freigegeben, aktiv, zugriffsart FROM quellen WHERE kennung=?",
                             (ereignis.plattform,)).fetchone()
-            if q is None or not q["freigegeben"] or not q["aktiv"] or q["zugriffsart"] != "api":
+            klasse = QUELLEN.get(ereignis.plattform)     # Plattform mit Adapter im Code: auch dessen Freigabe zählt (ADR-036)
+            if q is None or not q["freigegeben"] or not q["aktiv"] or q["zugriffsart"] != "api" or (klasse and not klasse.freigegeben):
                 raise QuelleNichtFreigegeben(f"Automatischer Eingang für {ereignis.plattform} nicht freigegeben")
         if ereignis.ereignis_id is not None:
             schon = con.execute(

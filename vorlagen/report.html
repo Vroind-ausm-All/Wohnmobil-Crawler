@@ -857,7 +857,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
       einlesen.disabled = true; einlesen.textContent = 'Wird eingelesen …';
       var fertig = function(){ einlesen.disabled = false; einlesen.textContent = '⤓ Gespeicherte Seiten einlesen'; };
       fetch('/api/import', {method:'POST', headers:{'Content-Type':'application/json','X-Scout-Token':APP.token}, body:'{}'})
-        .then(function(r){ return r.json().then(function(d){ if(!r.ok) throw new Error(d.fehler || r.status); return d; }); })
+        .then(function(r){ return r.json().then(function(d){ if(!r.ok){ var e = new Error(d.fehler || r.status); e.deaktiviert = d.grund === 'deaktiviert'; throw e; } return d; }); })
         .then(function(s){
           if(!s.dateien){
             fertig();
@@ -883,7 +883,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
           toast(text + ' – Liste wird neu geladen.');
           setTimeout(function(){ location.reload(); }, 4000);
         })
-        .catch(function(e){ fertig(); toast('Einlesen fehlgeschlagen: ' + e.message); });
+        .catch(function(e){ fertig(); toast(e.deaktiviert ? e.message : 'Einlesen fehlgeschlagen: ' + e.message, null, e.deaktiviert ? 15000 : 0, !!e.deaktiviert); });
     };
     if('Notification' in window && Notification.permission === 'default'){
       glocke.hidden = false;

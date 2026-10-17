@@ -6,6 +6,31 @@ Wert „–“.
 
 ---
 
+## P2-04 – Quellen und Eingänge schaltbar (17.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Umsetzung `source-integrations`; QA `qa-security-reviewer`; Prüfung und Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/schalter.py` (neu), `wmscout/importer.py` (Quellen vor dem Abruf prüfen, `uebersprungen`,
+  Detailabruf nur laufender Quellen), `wmscout/datenbank.py` (`ohne_details` filtert nach Quelle in SQL),
+  `wmscout/ereignis_speicher.py` (auch Code-Freigabe der Adapterklasse), `wmscout/web/api.py` (`/api/import` → 409
+  `deaktiviert`, Prüfung der Konfiguration beim Start), `wmscout/mandanten.py`, `wmscout/app.py` (Meldung „übersprungen“),
+  `scout.py` (`quellen liste|an|aus`, Seitenimport respektiert den Schalter), `vorlagen/report.html` (Warnhinweis bei 409),
+  `config.yaml` (Abschnitt `eingaenge`), Tests `test_schalter.py` (31, neu), `test_mandanten.py`, `test_import.py`,
+  `test_ereignisse.py`, `test_v4_abgleich.py`, Doku README, QUELLEN.md, ADR-036.
+- **Implementierte Funktionen:** Eingänge `seiten`/`text`/`email` in `config.yaml` schaltbar (Standard: an/an/aus), ungültige
+  Werte brechen den Start ab (auch je Mandant). Pull-Quellen laufen nur mit Code-Freigabe (Regel 12) und ohne Abschaltung in
+  der Tabelle `quellen`; Übersprungenes ist kein Fehler und wird gemeldet. `quellen an` für nicht freigegebene Quellen und
+  `quellen aus` für nicht freigegebene Quellen werden abgelehnt (Tabelle unverändert). Keine Schemaänderung.
+- **Tests:** `pytest -q` → **940 passed**; `ruff check .` → grün (vom Orchestrator nachgestellt). Gegenproben: 7 nach dem
+  QA-Durchgang (F1, F2 ×2, F3, F4 ×2, F9) – alle erkannt, dazu die Gegenproben der ersten Runde.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein Weg gefunden, auf dem eine nicht freigegebene Quelle abgerufen wird.
+  F1 HOCH (`quellen aus` für gesperrte Quelle wirkungslos gespeichert) → abgelehnt mit Meldung; F2 (Mandanten) → Prüfung im
+  `Kontext` und in `mandanten.alle`; F3 (Detail-Limit durch gesperrte Zeilen verbraucht) → Filter in SQL; F4 (Ereignis-Eingang
+  ohne Code-Freigabe) → zusätzlich Klassenfreigabe, `zugriffsart` wird gesetzt; F6 (Doku zum Standard) → angeglichen;
+  F7 → Warnhinweis 15 s; F9 → klare CLI-Meldungen; F8 (Report nennt Übersprungenes nicht) bewusst offen, in ADR-036.
+- **Bekannte Risiken:** Warnhinweis im Browser nicht geprüft; Merge-Konflikte mit P2-05 in `api.py`/`scout.py` möglich (kleine
+  Blöcke).
+- **Nächster sinnvoller Schritt:** P2-05 auf `schalter.eingang_pruefen(cfg, "text")` umstellen, P2-06 Teil 2 (Schalter `email`).
+
 ## P2-00 – Eingang-Schnittstelle (17.10.2026) · Status: REVIEW
 
 - **Phase:** 2 (Multi-Quellen-System), freigegeben vom Betreiber am 17.10.2026 („Starte Phase 2“). Betreiberentscheidungen zu

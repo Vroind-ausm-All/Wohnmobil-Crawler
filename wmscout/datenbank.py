@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import sqlite3
+from collections.abc import Collection
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -212,11 +213,20 @@ class Datenbank:
         self.con.execute(f"UPDATE anzeigen SET {sets} WHERE id=?", [*felder.values(), ad_id])
         self.con.commit()
 
-    def ohne_details(self, limit: int) -> list[sqlite3.Row]:
-        """Inserate für den Detailabruf – ohne solche aus gespeicherten Seiten (kein Netzabruf, ADR-010)."""
+    def ohne_details(self, limit: int, kennungen: Collection[str] | None = None) -> list[sqlite3.Row]:
+        """Inserate für den Detailabruf – ohne solche aus gespeicherten Seiten (kein Netzabruf, ADR-010).
+        kennungen: nur Inserate dieser Quellen (leere Quelle = STANDARD_PLATTFORM), schon in SQL – Zeilen anderer Quellen
+        verbrauchen das LIMIT nicht."""
+        quelle_sql, quelle_param = "", ()
+        if kennungen is not None:
+            kennungen = sorted(kennungen)
+            if not kennungen:
+                return []
+            quelle_sql = f" AND COALESCE(NULLIF(quelle, ''), ?) IN ({','.join('?' * len(kennungen))})"
+            quelle_param = (STANDARD_PLATTFORM, *kennungen)
         return self.con.execute(
-            f"SELECT * FROM anzeigen WHERE detail_geladen=0 AND NOT COALESCE({_IMPORT_SQL}, 0) "
-            "ORDER BY erstmals_gesehen DESC LIMIT ?", (*_IMPORT_PARAMETER, limit)).fetchall()
+            f"SELECT * FROM anzeigen WHERE detail_geladen=0 AND NOT COALESCE({_IMPORT_SQL}, 0){quelle_sql} "
+            "ORDER BY erstmals_gesehen DESC LIMIT ?", (*_IMPORT_PARAMETER, *quelle_param, limit)).fetchall()
 
     def detail_art(self, ad_id: str) -> str | None:
         """Feld „Art“ der gespeicherten Detailseite (None ohne Detailseite oder ohne Angabe)."""

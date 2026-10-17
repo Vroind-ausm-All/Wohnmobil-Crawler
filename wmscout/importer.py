@@ -5,6 +5,8 @@ Einzige Stelle, die Quellen und Datenbank verbindet. Ablauf eines Laufs:
      schon bekannt, lohnt es sich nicht, tiefer zu suchen
   2. Detailseiten für Inserate ohne Details nachladen (begrenzt pro Lauf)
   3. Auffälligkeiten (Layout geändert, Sperre, Netzwerk) als Fehlertext zurückgeben
+Nicht freigegebene oder abgeschaltete Quellen (`wmscout/schalter.py`) werden vor dem Abruf übersprungen und unter
+`uebersprungen` gemeldet – das ist kein Fehler.
 
 Außerdem: `importiere()` ist der einzige Schreibweg für Push-Eingänge (Lesung → Datenbank, ADR-035); `importiere_seiten()`
 liest im Browser gespeicherte Seiten (Kleinanzeigen, mobile.de) aus dem Import-Ordner – ohne Netzabruf (ADR-010).
@@ -23,9 +25,10 @@ from .eingang import BegleitordnerFehler, Lesung, Rohdaten, SeitenEingang, Suchs
 from .ereignisse import InseratEreignis
 from .ereignis_speicher import EreignisSpeicher
 from .normalisierung.fahrzeug import art_schluessel
-from .quellen import (STANDARD_QUELLE, Abruf, InseratNichtGefunden, NetzwerkFehler, Quelle, QuelleGesperrt,
+from .quellen import (QUELLEN, STANDARD_QUELLE, Abruf, InseratNichtGefunden, NetzwerkFehler, Quelle, QuelleGesperrt,
                       QuellenFehler, Suchauftrag, erstelle_quelle)
 from .quellen.basis import ART_QUELLE_KATEGORIE
+from .schalter import eingang_pruefen, quelle_laeuft
 
 log = logging.getLogger("scout")
 
@@ -91,6 +94,14 @@ class Importer:
             self._quellen[kennung] = q
         return self._quellen[kennung]
 
+    def laeuft(self, kennung: str) -> tuple[bool, str | None]:
+        """(läuft, Grund des Überspringens): Code-Freigabe der Quelle und Schalter in der Tabelle `quellen` (ADR-036)."""
+        try:
+            klasse = QUELLEN[kennung]
+        except KeyError:
+            raise QuellenFehler(f"Unbekannte Quelle „{kennung}“ – verfügbar: {', '.join(sorted(QUELLEN))}") from None
+        return quelle_laeuft(self.db, klasse)
+
     def importiere_ereignis(self, ereignis: InseratEreignis) -> str:
         """Ein normalisiertes Ereignis ohne Portalabruf in Schema v4 einlesen."""
         return EreignisSpeicher(self.db).verarbeite(ereignis)
@@ -129,8 +140,10 @@ class Importer:
         log.warning(self.layout_warnung)
 
     # ---------- Details ----------
-    def details(self) -> int:
-        offen = self.db.ohne_details(self.cfg["crawler"]["detailseiten_pro_lauf"])
+    def details(self, kennungen: Collection[str] | None = None) -> int:
+        """Detailseiten nachladen. kennungen: nur Inserate dieser Quellen (der Suchlauf übergibt die laufenden Quellen);
+        ohne Angabe gilt jede Quelle – eine nicht freigegebene wirft weiterhin QuellenFehler (`quelle`)."""
+        offen = self.db.ohne_details(self.cfg["crawler"]["detailseiten_pro_lauf"], kennungen)    # Filter in SQL: zählt nur Bearbeitetes
         leer = 0
         for i, zeile in enumerate(offen, 1):
             kennung = zeile["quelle"] if "quelle" in zeile.keys() and zeile["quelle"] else STANDARD_QUELLE
@@ -171,6 +184,7 @@ class Importer:
         """
         stat = {"dateien": 0, "suchseiten": 0, "detailseiten": 0, "unbekannt": 0, "fehlerhaft": 0, "neu": 0,
                 "preis": 0, "bekannt": 0, "details": 0, "fehler": [], "uebrig": 0}
+        eingang_pruefen(self.cfg, "seiten")                 # abgeschaltet: nichts lesen, Dateien liegen lassen (ADR-036)
         dateien = html_dateien(ordner)
         if max_dateien is not None and len(dateien) > max_dateien:
             dateien, stat["uebrig"] = dateien[:max_dateien], len(dateien) - max_dateien
@@ -283,15 +297,21 @@ class Importer:
 
     # ---------- Lauf ----------
     def lauf(self, suchen: list[dict]) -> dict:
-        gesamt = {"neu": 0, "preis": 0, "bekannt": 0, "details": 0, "fehler": None}
+        gesamt = {"neu": 0, "preis": 0, "bekannt": 0, "details": 0, "fehler": None, "uebersprungen": []}
         self.layout_warnung = None
         try:
             for eintrag in suchen:
                 auftrag = Suchauftrag.aus_config(eintrag)
+                laeuft, grund = self.laeuft(auftrag.quelle)
+                if not laeuft:
+                    if all(u["quelle"] != auftrag.quelle for u in gesamt["uebersprungen"]):
+                        gesamt["uebersprungen"].append({"quelle": auftrag.quelle, "grund": grund})
+                        log.info("Quelle %s übersprungen: %s", auftrag.quelle, grund)
+                    continue
                 log.info("Suche: %s", auftrag.name)
                 for k, v in self.suche(auftrag).items():
                     gesamt[k] += v
-            gesamt["details"] = self.details()
+            gesamt["details"] = self.details({k for k in QUELLEN if self.laeuft(k)[0]})     # nur Quellen, die laufen dürfen
             gesamt["fehler"] = self.layout_warnung
         except QuelleGesperrt as e:
             log.error(str(e))
