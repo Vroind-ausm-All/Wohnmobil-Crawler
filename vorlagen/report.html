@@ -167,8 +167,8 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <div class="suchlauf">
       <span id="suchstatus" class="hinweis" aria-live="polite"></span>
       <button id="glocke" class="btn" title="Browser-Hinweis bei neuen Treffern" hidden>🔔 Hinweise an</button>
-      <button id="einlesen" class="btn" title="Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten (Strg+S) einlesen – ohne Internetabruf">⤓ Gespeicherte Seiten einlesen</button>
-      <button id="suchen" class="btn">↻ Neue Anzeigen suchen</button>
+      <button id="einlesen" class="btn"{% if team and team.ich and team.ich.rolle != 'inhaber' %} hidden{% endif %} title="Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten (Strg+S) einlesen – ohne Internetabruf">⤓ Gespeicherte Seiten einlesen</button>
+      <button id="suchen" class="btn"{% if team and team.ich and team.ich.rolle != 'inhaber' %} hidden{% endif %}>↻ Neue Anzeigen suchen</button>
       <a class="btn" href="/anfragen" title="Fahrzeuge, die Verkäufer uns selbst anbieten">Verkaufsanfragen</a>
       <a class="btn" href="/ankaeufe" title="Gekaufte Fahrzeuge: Vertrag, Übergabe, Kosten, Verkauf, Plan gegen Ist">Ankäufe</a>
     </div>

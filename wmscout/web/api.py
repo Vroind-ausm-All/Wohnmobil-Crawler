@@ -848,6 +848,9 @@ class Anfrage:
         if p == "/api/status":
             if daten.get("status") not in STATUS:
                 raise Antwort(400, "unbekannter Status")
+            if daten["status"] == "gekauft" and self.team_aktiv and self.nutzer["rolle"] != "inhaber":
+                # P1-15: ein Kauf entsteht über den Abschluss der Besichtigung (mit Protokoll) – direkt nur durch den Inhaber
+                raise Antwort(403, "Status „gekauft“ setzt der Inhaber – oder der Abschluss der Besichtigung", grund="recht")
             ad_id = str(daten.get("id"))
             aktuell = k.db.status_von(ad_id) if daten["status"] == VORBEREITET else None
             if aktuell in (*IN_ARBEIT, "gekauft") and aktuell != VORBEREITET:
@@ -882,8 +885,12 @@ class Anfrage:
             k.veraendert()
             return self.json(200 if ok else 404, {"ok": ok})
         if p == "/api/suchlauf":
+            if self.team_aktiv:
+                self.nur_inhaber()                     # P1-15: Suchläufe und Import steuert der Inhaber
             return self.json(200, {"gestartet": k.suchlauf.starte(), **k.suchlauf.stand})
         if p == "/api/import":
+            if self.team_aktiv:
+                self.nur_inhaber()
             return self.json(200, self.seiten_einlesen())
         if p == "/api/besichtigung":
             return self.json(200, self.besichtigung_anlegen(daten))
