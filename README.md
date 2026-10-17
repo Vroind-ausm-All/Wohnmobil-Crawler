@@ -284,6 +284,7 @@ Nachrichten verschicken, und viele Verkäufer reagieren auf Massenanfragen aller
   `docs/PILOTBETRIEB.md` abarbeiten. Was gespeichert wird und wie es sich löschen lässt: `docs/DATENRECHTE.md`
   (Widerruf einer Verkaufsanfrage: `/anfragen` → „Widerruf: personenbezogene Daten löschen“ oder `scout.py anfrage widerruf REF --bestaetigt`).
   Wer wann Verkäuferdaten gelesen oder etwas geändert hat, zeigt `scout.py audit --tage 7` (nur Metadaten, ohne Inhalte).
+- **Mehrere Firmen auf einem Server** (Mandanten, je eigene Datenbank): `docs/MANDANTEN.md`.
 - **Nutzung je Monat** (Anfragen, Auktionen, Gebote, Ankäufe, Zugriffe, aktive Nutzer): `scout.py nutzung --monat 2026-10`.
 - **Wenn plötzlich 0 Anzeigen gefunden werden**, hat Kleinanzeigen vermutlich das Seitenlayout
   geändert. Die App meldet das als „Seitenlayout geändert“ und legt

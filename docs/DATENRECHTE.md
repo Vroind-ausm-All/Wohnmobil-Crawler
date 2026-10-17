@@ -24,6 +24,13 @@ Quellen und Nutzungsrechte der Marktdaten: `docs/SOURCES.md` (Status OK / PRÜFE
 | Protokolldatei | `ausgabe/scout.log` | Fehlersuche, Nachvollziehbarkeit von Aktionen | Betreiber | Rotation durch den Betreiber | Aufbewahrung festlegen; Log nennt Nutzernamen und Referenzen, keine Kontaktdaten der Verkäufer |
 | Sicherungen | `daten/sicherungen/` (`config.yaml` → `sicherung.behalten`) | Wiederherstellung | Betreiber | rotieren automatisch (älteste zuerst) | **Gelöschte Daten bleiben bis zur Rotation in älteren Sicherungen** – im Verzeichnis vermerken |
 
+## Mehrere Firmen (Mandanten, G2)
+
+Im Mandantenbetrieb gilt dieses Verzeichnis **je Firma**: Jede Firma ist eigener Verantwortlicher für ihre Daten; der Betreiber
+des Servers verarbeitet im Auftrag (Auftragsverarbeitungsvertrag nötig). Daten liegen je Firma in einer eigenen Datenbank unter
+`mandanten/<kennung>/daten/` – mit eigenen Zugängen, eigenem Audit-Protokoll und eigenen Sicherungen. Ende eines Mandats:
+Sicherung erstellen, nach Vertrag übergeben oder löschen, Ordner entfernen (`docs/MANDANTEN.md`).
+
 ## Rechte der Betroffenen
 
 | Recht | Stand |
