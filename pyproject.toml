@@ -3,7 +3,7 @@ name = "wohnmobil-scout"
 version = "0.2.0"
 description = "Wohnmobil-Suche für den gewerblichen Ankauf: Quellen, faire Bewertung, Anschreiben, Browser-App"
 readme = "README.md"
-requires-python = ">=3.10,<3.14"   # 3.14+ noch ohne fertige PyYAML-Pakete für Windows
+requires-python = ">=3.13,<3.14"   # nur 3.13 (P1-10, F9); 3.14+ noch ohne fertige PyYAML-Pakete für Windows
 dependencies = [
     "requests>=2.31,<3",
     "beautifulsoup4>=4.12,<5",
@@ -17,9 +17,9 @@ dev = [
     "ruff>=0.8,<1",
 ]
 
-# Gesperrte Abhängigkeiten (feste Versionen + Prüfsummen, gültig für Windows/macOS/Linux, Python 3.10–3.13):
-#   uv pip compile pyproject.toml --universal --generate-hashes --python-version 3.10 -o requirements.txt
-#   uv pip compile pyproject.toml --extra dev --universal --generate-hashes --python-version 3.10 -o requirements-dev.txt
+# Gesperrte Abhängigkeiten (feste Versionen + Prüfsummen, gültig für Windows/macOS/Linux, Python 3.13):
+#   uv pip compile pyproject.toml --universal --generate-hashes --python-version 3.13 -o requirements.txt
+#   uv pip compile pyproject.toml --extra dev --universal --generate-hashes --python-version 3.13 -o requirements-dev.txt
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

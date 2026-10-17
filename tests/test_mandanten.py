@@ -135,7 +135,8 @@ def test_ohne_lokal_kein_zugriff_ueber_127(grund, tmp_path):
 def test_cli_mandanten(grund, tmp_path):
     r = _scout(grund, tmp_path, "mandant", "anlegen", "firma-a", "--name", "Firma A", "--url", "https://a.test")
     assert r.returncode == 0 and "angelegt" in r.stdout, r.stderr
-    r = _scout(grund, tmp_path, "--mandant", "firma-a", "nutzer", "anlegen", "Anna", "--rolle", "inhaber", "--passwort", "sicher1234")
+    r = _scout(grund, tmp_path, "--mandant", "firma-a", "nutzer", "anlegen", "Anna", "--rolle", "inhaber",
+               umgebung={"SCOUT_NEUES_PASSWORT": "sicher1234"})
     assert r.returncode == 0, r.stderr
     assert (tmp_path / "mandanten" / "firma-a" / "daten" / "anzeigen.sqlite").is_file()
     r = _scout(grund, tmp_path, "mandant", "liste")

@@ -250,18 +250,26 @@ class TeamSpeicher:
         return [self._zeile(r) for r in self.con.execute(sql, werte)]
 
     def besichtigung_planen(self, bid: int, termin: str | None, adresse: str | None, zustaendig_id: int | None) -> bool:
-        cur = self.con.execute("UPDATE besichtigungen SET termin=?, adresse=?, zustaendig_id=?, geaendert_am=?, "
-                               "version=version+1 WHERE id=?", (termin, adresse, zustaendig_id, _jetzt(), bid))
+        # ohne neue Version: Termin/Adresse/Zuständig gehören nicht zu den Eingaben vor Ort – ein verschobener Termin soll auf dem
+        # Handy des Besichtigers keinen Versionskonflikt auslösen (P1-07)
+        cur = self.con.execute("UPDATE besichtigungen SET termin=?, adresse=?, zustaendig_id=?, geaendert_am=? WHERE id=?",
+                               (termin, adresse, zustaendig_id, _jetzt(), bid))
         self.con.commit()
         return cur.rowcount > 0
 
-    def besichtigung_speichern(self, bid: int, daten: dict, ergebnis: dict) -> int:
-        """Speichert Eingaben + Rechnung, setzt Status auf „läuft“. Rückgabe: neue Version."""
-        self.con.execute(
-            "UPDATE besichtigungen SET daten_json=?, ergebnis_json=?, status=CASE WHEN status='geplant' THEN 'laeuft' "
-            "ELSE status END, geaendert_am=?, version=version+1 WHERE id=?",
-            (json.dumps(daten, ensure_ascii=False), json.dumps(ergebnis, ensure_ascii=False), _jetzt(), bid))
+    def besichtigung_speichern(self, bid: int, daten: dict, ergebnis: dict, version: int | None = None) -> int | None:
+        """Speichert Eingaben + Rechnung, setzt Status auf „läuft“. Rückgabe: neue Version – oder None, wenn ``version`` angegeben
+        ist und inzwischen jemand anderes gespeichert hat (P1-07: nichts wird überschrieben). Abgeschlossene bleiben unverändert."""
+        sql = ("UPDATE besichtigungen SET daten_json=?, ergebnis_json=?, status=CASE WHEN status='geplant' THEN 'laeuft' "
+               "ELSE status END, geaendert_am=?, version=version+1 WHERE id=? AND status IN ('geplant', 'laeuft')")
+        werte = [json.dumps(daten, ensure_ascii=False), json.dumps(ergebnis, ensure_ascii=False), _jetzt(), bid]
+        if version is not None:
+            sql += " AND version=?"
+            werte.append(version)
+        cur = self.con.execute(sql, werte)
         self.con.commit()
+        if not cur.rowcount:
+            return None
         return self.con.execute("SELECT version FROM besichtigungen WHERE id=?", (bid,)).fetchone()["version"]
 
     def besichtigung_abschliessen(self, bid: int, protokoll: dict, endpreis: int | None, status: str = "abgeschlossen"):

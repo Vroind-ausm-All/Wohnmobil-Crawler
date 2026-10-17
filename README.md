@@ -8,7 +8,7 @@ Wohnmobil an und schreibst es mit einem Klick an.
 ## Einrichtung (einmalig, ca. 5 Minuten)
 
 1. **Python 3.13** installieren (python.org → Downloads → Windows → „Python 3.13.x“ →
-   „Windows installer (64-bit)“). 3.10–3.12 gehen auch. **Neuere Versionen wie 3.14/3.15 noch nicht**:
+   „Windows installer (64-bit)“). Ältere Versionen werden nicht unterstützt. **Neuere Versionen wie 3.14/3.15 noch nicht**:
    Für sie gibt es PyYAML nicht fertig für Windows, die Installation bricht dann mit
    „Microsoft Visual C++ 14.0 or greater is required“ ab. 3.13 kann problemlos *zusätzlich* zu
    einer anderen Version installiert sein. Python selbst muss nie geöffnet werden.
@@ -18,6 +18,9 @@ Wohnmobil an und schreibst es mit einem Klick an.
    - **suchen**: Suche im Browser auf kleinanzeigen.de zusammenklicken (Ort/Radius, Preis, Art,
      *Anbieter: Privat*), URL kopieren und eintragen. Seitenzahlen ergänzt das Tool selbst.
    - **rechner**: deine echten Kosten und Zielmarge eintragen.
+
+   Tipp: Eigene Werte lieber in eine neue Datei `config.local.yaml` daneben schreiben (gleiche Abschnitte, nur die
+   Abweichungen). Sie überlagert `config.yaml`, wird nie ins Repository übernommen und bleibt bei Updates erhalten.
 4. **Windows: Doppelklick auf `app.bat`.** Beim ersten Start richtet `installieren.bat` automatisch
    eine eigene Python-Umgebung im Projektordner ein (`.venv`, mit Python 3.13) und installiert dort die
    Zusatzpakete – nur als fertige Pakete, ohne Kompilieren. Globale Python-Einstellungen und andere
@@ -54,7 +57,7 @@ es wird niemand als Bearbeiter eingetragen (eine bestehende Reservierung bleibt 
 | `python scout.py report` | Report neu erzeugen, z. B. nach Änderung der Kosten in `config.yaml` (ohne Internet) |
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --titel "Knaus Sky TI 650 MEG" --anschreiben` | Einzelfahrzeug durchrechnen und Anschreiben ausgeben (auch für Anfragen außerhalb von Kleinanzeigen; `--text` mit der Beschreibung berücksichtigt Ausstattung/Mängel) |
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --marktwert 44000` | mit eigenem Marktwert (z. B. aus mobile.de oder DAT) |
-| `python scout.py nutzer anlegen Anna --rolle inhaber --telefon "+49 170 …"` | Team-Zugang für die Handy-App (auch `liste`, `passwort`, `sperren`, `entsperren`) |
+| `python scout.py nutzer anlegen Anna --rolle inhaber --telefon "+49 170 …"` | Team-Zugang für die Handy-App (auch `liste`, `passwort`, `sperren`, `entsperren`); das Passwort wird abgefragt – nie als Argument, für Skripte nur über die Umgebungsvariable `SCOUT_NEUES_PASSWORT` |
 | `python scout.py sichern` | Datenbank und Fotos sichern (siehe „Datensicherung“) |
 | `python scout.py wiederherstellen <Datei> --bestaetigt [--ohne-fotos]` | Sicherung zurückspielen – vorher App und Suchlauf beenden |
 | `python scout.py status 3531797014 kontaktiert` | Status setzen: `neu`, `kontaktiert`, `uninteressant`, `gekauft` (in der App per Klick) |
@@ -277,8 +280,10 @@ Nachrichten verschicken, und viele Verkäufer reagieren auf Massenanfragen aller
   Nummern und Adressen werden verworfen. Er dient der persönlichen Anrede im Anschreiben und steht deshalb
   auch im erzeugten Brief: in `ausgabe/report.html`, in `ausgabe/anschreiben/<id>.txt` im Anhang der
   Benachrichtigungs-Mail (`report.html`, verlässt damit den Rechner), im Offline-Speicher der Handy-App (Fahrzeugansicht
-  mit Brief) und – nach dem Kontakt – im gespeicherten Anschreibentext der Datenbank. **Eine Lösch- oder Anonymisierungsfunktion gibt es noch nicht** (geplant als Paket P1-14a, Backlog): der Status „gelöscht“ markiert nur
-  das Inserat und entfernt den Namen **nicht** aus `details_json`. Die App selbst lauscht nur auf dem eigenen Rechner (127.0.0.1;
+  mit Brief) und – nach dem Kontakt – im gespeicherten Anschreibentext der Datenbank. **Löschen:** `python scout.py inserat anonymisieren ID --bestaetigt` (oder `--aelter-als MONATE`) entfernt den Profilnamen aus
+  `details_json`, den Namen im gespeicherten Anschreiben, Verkäuferangaben im Besichtigungsprotokoll und die Anschreiben-Datei; mit
+  `datenschutz → inserate_anonymisieren_nach_monaten` auch automatisch nach jedem Suchlauf (Standard 0 = aus). Gekaufte Fahrzeuge
+  bleiben unverändert (Aufbewahrung). Die App selbst lauscht nur auf dem eigenen Rechner (127.0.0.1;
   Handys über `tailscale serve`); Mail-Anhang und Handy-Speicher liegen außerhalb davon.
 - **Betrieb über das eigene Büro hinaus** (öffentliche Adresse, weitere Firmen): erst die Checkliste
   `docs/PILOTBETRIEB.md` abarbeiten. Was gespeichert wird und wie es sich löschen lässt: `docs/DATENRECHTE.md`

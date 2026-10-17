@@ -135,7 +135,8 @@
         (d.termine.length > heutige.length ? '<p><a href="#/termine">Alle ' + d.termine.length + " offenen Besichtigungen →</a></p>" : "") +
         "<h2>Suche</h2>" + '<p class="leise">' + esc(d.suchlauf.laeuft ? "Läuft: " + (d.suchlauf.meldung || "") : (d.suchlauf.meldung || "Bereit")) +
         (d.suchlauf.naechste_auto ? " · nächste automatische Suche " + esc(d.suchlauf.naechste_auto.slice(11, 16)) + " Uhr" : "") + "</p>" +
-        '<div class="reihe"><button class="knopf" data-aktion="suchen">↻ Neue Anzeigen suchen</button></div>' +
+        (S.ich.team && S.ich.nutzer && S.ich.nutzer.rolle !== "inhaber" ? "" :       // P1-15: Suchlauf nur Inhaber
+          '<div class="reihe"><button class="knopf" data-aktion="suchen">↻ Neue Anzeigen suchen</button></div>') +
         (S.ich.team ? '<p class="leise mitte"><a href="#" data-aktion="abmelden">Abmelden</a></p>' : "");
     });
   }
@@ -269,7 +270,9 @@
     return Promise.all([api("/api/besichtigung/" + id), katalog()]).then(function (r) {
       var srv = r[0], lokal = entwurfLesen(id);
       B = { id: srv.id, basis: srv.basis, daten: srv.daten || {}, version: srv.version, fotos: srv.fotos, info: srv, katalog: r[1] };
-      if (lokal && lokal.offen) { B.daten = lokal.daten; toast("Lokale Änderungen werden übertragen …"); }
+      if (lokal && lokal.offen) {                  // Entwurf: Version, auf der die Eingaben beruhen (P1-07)
+        B.daten = lokal.daten; if (lokal.version != null) B.version = lokal.version; toast("Lokale Änderungen werden übertragen …");
+      }
       var d = B.daten;
       d.pruefpunkte = d.pruefpunkte || {}; d.messungen = d.messungen || {}; d.maengel = d.maengel || [];
       d.fahrzeug = d.fahrzeug || {}; d.anpassung = d.anpassung || { betrag: "", grund: "" };
@@ -413,7 +416,7 @@
 
   function geaendert() {
     rechne();
-    entwurfSchreiben(B.id, { daten: B.daten, offen: true, zeit: Date.now() });
+    entwurfSchreiben(B.id, { daten: B.daten, offen: true, zeit: Date.now(), version: B.version });
     syncAnzeige();
     clearTimeout(speicherUhr);
     speicherUhr = setTimeout(speichern, 1200);
@@ -421,18 +424,37 @@
   function speichereServer(bid) {
     var e = entwurfLesen(bid);
     if (!e || !e.offen) return Promise.resolve();
-    return api("/api/besichtigung/" + bid + "/speichern", { daten: e.daten }).then(function (antwort) {
+    return api("/api/besichtigung/" + bid + "/speichern", { daten: e.daten, version: e.version }).then(function (antwort) {
       var aktuell = entwurfLesen(bid);
-      if (aktuell && aktuell.zeit === e.zeit) entwurfSchreiben(bid, { daten: e.daten, offen: false, zeit: e.zeit });
+      if (aktuell && aktuell.zeit === e.zeit) entwurfSchreiben(bid, { daten: e.daten, offen: false, zeit: e.zeit, version: antwort.version });
+      else if (aktuell) { aktuell.version = antwort.version; entwurfSchreiben(bid, aktuell); }   // inzwischen weiter getippt
       if (B && String(B.id) === String(bid)) B.version = antwort.version;
       return antwort;
     });
+  }
+  // P1-07: Ein anderes Gerät hat inzwischen gespeichert – nichts still überschreiben, sondern fragen
+  function versionsKonflikt(bid, fehler) {
+    var mein = entwurfLesen(bid), fremd = fehler.daten || {};
+    if (fremd.status === "abgeschlossen" || fremd.status === "abgebrochen") { toast("Besichtigung ist bereits abgeschlossen"); return Promise.resolve(); }
+    if (mein && confirm("Diese Besichtigung wurde inzwischen auf einem anderen Gerät gespeichert.\n\n" +
+                        "OK = deine Eingaben behalten (der andere Stand wird überschrieben)\nAbbrechen = den anderen Stand laden")) {
+      entwurfSchreiben(bid, { daten: mein.daten, offen: true, zeit: Date.now(), version: fremd.version });
+      return speichereServer(bid);
+    }
+    entwurfSchreiben(bid, { daten: fremd.daten || {}, offen: false, zeit: Date.now(), version: fremd.version });
+    if (B && String(B.id) === String(bid)) return besichtigung(bid);
+    return Promise.resolve();
   }
   function speichern() {
     clearTimeout(speicherUhr);
     if (!B) return Promise.resolve();
     if (!navigator.onLine) { syncAnzeige(); return Promise.resolve(); }
-    return speichereServer(B.id).then(syncAnzeige, function (e) { if (e.status === 409) toast(e.message); syncAnzeige(); });
+    var bid = B.id;
+    return speichereServer(bid).then(syncAnzeige, function (e) {
+      if (e.status === 409 && e.grund === "version") return versionsKonflikt(bid, e).then(syncAnzeige, syncAnzeige);
+      if (e.status === 409) toast(e.message);
+      syncAnzeige();
+    });
   }
 
   function bildVerkleinern(datei) {
@@ -515,7 +537,7 @@
       if (!daten.verkaeufer.eigentum_frei) { fehler.textContent = "Erklärung zu Eigentum/Rechten Dritter bestätigen"; return; }
     }
     if (!navigator.onLine) { fehler.textContent = "Für den Abschluss wird Netz gebraucht – alle Eingaben sind lokal gesichert."; return; }
-    entwurfSchreiben(B.id, { daten: B.daten, offen: true, zeit: Date.now() });
+    entwurfSchreiben(B.id, { daten: B.daten, offen: true, zeit: Date.now(), version: B.version });
     speichereServer(B.id).then(function () { return api("/api/besichtigung/" + B.id + "/abschluss", daten); }).then(function (r) {
       // kein automatisches Fenster (Handy-Browser blockieren das) – Protokoll-Knopf steht in der Besichtigung
       toast(r && r.ankauf ? "Abgeschlossen – Ankaufsvorgang angelegt (Ankäufe)" : "Abgeschlossen – Protokoll oben öffnen"); location.hash = "#/besichtigung/" + B.id;
@@ -557,10 +579,19 @@
                                                                            function (err) { teamFehler(err, id); });
     } else if (a === "planen") {
       var termin = document.getElementById("b-termin").value;
-      api("/api/besichtigung", { anzeige_id: id, termin: termin || null, adresse: document.getElementById("b-adresse").value,
-                                  zustaendig_id: document.getElementById("b-wer").value || null })
-        .then(function (b) { toast("Besichtigung geplant"); fahrzeug(id); if (b.zustaendig && b.zustaendig.id !== S.ich.nutzer.id && b.whatsapp) window.open(b.whatsapp, "_blank", "noopener"); },
-              function (err) { toast(err.message); });
+      var planen = function (marktwert) {
+        return api("/api/besichtigung", { anzeige_id: id, termin: termin || null, adresse: document.getElementById("b-adresse").value,
+                                          zustaendig_id: document.getElementById("b-wer").value || null, marktwert: marktwert });
+      };
+      var geplant = function (b) { toast("Besichtigung geplant"); fahrzeug(id); if (b.zustaendig && b.zustaendig.id !== S.ich.nutzer.id && b.whatsapp) window.open(b.whatsapp, "_blank", "noopener"); };
+      planen(undefined).then(geplant, function (err) {
+        if (err.grund !== "marktwert") return toast(err.message);
+        // P1-12: Erstzulassung fehlt – ohne eigenen Marktwert keine Beträge
+        var eingabe = prompt(err.message + "\n\nMarktwert in €:");
+        var mw = parseInt(String(eingabe || "").replace(/[^0-9]/g, ""), 10);
+        if (!mw) return;
+        planen(mw).then(geplant, function (e2) { toast(e2.message); });
+      });
     } else if (a === "suchen") {
       api("/api/suchlauf", {}).then(function () { toast("Suche gestartet – dauert einige Minuten"); });
     } else if (a === "abmelden") {

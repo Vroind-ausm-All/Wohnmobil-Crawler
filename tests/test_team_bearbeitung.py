@@ -851,7 +851,7 @@ def test_service_worker_speichert_team_stand_nicht_zwischen():
     for pfad in ("/api/team", "/api/suchlauf", "/api/verkaufsanfrage/1", "/api/verkaufsanfragen", "/api/ankauf/1", "/api/ankaeufe",
                  "/api/kalkulation/1", "/anfrage-fotos/1/a.jpg", "/protokoll/1", "/api/haendler/fahrzeuge", "/api/auktion/1", "/mx"):
         assert not lesbar(pfad), pfad
-    assert "antwort.status === 401" in sw and "wm-scout-4" in sw
+    assert "antwort.status === 401" in sw and "wm-scout-6" in sw
 
 
 def test_zwischenspeicher_wird_von_uebernahme_nicht_verworfen_team_aber_frisch(server, team, db):

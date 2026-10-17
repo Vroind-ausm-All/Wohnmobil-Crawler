@@ -129,8 +129,9 @@ def test_sicherheits_kopf_und_server_kennung(server, team):
 
 
 def test_login_weiterleitung_nur_auf_eigene_seiten(server):
-    html = roh(server, "GET", "/login")[1].decode()
-    assert "u.origin === location.origin" in html and "weiter.charAt(0)" not in html
+    """Das Ziel prüft der Server (``sicheres_ziel``, ausführlich in test_phase1_abschluss); die Seite übernimmt nur dessen Ergebnis."""
+    assert 'var ziel = "/m";' in roh(server, "GET", "/login?weiter=/.//evil.com")[1].decode()
+    assert 'var ziel = "/anfragen";' in roh(server, "GET", "/login?weiter=/anfragen")[1].decode()
 
 
 def test_ohne_nutzer_ist_ein_proxy_nicht_lokal(server):

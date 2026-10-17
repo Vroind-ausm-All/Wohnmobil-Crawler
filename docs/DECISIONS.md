@@ -512,3 +512,43 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   5. Einzelbetrieb unverändert (ohne `--mandanten` keine Wirkung).
 * **Folgen / offen:** Keine gemeinsame Marktdatenbasis (jeder Mandant sucht selbst). Kein Administrator in der Oberfläche.
   Viele Mandanten in einem Prozess nicht vorgesehen (Threads je Live-Verbindung). Bestehende Daten werden nicht verschoben.
+
+## ADR-034 – Phase-1-Abschluss: Grenzen von P1-05, Bewertung ohne Datenbank, lokale Konfiguration, nur Python 3.13 · vorgeschlagen (17.10.2026)
+
+* **Kontext:** Betreiber „Schließe Phase 1 komplett ab“ mit den Entscheidungen F9 „Nur 3.13“, F10 „Befehl + einstellbare Frist,
+  Standard aus“ und F11 „Lesen frei, Schreiben nur zuständig“.
+* **Entscheidung:**
+  1. **P1-05 eng statt Umbau:** Der einzige Netzaufruf, der während einer Web-Anfrage unter der globalen Sperre lief, war die
+     WhatsApp-Nachricht bei Zuweisung einer Besichtigung (bis 20 s). Sie läuft jetzt in einem eigenen Thread
+     (`WhatsAppCloud.sende_im_hintergrund`). E-Mail und die WhatsApp-Meldung neuer Treffer liefen schon im Suchlauf-Thread.
+     Eine Datenbankverbindung je Thread mit Sperre nur um Datenbankzugriffe wird **nicht** gebaut: SQLite schreibt ohnehin
+     nacheinander, WAL (ADR-013) entkoppelt Lesen und Schreiben, und der Umbau berührt jede Route. Das Akzeptanzkriterium
+     „langsamer WhatsApp-Aufruf blockiert keine andere Anfrage“ ist erfüllt und getestet. Die Bewertung aller Inserate unter
+     der Sperre (Q10) bleibt bis P3-07 bestehen.
+  2. **Bewertung ohne Datenbank (ADR-015, P1-08):** Fachbegriffe (Status, Herkunft der Fahrzeugart) in `wmscout/domaene.py`;
+     `bewerte_zeilen` rechnet auf Listen, `bewerte_alle` liest nur noch die Datenbank. `datenbank.py` stellt die Namen für
+     bestehende Importe weiter bereit.
+  3. **Lokale Konfiguration (P1-09):** `config.local.yaml` neben `config.yaml` (ignoriert, auch `*.local.yaml`) wird
+     abschnittsweise zusammengeführt, einzelne Werte und Listen werden ersetzt. Passwörter für Zugänge nie als Argument:
+     Abfrage am Terminal oder `SCOUT_NEUES_PASSWORT` für Skripte.
+  4. **Nur Python 3.13 (F9, P1-10):** `pyproject.toml`, Installer und Hinweis in `scout.py` einheitlich; Lock-Dateien für 3.13
+     ohne Versionswechsel neu erzeugt. Eine vorhandene `.venv` mit älterem Python wird beim nächsten Start neu angelegt.
+  5. **Ohne Erstzulassung keine Beträge (P1-12):** Der Angebotspreis ist kein Marktwert. Max-EK und Erstangebot gibt es erst mit
+     manuell angegebenem Marktwert; die Besichtigung eines solchen Inserats verlangt ihn.
+  6. **Versionsprüfung beim Speichern der Besichtigung (P1-07):** Ein Gerät mit veraltetem Stand überschreibt nichts still,
+     sondern erhält 409 mit dem aktuellen Stand und entscheidet selbst.
+  7. **Rollen (F11, P1-15):** `docs/ROLLEN.md`. „Gekauft“ direkt, Suchlauf und Seitenimport nur Inhaber.
+  8. **Verkäuferdaten in Inseraten (F10, P1-14a):** Befehl `scout.py inserat anonymisieren` und optionale Frist
+     `datenschutz.inserate_anonymisieren_nach_monaten` (Standard 0 = aus); gekaufte Fahrzeuge nie (Aufbewahrungspflichten).
+     Umfang wie der Widerruf einer Anfrage (ADR-030): auch Team-Notiz, Eingaben vor Ort (FIN, Kennzeichen), Fotos der
+     Besichtigung; Inserate mit offener Besichtigung lässt die Frist aus. Die Frist läuft nach Suchlauf, Seitenimport und beim
+     Start der App, weil Verkäufernamen fast nur über den Seitenimport kommen; ein Fehler dabei bricht nichts ab.
+  9. **Ziel nach der Anmeldung prüft der Server** (`sicheres_ziel`): nur Pfade auf diesem Server, ohne „//“, „\“, Punkt-
+     Segmente und Steuerzeichen. Die frühere Prüfung im Browser ließ „/.//fremd“ durch (QA-Befund N3).
+  10. **Handy-Offline-Speicher (P1-14b):** Abgeschlossene Besichtigungen markiert der Server (`X-Scout-Offline: nein`), der
+      Service Worker speichert sie nicht; Unterschriften und Verkäuferangaben liefert die Handy-API nie. Offline bleiben bewusst
+      `/api/ich` (Start ohne Netz) und Fotos offener Besichtigungen.
+  11. **Planen ändert keine Version:** Termin, Adresse und Zuständiger gehören nicht zu den Eingaben vor Ort; ein verschobener
+      Termin löst auf dem Handy keinen Versionskonflikt aus.
+* **Folgen / offen:** Fristen legt der Betreiber mit dem Datenschutzbeauftragten fest (`docs/DATENRECHTE.md`, Standard aus).
+  Q10 bleibt bis P3-07. CSRF-Token je Prozess statt je Sitzung (Schutz über SameSite, JSON-Pflicht, Origin-Prüfung).

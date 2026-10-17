@@ -10,6 +10,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .bearbeitung import IN_ARBEIT, VORBEREITET, BearbeitungsKonflikt
+from .domaene import (  # noqa: F401 – Kompatibilität: bisher hier definiert
+    _MARKE, BESTAETIGT, IMPORT_ARTEN, IMPORT_SUCHE, STATUS, UNBEKANNT, VORLAEUFIG, import_art, import_suche)
 from .migrationen import NEUE_SPALTEN, migriere  # noqa: F401 – NEUE_SPALTEN bleibt hier importierbar (Kompatibilität)
 
 log = logging.getLogger(__name__)
@@ -17,53 +19,7 @@ log = logging.getLogger(__name__)
 # (kurze Transaktionen); 10 s überbrücken auch einen langsamen Datenträger, ohne die App merklich hängen zu lassen.
 STANDARD_WARTEZEIT = 10.0
 
-# Ablauf eines Ankaufs (Schlüssel → Anzeige in der App)
-# „vorbereitet“ = Text kopiert/Anzeige geöffnet; erst „kontaktiert“ (Knopf „gesendet“) ist ein bestätigter Kontakt (ADR-012)
-STATUS = {"neu": "offen", "vorbereitet": "Text kopiert", "kontaktiert": "kontaktiert", "verhandlung": "in Verhandlung",
-          "besichtigung": "Besichtigung", "gekauft": "gekauft", "abgesagt": "abgesagt",
-          "uninteressant": "uninteressant"}
-
-# `suche` von Inseraten aus gespeicherten Seiten: werden nie per Detailabruf nachgeladen (ADR-010)
-IMPORT_SUCHE = "Import (gespeicherte Seite)"
-
-# Herkunft der Fahrzeugart eines importierten Inserats, in `suche` kodiert (keine Schemaänderung):
-#   „Import <Art> (bestätigt)“  Art stammt aus dem Art-Filter (art_s:) in der Haupttabelle einer Suchseite oder aus dem
-#                               Feld „Art“ der Detailseite (die Detailseite hat Vorrang)
-#   „Import <Art> (vorläufig)“  Art nur aus dem eigenen Titel bzw. einem Suchwort der Seite – Hinweis „nicht bestätigt“
-#   IMPORT_SUCHE                Art unbekannt (oder widersprüchlich) – Hinweis „unbekannt“
-#   „Import <Art>“              Altbestand früherer Zweigstände: gilt wie „vorläufig“
-# Erkannt werden nur genau diese Muster; jede andere `suche` (auch „Importfahrzeuge …“) ist eine Crawler-Suche und
-# bleibt unberührt. Bei nicht bestätigter Art wird trotzdem angeschrieben, die Zeile trägt aber einen Hinweis.
-IMPORT_ARTEN = ("Teilintegrierter", "Integrierter", "Alkoven", "Kastenwagen", "Wohnwagen")
-BESTAETIGT, VORLAEUFIG, UNBEKANNT = "bestaetigt", "vorlaeufig", "unbekannt"
-_MARKE = {BESTAETIGT: " (bestätigt)", VORLAEUFIG: " (vorläufig)"}
-
-
-def import_suche(art: str | None = None, status: str | None = None) -> str:
-    """`suche`-Wert für ein importiertes Inserat; ohne Art oder Status `IMPORT_SUCHE` (unbekannt)."""
-    if art not in IMPORT_ARTEN or status not in _MARKE:
-        return IMPORT_SUCHE
-    return f"Import {art}{_MARKE[status]}"
-
-
-def import_art(suche: str | None) -> tuple[str | None, str | None]:
-    """(Art, Herkunft) aus `suche`. Herkunft: BESTAETIGT, VORLAEUFIG, UNBEKANNT – oder None, wenn `suche` keine
-    Import-Suche ist (Crawler). „Import <unbekannte Art> (bestätigt|vorläufig)“ gilt als UNBEKANNT."""
-    if not suche:
-        return None, None
-    if suche == IMPORT_SUCHE:
-        return None, UNBEKANNT
-    if not suche.startswith("Import "):
-        return None, None
-    rest = suche[len("Import "):]
-    for status, marke in _MARKE.items():
-        if rest.endswith(marke):
-            art = rest[:-len(marke)]
-            return (art, status) if art in IMPORT_ARTEN else (None, UNBEKANNT)
-    if rest in IMPORT_ARTEN:
-        return rest, VORLAEUFIG                  # Altbestand ohne Markierung
-    return None, None
-
+# Fachbegriffe (STATUS, Import-Herkunft) liegen in domaene.py (P1-08) und sind oben importiert.
 
 # SQL-Gegenstück zu import_art() != (None, None): nur die exakten Muster, nicht jeder Name mit „Import“ am Anfang.
 # GLOB statt LIKE: LIKE ignoriert die Groß-/Kleinschreibung, Python (startswith/endswith) nicht. In den Mustern stehen keine
@@ -107,7 +63,8 @@ class Datenbank:
         """
         Path(pfad).parent.mkdir(parents=True, exist_ok=True)
         migriere(pfad, sicherung_ordner)
-        # check_same_thread=False: die App bedient Anfragen nacheinander in einem Server-Thread
+        # check_same_thread=False: die App bedient Anfragen in mehreren Threads (ThreadingHTTPServer); Zugriffe auf diese
+        # Verbindung serialisiert die Sperre des App-Kontexts, Suchlauf und Auto-Suche öffnen eigene Verbindungen
         self.con = sqlite3.connect(pfad, check_same_thread=False, timeout=timeout)
         self.con.row_factory = sqlite3.Row
         self._tiefe = 0          # >0: innerhalb von ``transaktion()`` – verschachtelte Schreibblöcke committen nicht selbst

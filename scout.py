@@ -22,8 +22,8 @@ for _strom in (sys.stdout, sys.stderr):
     if hasattr(_strom, "reconfigure"):
         _strom.reconfigure(encoding="utf-8", errors="replace")
 
-if not (3, 10) <= sys.version_info[:2] <= (3, 13):
-    print(f"Hinweis: Wohnmobil-Scout ist für Python 3.10–3.13 gedacht, verwendet wird {sys.version.split()[0]}.\n"
+if sys.version_info[:2] != (3, 13):
+    print(f"Hinweis: Wohnmobil-Scout ist für Python 3.13 gedacht, verwendet wird {sys.version.split()[0]}.\n"
           "Unter Windows bitte über app.bat starten – das richtet automatisch eine passende Umgebung (.venv) ein.",
           file=sys.stderr)
 _fehlt = [paket for paket, modul in (("requests", "requests"), ("beautifulsoup4", "bs4"), ("PyYAML", "yaml"),
@@ -36,6 +36,7 @@ if _fehlt:
 import argparse
 import logging
 import logging.handlers
+import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -67,9 +68,30 @@ from wmscout.team import ROLLEN, TeamSpeicher, lade_team_sicht
 BASIS = Path(__file__).resolve().parent
 
 
+def _mischen(basis: dict, zusatz: dict) -> dict:
+    for k, v in zusatz.items():
+        basis[k] = _mischen(basis[k], v) if isinstance(v, dict) and isinstance(basis.get(k), dict) else v
+    return basis
+
+
+LOKAL_ABSCHNITTE: list[str] = []
+
+
 def lade_config(pfad: str) -> dict:
-    with open(BASIS / pfad, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    """``config.yaml`` und – falls vorhanden – ``config.local.yaml`` daneben (P1-09): eigene Einstellungen des Betriebs, die
+    nicht ins Repository gehören (.gitignore). Abschnitte werden zusammengeführt, einzelne Werte und Listen ersetzt."""
+    datei = BASIS / pfad
+    with open(datei, encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+    lokal = datei.with_name(f"{datei.stem}.local{datei.suffix}")
+    if lokal.is_file():
+        with open(lokal, encoding="utf-8") as f:
+            zusatz = yaml.safe_load(f) or {}
+        if not isinstance(zusatz, dict):
+            sys.exit(f"{lokal.name}: erwartet werden Abschnitte wie in {datei.name}")
+        cfg = _mischen(cfg, zusatz)
+        LOKAL_ABSCHNITTE[:] = sorted(zusatz)        # wird nach dem Einrichten des Protokolls gemeldet (nachvollziehbar)
+    return cfg
 
 
 def logging_einrichten(cfg: dict):
@@ -79,6 +101,8 @@ def logging_einrichten(cfg: dict):
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S",
         handlers=[logging.StreamHandler(sys.stdout),        # Protokoll rotiert: höchstens 6 × 5 MB (G0)
                   logging.handlers.RotatingFileHandler(ordner / "scout.log", maxBytes=5_000_000, backupCount=5, encoding="utf-8")])
+    if LOKAL_ABSCHNITTE:
+        logging.getLogger("scout").info("config.local.yaml überlagert: %s", ", ".join(LOKAL_ABSCHNITTE))
 
 
 def _team(cfg, db):
@@ -100,6 +124,7 @@ def cmd_lauf(cfg, db, args):
 def _lauf(cfg, db):
     start = datetime.now().isoformat(timespec="seconds")
     stat = Importer(cfg, db).lauf(cfg["suchen"])
+    datenrechte.frist_anwenden(db, cfg, BASIS, foto_ordner(cfg))
     logging.info("Crawl fertig: %d neu, %d Preissenkungen, %d bekannt, %d Detailseiten",
                  stat["neu"], stat["preis"], stat["bekannt"], stat["details"])
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
@@ -134,6 +159,7 @@ def cmd_import(cfg, db, args):
         print(f"Eingelesene Dateien liegen jetzt in: {ordner / 'eingelesen'}")
     if stat["fehler"]:
         print("Bitte prüfen:\n" + "\n".join(f"  - {f}" for f in stat["fehler"]))
+    datenrechte.frist_anwenden(db, cfg, BASIS, foto_ordner(cfg))         # Verkäufernamen kommen über den Seitenimport (P1-14a)
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
     erg = schreibe_ausgaben(cfg, zeilen, BASIS, team=_team(cfg, db))
     print(f"Report: {erg['html']}  ({erg['zaehl']})")
@@ -158,6 +184,11 @@ def cmd_rechne(cfg, db, args):
         print(f"Referenzwert (Modell)    : {euro(b.modellwert)}   (km-Korrektur {b.km_korrektur:+.1%})")
     for n, w in b.wertfaktoren.items():
         print(f"  {n:<23}: {w:+.1%}")
+    if b.sicherheit == "keine":
+        print(f"  {b.vergleich_basis}\n  Keine Beträge – mit --marktwert einen eigenen Marktwert angeben (P1-12).")
+        if args.anschreiben:
+            print("\n--- Anschreiben ---\n" + Anschreiber(cfg, BASIS).text(a, b))
+        return
     print(f"Marktniveau Angebote     : {euro(b.marktwert_angebote)}   Sicherheit {b.sicherheit}"
           + (f", plausibel {euro(b.spanne_von)} – {euro(b.spanne_bis)}" if b.spanne_von else ""))
     print(f"  Basis: {b.vergleich_basis}")
@@ -245,6 +276,15 @@ def cmd_wiederherstellen(cfg, args):
     print("Beim nächsten Start wird die Datenbank bei Bedarf auf die aktuelle Version gebracht (mit eigener Sicherung).")
 
 
+def _neues_passwort(name: str) -> str:
+    """Passwort nie als Kommandozeilen-Argument (stünde in der Prozessliste und im Verlauf, P1-09): Abfrage am Terminal oder –
+    für Automatisierung – Umgebungsvariable SCOUT_NEUES_PASSWORT."""
+    if os.environ.get("SCOUT_NEUES_PASSWORT"):
+        print(f"Hinweis: Passwort für {name} aus SCOUT_NEUES_PASSWORT – Variable danach wieder entfernen", file=sys.stderr)
+        return os.environ["SCOUT_NEUES_PASSWORT"]
+    return _passwort_abfragen(name)
+
+
 def _passwort_abfragen(name: str) -> str:
     import getpass
     while True:
@@ -273,12 +313,12 @@ def cmd_nutzer(cfg, db, args):
                 sys.exit(f"Standort „{args.standort}“ unbekannt (python scout.py standort liste)")
             standort_id = s["id"]
         try:
-            team.nutzer_anlegen(args.name, args.passwort or _passwort_abfragen(args.name), args.rolle, args.telefon, standort_id)
+            team.nutzer_anlegen(args.name, _neues_passwort(args.name), args.rolle, args.telefon, standort_id)
         except Exception as e:  # noqa: BLE001 – verständliche Meldung statt Traceback
             sys.exit(f"Nicht angelegt: {e}")
         print(f"{args.name} angelegt ({ROLLEN[args.rolle]}). Ab jetzt ist für die App eine Anmeldung nötig.")
     elif args.aktion == "passwort":
-        ok = team.passwort_setzen(args.name, args.passwort or _passwort_abfragen(args.name))
+        ok = team.passwort_setzen(args.name, _neues_passwort(args.name))
         print("Passwort geändert – bestehende Anmeldungen wurden beendet." if ok else f"{args.name} nicht gefunden")
     elif args.aktion in ("sperren", "entsperren"):
         ok = team.nutzer_aktiv_setzen(args.name, args.aktion == "entsperren")
@@ -345,6 +385,30 @@ def cmd_anfrage(cfg, db, args):
         sys.exit(f"Nicht gelöscht: {e}")
     print(f"Widerruf ausgeführt: {erg['fotos']} Foto(s) gelöscht, {erg['besichtigungen']} Besichtigung(en) geschwärzt, "
           f"Verkäufer {'anonymisiert' if erg['verkaeufer_anonymisiert'] else 'bleibt (weitere Anfragen)'}.")
+
+
+def cmd_inserat(cfg, db, args):
+    """Personendaten aus Inseraten entfernen (P1-14a): einzeln oder alle ohne Kauf, die älter als N Monate sind."""
+    if bool(args.id) == (args.aelter_als is not None):
+        sys.exit("Entweder eine Inserat-ID oder --aelter-als MONATE angeben")
+    if args.aelter_als is not None and args.aelter_als < 1:
+        sys.exit("--aelter-als: mindestens 1 Monat")
+    if not args.bestaetigt:
+        sys.exit("Entfernt Verkäuferdaten (Profilname, Name im Anschreiben, Angaben im Protokoll) unwiderruflich – "
+                 "zur Bestätigung --bestaetigt angeben")
+    ausgabe = BASIS / cfg["ausgabe"]["ordner"]
+    if args.id:
+        try:
+            erg = datenrechte.inserat_anonymisieren(db, ausgabe, args.id, foto_ordner(cfg))
+        except LookupError as e:
+            sys.exit(str(e))
+        except ValueError as e:
+            sys.exit(f"Nicht geändert: {e}")
+        print(f"Inserat {args.id} anonymisiert ({'Name entfernt' if erg['name_entfernt'] else 'kein Name gespeichert'}, "
+              f"{erg['besichtigungen']} Besichtigung(en) bereinigt, {erg['fotos']} Foto(s) gelöscht). Bericht aktualisiert sich beim nächsten Lauf/„report“.")
+        return
+    erledigt = datenrechte.inserate_nach_frist(db, ausgabe, args.aelter_als, foto_ordner=foto_ordner(cfg))
+    print(f"{len(erledigt)} Inserat(e) ohne Kauf, älter als {args.aelter_als} Monate, anonymisiert.")
 
 
 def cmd_audit(cfg, db, args):
@@ -419,7 +483,6 @@ def main():
     n.add_argument("--rolle", choices=list(ROLLEN), default="mitarbeiter")
     n.add_argument("--telefon", help="Handynummer international, z. B. +491701234567 (für WhatsApp)")
     n.add_argument("--standort", help="nur Rolle haendler: Name des Standorts (python scout.py standort anlegen …)")
-    n.add_argument("--passwort", help=argparse.SUPPRESS)      # nur für Tests/Automatisierung
     st = sub.add_parser("standort", help="Standorte/Händler für das Händlerportal verwalten (prüfen = Zugang frei)")
     st.add_argument("aktion", choices=["anlegen", "liste", "pruefen", "sperren"])
     st.add_argument("name", nargs="?")
@@ -438,6 +501,11 @@ def main():
     ad.add_argument("--limit", type=int, default=500)
     nz = sub.add_parser("nutzung", help="Nutzungszähler eines Monats (Anfragen, Auktionen, Gebote, Ankäufe, Zugriffe, aktive Nutzer)")
     nz.add_argument("--monat", help="JJJJ-MM, Standard: laufender Monat")
+    ins = sub.add_parser("inserat", help="Verkäuferdaten aus Inseraten entfernen (Datenschutz, P1-14a)")
+    ins.add_argument("aktion", choices=["anonymisieren"])
+    ins.add_argument("id", nargs="?", help="Inserat-ID (oder --aelter-als)")
+    ins.add_argument("--aelter-als", type=int, help="alle Inserate ohne Kauf, letzte Aktivität älter als so viele Monate")
+    ins.add_argument("--bestaetigt", action="store_true")
     md = sub.add_parser("mandant", help="Mandanten (mehrere Firmen) anlegen, auflisten, Nutzung je Mandant")
     md.add_argument("aktion", choices=["anlegen", "liste", "nutzung"])
     md.add_argument("kennung", nargs="?", help="nur anlegen: z. B. firma-b (a–z, 0–9, Bindestrich)")
@@ -481,12 +549,14 @@ def main():
     try:
         reservierung_tage(cfg)              # ungültiges „team“ in config.yaml ebenso sofort melden
         einstellungen(cfg, BASIS)           # ungültiges „sicherung“ in config.yaml sofort melden, nicht erst bei der Sicherung
+        datenrechte.frist_aus(cfg)          # ebenso „datenschutz“
         db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]), str(sicherung_ordner(cfg, BASIS)), wal=wal_aktiv(cfg))
     except (MigrationsFehler, ValueError, sqlite3.Error) as e:
         sys.exit(f"Datenbank-Start abgebrochen: {e}")
     {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "rechne": cmd_rechne,
      "nutzer": cmd_nutzer, "status": cmd_status, "standort": cmd_standort,
-     "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage, "audit": cmd_audit, "nutzung": cmd_nutzung}[args.cmd](cfg, db, args)
+     "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage, "audit": cmd_audit, "nutzung": cmd_nutzung,
+     "inserat": cmd_inserat}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":

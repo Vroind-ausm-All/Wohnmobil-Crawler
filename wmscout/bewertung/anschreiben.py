@@ -7,7 +7,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from ..datenbank import STATUS, UNBEKANNT, VORLAEUFIG, import_art
+from ..domaene import STATUS, UNBEKANNT, VORLAEUFIG, import_art
 from ..normalisierung.fahrzeug import ART_PLURAL, fahrzeug_bezeichnung
 from ..normalisierung.person import profilname
 

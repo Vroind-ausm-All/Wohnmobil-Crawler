@@ -45,7 +45,7 @@ from ..bearbeitung import (IN_ARBEIT, OFFEN, VORBEREITET, BearbeitungsKonflikt, 
                            darf_zuweisen, reservierung_tage)
 from ..benachrichtigung import WhatsAppCloud, whatsapp_link
 from ..bewertung.anschreiben import euro, tsd
-from ..bewertung.auswertung import bewerte_alle, dubletten_ids
+from ..bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids
 from ..bewertung import kalkulation as kalk
 from ..bewertung.besichtigung import berechne, lade_katalog
 from ..datenbank import STATUS, Datenbank
@@ -71,6 +71,32 @@ MAX_IMPORT_SEKUNDEN = 20       # Zeitbudget je Klick (die Anfrage hält die Date
 #   konflikt  409  Zustand passt nicht (Kollege hält das Inserat bzw. eine Dublette, Besichtigung abgeschlossen, Suchlauf läuft)
 #   belegt    503  Datenbank kurz von einem anderen Vorgang gesperrt – später erneut versuchen
 GRUENDE = {403: "recht", 409: "konflikt", 503: "belegt"}
+
+
+# Unterschriften und Kontaktdaten des Verkäufers nur im Protokoll-Dokument (/protokoll/ID), nie in der Handy-API (P1-14b)
+OHNE_GERAET = ("unterschrift_verkaeufer", "unterschrift_ankaeufer", "verkaeufer")
+BETRAEGE = ("marktwert_privat", "haendler_vk", "kosten", "ziel_marge", "max_ek", "erstangebot")
+
+
+def bewertung_json(b) -> dict:
+    """Bewertung für die Oberfläche; ohne unabhängigen Marktwert (Sicherheit „keine“) Beträge als ``null`` statt 0 (P1-12)."""
+    d = b.dict()
+    if b.sicherheit == "keine":
+        d.update(dict.fromkeys(BETRAEGE))
+    return d
+
+
+def sicheres_ziel(weiter: str | None, standard: str = "/m") -> str:
+    """Ziel nach der Anmeldung (Q6): nur ein Pfad auf diesem Server. Abgelehnt werden fremde Adressen, „//…“, „/\\…“, Punkt-
+    Segmente („/.//x“ würde der Browser zu „//x“ machen) und Steuerzeichen – dann gilt der Standard."""
+    if not weiter or len(weiter) > 500 or not weiter.startswith("/") or "//" in weiter or "\\" in weiter:
+        return standard
+    if any(ord(c) < 33 or ord(c) == 127 for c in weiter):
+        return standard
+    pfad = urlparse(weiter)
+    if pfad.scheme or pfad.netloc or any(teil in (".", "..") for teil in pfad.path.split("/")):
+        return standard
+    return weiter
 
 
 class Antwort(Exception):
@@ -186,7 +212,8 @@ def ics(b: dict, cfg: dict, link: str | None) -> str:
     ende = start + timedelta(hours=1)
 
     def esc(t: str) -> str:
-        return (t or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+        return (t or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\r\n", "\n").replace("\r", "\n") \
+            .replace("\n", "\\n")                         # nacktes \r (Q15) wie Zeilenumbruch behandeln
 
     beschreibung = f"Inserat: {b['basis'].get('url', '')}\nWunschpreis {euro(b['basis'].get('preis'))}, " \
                    f"vorbehaltliches Angebot {euro(b['basis'].get('angebot'))}" + (f"\nApp: {link}" if link else "")
@@ -414,7 +441,8 @@ class Anfrage:
     def get(self):
         k, p = self.k, self.pfad
         if p == "/login":
-            return self.html(k.env.get_template("login.html").render(firma=k.cfg["anschreiben"]["firma"]))
+            ziel = sicheres_ziel((self.query.get("weiter") or [None])[0])
+            return self.html(k.env.get_template("login.html").render(firma=k.cfg["anschreiben"]["firma"], ziel=ziel))
         if self.nutzer.get("rolle") == HAENDLER and p in ("/", "/m"):
             return self.weiterleiten("/haendler")
         if p == "/":
@@ -445,7 +473,9 @@ class Anfrage:
         if m := re.fullmatch(r"/api/fahrzeug/([\w-]+)", p):
             return self.json(200, self.fahrzeug(m.group(1)))
         if m := re.fullmatch(r"/api/besichtigung/(\d+)", p):
-            return self.json(200, self.besichtigung_voll(self.besichtigung(m.group(1))))
+            b = self.besichtigung(m.group(1))
+            # abgeschlossene Besichtigungen braucht niemand offline – nicht im Speicher des Geräts ablegen (P1-14b)
+            return self.json(200, self.besichtigung_voll(b), {"X-Scout-Offline": "nein"} if b["status"] in ("abgeschlossen", "abgebrochen") else None)
         if m := re.fullmatch(r"/api/besichtigung/(\d+)/ics", p):
             b = self.besichtigung(m.group(1))
             if not b.get("termin"):
@@ -733,7 +763,7 @@ class Anfrage:
         a["bearbeiter"] = namen.get(a["bearbeiter_id"])
         for v in a["verlauf"]:
             v["nutzer"] = namen.get(v["nutzer_id"])
-        return {**a, "bewertung": {**b.dict(), **self._bewertung_kurz(b)}, "spanne_verkaeufer": vk.spanne_fuer_verkaeufer(b, k.cfg),
+        return {**a, "bewertung": {**bewertung_json(b), **self._bewertung_kurz(b)}, "spanne_verkaeufer": vk.spanne_fuer_verkaeufer(b, k.cfg),
                 "interessen": k.verkauf.interessen(anfrage_id), "auktionen": k.auktion.fuer_anfrage(anfrage_id),
                 "kalkulationen": k.deal.liste(anfrage_id), "ankaeufe": k.ankauf.zu_anfrage(anfrage_id),
                 "besichtigungen": [self.besichtigung_kurz(b) for b in k.team.besichtigungen(offen=False, anzeige_id=f"anfrage-{anfrage_id}")]}
@@ -812,7 +842,8 @@ class Anfrage:
     def fahrzeug(self, anzeige_id: str) -> dict:
         z = self.k.zeile(anzeige_id)
         sicht = self.team_sicht()
-        return {**fahrzeug_kurz(z, sicht.objekt(z) if sicht else None), "bewertung": z["b"].dict(), "brief": z["brief"], "nachfass_text": z["nachfass_text"],
+        return {**fahrzeug_kurz(z, sicht.objekt(z) if sicht else None), "bewertung": bewertung_json(z["b"]), "brief": z["brief"],
+                "nachfass_text": z["nachfass_text"],
                 "nachfass_betrag": z["nachfass_betrag"], "anschreiben_text": z["a"].get("anschreiben_text"),
                 "notiz": z["a"].get("notiz"), "besichtigungen": [self.besichtigung_kurz(b, sicht) for b in
                                                                  self.k.team.besichtigungen(offen=False, anzeige_id=anzeige_id)]}
@@ -828,7 +859,8 @@ class Anfrage:
     def besichtigung_voll(self, b: dict) -> dict:
         e = berechne(self.k.katalog(), b["daten"] or {}, b["basis"])
         return {**self.besichtigung_kurz(b), "basis": b["basis"], "daten": b["daten"], "ergebnis": e,
-                "protokoll": b["protokoll"], "version": b["version"], "fotos": self.k.team.fotos(b["id"])}
+                "protokoll": {k_: v for k_, v in b["protokoll"].items() if k_ not in OHNE_GERAET} if b["protokoll"] else None,
+                "version": b["version"], "fotos": self.k.team.fotos(b["id"])}
 
     def protokoll(self, b: dict) -> str:
         e = b["ergebnis"] or berechne(self.k.katalog(), b["daten"] or {}, b["basis"])
@@ -849,6 +881,10 @@ class Anfrage:
             if daten.get("status") not in STATUS:
                 raise Antwort(400, "unbekannter Status")
             ad_id = str(daten.get("id"))
+            if self.team_aktiv and self.nutzer["rolle"] != "inhaber" and "gekauft" in (daten["status"], k.db.status_von(ad_id)):
+                # P1-15: ein Kauf entsteht über den Abschluss der Besichtigung (mit Protokoll) – direkt nur durch den Inhaber;
+                # ebenso nimmt nur er einen Kauf wieder zurück
+                raise Antwort(403, "Status „gekauft“ setzt oder ändert der Inhaber – oder der Abschluss der Besichtigung", grund="recht")
             aktuell = k.db.status_von(ad_id) if daten["status"] == VORBEREITET else None
             if aktuell in (*IN_ARBEIT, "gekauft") and aktuell != VORBEREITET:
                 # veraltete Seite: „Text kopiert“ darf einen schon bestätigten Kontakt oder Kauf nicht zurücksetzen
@@ -882,8 +918,12 @@ class Anfrage:
             k.veraendert()
             return self.json(200 if ok else 404, {"ok": ok})
         if p == "/api/suchlauf":
+            if self.team_aktiv:
+                self.nur_inhaber()                     # P1-15: Suchläufe und Import steuert der Inhaber
             return self.json(200, {"gestartet": k.suchlauf.starte(), **k.suchlauf.stand})
         if p == "/api/import":
+            if self.team_aktiv:
+                self.nur_inhaber()
             return self.json(200, self.seiten_einlesen())
         if p == "/api/besichtigung":
             return self.json(200, self.besichtigung_anlegen(daten))
@@ -1082,6 +1122,7 @@ class Anfrage:
         ordner.mkdir(parents=True, exist_ok=True)
         stat = Importer(k.cfg, k.db).importiere_seiten(ordner, max_dateien=MAX_IMPORT_DATEIEN,
                                                              max_sekunden=MAX_IMPORT_SEKUNDEN)
+        datenrechte.frist_anwenden(k.db, k.cfg, k.basis, k.team.foto_ordner)   # Verkäufernamen kommen über den Seitenimport
         k.veraendert()
         k.dubletten_verwerfen()
         return {**stat, "ordner": relativ_zum_projekt(ordner)}
@@ -1128,7 +1169,16 @@ class Anfrage:
         ad_id = z["a"]["id"]
         termin, adresse = self._termin(daten.get("termin")), str(daten.get("adresse") or "").strip()[:200] or None
         zustaendig = self._zustaendig(daten.get("zustaendig_id"))              # prüfen, bevor etwas geändert wird (400)
+        if z["b"].sicherheit == "keine":
+            # P1-12: ohne Erstzulassung kein Marktwert – die Besichtigung braucht einen manuell angegebenen (Angebotsniveau)
+            mw = daten.get("marktwert")
+            if isinstance(mw, bool) or not isinstance(mw, int) or not 1000 <= mw <= 1_000_000:
+                raise Antwort(409, "Erstzulassung fehlt – ohne Marktwert keine Beträge. Bitte einen Marktwert (Angebotsniveau in €) "
+                                   "angeben, z. B. aus mobile.de oder DAT.", grund="marktwert")
+            z = {**z, "b": bewerte_anzeige(vk.Rechner(k.cfg), z["a"], [], marktwert_manuell=mw)}
         basis = basis_fuer(z, k.cfg)
+        if z["b"].sicherheit == "manuell":
+            basis["marktwert_manuell"] = z["b"].marktwert_angebote
         status = k.db.status_von(ad_id) or "neu"
         # Status/Übernahme und Besichtigungsdatensatz in EINER Transaktion: bei Konflikt, Fehler oder „database is locked“ bleibt
         # beides unverändert (nie ein Status „Besichtigung“ ohne Besichtigung).
@@ -1162,10 +1212,12 @@ class Anfrage:
         z = b["zustaendig"]
         if z and z["id"] != self.nutzer["id"] and z.get("telefon"):
             termin = datetime.fromisoformat(b["termin"]).strftime("%d.%m. %H:%M") if b.get("termin") else "offen"
-            self.k.whatsapp.sende(z["telefon"], self.k.cfg.get("whatsapp", {}).get("vorlage_zuweisung"),
+            self.k.whatsapp.sende_im_hintergrund(z["telefon"], self.k.cfg.get("whatsapp", {}).get("vorlage_zuweisung"),
                                   [b["basis"].get("fahrzeug", ""), termin, b.get("adresse") or b["basis"].get("ort") or ""])
 
     def b_planen(self, b: dict, daten: dict) -> dict:
+        if b["status"] in ("abgeschlossen", "abgebrochen"):
+            raise Antwort(409, "Besichtigung ist bereits abgeschlossen – Planen nicht mehr möglich")
         termin, adresse = self._termin(daten.get("termin")), str(daten.get("adresse") or "").strip()[:200] or None
         self.k.team.besichtigung_planen(b["id"], termin, adresse, self._zustaendig_planen(b, daten.get("zustaendig_id")))
         neu = self.k.team.besichtigung(b["id"])
@@ -1179,10 +1231,16 @@ class Anfrage:
         eingaben = daten.get("daten")
         if not isinstance(eingaben, dict):
             raise Antwort(400, "daten fehlen")
+        erwartet = daten.get("version")
+        if erwartet is not None and (isinstance(erwartet, bool) or not isinstance(erwartet, int)):
+            raise Antwort(400, "version muss eine Zahl sein")
         ergebnis = berechne(self.k.katalog(), eingaben, b["basis"])        # verbindlich: Server rechnet nach
-        version = self.k.team.besichtigung_speichern(b["id"], eingaben, ergebnis)
-        konflikt = isinstance(daten.get("version"), int) and daten["version"] != b["version"]
-        return {"ergebnis": ergebnis, "version": version, "konflikt": konflikt}
+        version = self.k.team.besichtigung_speichern(b["id"], eingaben, ergebnis, erwartet)
+        if version is None:                       # P1-07: inzwischen von jemand anderem gespeichert (oder abgeschlossen)
+            aktuell = self.k.team.besichtigung(b["id"])
+            raise Antwort(409, "Diese Besichtigung wurde inzwischen auf einem anderen Gerät gespeichert", grund="version",
+                          extra={"version": aktuell["version"], "daten": aktuell["daten"], "status": aktuell["status"]})
+        return {"ergebnis": ergebnis, "version": version, "konflikt": False}
 
     def b_foto(self, b: dict, daten: dict) -> dict:
         if daten.get("mangel_key") is not None and not isinstance(daten["mangel_key"], str):
@@ -1244,7 +1302,11 @@ class Anfrage:
         bewertung = None
         if not b.get("anfrage_id"):
             try:
-                bewertung = self.k.zeile(b["anzeige_id"])["b"]
+                z = self.k.zeile(b["anzeige_id"])
+                bewertung = z["b"]
+                mw = (b.get("basis") or {}).get("marktwert_manuell")
+                if mw:                            # ohne EZ: wie beim Anlegen mit dem manuellen Marktwert (P1-12)
+                    bewertung = bewerte_anzeige(vk.Rechner(self.k.cfg), z["a"], [], marktwert_manuell=mw)
             except Exception:  # noqa: BLE001 – Inserat nicht mehr in der Bewertung: Grundlage der Besichtigung genügt
                 bewertung = None
         try:
