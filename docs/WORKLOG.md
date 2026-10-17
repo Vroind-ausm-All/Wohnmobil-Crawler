@@ -6,6 +6,28 @@ Wert „–“.
 
 ---
 
+## P2-06 – E-Mail-Suchagenten (.eml) (17.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** `source-integrations`; zwei QA-Runden `qa-security-reviewer`; Abschluss der dritten Runde (Tests zu K1,
+  Doku, PR) Orchestrator, auf Wunsch des Betreibers ohne weitere QA-Runde.
+- **Geänderte Dateien:** `wmscout/eingang/email/` (neu: `nachricht.py`, `htmlbaum.py`, `treffer.py`, `kleinanzeigen.py`, `mobilede.py`),
+  `wmscout/importer.py` (`importiere_mails`), `wmscout/datenrechte.py` (Frist für Mails), `wmscout/datenbank.py` (vb unbekannt
+  überschreibt nichts), `wmscout/schalter.py`, `wmscout/web/api.py` (`POST /api/import/mails`), `scout.py` (`import --mails`),
+  `vorlagen/report.html`, `config.yaml`, Tests `test_email_eingang.py`, `test_email_haertung.py`, `test_email_betrieb.py`,
+  `nachgebildet_mails.py` (neu), Doku README, QUELLEN (Abschnitt 6), DATENRECHTE, ARCHITECTURE, ADR-037.
+- **Implementierte Funktionen:** Suchagent-Mails von Kleinanzeigen und mobile.de als `.eml` einlesen; Links werden nie abgerufen, die
+  Adresse wird aus der Anzeigen-ID neu gebildet; Absender, Betreff und Tracking werden nicht gespeichert. Preis nur aus einer eigenen
+  Preiszeile; Mails älter als die letzte Beobachtung ändern den Preis nicht (Dateien nach Mail-Datum sortiert). Eine Mail ergänzt
+  bekannte Anzeigen nur. Grenzen für Größe, Kopf, MIME-Teile, HTML-Knoten und Ebenen. Löschfrist für eingelesene, nicht erkannte
+  und fehlerhafte Mails; unverarbeitete werden gemeldet. Nur Inhaber, Schalter `eingaenge.email` (Standard aus).
+- **Tests:** siehe TEST-REPORT (Gesamtsuite vom Orchestrator nachgestellt).
+- **Review-Ergebnis:** QA Runde 1 „Freigabe mit Auflagen“ (4× HOCH: Laufzeit, Speicher, falscher Preis) → behoben, gemessen;
+  Runde 2 ABLEHNUNG (K1: ältere Mail überschreibt neueren Preis) → in Runde 3 behoben, Test mit Gegenprobe (Altersprüfung aus → rot).
+  Runde 3 nicht mehr von der QA nachgeprüft.
+- **Bekannte Risiken:** keine echten Mails geprüft (F3); Mail-Layout-Annahmen in QUELLEN.md; Gesuch-/Preisregeln doppelt zu P2-05
+  (Backlog P2-05e); Seitenimport hat dieselbe Löschfrist-Lücke für `import/eingelesen/` (Backlog).
+- **Nächster sinnvoller Schritt:** echte Beispiel-Mails (F3) einlesen und Parser nachziehen; P2-05e.
+
 ## P2-04 – Quellen und Eingänge schaltbar (17.10.2026) · Status: REVIEW
 
 - **Verantwortlicher Agent:** Umsetzung `source-integrations`; QA `qa-security-reviewer`; Prüfung und Doku Orchestrator.

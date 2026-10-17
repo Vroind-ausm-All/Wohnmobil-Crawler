@@ -620,3 +620,39 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   und in der Meldung des App-Suchlaufs (QA-Befund F8, bewusst offen). Das CLI schreibt `config.yaml` nicht; Eingänge werden von Hand (oder `config.local.yaml`) geschaltet.
   P2-05 prüft vor dem Text-Eingang `eingang_pruefen(cfg, "text")`, P2-06 für `email`. Die Oberfläche zeigt `uebersprungen` nur
   in der Meldung des App-Suchlaufs.
+
+## ADR-037 – E-Mail-Eingang (P2-06): Links nie abrufen, URL aus der ID, Absender nur zur Erkennung · gilt (17.10.2026)
+
+* **Kontext:** Suchagent-Benachrichtigungen von Kleinanzeigen und mobile.de sind ein zulässiger Eingangskanal (ADR-010, ADR-035). Der Betreiber liefert sie als
+  `.eml`; echte Beispiel-Mails folgen später (F3). Mails enthalten Personen- und Trackingdaten (Empfänger-Adresse, Nutzerkennungen in Links).
+* **Entscheidung:**
+  1. **Nur lesen, was in der Mail steht.** Links werden mit `urllib.parse` zerlegt, auch Weiterleitungs-/Tracking-Links (Ziel in Parameter oder Pfad), aber **nie
+     abgerufen**; verlinkte Anzeigen werden nicht nachgeladen, Detailabruf gibt es für `email` nicht.
+  2. **Die URL wird aus der ID neu gebildet.** Aus einem Link zählt nur die Anzeigen-ID; gespeichert wird die kanonische Detail-Adresse. Host muss zur Plattform gehören
+     (Domain oder Subdomain, auch beim äußeren Weiterleitungs-Host), Schema nur http(s); alles andere wird verworfen und gezählt. Bilder werden nicht übernommen.
+  3. **Absender nur zur Erkennung.** `Mail` hält nur die Absender-Domain und das Datum; Adressen von Absender und Empfänger werden weder gehalten noch gespeichert,
+     der Betreff wird nicht einmal dekodiert. Eine Mail ohne passenden Absender wird (weitergeleitet) am Inhalt erkannt; Mehrdeutiges ist „unbekannt“.
+  4. **Grenzen statt Hoffnung** (QA-Runde 1: mit `policy.default` und ungebremstem Lesen genügten einzelne Mails für Minuten, Gigabytes und RecursionError). Vor dem Parsen:
+     5 MB je Mail, Kopfbereich ≤ 64 KB, Kopfzeile ≤ 8 KB, ≤ 500 MIME-Trennzeilen; beim Lesen: `policy.compat32` (Kopfzeilen bleiben Zeichenketten; Absender per
+     `parseaddr`, Datum per `parsedate_to_datetime` auf gekürzten Werten), ≤ 200 Teile, ≤ 20 multipart-Ebenen, nur `text/plain`/`text/html`, Anhänge ignoriert; HTML: ≤ 200 000
+     Elemente, ≤ 100 Ebenen, ≤ 200 Anzeigen, Textzeilen > 4 500 Zeichen verworfen (gezählt), alle Abfragen einer Mail teilen ein Budget von 3 Mio. Knotenbesuchen. Überschreitung
+     ist ein `MailFehler` (Datei nach `fehlerhaft/`) bzw. ein Hinweis. Gemessen (Wiederholung der QA-Angriffe): jeweils unter 3 s und unter 150 MB. Eigener schlanker HTML-Baum
+     (`htmlbaum.py`, nur lesend): Er war beim Bauen nur etwa 1,6-mal so schnell wie BeautifulSoup; der eigentliche Engpass war `html_bloecke` (Block je Link statt je Anzeige) und ist
+     dort behoben. Behalten wurde er, weil Blockgrenzen ohne Verändern des Baums entstehen (Bs4 wird beim Einfügen quadratisch langsam).
+  5. **Anbieter unbekannt, Art höchstens vorläufig.** Mails nennen privat/gewerblich nicht verlässlich; `gewerblich` bleibt leer. Die Art folgt den Titel-Regeln des
+     Seitenimports. Erkannt, aber ohne Treffer ist „Layout verdächtig“, mit weniger als 50 % Preis oder Titel „Layout teilweise verdächtig“ (Datei nach `nicht_erkannt/` bzw. Hinweis).
+     **Lieber kein Preis als ein falscher:** Preis und VB nur aus einer eigenen Preiszeile; nie aus dem Titel, nie bei mehreren Beträgen, Durchgestrichenem, Neupreis/Miete/Raten;
+     „VB“ ist unbekannt (None), wenn es keine Preiszeile gibt, und überschreibt dann nichts. Gesuche/Ankaufsanzeigen und Empfehlungsblöcke („Ähnliche Anzeigen“) werden nicht
+     gespeichert. Die Gesuchsregeln entsprechen vorerst `eingang/text.py` (P2-05); die Vereinheitlichung folgt als eigenes Paket (A1).
+  6. **Eine Mail ergänzt nur.** Bei vorhandener Zeile bleiben Adresse, Titel, Ort, km, EZ, Marke und VB unverändert (`Importer._mail_ergaenzt_nur`); leere Felder werden gefüllt, der Preis
+     läuft über den normalen Preis-/Historienweg. So erzeugt der Wechsel Seite → Mail → Seite keine „geaendert“-Beobachtungen, und ein gekürzter Titel beeinflusst die Bewertung nicht.
+  7. **Löschung über die vorhandene Datenschutz-Frist** für alles, was der Scout ablegt: `eingelesen/<Datum>/`, `nicht_erkannt/` und `fehlerhaft/` (unlesbare oder zu große Mails werden dorthin
+     verschoben; die Änderungszeit wird beim Ablegen auf „jetzt“ gesetzt). Maßgeblich ist das spätere von Datumsordner (ISO-Name) und Änderungszeit. Verknüpfungen werden nie gelesen,
+     verschoben oder verfolgt. Noch nicht eingelesene Mails direkt in `import/email/` werden nicht gelöscht, aber nach Ablauf der Frist gemeldet (Protokoll, Kommandozeile, App).
+  8. **Eingang schaltbar, Standard aus (ADR-036):** `eingaenge.email.aktiv`; `Importer.importiere_mails` wirft `EingangDeaktiviert`, Kommandozeile (`import --mails`) und App
+     (`POST /api/import/mails`, nur Inhaber, 409 „deaktiviert“) prüfen vorher und legen den Ordner dann nicht an.
+  9. **Abnahme an echte Mails geknüpft.** Die Parser sind mit nachgebildeten Mails geprüft; bis der Betreiber anonymisierte Originale liefert (F3), gilt der Kanal als Gerüst
+     (`docs/QUELLEN.md` Abschnitt 6). Kein IMAP (P2-07).
+* **Folgen / offen:** Das Mail-Datum steht als `details["mail_datum"]` am `Inserat`, wird bei Such-Lesungen aber noch nicht gespeichert (kein Feld; ADR-035 Nr. 6 bleibt offen).
+  Der Seitenimport hat dieselbe Lücke bei `import/eingelesen/` (Backlog). `Inserat.vb` kann jetzt `None` sein (unbekannt, überschreibt beim Update nichts). Die Absender-Domain als
+  Erkennungsmerkmal ist fälschbar; das ist hier unkritisch, weil nur der Nutzer eigene Dateien einlegt und die Adresse aus der ID neu gebildet wird.

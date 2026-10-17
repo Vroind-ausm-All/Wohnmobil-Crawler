@@ -51,6 +51,7 @@ from ..bewertung import kalkulation as kalk
 from ..bewertung.besichtigung import berechne, lade_katalog
 from ..datenbank import STATUS, Datenbank
 from ..eingang import import_ordner, relativ_zum_projekt
+from ..eingang.email import mail_ordner
 from ..importer import Importer
 from ..team import BESICHTIGUNG_STATUS, LEERLAUF_STUNDEN, ROLLEN, TeamSpeicher
 
@@ -928,6 +929,10 @@ class Anfrage:
             if self.team_aktiv:
                 self.nur_inhaber()
             return self.json(200, self.seiten_einlesen())
+        if p == "/api/import/mails":
+            if self.team_aktiv:
+                self.nur_inhaber()                     # wie der Seitenimport (P1-15)
+            return self.json(200, self.mails_einlesen())
         if p == "/api/besichtigung":
             return self.json(200, self.besichtigung_anlegen(daten))
         if p == "/api/verkaufsanfrage":
@@ -1133,6 +1138,24 @@ class Anfrage:
         k.veraendert()
         k.dubletten_verwerfen()
         return {**stat, "ordner": relativ_zum_projekt(ordner)}
+
+    def mails_einlesen(self) -> dict:
+        """E-Mail-Suchbenachrichtigungen (.eml) aus dem konfigurierten Mail-Ordner – nie ein Pfad aus der Anfrage, kein Netzabruf (P2-06)."""
+        k = self.k
+        if k.suchlauf.stand["laeuft"]:
+            raise Antwort(409, "Gerade läuft ein Suchlauf – bitte danach einlesen")
+        try:
+            eingang_pruefen(k.cfg, "email")                  # abgeschaltet (Standard): nichts lesen, Ordner nicht anlegen (ADR-036)
+        except EingangDeaktiviert as e:
+            raise Antwort(409, str(e), grund="deaktiviert") from e
+        ordner = mail_ordner(k.cfg, k.basis)
+        ordner.mkdir(parents=True, exist_ok=True)
+        stat = Importer(k.cfg, k.db).importiere_mails(ordner, max_dateien=MAX_IMPORT_DATEIEN, max_sekunden=MAX_IMPORT_SEKUNDEN)
+        offen = datenrechte.mails_unverarbeitet_gemeldet(k.cfg, ordner)
+        datenrechte.frist_anwenden(k.db, k.cfg, k.basis, k.team.foto_ordner)     # abgelegte Mails nach der Frist löschen
+        k.veraendert()
+        k.dubletten_verwerfen()
+        return {**stat, "ordner": relativ_zum_projekt(ordner), "unverarbeitet": offen}
 
     def _termin(self, wert) -> str | None:
         if not wert:

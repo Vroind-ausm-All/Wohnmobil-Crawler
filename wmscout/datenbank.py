@@ -91,20 +91,22 @@ class Datenbank:
             log.warning("Journalmodus %s nicht möglich; die Datenbank bleibt im Modus %s.", ziel, modus)
         return modus
 
-    def speichere_treffer(self, a: dict, suche: str, kanal: str = "suche") -> str:
+    def speichere_treffer(self, a: dict, suche: str, kanal: str = "suche", gesehen_am: str | None = None) -> str:
         """Fügt ein oder aktualisiert. Rückgabe: 'neu', 'preis' (Preis gesenkt) oder 'bekannt'.
 
         In derselben Transaktion wird der Treffer in die v4-Tabellen gespiegelt (``spiegle_inserat``), damit Ereigniseingang,
-        Preisverlauf und App dieselben Fahrzeuge kennen. ``kanal``: 'suche' (Suchlauf) oder ein Push-Kanal 'manuell'/'email' (über Importer.importiere)."""
+        Preisverlauf und App dieselben Fahrzeuge kennen. ``kanal``: 'suche' (Suchlauf) oder ein Push-Kanal 'manuell'/'email' (über Importer.importiere).
+        ``gesehen_am`` (ISO, lokal, nicht in der Zukunft): Zeitpunkt der Beobachtung, wenn er nicht „jetzt“ ist (E-Mail: Datum der Mail);
+        ``zuletzt_gesehen`` wird damit nie zurückgesetzt, nur nach vorn bewegt."""
         with self._exklusiv():
-            ergebnis = self.schreibe_anzeige(a, suche)
+            ergebnis = self.schreibe_anzeige(a, suche, gesehen_am)
             self.spiegle_inserat(a, kanal)
         return ergebnis
 
-    def schreibe_anzeige(self, a: dict, suche: str) -> str:
+    def schreibe_anzeige(self, a: dict, suche: str, gesehen_am: str | None = None) -> str:
         """Nur Tabelle ``anzeigen``, ohne eigenes Commit (Teil einer Transaktion des Aufrufers)."""
         jetzt = datetime.now().isoformat(timespec="seconds")
-        alt = self.con.execute("SELECT preis FROM anzeigen WHERE id=?", (a["id"],)).fetchone()
+        alt = self.con.execute("SELECT preis, zuletzt_gesehen FROM anzeigen WHERE id=?", (a["id"],)).fetchone()
         werte = {k: a.get(k) for k in FELDER_UPDATE}
         werte["suche"] = suche
         werte["vb"] = int(bool(a.get("vb")))
@@ -116,20 +118,23 @@ class Datenbank:
             spalten = ["id", *werte, "erstmals_gesehen", "zuletzt_gesehen"]
             self.con.execute(
                 f"INSERT INTO anzeigen ({','.join(spalten)}) VALUES ({','.join('?' * len(spalten))})",
-                [a["id"], *werte.values(), jetzt, jetzt])
+                [a["id"], *werte.values(), jetzt, gesehen_am or jetzt])
             ergebnis = "neu"
         else:
             # Werte aus der Detailseite nicht mit leeren Listenwerten überschreiben
             werte = {k: v for k, v in werte.items() if v not in (None, "")}
             if a.get("gewerblich") is None:          # „unbekannt“ (z. B. Detailseite ohne Hinweis) überschreibt nichts
                 werte.pop("gewerblich", None)
+            if "vb" in a and a["vb"] is None:        # ausdrücklich „unbekannt“ (Mail ohne Preiszeile) überschreibt nichts; fehlt der Schlüssel: wie früher 0
+                werte.pop("vb", None)
             ergebnis = "bekannt"
             if a.get("preis") and alt["preis"] and a["preis"] < alt["preis"]:
                 werte["preis_vorher"] = alt["preis"]
                 werte["preis_geaendert_am"] = jetzt
                 ergebnis = "preis"
             sets = ", ".join(f"{k}=?" for k in werte) + ", zuletzt_gesehen=?"
-            self.con.execute(f"UPDATE anzeigen SET {sets} WHERE id=?", [*werte.values(), jetzt, a["id"]])
+            gesehen = max(alt["zuletzt_gesehen"] or "", gesehen_am) if gesehen_am else jetzt
+            self.con.execute(f"UPDATE anzeigen SET {sets} WHERE id=?", [*werte.values(), gesehen, a["id"]])
         return ergebnis
 
     def spiegle_inserat(self, a: dict, kanal: str) -> int:

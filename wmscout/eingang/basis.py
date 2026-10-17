@@ -38,7 +38,9 @@ class Lesung:
     art: 'suche', 'detail' – oder 'unbekannt'/'detail_ohne_id' (nichts zu speichern; `hinweise` nennt den Grund).
     art_filter: Fahrzeugart-Angaben der Suchseite (bestätigter Filter bzw. vorläufiger Hinweis); None = keine.
     haupttreffer: Anzeigen-IDs, für die der Art-Filter gilt (nur die Haupttabelle); None = keine.
-    plattform: Plattform der gelesenen Seite, soweit erkannt (für Meldungen)."""
+    plattform: Plattform der gelesenen Seite, soweit erkannt (für Meldungen).
+    zeitpunkt: Zeitpunkt, zu dem das Angebot laut Kanal so aussah (E-Mail: Datum der Mail, sonst Dateizeit); None = jetzt. Der Importer
+               übernimmt Preise aus einem Kanal mit Zeitpunkt nur, wenn er nicht älter ist als die letzte Beobachtung der Anzeige."""
 
     art: str
     inserate: list[Inserat] = field(default_factory=list)
@@ -46,6 +48,7 @@ class Lesung:
     art_filter: SuchseitenArt | None = None
     haupttreffer: frozenset[str] | None = None
     plattform: str | None = None
+    zeitpunkt: datetime | None = None
 
 
 @runtime_checkable

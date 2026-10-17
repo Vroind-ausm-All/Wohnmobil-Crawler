@@ -22,6 +22,8 @@ from pathlib import Path
 from .datenbank import BESTAETIGT, IMPORT_SUCHE, VORLAEUFIG, Datenbank, import_art, import_suche
 from .domaene import PUSH_KANAELE, pruefe_anzeigen_id, pruefe_kanal
 from .eingang import BegleitordnerFehler, Lesung, Rohdaten, SeitenEingang, SuchseitenArt, html_dateien, lies_html, verschiebe
+from .eingang.email import MAX_BYTES as MAX_MAIL_BYTES
+from .eingang.email import MailEingang, MailFehler, eml_dateien, mail_zeitpunkt, verschiebe_mail
 from .ereignisse import InseratEreignis
 from .ereignis_speicher import EreignisSpeicher
 from .normalisierung.fahrzeug import art_schluessel
@@ -234,6 +236,107 @@ class Importer:
                  stat["unbekannt"], stat["fehlerhaft"], stat["neu"], stat["preis"], stat["bekannt"])
         return stat
 
+    # ---------- E-Mail-Suchbenachrichtigungen (ohne Netz) ----------
+    def importiere_mails(self, ordner: Path, max_dateien: int | None = None, max_sekunden: float | None = None) -> dict:
+        """Liest Benachrichtigungs-Mails (`.eml`) von Kleinanzeigen und mobile.de aus `ordner` (nicht rekursiv; Standard `import/email/`).
+
+        Wie `importiere_seiten`: kein Netzabruf, verlinkte Anzeigen werden nicht nachgeladen; gespeichert wird nur über
+        `importiere(lesung, "email")`. Alles, was der Scout ablegt, bekommt als Änderungszeit „jetzt“ (die Datenschutz-Frist zählt ab dem
+        Einlesen, `datenrechte.mails_nach_frist`): eingelesene Mails nach <ordner>/eingelesen/<Datum>/, nicht erkannte nach
+        <ordner>/nicht_erkannt/, unlesbare oder zu große (`MailFehler`, zählen als `fehlerhaft`) nach <ordner>/fehlerhaft/. Unerwartete
+        Fehler (z. B. gesperrte Datenbank) lassen die Datei liegen; ein Fehler bei einer Datei hält die übrigen nicht auf. Symbolische
+        Verknüpfungen werden nicht gelesen. Absender und Betreff werden nicht gespeichert.
+        **Reihenfolge und Alter (K1):** Die Dateien werden nach dem Zeitpunkt der Mail (Date-Kopf; fehlt er, ist er ungültig oder liegt er in der
+        Zukunft: Änderungszeit der Datei) aufsteigend gelesen, nicht nach dem Namen. Preis und VB einer Mail, die älter ist als die letzte Beobachtung
+        der Anzeige (`zuletzt_gesehen`), werden nicht übernommen (`aeltere` zählt solche Treffer, Hinweis je Mail); sonst würde eine nachträglich
+        eingelesene alte Mail einen neueren Preis überschreiben und eine falsche Preissenkung auslösen.
+        Ist der Eingang „email“ abgeschaltet (Standard), wirft sie `EingangDeaktiviert` und liest nichts.
+        Rückgabe wie `importiere_seiten` (`suchseiten` = eingelesene Mails mit Treffern, `detailseiten` immer 0)."""
+        eingang_pruefen(self.cfg, "email")                  # abgeschaltet (Standard): nichts lesen, Dateien liegen lassen (ADR-036)
+        stat = {"dateien": 0, "suchseiten": 0, "detailseiten": 0, "unbekannt": 0, "fehlerhaft": 0, "neu": 0,
+                "preis": 0, "bekannt": 0, "details": 0, "fehler": [], "uebrig": 0, "aeltere": 0}
+        dateien = []
+        for p in eml_dateien(ordner):
+            try:
+                dateien.append((mail_zeitpunkt(p), p.name.lower(), p))
+            except OSError:
+                dateien.append((datetime.now(timezone.utc), p.name.lower(), p))
+        dateien = [p for _, _, p in sorted(dateien, key=lambda e: e[:2])]       # älteste Mail zuerst: der neueste Preis gewinnt
+        if max_dateien is not None and len(dateien) > max_dateien:
+            dateien, stat["uebrig"] = dateien[:max_dateien], len(dateien) - max_dateien
+        eingelesen = ordner / "eingelesen" / date.today().isoformat()
+        start = time.monotonic()
+        eingang = MailEingang()
+
+        def melde(text: str):
+            log.warning("Mail %s", text)
+            stat["fehler"].append(text)
+
+        for n, datei in enumerate(dateien):
+            if max_sekunden is not None and n and time.monotonic() - start > max_sekunden:
+                stat["uebrig"] += len(dateien) - n
+                break
+            stat["dateien"] += 1
+            try:
+                groesse = datei.stat().st_size
+                if groesse > MAX_MAIL_BYTES:
+                    raise MailFehler(f"Mail zu groß ({groesse / 1_000_000:.1f} MB, erlaubt sind {MAX_MAIL_BYTES // 1_000_000} MB)")
+                lesung = eingang.lese(Rohdaten(datei.read_bytes(), datei.name, datetime.fromtimestamp(datei.stat().st_mtime, timezone.utc)))
+                if lesung.art in ("unbekannt", "detail_ohne_id"):
+                    verschiebe_mail(datei, ordner / "nicht_erkannt")
+                    stat["unbekannt"] += 1
+                    melde(f"{datei.name}: {'; '.join(lesung.hinweise) or 'keine Benachrichtigung erkannt'} – verschoben nach nicht_erkannt/")
+                    continue
+                for h in lesung.hinweise:
+                    stat["fehler"].append(f"{datei.name}: {h}")
+                aeltere_vorher = stat["aeltere"]
+                self.importiere(lesung, eingang.kanal, stat)
+                if stat["aeltere"] > aeltere_vorher:
+                    stat["fehler"].append(f"{datei.name}: {stat['aeltere'] - aeltere_vorher} Treffer aus älteren Mails – Preis nicht übernommen "
+                                          "(die Anzeige wurde danach schon neuer gesehen)")
+            except MailFehler as e:
+                stat["fehlerhaft"] += 1
+                try:
+                    verschiebe_mail(datei, ordner / "fehlerhaft")
+                    melde(f"{datei.name}: nicht eingelesen ({e}) – verschoben nach fehlerhaft/")
+                except OSError as e2:
+                    melde(f"{datei.name}: nicht eingelesen ({e}), auch nicht verschoben ({type(e2).__name__}) – Datei bleibt liegen")
+                continue
+            except Exception as e:  # noqa: BLE001 – eine kaputte Datei darf die übrigen nicht aufhalten (nur der Fehlertyp: der Text könnte Mailinhalt enthalten)
+                stat["fehlerhaft"] += 1
+                melde(f"{datei.name}: nicht eingelesen ({type(e).__name__}) – Datei bleibt liegen")
+                continue
+            try:
+                verschiebe_mail(datei, eingelesen)
+            except OSError as e:
+                melde(f"{datei.name}: eingelesen, aber nicht verschoben ({type(e).__name__}) – Datei liegt noch im Ordner "
+                      "(wird beim nächsten Mal ohne Dubletten erneut gelesen)")
+        log.info("E-Mails: %d Dateien (%d mit Treffern, %d nicht erkannt, %d fehlerhaft) – %d neu, %d Preissenkungen, %d bekannt",
+                 stat["dateien"], stat["suchseiten"], stat["unbekannt"], stat["fehlerhaft"], stat["neu"], stat["preis"], stat["bekannt"])
+        return stat
+
+    def _mail_ergaenzt_nur(self, d: dict, zeitpunkt: datetime | None) -> tuple[dict, str | None, bool]:
+        """Kanal „email“: Eine Mail ergänzt Bekanntes nur. Bei vorhandener Zeile bleiben Adresse, Titel, Ort, km, EZ und Marke unverändert
+        (None = nicht überschreiben) – Mails kürzen Titel, nennen andere Adressformen und würden sonst bei jedem Wechsel zwischen Seite und
+        Mail eine Änderung auslösen und die Bewertung (Titel) beeinflussen. Preis und VB laufen über den normalen Weg – aber nur, wenn die Mail
+        nicht älter ist als die letzte Beobachtung der Anzeige (K1).
+        Rückgabe: (Datensatz, `gesehen_am` für die Datenbank, Preis wegen älterer Mail nicht übernommen)."""
+        jetzt = datetime.now()
+        gesehen_am = None
+        if zeitpunkt is not None:
+            gesehen_am = min(zeitpunkt.astimezone().replace(tzinfo=None), jetzt).isoformat(timespec="seconds")
+        alt = self.db.con.execute("SELECT url, titel, ort, km, ez_jahr, marke, zuletzt_gesehen FROM anzeigen WHERE id=?", (d["id"],)).fetchone()
+        if alt is None:
+            return d, gesehen_am, False
+        d = dict(d)
+        for feld in ("url", "titel", "ort", "km", "ez_jahr", "marke"):
+            if alt[feld] not in (None, ""):
+                d[feld] = None
+        aelter = bool(gesehen_am and alt["zuletzt_gesehen"] and gesehen_am < alt["zuletzt_gesehen"])
+        if aelter:
+            d["preis"], d["vb"] = None, None
+        return d, gesehen_am, aelter
+
     def importiere(self, lesung: Lesung, kanal: str, stat: dict | None = None) -> dict:
         """Einziger Schreibweg für Push-Eingänge (ADR-035): speichert eine `Lesung` über den Kanal `kanal` ('manuell', 'email').
 
@@ -252,11 +355,11 @@ class Importer:
             stat = {}
         for schluessel in ("suchseiten", "detailseiten", "neu", "preis", "bekannt", "details"):
             stat.setdefault(schluessel, 0)
-        self._speichere_seite(lesung.art, lesung.inserate, stat, lesung.art_filter, lesung.haupttreffer, kanal)
+        self._speichere_seite(lesung.art, lesung.inserate, stat, lesung.art_filter, lesung.haupttreffer, kanal, lesung.zeitpunkt)
         return stat
 
     def _speichere_seite(self, art: str, inserate: list, stat: dict, seitenart: SuchseitenArt | None = None,
-                         haupttreffer: Collection[str] | None = None, kanal: str = "manuell"):
+                         haupttreffer: Collection[str] | None = None, kanal: str = "manuell", zeitpunkt: datetime | None = None):
         """Speichert die Inserate einer Such- oder Detailseite (ungeprüft; Eintritt von außen ist `importiere`).
 
         Importierte Inserate bekommen die Suche „Import <Art> (bestätigt|vorläufig)“ bzw. `IMPORT_SUCHE` (Art unbekannt);
@@ -288,9 +391,13 @@ class Importer:
                 eigene = seitenart if d["id"] in (haupttreffer or ()) else SuchseitenArt()
                 neue_art, herkunft = eigene.fuer_treffer(d.get("titel"), d.get("kurzbeschreibung"))
             suche = _neue_suche(self.db.suche_zu(d["id"]), neue_art, herkunft)
+            gesehen_am = None
+            if kanal == "email":
+                d, gesehen_am, aelter = self._mail_ergaenzt_nur(d, zeitpunkt)
+                stat["aeltere"] = stat.get("aeltere", 0) + (aelter and inserat.preis is not None)
             if art == "detail" and not d.get("gewerblich") and self.db.gewerblich_zu(d["id"]):
                 d["gewerblich"] = None            # kein Hinweis auf der Detailseite ≠ „privat“: gewerblicher Listenwert bleibt
-            stat[self.db.speichere_treffer(d, suche, kanal=kanal)] += 1
+            stat[self.db.speichere_treffer(d, suche, kanal=kanal, gesehen_am=gesehen_am)] += 1
             if art == "detail":
                 self.db.speichere_details(d["id"], d)
                 stat["details"] += 1

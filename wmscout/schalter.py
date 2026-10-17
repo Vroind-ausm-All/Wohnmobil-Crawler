@@ -20,7 +20,7 @@ from collections.abc import Mapping
 
 STANDARD_EINGAENGE = {"seiten": True, "text": True, "email": False}
 EINGANG_NAMEN = {"seiten": "Gespeicherte Seiten (Import-Ordner)", "text": "URL + eingefügter Text",
-                 "email": "E-Mail-Suchagenten (folgt mit P2-06)"}
+                 "email": "E-Mail-Suchagenten (.eml im Ordner import/email)"}
 
 GRUND_NICHT_FREIGEGEBEN = "nicht freigegeben"
 GRUND_DEAKTIVIERT = "deaktiviert"

@@ -4,6 +4,20 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P2-06 – E-Mail-Suchagenten (.eml) (17.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator, Stand vor Zusammenführung mit P2-05) | 1048 bestanden (vorher 940), neu `test_email_eingang.py`, `test_email_haertung.py`, `test_email_betrieb.py` |
+| `ruff check .` | grün |
+| Kein Netzabruf (Sockets und urllib gesperrt), Links aus Mails nie abgerufen | bestanden |
+| Angriffsmails der QA (5 MB Links, 200 000 `[`, 40 000 Encoded Words, 100 000 MIME-Teile, tiefe Verschachtelung) | ≤ 2,5 s, ≤ 152 MB, sonst sauber abgelehnt (vorher bis 253 s bzw. MemoryError) |
+| Preis nur aus Preiszeile; ältere Mail ändert neueren Preis nicht; Mails nach Datum gelesen | bestanden; Gegenprobe Altersprüfung aus → rot |
+| Seite → Mail → Seite ohne zusätzliche Beobachtungen; Löschfrist inkl. Symlink-Schutz | bestanden |
+| Schalter (CLI, API, Importer), Rollen (nur Inhaber), CSRF, Ordner aus der Anfrage ignoriert | bestanden |
+| QA Runde 1 / Runde 2 | Freigabe mit Auflagen / Ablehnung (K1) – behoben; Runde 3 von der QA **nicht geprüft** |
+| Echte Kleinanzeigen-/mobile.de-Mails (F3), Knopf im Browser, Windows-CI | nicht geprüft |
+
 ## P2-04 – Quellen und Eingänge schaltbar (17.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |
