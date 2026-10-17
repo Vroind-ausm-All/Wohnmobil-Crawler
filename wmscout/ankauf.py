@@ -113,6 +113,8 @@ class AnkaufSpeicher:
             e, erg = deal.berechne(b["anfrage_id"], kaufpreis, z["standort_id"] if z else 0)
             return {"herkunft": "anfrage", "zuschlag": z, "kalkulation": (e, erg) if erg.get("moeglich") else None,
                     "plan": None if erg.get("moeglich") else ergebnis.plan_aus_basis(b["basis"], standzeit_tage=tage)}
+        if bewertung is not None and bewertung.sicherheit == "keine":
+            bewertung = None                      # ohne unabhängigen Marktwert keine Beträge (P1-12) – Grundlage der Besichtigung
         plan = (ergebnis.plan_aus_bewertung(bewertung, kaufpreis, standzeit_tage=tage, differenzbesteuerung=steuer) if bewertung
                 else ergebnis.plan_aus_basis(b["basis"], standzeit_tage=tage))
         return {"herkunft": "anzeige", "zuschlag": None, "kalkulation": None, "plan": plan}

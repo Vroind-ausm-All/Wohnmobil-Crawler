@@ -73,6 +73,30 @@ MAX_IMPORT_SEKUNDEN = 20       # Zeitbudget je Klick (die Anfrage hält die Date
 GRUENDE = {403: "recht", 409: "konflikt", 503: "belegt"}
 
 
+BETRAEGE = ("marktwert_privat", "haendler_vk", "kosten", "ziel_marge", "max_ek", "erstangebot")
+
+
+def bewertung_json(b) -> dict:
+    """Bewertung für die Oberfläche; ohne unabhängigen Marktwert (Sicherheit „keine“) Beträge als ``null`` statt 0 (P1-12)."""
+    d = b.dict()
+    if b.sicherheit == "keine":
+        d.update(dict.fromkeys(BETRAEGE))
+    return d
+
+
+def sicheres_ziel(weiter: str | None, standard: str = "/m") -> str:
+    """Ziel nach der Anmeldung (Q6): nur ein Pfad auf diesem Server. Abgelehnt werden fremde Adressen, „//…“, „/\\…“, Punkt-
+    Segmente („/.//x“ würde der Browser zu „//x“ machen) und Steuerzeichen – dann gilt der Standard."""
+    if not weiter or len(weiter) > 500 or not weiter.startswith("/") or "//" in weiter or "\\" in weiter:
+        return standard
+    if any(ord(c) < 33 or ord(c) == 127 for c in weiter):
+        return standard
+    pfad = urlparse(weiter)
+    if pfad.scheme or pfad.netloc or any(teil in (".", "..") for teil in pfad.path.split("/")):
+        return standard
+    return weiter
+
+
 class Antwort(Exception):
     """Beendet eine Anfrage mit HTTP-Status, JSON-Fehlertext und (für 403/409/503) einem ``grund``."""
 
@@ -186,7 +210,8 @@ def ics(b: dict, cfg: dict, link: str | None) -> str:
     ende = start + timedelta(hours=1)
 
     def esc(t: str) -> str:
-        return (t or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+        return (t or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\r\n", "\n").replace("\r", "\n") \
+            .replace("\n", "\\n")                         # nacktes \r (Q15) wie Zeilenumbruch behandeln
 
     beschreibung = f"Inserat: {b['basis'].get('url', '')}\nWunschpreis {euro(b['basis'].get('preis'))}, " \
                    f"vorbehaltliches Angebot {euro(b['basis'].get('angebot'))}" + (f"\nApp: {link}" if link else "")
@@ -414,7 +439,8 @@ class Anfrage:
     def get(self):
         k, p = self.k, self.pfad
         if p == "/login":
-            return self.html(k.env.get_template("login.html").render(firma=k.cfg["anschreiben"]["firma"]))
+            ziel = sicheres_ziel((self.query.get("weiter") or [None])[0])
+            return self.html(k.env.get_template("login.html").render(firma=k.cfg["anschreiben"]["firma"], ziel=ziel))
         if self.nutzer.get("rolle") == HAENDLER and p in ("/", "/m"):
             return self.weiterleiten("/haendler")
         if p == "/":
@@ -733,7 +759,7 @@ class Anfrage:
         a["bearbeiter"] = namen.get(a["bearbeiter_id"])
         for v in a["verlauf"]:
             v["nutzer"] = namen.get(v["nutzer_id"])
-        return {**a, "bewertung": {**b.dict(), **self._bewertung_kurz(b)}, "spanne_verkaeufer": vk.spanne_fuer_verkaeufer(b, k.cfg),
+        return {**a, "bewertung": {**bewertung_json(b), **self._bewertung_kurz(b)}, "spanne_verkaeufer": vk.spanne_fuer_verkaeufer(b, k.cfg),
                 "interessen": k.verkauf.interessen(anfrage_id), "auktionen": k.auktion.fuer_anfrage(anfrage_id),
                 "kalkulationen": k.deal.liste(anfrage_id), "ankaeufe": k.ankauf.zu_anfrage(anfrage_id),
                 "besichtigungen": [self.besichtigung_kurz(b) for b in k.team.besichtigungen(offen=False, anzeige_id=f"anfrage-{anfrage_id}")]}
@@ -812,7 +838,8 @@ class Anfrage:
     def fahrzeug(self, anzeige_id: str) -> dict:
         z = self.k.zeile(anzeige_id)
         sicht = self.team_sicht()
-        return {**fahrzeug_kurz(z, sicht.objekt(z) if sicht else None), "bewertung": z["b"].dict(), "brief": z["brief"], "nachfass_text": z["nachfass_text"],
+        return {**fahrzeug_kurz(z, sicht.objekt(z) if sicht else None), "bewertung": bewertung_json(z["b"]), "brief": z["brief"],
+                "nachfass_text": z["nachfass_text"],
                 "nachfass_betrag": z["nachfass_betrag"], "anschreiben_text": z["a"].get("anschreiben_text"),
                 "notiz": z["a"].get("notiz"), "besichtigungen": [self.besichtigung_kurz(b, sicht) for b in
                                                                  self.k.team.besichtigungen(offen=False, anzeige_id=anzeige_id)]}
@@ -848,10 +875,11 @@ class Anfrage:
         if p == "/api/status":
             if daten.get("status") not in STATUS:
                 raise Antwort(400, "unbekannter Status")
-            if daten["status"] == "gekauft" and self.team_aktiv and self.nutzer["rolle"] != "inhaber":
-                # P1-15: ein Kauf entsteht über den Abschluss der Besichtigung (mit Protokoll) – direkt nur durch den Inhaber
-                raise Antwort(403, "Status „gekauft“ setzt der Inhaber – oder der Abschluss der Besichtigung", grund="recht")
             ad_id = str(daten.get("id"))
+            if self.team_aktiv and self.nutzer["rolle"] != "inhaber" and "gekauft" in (daten["status"], k.db.status_von(ad_id)):
+                # P1-15: ein Kauf entsteht über den Abschluss der Besichtigung (mit Protokoll) – direkt nur durch den Inhaber;
+                # ebenso nimmt nur er einen Kauf wieder zurück
+                raise Antwort(403, "Status „gekauft“ setzt oder ändert der Inhaber – oder der Abschluss der Besichtigung", grund="recht")
             aktuell = k.db.status_von(ad_id) if daten["status"] == VORBEREITET else None
             if aktuell in (*IN_ARBEIT, "gekauft") and aktuell != VORBEREITET:
                 # veraltete Seite: „Text kopiert“ darf einen schon bestätigten Kontakt oder Kauf nicht zurücksetzen
@@ -1089,6 +1117,7 @@ class Anfrage:
         ordner.mkdir(parents=True, exist_ok=True)
         stat = Importer(k.cfg, k.db).importiere_seiten(ordner, max_dateien=MAX_IMPORT_DATEIEN,
                                                              max_sekunden=MAX_IMPORT_SEKUNDEN)
+        datenrechte.frist_anwenden(k.db, k.cfg, k.basis, k.team.foto_ordner)   # Verkäufernamen kommen über den Seitenimport
         k.veraendert()
         k.dubletten_verwerfen()
         return {**stat, "ordner": relativ_zum_projekt(ordner)}
@@ -1268,7 +1297,11 @@ class Anfrage:
         bewertung = None
         if not b.get("anfrage_id"):
             try:
-                bewertung = self.k.zeile(b["anzeige_id"])["b"]
+                z = self.k.zeile(b["anzeige_id"])
+                bewertung = z["b"]
+                mw = (b.get("basis") or {}).get("marktwert_manuell")
+                if mw:                            # ohne EZ: wie beim Anlegen mit dem manuellen Marktwert (P1-12)
+                    bewertung = bewerte_anzeige(vk.Rechner(self.k.cfg), z["a"], [], marktwert_manuell=mw)
             except Exception:  # noqa: BLE001 – Inserat nicht mehr in der Bewertung: Grundlage der Besichtigung genügt
                 bewertung = None
         try:

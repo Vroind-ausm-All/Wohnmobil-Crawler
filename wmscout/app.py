@@ -7,6 +7,7 @@ Der Server lauscht nur auf 127.0.0.1 – er ist von anderen Rechnern aus nicht e
 """
 from __future__ import annotations
 
+import contextlib
 import logging
 import secrets
 import sys
@@ -78,9 +79,7 @@ class Suchlauf:
         try:
             db = self.oeffne_datenbank()
             stat = Importer(self.cfg, db).lauf(self.cfg["suchen"])
-            alt = datenrechte.inserate_nach_frist(db, self.basis / self.cfg["ausgabe"]["ordner"], datenrechte.frist_aus(self.cfg))
-            if alt:
-                log.info("Datenschutz-Frist: %d Inserate anonymisiert", len(alt))
+            datenrechte.frist_anwenden(db, self.cfg, self.basis, (self.basis / self.db_pfad).parent / "fotos")
             # wie „python scout.py lauf“: Report/CSV/Anschreiben-Dateien aktualisieren, ggf. Mail
             zeilen = bewerte_alle(self.cfg, db, self.basis, lauf_start=self.letzter_start)
             sende_mail(self.cfg, zeilen, schreibe_ausgaben(self.cfg, zeilen, self.basis, fehler=stat["fehler"],
@@ -147,6 +146,9 @@ class AutoSuche:
                 self._schritt(db)
             except Exception:  # noqa: BLE001 – ein Fehler darf die Auto-Suche nicht dauerhaft beenden (P1-11b)
                 log.exception("Automatische Suche: Durchgang fehlgeschlagen – nächster Versuch in einer Minute")
+                with contextlib.suppress(Exception):     # Verbindung beim nächsten Durchgang neu öffnen
+                    db.con.close()
+                db = None
             if self.halt.wait(60):
                 return
 
@@ -209,6 +211,7 @@ def _kontext(cfg: dict, db: Datenbank, basis: Path) -> tuple[Kontext, Suchlauf]:
     suchlauf = Suchlauf(cfg, str(db_pfad), basis)
     k = Kontext(cfg, db, basis, secrets.token_urlsafe(18), suchlauf, db_pfad.parent / "fotos")
     suchlauf.bei_ende.append(lambda zeilen: (k.veraendert(), k.whatsapp.neue_treffer(zeilen), k.live.melde("suchlauf")))
+    datenrechte.frist_anwenden(db, cfg, basis, db_pfad.parent / "fotos")      # auch ohne Suchlauf/Import (P1-14a)
     return k, suchlauf
 
 

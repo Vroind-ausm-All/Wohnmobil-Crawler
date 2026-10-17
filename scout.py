@@ -74,6 +74,9 @@ def _mischen(basis: dict, zusatz: dict) -> dict:
     return basis
 
 
+LOKAL_ABSCHNITTE: list[str] = []
+
+
 def lade_config(pfad: str) -> dict:
     """``config.yaml`` und – falls vorhanden – ``config.local.yaml`` daneben (P1-09): eigene Einstellungen des Betriebs, die
     nicht ins Repository gehören (.gitignore). Abschnitte werden zusammengeführt, einzelne Werte und Listen ersetzt."""
@@ -87,6 +90,7 @@ def lade_config(pfad: str) -> dict:
         if not isinstance(zusatz, dict):
             sys.exit(f"{lokal.name}: erwartet werden Abschnitte wie in {datei.name}")
         cfg = _mischen(cfg, zusatz)
+        LOKAL_ABSCHNITTE[:] = sorted(zusatz)        # wird nach dem Einrichten des Protokolls gemeldet (nachvollziehbar)
     return cfg
 
 
@@ -97,6 +101,8 @@ def logging_einrichten(cfg: dict):
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S",
         handlers=[logging.StreamHandler(sys.stdout),        # Protokoll rotiert: höchstens 6 × 5 MB (G0)
                   logging.handlers.RotatingFileHandler(ordner / "scout.log", maxBytes=5_000_000, backupCount=5, encoding="utf-8")])
+    if LOKAL_ABSCHNITTE:
+        logging.getLogger("scout").info("config.local.yaml überlagert: %s", ", ".join(LOKAL_ABSCHNITTE))
 
 
 def _team(cfg, db):
@@ -118,9 +124,7 @@ def cmd_lauf(cfg, db, args):
 def _lauf(cfg, db):
     start = datetime.now().isoformat(timespec="seconds")
     stat = Importer(cfg, db).lauf(cfg["suchen"])
-    alt = datenrechte.inserate_nach_frist(db, BASIS / cfg["ausgabe"]["ordner"], datenrechte.frist_aus(cfg))
-    if alt:
-        logging.info("Datenschutz-Frist: %d Inserate anonymisiert", len(alt))
+    datenrechte.frist_anwenden(db, cfg, BASIS, foto_ordner(cfg))
     logging.info("Crawl fertig: %d neu, %d Preissenkungen, %d bekannt, %d Detailseiten",
                  stat["neu"], stat["preis"], stat["bekannt"], stat["details"])
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
@@ -155,6 +159,7 @@ def cmd_import(cfg, db, args):
         print(f"Eingelesene Dateien liegen jetzt in: {ordner / 'eingelesen'}")
     if stat["fehler"]:
         print("Bitte prüfen:\n" + "\n".join(f"  - {f}" for f in stat["fehler"]))
+    datenrechte.frist_anwenden(db, cfg, BASIS, foto_ordner(cfg))         # Verkäufernamen kommen über den Seitenimport (P1-14a)
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
     erg = schreibe_ausgaben(cfg, zeilen, BASIS, team=_team(cfg, db))
     print(f"Report: {erg['html']}  ({erg['zaehl']})")
@@ -274,7 +279,10 @@ def cmd_wiederherstellen(cfg, args):
 def _neues_passwort(name: str) -> str:
     """Passwort nie als Kommandozeilen-Argument (stünde in der Prozessliste und im Verlauf, P1-09): Abfrage am Terminal oder –
     für Automatisierung – Umgebungsvariable SCOUT_NEUES_PASSWORT."""
-    return os.environ.get("SCOUT_NEUES_PASSWORT") or _passwort_abfragen(name)
+    if os.environ.get("SCOUT_NEUES_PASSWORT"):
+        print(f"Hinweis: Passwort für {name} aus SCOUT_NEUES_PASSWORT – Variable danach wieder entfernen", file=sys.stderr)
+        return os.environ["SCOUT_NEUES_PASSWORT"]
+    return _passwort_abfragen(name)
 
 
 def _passwort_abfragen(name: str) -> str:
@@ -381,23 +389,25 @@ def cmd_anfrage(cfg, db, args):
 
 def cmd_inserat(cfg, db, args):
     """Personendaten aus Inseraten entfernen (P1-14a): einzeln oder alle ohne Kauf, die älter als N Monate sind."""
-    if bool(args.id) == bool(args.aelter_als):
+    if bool(args.id) == (args.aelter_als is not None):
         sys.exit("Entweder eine Inserat-ID oder --aelter-als MONATE angeben")
+    if args.aelter_als is not None and args.aelter_als < 1:
+        sys.exit("--aelter-als: mindestens 1 Monat")
     if not args.bestaetigt:
         sys.exit("Entfernt Verkäuferdaten (Profilname, Name im Anschreiben, Angaben im Protokoll) unwiderruflich – "
                  "zur Bestätigung --bestaetigt angeben")
     ausgabe = BASIS / cfg["ausgabe"]["ordner"]
     if args.id:
         try:
-            erg = datenrechte.inserat_anonymisieren(db, ausgabe, args.id)
+            erg = datenrechte.inserat_anonymisieren(db, ausgabe, args.id, foto_ordner(cfg))
         except LookupError as e:
             sys.exit(str(e))
         except ValueError as e:
             sys.exit(f"Nicht geändert: {e}")
         print(f"Inserat {args.id} anonymisiert ({'Name entfernt' if erg['name_entfernt'] else 'kein Name gespeichert'}, "
-              f"{erg['besichtigungen']} Besichtigung(en) bereinigt). Bericht aktualisiert sich beim nächsten Lauf/„report“.")
+              f"{erg['besichtigungen']} Besichtigung(en) bereinigt, {erg['fotos']} Foto(s) gelöscht). Bericht aktualisiert sich beim nächsten Lauf/„report“.")
         return
-    erledigt = datenrechte.inserate_nach_frist(db, ausgabe, args.aelter_als)
+    erledigt = datenrechte.inserate_nach_frist(db, ausgabe, args.aelter_als, foto_ordner=foto_ordner(cfg))
     print(f"{len(erledigt)} Inserat(e) ohne Kauf, älter als {args.aelter_als} Monate, anonymisiert.")
 
 

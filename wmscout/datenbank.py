@@ -63,7 +63,8 @@ class Datenbank:
         """
         Path(pfad).parent.mkdir(parents=True, exist_ok=True)
         migriere(pfad, sicherung_ordner)
-        # check_same_thread=False: die App bedient Anfragen nacheinander in einem Server-Thread
+        # check_same_thread=False: die App bedient Anfragen in mehreren Threads (ThreadingHTTPServer); Zugriffe auf diese
+        # Verbindung serialisiert die Sperre des App-Kontexts, Suchlauf und Auto-Suche öffnen eigene Verbindungen
         self.con = sqlite3.connect(pfad, check_same_thread=False, timeout=timeout)
         self.con.row_factory = sqlite3.Row
         self._tiefe = 0          # >0: innerhalb von ``transaktion()`` – verschachtelte Schreibblöcke committen nicht selbst

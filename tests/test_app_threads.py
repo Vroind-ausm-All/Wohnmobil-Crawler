@@ -88,7 +88,7 @@ def test_suchlauf_wendet_datenschutzfrist_an(cfg, ads, monkeypatch, caplog):
     lauf = _suchlauf(cfg, ads, monkeypatch)
     alt = (datetime.now() - timedelta(days=60)).isoformat(timespec="seconds")
     aufrufe = []
-    monkeypatch.setattr(app_modul.datenrechte, "inserate_nach_frist", lambda db, ordner, monate: aufrufe.append(monate) or [alt])
+    monkeypatch.setattr(app_modul.datenrechte, "inserate_nach_frist", lambda db, ordner, monate, **k: aufrufe.append(monate) or [alt])
     with caplog.at_level(logging.INFO, logger="scout"):
         lauf.starte()
         lauf.thread.join(120)
@@ -162,7 +162,7 @@ def test_auto_suche_schleife_ueberlebt_fehler(monkeypatch, caplog):
     monkeypatch.setattr(auto.halt, "wait", lambda sek: auto.halt.is_set())             # keine Minute warten
     with caplog.at_level(logging.ERROR, logger="scout"):
         auto._schleife()
-    assert len(durchgaenge) == 2 and lauf.oeffnungen == 1                               # Verbindung einmal, weiter nach Fehler
+    assert len(durchgaenge) == 2 and lauf.oeffnungen == 2                               # weiter nach Fehler, Verbindung neu
     assert "Durchgang fehlgeschlagen" in caplog.text and "Datenbank gesperrt" in caplog.text
 
 

@@ -61,6 +61,7 @@ def test_config_local_ueberlagert(cfg, tmp_path):
     assert c["rechner"] == cfg["rechner"]
     r = _scout(cfg, tmp_path, "rechne", "--preis", "39000", "--ez", "2016", "--km", "90000", "--titel", "Knaus Sky TI", "--anschreiben")
     assert r.returncode == 0 and "Eigene Firma" in r.stdout, r.stderr
+    assert "config.local.yaml überlagert: anschreiben, suchen" in r.stdout                       # nachvollziehbar im Protokoll
     (tmp_path / "config.local.yaml").write_text("- nur eine Liste\n", encoding="utf-8")
     r = _scout(cfg, tmp_path, "rechne", "--preis", "39000", "--ez", "2016", "--km", "90000")
     assert r.returncode != 0 and "config.local.yaml" in r.stderr

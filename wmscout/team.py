@@ -250,8 +250,10 @@ class TeamSpeicher:
         return [self._zeile(r) for r in self.con.execute(sql, werte)]
 
     def besichtigung_planen(self, bid: int, termin: str | None, adresse: str | None, zustaendig_id: int | None) -> bool:
-        cur = self.con.execute("UPDATE besichtigungen SET termin=?, adresse=?, zustaendig_id=?, geaendert_am=?, "
-                               "version=version+1 WHERE id=?", (termin, adresse, zustaendig_id, _jetzt(), bid))
+        # ohne neue Version: Termin/Adresse/Zuständig gehören nicht zu den Eingaben vor Ort – ein verschobener Termin soll auf dem
+        # Handy des Besichtigers keinen Versionskonflikt auslösen (P1-07)
+        cur = self.con.execute("UPDATE besichtigungen SET termin=?, adresse=?, zustaendig_id=?, geaendert_am=? WHERE id=?",
+                               (termin, adresse, zustaendig_id, _jetzt(), bid))
         self.con.commit()
         return cur.rowcount > 0
 

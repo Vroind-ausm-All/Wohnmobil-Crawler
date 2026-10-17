@@ -73,8 +73,20 @@ def test_inserat_anonymisieren_einzeln_und_nach_frist(cfg, db, importiert, team,
     from wmscout import datenrechte
     ids = [r[0] for r in db.con.execute("SELECT id FROM anzeigen ORDER BY id LIMIT 4")]
     bid, datei = _mit_personendaten(db, team, tmp_path, ids[0])
-    erg = datenrechte.inserat_anonymisieren(db, tmp_path / "ausgabe", ids[0])
-    assert erg == {"anzeige_id": ids[0], "name_entfernt": True, "besichtigungen": 1} and not datei.exists()
+    # Eingaben vor Ort, Foto und Team-Notiz wie beim Widerruf einer Anfrage (N5)
+    db.con.execute("UPDATE besichtigungen SET daten_json=? WHERE id=?", (json.dumps({"fahrzeug": {"fin": "WDB123", "kennzeichen": "B-EB 1"}}), bid))
+    db.con.execute("UPDATE anzeigen SET notiz='Frau Beispiel 0170 1' WHERE id=?", (ids[0],))
+    db.con.execute("INSERT INTO fotos (besichtigung_id, datei, erstellt_am) VALUES (?, 'a.jpg', '2025-01-01')", (bid,))
+    db.con.commit()
+    foto = team.foto_ordner / str(bid) / "a.jpg"
+    foto.parent.mkdir(parents=True)
+    foto.write_bytes(b"jpg")
+    erg = datenrechte.inserat_anonymisieren(db, tmp_path / "ausgabe", ids[0], team.foto_ordner)
+    assert erg == {"anzeige_id": ids[0], "name_entfernt": True, "besichtigungen": 1, "fotos": 1} and not datei.exists() and not foto.exists()
+    b = db.con.execute("SELECT daten_json, ergebnis_json FROM besichtigungen WHERE id=?", (bid,)).fetchone()
+    assert b["daten_json"] == "{}" and b["ergebnis_json"] is None
+    assert db.con.execute("SELECT COUNT(*) FROM fotos WHERE besichtigung_id=?", (bid,)).fetchone()[0] == 0
+    assert db.con.execute("SELECT notiz FROM anzeigen WHERE id=?", (ids[0],)).fetchone()[0] is None
     a = db.con.execute("SELECT * FROM anzeigen WHERE id=?", (ids[0],)).fetchone()
     details = json.loads(a["details_json"])
     assert "verkaeufer_name" not in details and details["ausstattung"] == "Markise" and details["anonymisiert_am"]
@@ -84,7 +96,7 @@ def test_inserat_anonymisieren_einzeln_und_nach_frist(cfg, db, importiert, team,
     # gekauft: Aufbewahrung
     db.con.execute("UPDATE anzeigen SET status='gekauft' WHERE id=?", (ids[1],))
     db.con.commit()
-    with pytest.raises(ValueError, match="gekauft"):
+    with pytest.raises(datenrechte.InseratGekauft, match="gekauft"):
         datenrechte.inserat_anonymisieren(db, tmp_path / "ausgabe", ids[1])
     with pytest.raises(LookupError):
         datenrechte.inserat_anonymisieren(db, tmp_path / "ausgabe", "gibtsnicht")
@@ -100,6 +112,62 @@ def test_inserat_anonymisieren_einzeln_und_nach_frist(cfg, db, importiert, team,
         with pytest.raises(ValueError):
             datenrechte.frist_aus({"datenschutz": {"inserate_anonymisieren_nach_monaten": falsch}})
     assert datenrechte.frist_aus({}) == 0
+
+
+
+def test_frist_offene_besichtigung_kaputtes_json_gesperrte_datei_diagnose(cfg, db, importiert, team, tmp_path, monkeypatch, caplog):
+    """QA-Befunde N4, N8, N9 und Q11: offene Besichtigung schützt, kaputtes JSON wird nicht dauerhaft übersprungen, eine gesperrte
+    Datei bricht nichts ab, Diagnose-Rohseiten verfallen mit derselben Frist, Fehler beenden keinen Lauf."""
+    import logging
+    import os
+    from datetime import datetime
+    from pathlib import Path
+    from wmscout import datenrechte
+    ids = [r[0] for r in db.con.execute("SELECT id FROM anzeigen ORDER BY id LIMIT 3")]
+    _mit_personendaten(db, team, tmp_path, ids[0])
+    team.besichtigung_anlegen(ids[0], {"anzeige_id": ids[0]}, None, "Weg 2", None, None)       # noch offen
+    _, datei = _mit_personendaten(db, team, tmp_path, ids[1])
+    db.con.execute("UPDATE anzeigen SET details_json='{\"verkaeufer_name\": kaputt' WHERE id=?", (ids[1],))
+    db.con.commit()
+    original = Path.unlink
+
+    def gesperrt(pfad, *a, **k):
+        if pfad == datei:
+            raise PermissionError("von einem anderen Prozess verwendet")
+        return original(pfad, *a, **k)
+
+    monkeypatch.setattr(Path, "unlink", gesperrt)
+    with caplog.at_level(logging.WARNING, logger="scout"):
+        assert datenrechte.inserate_nach_frist(db, tmp_path / "ausgabe", 6, jetzt=datetime(2026, 10, 17)) == [ids[1]]
+    assert "nicht gelöscht (PermissionError)" in caplog.text and datei.exists()
+    assert "anonymisiert_am" in db.con.execute("SELECT details_json FROM anzeigen WHERE id=?", (ids[1],)).fetchone()[0]
+    # Diagnose-Rohseiten
+    ausgabe = tmp_path / "ausgabe"
+    alt, frisch = ausgabe / "diagnose_suchseite.html", ausgabe / "diagnose_detailseite.html"
+    for f in (alt, frisch):
+        f.write_text("<html>Inserat</html>", encoding="utf-8")
+    os.utime(alt, (datetime(2025, 1, 1).timestamp(),) * 2)
+    assert datenrechte.diagnose_nach_frist(ausgabe, 6) == 1 and not alt.exists() and frisch.exists()
+    assert datenrechte.diagnose_nach_frist(ausgabe, 0) == 0 and frisch.exists()
+    # Fehler (z. B. ungültige Frist) werden protokolliert, nicht weitergereicht
+    with caplog.at_level(logging.ERROR, logger="scout"):
+        assert datenrechte.frist_anwenden(db, {**cfg, "datenschutz": {"inserate_anonymisieren_nach_monaten": -3}}, tmp_path,
+                                          team.foto_ordner) == []
+    assert "Datenschutz-Frist konnte nicht angewendet werden" in caplog.text
+
+
+def test_frist_auch_nach_seitenimport_und_beim_start(cfg, db, importiert, server, team, monkeypatch):
+    """N4: Verkäufernamen kommen über den Seitenimport – die Frist greift dort und beim Start, nicht nur nach einem Suchlauf."""
+    from tests.daten import BASIS
+    from wmscout import app as app_modul
+    from wmscout import datenrechte
+    aufrufe = []
+    monkeypatch.setattr(datenrechte, "frist_anwenden", lambda *a, **k: aufrufe.append(a[1] is not None) or [])
+    anna = anmelden(server, "Anna")
+    assert anna("POST", "/api/import", {})[0] == 200 and aufrufe == [True]
+    srv, _, _ = app_modul.erstelle_server(cfg, db, BASIS, port=0)
+    srv.server_close()
+    assert aufrufe == [True, True]
 
 
 def test_cli_inserat_anonymisieren(cfg, db, importiert, team, tmp_path):
@@ -186,3 +254,100 @@ def test_python_version_ueberall_gleich():
     for lock in ("requirements.txt", "requirements-dev.txt"):
         assert "--python-version 3.13" in lesen(lock) and "python_full_version <" not in lesen(lock), lock
     assert sys.version_info[:2] == (3, 13)
+
+
+# ---------------------------------------------------------------- QA-Befunde zum Phase-1-Abschluss
+PNG = "data:image/png;base64,iVBORw0KGgo="
+
+
+def test_ankauf_ohne_ez_plant_mit_manuellem_marktwert(server, team, db):
+    """N1 (HOCH): Kauf eines Inserats ohne EZ – der Plan rechnet mit dem Marktwert der Besichtigung, nicht mit 0 €."""
+    ziel = db.con.execute("SELECT id FROM anzeigen WHERE ez_jahr IS NOT NULL ORDER BY id LIMIT 1").fetchone()[0]
+    db.con.execute("UPDATE anzeigen SET ez_jahr=NULL WHERE id=?", (ziel,))
+    db.con.commit()
+    server.RequestHandlerClass.kontext.veraendert()
+    anna = anmelden(server, "Anna")
+    s, b, _ = anna("POST", "/api/besichtigung", {"anzeige_id": ziel, "marktwert": 36000})
+    assert s == 200, b
+    basis = anna("GET", f"/api/besichtigung/{b['id']}")[1]["basis"]
+    s, r, _ = anna("POST", f"/api/besichtigung/{b['id']}/abschluss", {"entscheidung": "gekauft", "endpreis": 25000,
+                   "begruendung_unvollstaendig": "Test", "unterschrift_verkaeufer": PNG, "unterschrift_ankaeufer": PNG})
+    assert s == 200 and r["ankauf"], r
+    plan = anna("GET", f"/api/ankauf/{r['ankauf']}")[1]["vergleich"]["plan"]
+    assert plan["max_ek"] == basis["max_ek"] > 0 and plan["haendler_vk"] == basis["haendler_vk"] > 0 and plan["gewinn"] > 0
+    f = anna("GET", f"/api/fahrzeug/{ziel}")[1]["bewertung"]                                   # N11: null statt 0
+    assert f["sicherheit"] == "keine" and f["max_ek"] is None and f["erstangebot"] is None and f["haendler_vk"] is None
+
+
+def test_gekauft_verlassen_nur_inhaber(server, team, db):
+    """N2: „gekauft“ setzt und ändert nur der Inhaber."""
+    anna, ben = anmelden(server, "Anna"), anmelden(server, "Ben")
+    a = ids_der_liste(anna, "alle", n=1)[0]
+    assert anna("POST", "/api/status", {"id": a, "status": "gekauft"})[0] == 200
+    for status in ("neu", "uninteressant", "abgesagt"):
+        s, f, _ = ben("POST", "/api/status", {"id": a, "status": status})
+        assert s == 403 and f["grund"] == "recht", status
+    assert db.status_von(a) == "gekauft"
+    assert anna("POST", "/api/status", {"id": a, "status": "abgesagt"})[0] == 200
+
+
+def test_termin_verschieben_ohne_versionskonflikt(server, team, db):
+    """N6: Planen (Termin/Adresse/Zuständig) erhöht die Version der Eingaben nicht."""
+    anna, ben = anmelden(server, "Anna"), anmelden(server, "Ben")
+    x = ids_der_liste(anna, "alle", n=1)[0]
+    b = anna("POST", "/api/besichtigung", {"anzeige_id": x, "zustaendig_id": team.ids["Ben"]})[1]
+    v = ben("GET", f"/api/besichtigung/{b['id']}")[1]["version"]
+    s, r, _ = ben("POST", f"/api/besichtigung/{b['id']}/speichern", {"daten": {"notiz": "1"}, "version": v})
+    assert s == 200
+    assert anna("POST", f"/api/besichtigung/{b['id']}/planen", {"termin": "2026-11-02T10:00"})[0] == 200
+    assert ben("POST", f"/api/besichtigung/{b['id']}/speichern", {"daten": {"notiz": "2"}, "version": r["version"]})[0] == 200
+    assert ben("GET", f"/api/besichtigung/{b['id']}")[1]["termin"].startswith("2026-11-02")
+
+
+def test_login_ziel_nur_eigene_pfade(server):
+    """Q6/N3: das Ziel nach der Anmeldung prüft der Server; fremde Adressen und Umwege landen auf /m."""
+    import json
+    import re
+    from tests.test_sicherheit import roh
+    from wmscout.web.api import sicheres_ziel
+    for gut in ("/m", "/m#/besichtigung/3", "/anfragen?status=neu", "/haendler"):
+        assert sicheres_ziel(gut) == gut
+    for boese in ("//evil.com", "/.//evil.com", "/\\evil.com", "https://evil.com", "/../x", "/m/./x", "evil.com",
+                  "javascript:alert(1)", "/m\r\nSet-Cookie:x", "/ m", "", None, "/" + "a" * 600):
+        assert sicheres_ziel(boese) == "/m", boese
+    assert sicheres_ziel("/%5Cevil") == "/%5Cevil"                          # bleibt ein Pfad auf diesem Server (kodiert)
+    for weiter, erwartet in (("/.//evil.com", "/m"), ("https://evil.com/", "/m"), ("/m#/termine", "/m#/termine")):
+        from urllib.parse import quote
+        html = roh(server, "GET", "/login?weiter=" + quote(weiter, safe=""))[1].decode()
+        assert json.loads(re.search(r"var ziel = (\"[^\"]*\");", html).group(1)) == erwartet, weiter
+
+
+def test_ics_ohne_nacktes_cr_und_zustaendig_400(server, team):
+    """Q15: \\r aus Adresse/Titel bricht keine ICS-Zeile; Q13: ungültiger Zuständiger → 400."""
+    from wmscout.web.api import ics
+    text = ics({"id": 1, "termin": "2026-11-02T10:00", "adresse": "Musterweg 1\rATTENDEE:mailto:x@y", "basis": {"fahrzeug": "A\r\nB"}}, {}, None)
+    zeilen = text.split("\r\n")
+    assert "\r" not in "".join(zeilen) and not any(z.startswith("ATTENDEE") for z in zeilen)
+    assert "LOCATION:Musterweg 1\\nATTENDEE:mailto:x@y" in zeilen
+    anna = anmelden(server, "Anna")
+    x = ids_der_liste(anna, "alle", n=1)[0]
+    s, f, _ = anna("POST", "/api/besichtigung", {"anzeige_id": x, "zustaendig_id": "abc"})
+    assert s == 400, f
+
+
+def test_cli_frist_nur_positiv_und_hinweis_passwort_variable(cfg, tmp_path):
+    from tests.test_cli import _scout
+    r = _scout(cfg, tmp_path, "inserat", "anonymisieren", "--aelter-als", "-5", "--bestaetigt")
+    assert r.returncode != 0 and "mindestens 1" in r.stderr                                      # N16
+    r = _scout(cfg, tmp_path, "nutzer", "anlegen", "Eva", umgebung={"SCOUT_NEUES_PASSWORT": "sicher1234"})
+    assert r.returncode == 0 and "SCOUT_NEUES_PASSWORT" in r.stderr                              # N13
+
+
+def test_plan_ohne_unabhaengigen_marktwert_aus_grundlage(cfg, db, tmp_path):
+    """N1 für ältere Besichtigungen ohne manuellen Marktwert: Bewertung „keine“ liefert keine 0-€-Beträge in den Plan."""
+    from wmscout.ankauf import AnkaufSpeicher
+    from wmscout.bewertung.rechner import Rechner
+    b = Rechner(cfg).bewerte({"id": "x", "titel": "Knaus Sun Ti", "preis": 39000, "km": 90000, "suche": "Alkoven"}, [])
+    assert b.sicherheit == "keine"
+    v = AnkaufSpeicher(db, cfg, tmp_path / "ankaeufe").plan_vorbereiten({"id": 1, "basis": {"max_ek": 25100, "haendler_vk": 36800}}, 25000, b)
+    assert v["plan"]["max_ek"] == 25100 and v["plan"]["haendler_vk"] == 36800 and v["plan"]["quelle"].startswith("Grundlage")
