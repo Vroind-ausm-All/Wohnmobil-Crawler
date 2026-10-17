@@ -4,6 +4,21 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P2-00 – Eingang-Schnittstelle (17.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13) | 907 bestanden (vorher 891), neu `test_eingang.py` (16) |
+| `ruff check .` | grün |
+| Seitenimport-, mobile.de-, Kleinanzeigen-, Ereignis- und v4-Tests | unverändert grün (Testdaten „mobilede“ → „mobile.de“; Ereignisse über `api` mit Freigabe) |
+| `SeitenEingang.lese` ohne Netz (Socket gesperrt) und ohne Datenbank | bestanden |
+| Dasselbe Inserat über `manuell` und `email` → eine Zeile in `inserate`/`anzeigen`, keine doppelte Historie | bestanden |
+| Unbekannte Plattform/Kanal, fremdes ID-Präfix, gemischte Lesung, `detail_ohne_id` → nichts geschrieben | bestanden |
+| Ereignisspeicher weist `email`/`manuell` ab (ADR-035) | bestanden |
+| QA: alle 6 Testseiten unter `tests/seiten/` passieren die ID-Prüfung; Dekodierung alt/neu an 20.005 Eingaben verglichen | 0 Abweisungen; 1 Abweichung (doppelte BOM, harmlos) |
+| Gegenproben (9) | alle erkannt |
+| Windows-CI, echte Betreiberdaten | nicht geprüft (CI folgt im PR) |
+
 ## Phase 1 – Abschluss (17.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

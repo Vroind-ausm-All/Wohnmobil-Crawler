@@ -552,3 +552,32 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
       Termin löst auf dem Handy keinen Versionskonflikt aus.
 * **Folgen / offen:** Fristen legt der Betreiber mit dem Datenschutzbeauftragten fest (`docs/DATENRECHTE.md`, Standard aus).
   Q10 bleibt bis P3-07. CSRF-Token je Prozess statt je Sitzung (Schutz über SameSite, JSON-Pflicht, Origin-Prüfung).
+
+## ADR-035 – Push-Eingänge: Eingang.lese → Lesung → Importer.importiere · gilt (17.10.2026)
+
+* **Kontext:** Phase 2 bringt zwei weitere Eingänge, die der Nutzer selbst beliefert (URL + eingefügter Text, P2-05; E-Mail-
+  Suchbenachrichtigung, P2-06). Es gab drei Schreibwege: Suchlauf (`speichere_treffer`, Kanal `suche`), gespeicherte Seiten
+  (`_speichere_seite`, Kanal `manuell`) und den `EreignisSpeicher` (`api`/`stream`/`email`). Die Plattform-ID war uneinheitlich:
+  `mobile.de` im Code und in den echten Daten, `mobilede` in Tests des Ereigniseingangs.
+* **Entscheidung:**
+  1. **Ein Schreibweg für Push-Eingänge:** `Eingang.lese(Rohdaten) -> Lesung` (rein, ohne Datenbank und Netz,
+     `wmscout/eingang/basis.py`), gespeichert wird nur über `Importer.importiere(lesung, kanal)`. Der Seitenimport ist der erste
+     Eingang (`SeitenEingang`, Kanal `manuell`); `importiere_seiten` bleibt Dateischleife mit Verschieben und Grenzen.
+  2. **`Lesung` statt reiner Inserat-Liste:** Die Herkunft der Fahrzeugart (Art-Filter der Suchseite, Haupttabelle, je Treffer
+     bestätigte Kategorie bei mobile.de, ADR-020/021/022) muss bis zum Speichern mitgehen; sonst würde ein neuer Kanal die
+     Regeln „bestätigt/vorläufig“ und „gewerblich“ umgehen.
+  3. **Ereignisse nur für `api`/`stream` – in beide Richtungen erzwungen:** `importiere_ereignis`/`EreignisSpeicher` bleibt Weg
+     der freigegebenen automatischen Kanäle und weist `email`/`manuell` ab (ValueError, QA-Befund B1). `importiere` weist
+     `api`/`stream` ab und schreibt über `speichere_treffer` wie der Seitenimport.
+  4. **Kanonische Namen in `wmscout/domaene.py`:** Plattformen `kleinanzeigen` (IDs ohne Präfix), `mobile.de` (`md-`), vorgemerkt
+     `autoscout24` (`as-`); Kanäle `stream`, `api`, `email`, `manuell` (Push: `email`, `manuell`). Unbekannte Plattform, Kanal oder
+     nicht zur Plattform passende Anzeigen-ID → `ValueError` vor dem Schreiben. Gespeicherte Werte ändern sich nicht.
+  5. **Zweite Beobachtung ohne inhaltliche Änderung wird nicht protokolliert** (wie ADR-024): dasselbe Inserat über zwei Kanäle
+     ist eine Zeile in `inserate` und `anzeigen`; `beobachtungen`/`preis_historie` erhalten nur Änderungen.
+  6. **Zeitpunkt:** Gespeichert wird der Zeitpunkt, zu dem der Scout das Angebot kennt (Import), nicht der Eingangszeitpunkt
+     der Rohdaten. `Rohdaten.empfangen_am` (mit Zeitzone) bleibt für Meldungen und Kanäle mit eigenem Datum (E-Mail-Datum,
+     P2-06), das dort als Angabe am Inserat erscheint; eine rückdatierte Historie gibt es nicht (QA-Befund B2).
+* **Folgen / offen:** P2-05 und P2-06 liefern nur noch einen `Eingang` (Parser/Normalisierung); sie schreiben nie selbst.
+  Der Kanalwert wird nicht aus dem Eingang geraten, der Aufrufer nennt ihn. `Datenbank.speichere_treffer` prüft Plattformen nicht
+  selbst (Suchlauf und Altbestand); die Prüfung sitzt im `Importer`. Ein E-Mail-Eingang braucht eigene Regeln, was er aus
+  Benachrichtigungen lesen darf (ADR-010: verlinkte Anzeigen werden nicht nachgeladen).

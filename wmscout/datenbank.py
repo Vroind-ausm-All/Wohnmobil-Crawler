@@ -94,7 +94,7 @@ class Datenbank:
         """Fügt ein oder aktualisiert. Rückgabe: 'neu', 'preis' (Preis gesenkt) oder 'bekannt'.
 
         In derselben Transaktion wird der Treffer in die v4-Tabellen gespiegelt (``spiegle_inserat``), damit Ereigniseingang,
-        Preisverlauf und App dieselben Fahrzeuge kennen. ``kanal``: 'suche' (Suchlauf) oder 'manuell' (eingelesene Seite)."""
+        Preisverlauf und App dieselben Fahrzeuge kennen. ``kanal``: 'suche' (Suchlauf) oder ein Push-Kanal 'manuell'/'email' (über Importer.importiere)."""
         with self._exklusiv():
             ergebnis = self.schreibe_anzeige(a, suche)
             self.spiegle_inserat(a, kanal)

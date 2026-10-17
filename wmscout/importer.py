@@ -6,19 +6,20 @@ Einzige Stelle, die Quellen und Datenbank verbindet. Ablauf eines Laufs:
   2. Detailseiten für Inserate ohne Details nachladen (begrenzt pro Lauf)
   3. Auffälligkeiten (Layout geändert, Sperre, Netzwerk) als Fehlertext zurückgeben
 
-Außerdem: `importiere_seiten()` liest im Browser gespeicherte Seiten (Kleinanzeigen, mobile.de) aus dem Import-Ordner –
-ohne Netzabruf (ADR-010).
+Außerdem: `importiere()` ist der einzige Schreibweg für Push-Eingänge (Lesung → Datenbank, ADR-035); `importiere_seiten()`
+liest im Browser gespeicherte Seiten (Kleinanzeigen, mobile.de) aus dem Import-Ordner – ohne Netzabruf (ADR-010).
 """
 from __future__ import annotations
 
 import logging
 import time
-from datetime import date
+from collections.abc import Collection
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from .datenbank import BESTAETIGT, IMPORT_SUCHE, VORLAEUFIG, Datenbank, import_art, import_suche
-from .eingang import (BegleitordnerFehler, SuchseitenArt, erkenne_seite_mit_hinweisen, fahrzeugart_der_suchseite, haupttabelle_ids,
-                      html_dateien, lies_html, plattform_der_seite, verschiebe)
+from .domaene import PUSH_KANAELE, pruefe_anzeigen_id, pruefe_kanal
+from .eingang import BegleitordnerFehler, Lesung, Rohdaten, SeitenEingang, SuchseitenArt, html_dateien, lies_html, verschiebe
 from .ereignisse import InseratEreignis
 from .ereignis_speicher import EreignisSpeicher
 from .normalisierung.fahrzeug import art_schluessel
@@ -175,6 +176,7 @@ class Importer:
             dateien, stat["uebrig"] = dateien[:max_dateien], len(dateien) - max_dateien
         eingelesen = ordner / "eingelesen" / date.today().isoformat()
         start = time.monotonic()
+        eingang = SeitenEingang()
 
         def melde(text: str):
             log.warning("Gespeicherte Seite %s", text)
@@ -187,24 +189,21 @@ class Importer:
             stat["dateien"] += 1
             try:
                 html = lies_html(datei)
-                art, inserate, hinweise = erkenne_seite_mit_hinweisen(html)
-                if art in ("unbekannt", "detail_ohne_id"):
+                lesung = eingang.lese(Rohdaten(html.encode("utf-8"), datei.name, datetime.now(timezone.utc)))
+                if lesung.art in ("unbekannt", "detail_ohne_id"):
                     verschiebe(datei, ordner / "nicht_erkannt")
                     stat["unbekannt"] += 1
-                    if art == "detail_ohne_id":
-                        grund = DETAIL_OHNE_ID.get(plattform_der_seite(html), DETAIL_OHNE_ID_STANDARD)
-                    elif hinweise:
-                        grund = f"{'; '.join(hinweise)} – verschoben nach nicht_erkannt/"
+                    if lesung.art == "detail_ohne_id":
+                        grund = DETAIL_OHNE_ID.get(lesung.plattform, DETAIL_OHNE_ID_STANDARD)
+                    elif lesung.hinweise:
+                        grund = f"{'; '.join(lesung.hinweise)} – verschoben nach nicht_erkannt/"
                     else:
                         grund = "keine Kleinanzeigen- oder mobile.de-Such- oder Detailseite erkannt – verschoben nach nicht_erkannt/"
                     melde(f"{datei.name}: {grund}")
                     continue
-                for h in hinweise:                                        # übersprungene Treffer, fehlende Anbieterkästen …
+                for h in lesung.hinweise:                                 # übersprungene Treffer, fehlende Anbieterkästen …
                     stat["fehler"].append(f"{datei.name}: {h}")
-                # Art-Filter (art_s:) und Haupttabelle gibt es nur bei Kleinanzeigen; mobile.de nennt die Art je Treffer
-                mit_filter = art == "suche" and plattform_der_seite(html) == STANDARD_QUELLE
-                self._speichere_seite(art, inserate, stat, fahrzeugart_der_suchseite(html) if mit_filter else None,
-                                      haupttabelle_ids(html) if mit_filter else None)
+                self.importiere(lesung, eingang.kanal, stat)
             except Exception as e:  # noqa: BLE001 – eine kaputte Datei darf die übrigen nicht aufhalten
                 stat["fehlerhaft"] += 1
                 melde(f"{datei.name}: nicht eingelesen ({e}) – Datei bleibt liegen")
@@ -221,9 +220,30 @@ class Importer:
                  stat["unbekannt"], stat["fehlerhaft"], stat["neu"], stat["preis"], stat["bekannt"])
         return stat
 
+    def importiere(self, lesung: Lesung, kanal: str, stat: dict | None = None) -> dict:
+        """Einziger Schreibweg für Push-Eingänge (ADR-035): speichert eine `Lesung` über den Kanal `kanal` ('manuell', 'email').
+
+        Prüft Kanal, Plattform und Anzeigen-ID, bevor etwas geschrieben wird (ValueError). Gespeichert wird immer über
+        `speichere_treffer` mit den Regeln zur Fahrzeugart und zu „gewerblich“ von `_speichere_seite` – nie über den
+        `EreignisSpeicher` (der gilt nur für api/stream, `importiere_ereignis`). Nicht speicherbare Lesungen ('unbekannt',
+        'detail_ohne_id') behandelt der Aufrufer. `stat` (optional) wird fortlaufend ergänzt, auch wenn mittendrin ein Fehler
+        auftritt. Rückgabe: Zähler suchseiten, detailseiten, neu, preis, bekannt, details."""
+        if pruefe_kanal(kanal) not in PUSH_KANAELE:
+            raise ValueError(f"Eingangskanal {kanal!r} ist kein Push-Eingang (erlaubt: {', '.join(PUSH_KANAELE)})")
+        if lesung.art not in ("suche", "detail"):
+            raise ValueError(f"Lesung der Art {lesung.art!r} ist nicht speicherbar")
+        for inserat in lesung.inserate:
+            pruefe_anzeigen_id(inserat.quelle, inserat.anzeigen_id)
+        if stat is None:
+            stat = {}
+        for schluessel in ("suchseiten", "detailseiten", "neu", "preis", "bekannt", "details"):
+            stat.setdefault(schluessel, 0)
+        self._speichere_seite(lesung.art, lesung.inserate, stat, lesung.art_filter, lesung.haupttreffer, kanal)
+        return stat
+
     def _speichere_seite(self, art: str, inserate: list, stat: dict, seitenart: SuchseitenArt | None = None,
-                         haupttreffer: set[str] | None = None):
-        """Speichert die Inserate einer Such- oder Detailseite.
+                         haupttreffer: Collection[str] | None = None, kanal: str = "manuell"):
+        """Speichert die Inserate einer Such- oder Detailseite (ungeprüft; Eintritt von außen ist `importiere`).
 
         Importierte Inserate bekommen die Suche „Import <Art> (bestätigt|vorläufig)“ bzw. `IMPORT_SUCHE` (Art unbekannt);
         die Herkunft steuert den Hinweis am Fahrzeug (`bewertung.anschreiben.hinweise`), sperrt aber nichts.
@@ -256,7 +276,7 @@ class Importer:
             suche = _neue_suche(self.db.suche_zu(d["id"]), neue_art, herkunft)
             if art == "detail" and not d.get("gewerblich") and self.db.gewerblich_zu(d["id"]):
                 d["gewerblich"] = None            # kein Hinweis auf der Detailseite ≠ „privat“: gewerblicher Listenwert bleibt
-            stat[self.db.speichere_treffer(d, suche, kanal="manuell")] += 1
+            stat[self.db.speichere_treffer(d, suche, kanal=kanal)] += 1
             if art == "detail":
                 self.db.speichere_details(d["id"], d)
                 stat["details"] += 1

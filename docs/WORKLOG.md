@@ -6,6 +6,28 @@ Wert „–“.
 
 ---
 
+## P2-00 – Eingang-Schnittstelle (17.10.2026) · Status: REVIEW
+
+- **Phase:** 2 (Multi-Quellen-System), freigegeben vom Betreiber am 17.10.2026 („Starte Phase 2“). Betreiberentscheidungen zu
+  Phase 2: E-Mails als `.eml` (Thunderbird/Webmail), Import per URL + Text für alle Teammitglieder, eingelesene Mails mit der
+  Datenschutz-Frist löschen, Beispiel-Mails folgen (bis dahin Parser-Gerüst mit nachgebildeten Mails).
+- **Verantwortlicher Agent:** Analyse `scout-architect`; Umsetzung `source-integrations`; QA-Korrekturen Orchestrator.
+- **Geänderte Dateien:** `wmscout/eingang/basis.py` (neu: `Rohdaten`, `Lesung`, `Eingang`, `SeitenEingang`), `wmscout/importer.py`
+  (`importiere(lesung, kanal)`, Seitenimport darüber), `wmscout/domaene.py` (Plattformen, Kanäle, Prüfungen),
+  `wmscout/ereignisse.py`, `wmscout/ereignis_speicher.py` (Push-Kanäle abgewiesen), `wmscout/datenbank.py` (Docstring),
+  Tests `test_eingang.py` (16, neu), `test_ereignisse.py`/`test_v4_abgleich.py` (Testdaten „mobilede“ → „mobile.de“, Ereignisse
+  über den freigegebenen Kanal `api`), Doku ADR-035, ARCHITECTURE (Modul, R20 behoben, Diagramm), EREIGNIS-ENGINE, ROADMAP.
+- **Implementierte Funktionen:** ein Schreibweg für Push-Eingänge; Plattform/Kanal/Anzeigen-ID werden vor dem ersten Schreiben
+  geprüft; Herkunft der Fahrzeugart geht über die `Lesung` mit; Ereignisspeicher nur noch für `api`/`stream`.
+- **Tests:** `pytest -q` → **907 passed**; `ruff check .` → grün. Gegenproben: 7 durch den Agenten, 2 durch den Orchestrator
+  (Push-Abweisung im Ereignisspeicher, Zeitzone in `Rohdaten`) – alle erkannt.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein KRITISCH/HOCH. B1 (ADR nicht erzwungen) → erzwungen; B2 (Zeitpunkt)
+  → entschieden in ADR-035 Nr. 6, Zeitzone geprüft; B3 (Doku) → nachgezogen; B5/B6 → Kommentar, Test; B4 (ganze Seite wird
+  bei unpassender ID abgewiesen) bewusst so, mit Test; B7 (Mehraufwand Dekodierung) nicht gemessen, vernachlässigbar.
+- **Bekannte Risiken:** Verhalten mit echten Betreiberdatenbanken nicht geprüft (kein Produktivbestand hier); `mobilede` wurde laut
+  Code-Historie nie produktiv geschrieben.
+- **Nächster sinnvoller Schritt:** P2-04 (Quellen schaltbar) und P2-05 (URL + Text, Desktop und Handy).
+
 ## Phase 1 – Abschluss (17.10.2026) · Status: REVIEW
 
 - **Anlass:** Betreiber „Schließe Phase 1 komplett ab“. Entscheidungen: F9 „Nur 3.13“, F10 „Befehl + einstellbare Frist,

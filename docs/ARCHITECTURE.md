@@ -30,6 +30,7 @@ stichprobenartig nachgeprüft (R1, R2, R3, R5, R14). Entscheidungen: `docs/DECIS
 | `wmscout/quellen/kleinanzeigen/` | Adapter + HTML-Parser | `freigegeben = False`, läuft aber standardmäßig (R1) |
 | `wmscout/quellen/mobilede/` (seit P2-05b) | nur Parser für gespeicherte Such-/Anzeigenseiten (kein Abruf, kein Adapter in `QUELLEN`); IDs `md-<Nummer>` | Selektoren über `data-testid`; Telefon/seller-IDs im RSC-Strom werden nicht gelesen |
 | `wmscout/eingang/seiten.py` (seit P2-05) | Plattform- und Seitentyp-Erkennung gespeicherter Seiten (Kleinanzeigen, mobile.de), Art-Herkunft | Erkennung nur über den Seitenkopf |
+| `wmscout/eingang/basis.py` (seit P2-00) | Schnittstelle der Push-Eingänge: `Rohdaten`, `Lesung`, `Eingang.lese`; `SeitenEingang` (ADR-035) | rein, ohne Datenbank und Netz; geschrieben wird nur über `Importer.importiere` |
 | `wmscout/netz.py` | höflicher HTTP-Abruf, Abbruch bei 403/429/Captcha | User-Agent aus Konfiguration ist ein Chrome-Imitat (R2) |
 | `wmscout/importer.py` | Suchlauf, Detailseiten, Layout-Diagnose | Freigabe wird nur protokolliert, nicht erzwungen; ein `try` um alle Suchen (R8) |
 | `wmscout/datenbank.py` | SQLite, Tabelle `anzeigen`, Status, Nachfassen | `ALTER TABLE` bei jedem Öffnen, ohne Version/Backup (R3); ohne WAL/`busy_timeout` (R7) |
@@ -96,7 +97,7 @@ config.yaml (suchen) → Suchauftrag → KleinanzeigenQuelle.suche → Hoefliche
 | R17 | Login-Bremse nur 1 s, Sitzungen 30 Tage | `api.py:352,500`; `team.py:21` | NIEDRIG | Sperre nach Fehlversuchen | P1-13 |
 | R18 | Python 3.10–3.12 zugelassen, CI testet nur 3.13 | `pyproject.toml:6`, `scout.py:21` | NIEDRIG | festlegen oder mittesten | P1-10 |
 | R19 | Detailabruf ohne Freigabeprüfung; Inserate ohne `quelle` fallen auf Kleinanzeigen zurück – auch künftig manuell importierte Inserate würden nachgeladen (verletzt ADR-010) | `importer.py:78-100` | HOCH | Freigabeprüfung auch in `details()`; nur pull-fähige, freigegebene Plattformen | P1-01a |
-| R20 | Quellen kennen nur den Pull-Weg `suche()`; Plattform und Eingangskanal nicht getrennt – dasselbe Inserat per E-Mail und manuell ergäbe zwei Datensätze | `basis.py:111-135` | HOCH | ADR-016 (Plattform ≠ Kanal), ADR-017 (Push-Eingang) | P2-00 |
+| R20 | ~~Plattform und Eingangskanal nicht getrennt~~ – **behoben (P2-00, ADR-035):** ein Schreibweg `Importer.importiere(lesung, kanal)`, kanonische Plattform-IDs | `importer.py`, `eingang/basis.py`, `domaene.py` | – | – | P2-00 |
 
 Weitere Befunde der QA-Bestandsaufnahme: `docs/TEST-REPORT.md`. R19/R20 stammen aus der Architekturprüfung der
 Planung (P0-07). Belege (Datei:Zeile) beziehen sich auf Commit 3f75f67 und werden von `tests/test_projekt.py` auf
@@ -110,10 +111,10 @@ Existenz der Zeilen geprüft.
                        ┌──────────────────────────── wmscout ────────────────────────────┐
  Suchprofile (DB) ───▶ │ quellen/      Pull-Quellen (suche/details): mobile_de_api, …;   │
                        │               kleinanzeigen (BLOCKED, standardmäßig aus)        │
- Benachrichtigungs-    │ eingang/      Push-Kanäle: Eingang.lese(roh, meta) → Inserate   │
+ Benachrichtigungs-    │ eingang/      Push-Kanäle: Eingang.lese(Rohdaten) → Lesung       │
  E-Mails (.eml/IMAP) ▶ │               email_kleinanzeigen, email_autoscout, manuell     │
  Nutzer-Import ──────▶ │ netz.py       Abruf nur für freigegebene Plattformen            │
-                       │ importer.py   importiere(inserate, kanal): einziger Schreibweg;  │
+                       │ importer.py   importiere(lesung, kanal): einziger Schreibweg;    │
                        │               Lauf je Quelle isoliert, Laufsperre, Kennzahlen    │
                        │ normalisierung/  Fahrzeug, Geo, Datenqualitäts-Markierungen      │
                        │ datenbank/    Schema, Migrationen, Backup, Fassade (Repository) │
