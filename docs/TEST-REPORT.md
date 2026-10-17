@@ -4,6 +4,52 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## Phase 1 – Abschluss (17.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13) | **891 bestanden** (vorher 853), neu u. a. `test_rechner_ohne_ez.py` (4), `test_phase1_abschluss.py` (17), `test_netz.py` (9), `test_app_threads.py` (7) |
+| `ruff check .` | grün |
+| P1-12: ohne EZ keine Beträge in Rechner, CSV, API, CLI; Besichtigung nur mit Marktwert (409 `grund=marktwert`); Invariante Erstangebot ≤ Max-EK ≤ VK über 96 Kombinationen | bestanden |
+| P1-07: zwei Clients, veraltete Version → 409 mit aktuellem Stand; Planen nach Abschluss → 409 | bestanden |
+| P1-15: HTTP je Rolle (Mitarbeiter: „gekauft“, Suchlauf, Import → 403; Knöpfe ausgeblendet) | bestanden |
+| P1-14a: Anonymisierung (Profilname, Anschreiben, Besichtigungsangaben, Datei), gekauft geschützt, Frist, CLI | bestanden |
+| P1-05: hängender WhatsApp-Versand blockiert andere Anfragen nicht | bestanden |
+| P1-08: Bewertungsmodule laden weder `wmscout.datenbank` noch `sqlite3`; gleiche Ergebnisse aus Listen und Datenbank | bestanden |
+| P1-09: `config.local.yaml` überlagert (auch über die CLI), ungültige Datei → Abbruch mit Meldung; `--passwort` abgelehnt | bestanden |
+| P1-10: Python-Version in `pyproject.toml`, Installern, `scout.py`, Lock-Dateien einheitlich 3.13 | bestanden |
+| Abdeckung (coverage 7.16, nur zum Messen außerhalb des Projekts installiert, gesamte Suite) | `netz.py` 97 %, `app.py` 79 %, `benachrichtigung.py` 86 % (vorher 27 % / 67 % / 81 %) |
+| Gegenproben P1-11 (403/429 nicht mehr gesperrt; keine Pause bei 5xx; Auto-Suche ohne Fehlerbehandlung; kein STARTTLS) | alle 4 erkannt |
+| Gegenproben P1-12, P1-07, P1-15, P1-14a, P1-05, P1-08, P1-09 | alle erkannt (zwei zunächst wirkungslose Gegenproben ersetzt) |
+| Browser-Klicktest Handy (Chromium, 390 px): Inserat ohne EZ zeigt „Erstangebot –“, „Planen“ fragt nach dem Marktwert, Besichtigung mit `marktwert_manuell` 36.000 €; zwei Geräte: Konflikt → „anderen Stand laden“ übernimmt fremde Eingabe, „eigene behalten“ speichert die eigene | bestanden, 0 JS-Fehler (nur die erwarteten 409 in der Konsole) |
+| Unabhängige QA-Prüfung (`qa-security-reviewer`, 881 Tests nachgestellt) | Freigabe mit Auflagen, kein KRITISCH; 1 HOCH (N1), 7 MITTEL, 8 NIEDRIG – alle behoben bis auf die unten genannten Reste, je mit Test |
+| Gegenproben zu den QA-Korrekturen (N1 API, N1 Plan, N2, N6, Q6, Q15, N5, N8, N9, N4, offene Besichtigung) | alle 11 erkannt; eine weitere (Plan-Absicherung für ältere Besichtigungen) zunächst nicht erkannt → eigener Test ergänzt, danach erkannt |
+| Browser (Chromium): Login mit `weiter=/.//evil.example`, `https://evil.example/`, `/\evil.example` → `/m`; `/m#/termine`, `/anfragen` bleiben | bestanden, 0 JS-Fehler |
+| Browser: Service Worker speichert abgeschlossene Besichtigung nicht, offene schon | bestanden |
+| `pip install` aus den neuen Lock-Dateien, Windows-CI, `installieren.bat` mit vorhandener 3.12-`.venv` | nicht geprüft (Windows-CI folgt im PR) |
+
+**Stand der Befunde aus Phase 0 (Q1–Q18) nach Phase 1** – unabhängig geprüft (`qa-security-reviewer`), danach behoben wie angegeben:
+
+| Befund | Stand | Beleg |
+|---|---|---|
+| Q1 KRITISCH | behoben (P1-12, Rest N1 behoben) | `test_rechner_ohne_ez.py`, `test_ankauf_ohne_ez_plant_mit_manuellem_marktwert` |
+| Q2 HOCH | behoben (G0) | `test_sicherheit::test_negative_oder_kaputte_laenge_wird_sofort_abgelehnt` |
+| Q3 HOCH | behoben: Widerruf (G0), Inserate (P1-14a) mit Frist – **Frist legt der Betreiber fest (Standard aus)** | `test_phase1_abschluss` (3 Tests) |
+| Q4 | Betreiberentscheidung F11 „Lesen frei“ | `docs/ROLLEN.md` |
+| Q5 | behoben (P1-15, N2) | `test_gekauft_verlassen_nur_inhaber`, Rollen-Tests |
+| Q6 | behoben (serverseitige Prüfung) | `test_login_ziel_nur_eigene_pfade`, Browser-Test |
+| Q7, Q8 | behoben (G0) | `test_ohne_nutzer_ist_ein_proxy_nicht_lokal`, `test_login_bremse_*` |
+| Q9 | behoben bis auf bewusste Ausnahmen (`/api/ich`, Fotos offener Besichtigungen) | `test_abgeschlossene_besichtigung_nicht_auf_dem_geraet`, Browser-Test |
+| Q10 | offen bis P3-07 (ADR-034) | – |
+| Q11 | behoben (Rotation, Maskierung G0; Diagnose-Rohseiten mit Frist) | `test_frist_offene_besichtigung_…` |
+| Q12 | behoben (P1-07) | `test_besichtigung_speichern_mit_version_und_planen_nach_abschluss` |
+| Q13 | behoben | `test_ics_ohne_nacktes_cr_und_zustaendig_400` |
+| Q14 | teilweise: `Secure` und Leerlauf erledigt (G0/G0b); CSRF-Token je Prozess bleibt | `test_cookie_secure_*` |
+| Q15 | behoben | `test_ics_ohne_nacktes_cr_und_zustaendig_400` |
+| Q16 | behoben (P1-09) | `test_team::test_cli_nutzer` |
+| Q17 | behoben (P1-10) | `test_python_version_ueberall_gleich` |
+| Q18 | behoben (Kommentar) | – |
+
 ## Phase G2 – Mandantenfähigkeit (17.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

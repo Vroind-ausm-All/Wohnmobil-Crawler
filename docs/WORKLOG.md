@@ -6,6 +6,32 @@ Wert „–“.
 
 ---
 
+## Phase 1 – Abschluss (17.10.2026) · Status: REVIEW
+
+- **Anlass:** Betreiber „Schließe Phase 1 komplett ab“. Entscheidungen: F9 „Nur 3.13“, F10 „Befehl + einstellbare Frist,
+  Standard aus“, F11 „Lesen frei, Schreiben nur zuständig“ (ADR-034).
+- **Pakete:** P1-12 (ohne EZ keine Beträge, Besichtigung nur mit manuellem Marktwert), P1-07 (Versionsprüfung beim Speichern
+  der Besichtigung, Konfliktdialog in der Handy-App, Planen nach Abschluss → 409), P1-15 (Rollenmatrix `docs/ROLLEN.md`;
+  „gekauft“, Suchlauf und Seitenimport nur Inhaber), P1-14a (`scout.py inserat anonymisieren`, Frist
+  `datenschutz.inserate_anonymisieren_nach_monaten`), P1-05 (WhatsApp-Zuweisung nicht mehr unter der globalen Sperre; eng
+  umgesetzt, siehe ADR-034), P1-08 (`wmscout/domaene.py`, `bewerte_zeilen` ohne Datenbank), P1-09 (`config.local.yaml`,
+  Passwort nie als Argument), P1-10 (nur Python 3.13, Lock-Dateien ohne Versionswechsel neu erzeugt), P1-11a/b (Tests für
+  `netz.py`, Suchlauf, Auto-Suche, Mail; die Auto-Suche beendet sich bei einem Fehler nicht mehr still).
+- **Unabhängige QA-Prüfung** (`qa-security-reviewer`): Freigabe mit Auflagen, kein KRITISCH. Behoben: N1 (HOCH, Ankauf eines
+  Inserats ohne EZ plante mit 0 €), N2 („gekauft“ verlassen nur Inhaber), Q6/N3 (Weiterleitung nach Login – serverseitig, der
+  bisherige Test prüfte nur eine Zeichenkette), Q15 (ICS), Q18 (Kommentar), N4/N5/N8–N10 (Frist auch nach Seitenimport und beim
+  Start, Umfang wie Widerruf, robust gegen gesperrte Dateien und kaputtes JSON, Prüfung in der Transaktion), N6 (Termin
+  verschieben ohne Versionskonflikt), N11 (null statt 0), N12–N14, N16, Q11 (Diagnose-Rohseiten mit Frist), P1-14b (keine
+  abgeschlossenen Besichtigungen und keine Unterschriften auf dem Gerät).
+- **Keine Schemaänderung**, keine Migration.
+- **Eigene Fehler:** Die Ankaufsplanung ohne EZ (N1) und die Weiterleitung (Q6, fälschlich als erledigt angenommen) hätte ich
+  selbst prüfen müssen. Ein Klickskript fing zunächst die eigene Login-Seite ab (Muster passte auf den Abfrageparameter). Nach P1-15 lief die Gesamtsuite zunächst nicht; drei ältere Tests ließen einen Mitarbeiter „gekauft“
+  setzen bzw. importieren und wurden angepasst (eigener Commit). Zwei Gegenproben waren zunächst wirkungslos (eine Prüfung,
+  die schon anderswo greift; ein KeyError statt echter Fehlleitung) und wurden ersetzt.
+- **Tests:** siehe TEST-REPORT.
+- **Nicht geprüft:** Windows-Installer mit vorhandener 3.12-Umgebung (nur CI mit 3.13), Betrieb mit echter WhatsApp-/SMTP-
+  Verbindung, Safari/iOS.
+
 ## Phase G2 – Mandantenfähigkeit (17.10.2026) · Status: REVIEW
 
 - **Anlass:** Betreiber „Phase G“ / „Beides nacheinander“ (G0, dann Mandanten), nach Merge von G1. Entscheidungen ADR-033:
