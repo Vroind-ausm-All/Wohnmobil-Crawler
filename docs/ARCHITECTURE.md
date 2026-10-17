@@ -25,7 +25,7 @@ stichprobenartig nachgeprüft (R1, R2, R3, R5, R14). Entscheidungen: `docs/DECIS
 
 | Modul | Aufgabe | Kopplung / Auffälligkeit |
 |---|---|---|
-| `scout.py` | CLI: `app`, `lauf`, `report`, `rechne`, `nutzer`, `status` | hängt an allen Schichten; `--passwort` als Argument möglich (Shell-Historie) |
+| `scout.py` | CLI: `app`, `lauf`, `report`, `rechne`, `nutzer`, `status` | hängt an allen Schichten; Passwörter nur per Abfrage bzw. `SCOUT_NEUES_PASSWORT` (P1-09), `config.local.yaml` überlagert `config.yaml` |
 | `wmscout/quellen/basis.py` | `Quelle`, `Inserat`, `Suchauftrag`, `Suchseite`, Fehlerklassen | gut; `als_datensatz` nutzt die Anzeigen-ID ohne Quelle als Schlüssel |
 | `wmscout/quellen/kleinanzeigen/` | Adapter + HTML-Parser | `freigegeben = False`, läuft aber standardmäßig (R1) |
 | `wmscout/quellen/mobilede/` (seit P2-05b) | nur Parser für gespeicherte Such-/Anzeigenseiten (kein Abruf, kein Adapter in `QUELLEN`); IDs `md-<Nummer>` | Selektoren über `data-testid`; Telefon/seller-IDs im RSC-Strom werden nicht gelesen |

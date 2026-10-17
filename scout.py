@@ -36,6 +36,7 @@ if _fehlt:
 import argparse
 import logging
 import logging.handlers
+import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -67,9 +68,26 @@ from wmscout.team import ROLLEN, TeamSpeicher, lade_team_sicht
 BASIS = Path(__file__).resolve().parent
 
 
+def _mischen(basis: dict, zusatz: dict) -> dict:
+    for k, v in zusatz.items():
+        basis[k] = _mischen(basis[k], v) if isinstance(v, dict) and isinstance(basis.get(k), dict) else v
+    return basis
+
+
 def lade_config(pfad: str) -> dict:
-    with open(BASIS / pfad, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    """``config.yaml`` und – falls vorhanden – ``config.local.yaml`` daneben (P1-09): eigene Einstellungen des Betriebs, die
+    nicht ins Repository gehören (.gitignore). Abschnitte werden zusammengeführt, einzelne Werte und Listen ersetzt."""
+    datei = BASIS / pfad
+    with open(datei, encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+    lokal = datei.with_name(f"{datei.stem}.local{datei.suffix}")
+    if lokal.is_file():
+        with open(lokal, encoding="utf-8") as f:
+            zusatz = yaml.safe_load(f) or {}
+        if not isinstance(zusatz, dict):
+            sys.exit(f"{lokal.name}: erwartet werden Abschnitte wie in {datei.name}")
+        cfg = _mischen(cfg, zusatz)
+    return cfg
 
 
 def logging_einrichten(cfg: dict):
@@ -253,6 +271,12 @@ def cmd_wiederherstellen(cfg, args):
     print("Beim nächsten Start wird die Datenbank bei Bedarf auf die aktuelle Version gebracht (mit eigener Sicherung).")
 
 
+def _neues_passwort(name: str) -> str:
+    """Passwort nie als Kommandozeilen-Argument (stünde in der Prozessliste und im Verlauf, P1-09): Abfrage am Terminal oder –
+    für Automatisierung – Umgebungsvariable SCOUT_NEUES_PASSWORT."""
+    return os.environ.get("SCOUT_NEUES_PASSWORT") or _passwort_abfragen(name)
+
+
 def _passwort_abfragen(name: str) -> str:
     import getpass
     while True:
@@ -281,12 +305,12 @@ def cmd_nutzer(cfg, db, args):
                 sys.exit(f"Standort „{args.standort}“ unbekannt (python scout.py standort liste)")
             standort_id = s["id"]
         try:
-            team.nutzer_anlegen(args.name, args.passwort or _passwort_abfragen(args.name), args.rolle, args.telefon, standort_id)
+            team.nutzer_anlegen(args.name, _neues_passwort(args.name), args.rolle, args.telefon, standort_id)
         except Exception as e:  # noqa: BLE001 – verständliche Meldung statt Traceback
             sys.exit(f"Nicht angelegt: {e}")
         print(f"{args.name} angelegt ({ROLLEN[args.rolle]}). Ab jetzt ist für die App eine Anmeldung nötig.")
     elif args.aktion == "passwort":
-        ok = team.passwort_setzen(args.name, args.passwort or _passwort_abfragen(args.name))
+        ok = team.passwort_setzen(args.name, _neues_passwort(args.name))
         print("Passwort geändert – bestehende Anmeldungen wurden beendet." if ok else f"{args.name} nicht gefunden")
     elif args.aktion in ("sperren", "entsperren"):
         ok = team.nutzer_aktiv_setzen(args.name, args.aktion == "entsperren")
@@ -449,7 +473,6 @@ def main():
     n.add_argument("--rolle", choices=list(ROLLEN), default="mitarbeiter")
     n.add_argument("--telefon", help="Handynummer international, z. B. +491701234567 (für WhatsApp)")
     n.add_argument("--standort", help="nur Rolle haendler: Name des Standorts (python scout.py standort anlegen …)")
-    n.add_argument("--passwort", help=argparse.SUPPRESS)      # nur für Tests/Automatisierung
     st = sub.add_parser("standort", help="Standorte/Händler für das Händlerportal verwalten (prüfen = Zugang frei)")
     st.add_argument("aktion", choices=["anlegen", "liste", "pruefen", "sperren"])
     st.add_argument("name", nargs="?")

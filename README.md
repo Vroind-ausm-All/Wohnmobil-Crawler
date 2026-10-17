@@ -18,6 +18,9 @@ Wohnmobil an und schreibst es mit einem Klick an.
    - **suchen**: Suche im Browser auf kleinanzeigen.de zusammenklicken (Ort/Radius, Preis, Art,
      *Anbieter: Privat*), URL kopieren und eintragen. Seitenzahlen ergänzt das Tool selbst.
    - **rechner**: deine echten Kosten und Zielmarge eintragen.
+
+   Tipp: Eigene Werte lieber in eine neue Datei `config.local.yaml` daneben schreiben (gleiche Abschnitte, nur die
+   Abweichungen). Sie überlagert `config.yaml`, wird nie ins Repository übernommen und bleibt bei Updates erhalten.
 4. **Windows: Doppelklick auf `app.bat`.** Beim ersten Start richtet `installieren.bat` automatisch
    eine eigene Python-Umgebung im Projektordner ein (`.venv`, mit Python 3.13) und installiert dort die
    Zusatzpakete – nur als fertige Pakete, ohne Kompilieren. Globale Python-Einstellungen und andere
@@ -54,7 +57,7 @@ es wird niemand als Bearbeiter eingetragen (eine bestehende Reservierung bleibt 
 | `python scout.py report` | Report neu erzeugen, z. B. nach Änderung der Kosten in `config.yaml` (ohne Internet) |
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --titel "Knaus Sky TI 650 MEG" --anschreiben` | Einzelfahrzeug durchrechnen und Anschreiben ausgeben (auch für Anfragen außerhalb von Kleinanzeigen; `--text` mit der Beschreibung berücksichtigt Ausstattung/Mängel) |
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --marktwert 44000` | mit eigenem Marktwert (z. B. aus mobile.de oder DAT) |
-| `python scout.py nutzer anlegen Anna --rolle inhaber --telefon "+49 170 …"` | Team-Zugang für die Handy-App (auch `liste`, `passwort`, `sperren`, `entsperren`) |
+| `python scout.py nutzer anlegen Anna --rolle inhaber --telefon "+49 170 …"` | Team-Zugang für die Handy-App (auch `liste`, `passwort`, `sperren`, `entsperren`); das Passwort wird abgefragt – nie als Argument, für Skripte nur über die Umgebungsvariable `SCOUT_NEUES_PASSWORT` |
 | `python scout.py sichern` | Datenbank und Fotos sichern (siehe „Datensicherung“) |
 | `python scout.py wiederherstellen <Datei> --bestaetigt [--ohne-fotos]` | Sicherung zurückspielen – vorher App und Suchlauf beenden |
 | `python scout.py status 3531797014 kontaktiert` | Status setzen: `neu`, `kontaktiert`, `uninteressant`, `gekauft` (in der App per Klick) |

@@ -189,9 +189,11 @@ def test_ohne_anmeldung_kein_zugang(server, team):
 def test_cli_standort_und_haendlerzugang(cfg, tmp_path):
     Datenbank(cfg["ausgabe"]["datenbank"]).con.close()
     assert _scout(cfg, tmp_path, "standort", "anlegen", "Filiale Ost", "--plz", "01067").returncode == 0
-    r = _scout(cfg, tmp_path, "nutzer", "anlegen", "Hugo", "--rolle", "haendler", "--standort", "Unbekannt", "--passwort", "sicher1234")
+    r = _scout(cfg, tmp_path, "nutzer", "anlegen", "Hugo", "--rolle", "haendler", "--standort", "Unbekannt",
+               umgebung={"SCOUT_NEUES_PASSWORT": "sicher1234"})
     assert r.returncode != 0 and "unbekannt" in r.stderr
-    r = _scout(cfg, tmp_path, "nutzer", "anlegen", "Hugo", "--rolle", "haendler", "--standort", "Filiale Ost", "--passwort", "sicher1234")
+    r = _scout(cfg, tmp_path, "nutzer", "anlegen", "Hugo", "--rolle", "haendler", "--standort", "Filiale Ost",
+               umgebung={"SCOUT_NEUES_PASSWORT": "sicher1234"})
     assert r.returncode == 0, r.stderr
     assert _scout(cfg, tmp_path, "standort", "pruefen", "Filiale Ost").returncode == 0
     r = _scout(cfg, tmp_path, "standort", "liste")
