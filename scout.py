@@ -100,6 +100,9 @@ def cmd_lauf(cfg, db, args):
 def _lauf(cfg, db):
     start = datetime.now().isoformat(timespec="seconds")
     stat = Importer(cfg, db).lauf(cfg["suchen"])
+    alt = datenrechte.inserate_nach_frist(db, BASIS / cfg["ausgabe"]["ordner"], datenrechte.frist_aus(cfg))
+    if alt:
+        logging.info("Datenschutz-Frist: %d Inserate anonymisiert", len(alt))
     logging.info("Crawl fertig: %d neu, %d Preissenkungen, %d bekannt, %d Detailseiten",
                  stat["neu"], stat["preis"], stat["bekannt"], stat["details"])
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
@@ -352,6 +355,28 @@ def cmd_anfrage(cfg, db, args):
           f"Verkäufer {'anonymisiert' if erg['verkaeufer_anonymisiert'] else 'bleibt (weitere Anfragen)'}.")
 
 
+def cmd_inserat(cfg, db, args):
+    """Personendaten aus Inseraten entfernen (P1-14a): einzeln oder alle ohne Kauf, die älter als N Monate sind."""
+    if bool(args.id) == bool(args.aelter_als):
+        sys.exit("Entweder eine Inserat-ID oder --aelter-als MONATE angeben")
+    if not args.bestaetigt:
+        sys.exit("Entfernt Verkäuferdaten (Profilname, Name im Anschreiben, Angaben im Protokoll) unwiderruflich – "
+                 "zur Bestätigung --bestaetigt angeben")
+    ausgabe = BASIS / cfg["ausgabe"]["ordner"]
+    if args.id:
+        try:
+            erg = datenrechte.inserat_anonymisieren(db, ausgabe, args.id)
+        except LookupError as e:
+            sys.exit(str(e))
+        except ValueError as e:
+            sys.exit(f"Nicht geändert: {e}")
+        print(f"Inserat {args.id} anonymisiert ({'Name entfernt' if erg['name_entfernt'] else 'kein Name gespeichert'}, "
+              f"{erg['besichtigungen']} Besichtigung(en) bereinigt). Bericht aktualisiert sich beim nächsten Lauf/„report“.")
+        return
+    erledigt = datenrechte.inserate_nach_frist(db, ausgabe, args.aelter_als)
+    print(f"{len(erledigt)} Inserat(e) ohne Kauf, älter als {args.aelter_als} Monate, anonymisiert.")
+
+
 def cmd_audit(cfg, db, args):
     """Audit-Protokoll (G0b): wer hat wann Personendaten gelesen oder etwas geändert."""
     zeilen = AuditSpeicher(db).liste(tage=args.tage, nutzer=args.nutzer, objekt=args.objekt, limit=args.limit)
@@ -443,6 +468,11 @@ def main():
     ad.add_argument("--limit", type=int, default=500)
     nz = sub.add_parser("nutzung", help="Nutzungszähler eines Monats (Anfragen, Auktionen, Gebote, Ankäufe, Zugriffe, aktive Nutzer)")
     nz.add_argument("--monat", help="JJJJ-MM, Standard: laufender Monat")
+    ins = sub.add_parser("inserat", help="Verkäuferdaten aus Inseraten entfernen (Datenschutz, P1-14a)")
+    ins.add_argument("aktion", choices=["anonymisieren"])
+    ins.add_argument("id", nargs="?", help="Inserat-ID (oder --aelter-als)")
+    ins.add_argument("--aelter-als", type=int, help="alle Inserate ohne Kauf, letzte Aktivität älter als so viele Monate")
+    ins.add_argument("--bestaetigt", action="store_true")
     md = sub.add_parser("mandant", help="Mandanten (mehrere Firmen) anlegen, auflisten, Nutzung je Mandant")
     md.add_argument("aktion", choices=["anlegen", "liste", "nutzung"])
     md.add_argument("kennung", nargs="?", help="nur anlegen: z. B. firma-b (a–z, 0–9, Bindestrich)")
@@ -486,12 +516,14 @@ def main():
     try:
         reservierung_tage(cfg)              # ungültiges „team“ in config.yaml ebenso sofort melden
         einstellungen(cfg, BASIS)           # ungültiges „sicherung“ in config.yaml sofort melden, nicht erst bei der Sicherung
+        datenrechte.frist_aus(cfg)          # ebenso „datenschutz“
         db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]), str(sicherung_ordner(cfg, BASIS)), wal=wal_aktiv(cfg))
     except (MigrationsFehler, ValueError, sqlite3.Error) as e:
         sys.exit(f"Datenbank-Start abgebrochen: {e}")
     {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "rechne": cmd_rechne,
      "nutzer": cmd_nutzer, "status": cmd_status, "standort": cmd_standort,
-     "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage, "audit": cmd_audit, "nutzung": cmd_nutzung}[args.cmd](cfg, db, args)
+     "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage, "audit": cmd_audit, "nutzung": cmd_nutzung,
+     "inserat": cmd_inserat}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":

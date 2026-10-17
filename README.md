@@ -277,8 +277,10 @@ Nachrichten verschicken, und viele Verkäufer reagieren auf Massenanfragen aller
   Nummern und Adressen werden verworfen. Er dient der persönlichen Anrede im Anschreiben und steht deshalb
   auch im erzeugten Brief: in `ausgabe/report.html`, in `ausgabe/anschreiben/<id>.txt` im Anhang der
   Benachrichtigungs-Mail (`report.html`, verlässt damit den Rechner), im Offline-Speicher der Handy-App (Fahrzeugansicht
-  mit Brief) und – nach dem Kontakt – im gespeicherten Anschreibentext der Datenbank. **Eine Lösch- oder Anonymisierungsfunktion gibt es noch nicht** (geplant als Paket P1-14a, Backlog): der Status „gelöscht“ markiert nur
-  das Inserat und entfernt den Namen **nicht** aus `details_json`. Die App selbst lauscht nur auf dem eigenen Rechner (127.0.0.1;
+  mit Brief) und – nach dem Kontakt – im gespeicherten Anschreibentext der Datenbank. **Löschen:** `python scout.py inserat anonymisieren ID --bestaetigt` (oder `--aelter-als MONATE`) entfernt den Profilnamen aus
+  `details_json`, den Namen im gespeicherten Anschreiben, Verkäuferangaben im Besichtigungsprotokoll und die Anschreiben-Datei; mit
+  `datenschutz → inserate_anonymisieren_nach_monaten` auch automatisch nach jedem Suchlauf (Standard 0 = aus). Gekaufte Fahrzeuge
+  bleiben unverändert (Aufbewahrung). Die App selbst lauscht nur auf dem eigenen Rechner (127.0.0.1;
   Handys über `tailscale serve`); Mail-Anhang und Handy-Speicher liegen außerhalb davon.
 - **Betrieb über das eigene Büro hinaus** (öffentliche Adresse, weitere Firmen): erst die Checkliste
   `docs/PILOTBETRIEB.md` abarbeiten. Was gespeichert wird und wie es sich löschen lässt: `docs/DATENRECHTE.md`

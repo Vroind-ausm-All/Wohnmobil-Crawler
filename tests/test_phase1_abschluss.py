@@ -45,3 +45,69 @@ def test_rollenmatrix_schreiben_nur_zustaendig_lesen_frei(server, team, db):
     assert 'id="suchen" class="btn" hidden' in seite_ben and 'id="suchen" class="btn">' in seite_anna
     lokal = Client(server.server_address[1])
     assert lokal("GET", "/api/suchlauf")[0] == 401                                            # mit Team: nur angemeldet
+
+
+# ---------------------------------------------------------------- P1-14a
+def _mit_personendaten(db, team, tmp_path, anzeige_id, alt="2025-01-01T10:00:00"):
+    import json
+    db.con.execute("UPDATE anzeigen SET details_json=?, anschreiben_text=?, status='kontaktiert', kontaktiert_am=?, status_am=?, "
+                   "zuletzt_gesehen=? WHERE id=?",
+                   (json.dumps({"verkaeufer_name": "Erika Beispiel", "ausstattung": "Markise"}),
+                    "Hallo Erika Beispiel,\nwir interessieren uns für Ihr Wohnmobil.", alt, alt, alt, anzeige_id))
+    db.con.commit()
+    bid = team.besichtigung_anlegen(anzeige_id, {"anzeige_id": anzeige_id}, None, "Musterweg 1, Berlin", None, None)
+    team.besichtigung_abschliessen(bid, {"verkaeufer": {"name": "Erika Beispiel", "telefon": "0170 1"}, "unterschrift_verkaeufer": "data:x",
+                                         "bemerkung": "ruft abends an", "entscheidung": "abgelehnt"}, None, "abgeschlossen")
+    datei = tmp_path / "ausgabe" / "anschreiben" / f"{anzeige_id}.txt"
+    datei.parent.mkdir(parents=True, exist_ok=True)
+    datei.write_text("Hallo Erika Beispiel", encoding="utf-8")
+    return bid, datei
+
+
+def test_inserat_anonymisieren_einzeln_und_nach_frist(cfg, db, importiert, team, tmp_path):
+    import json
+    from datetime import datetime
+    import pytest
+    from wmscout import datenrechte
+    ids = [r[0] for r in db.con.execute("SELECT id FROM anzeigen ORDER BY id LIMIT 4")]
+    bid, datei = _mit_personendaten(db, team, tmp_path, ids[0])
+    erg = datenrechte.inserat_anonymisieren(db, tmp_path / "ausgabe", ids[0])
+    assert erg == {"anzeige_id": ids[0], "name_entfernt": True, "besichtigungen": 1} and not datei.exists()
+    a = db.con.execute("SELECT * FROM anzeigen WHERE id=?", (ids[0],)).fetchone()
+    details = json.loads(a["details_json"])
+    assert "verkaeufer_name" not in details and details["ausstattung"] == "Markise" and details["anonymisiert_am"]
+    assert "Erika" not in a["anschreiben_text"] and "[Name entfernt]" in a["anschreiben_text"] and a["kontaktiert_am"]
+    b = db.con.execute("SELECT adresse, protokoll_json FROM besichtigungen WHERE id=?", (bid,)).fetchone()
+    assert b["adresse"] is None and "Erika" not in b["protokoll_json"] and "abgelehnt" in b["protokoll_json"]
+    # gekauft: Aufbewahrung
+    db.con.execute("UPDATE anzeigen SET status='gekauft' WHERE id=?", (ids[1],))
+    db.con.commit()
+    with pytest.raises(ValueError, match="gekauft"):
+        datenrechte.inserat_anonymisieren(db, tmp_path / "ausgabe", ids[1])
+    with pytest.raises(LookupError):
+        datenrechte.inserat_anonymisieren(db, tmp_path / "ausgabe", "gibtsnicht")
+    # Frist: nur alte, nicht gekaufte, noch nicht anonymisierte; 0 = aus
+    _mit_personendaten(db, team, tmp_path, ids[2])
+    _mit_personendaten(db, team, tmp_path, ids[3], alt=datetime.now().isoformat(timespec="seconds"))     # frisch
+    db.con.execute("UPDATE anzeigen SET details_json='{\"verkaeufer_name\": \"Otto\"}', zuletzt_gesehen='2025-01-01' WHERE id=?", (ids[1],))
+    db.con.commit()
+    assert datenrechte.inserate_nach_frist(db, tmp_path / "ausgabe", 0) == []
+    assert datenrechte.inserate_nach_frist(db, tmp_path / "ausgabe", 6, jetzt=datetime(2026, 10, 17)) == [ids[2]]
+    assert datenrechte.inserate_nach_frist(db, tmp_path / "ausgabe", 6, jetzt=datetime(2026, 10, 17)) == []   # nichts doppelt
+    for falsch in (-1, "6", True):
+        with pytest.raises(ValueError):
+            datenrechte.frist_aus({"datenschutz": {"inserate_anonymisieren_nach_monaten": falsch}})
+    assert datenrechte.frist_aus({}) == 0
+
+
+def test_cli_inserat_anonymisieren(cfg, db, importiert, team, tmp_path):
+    from tests.test_cli import _scout
+    anzeige_id = db.con.execute("SELECT id FROM anzeigen ORDER BY id LIMIT 1").fetchone()[0]
+    _mit_personendaten(db, team, tmp_path, anzeige_id)
+    db.con.close()
+    r = _scout(cfg, tmp_path, "inserat", "anonymisieren", anzeige_id)
+    assert r.returncode != 0 and "--bestaetigt" in r.stderr
+    r = _scout(cfg, tmp_path, "inserat", "anonymisieren", anzeige_id, "--bestaetigt")
+    assert r.returncode == 0 and "anonymisiert" in r.stdout, r.stderr
+    r = _scout(cfg, tmp_path, "inserat", "anonymisieren", "--aelter-als", "6", "--bestaetigt")
+    assert r.returncode == 0 and "0 Inserat(e)" in r.stdout, r.stderr

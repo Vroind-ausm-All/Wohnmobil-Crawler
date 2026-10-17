@@ -28,7 +28,7 @@ from .sicherung import sicherung_ordner
 from .team import lade_team_sicht
 from .web.api import Kontext, bearbeite
 from .web.sicherheit import SICHERHEITS_KOPF
-from . import mandanten
+from . import datenrechte, mandanten
 from .sicherung import sicherung_ordner as _sicherung_ordner
 
 log = logging.getLogger("scout")
@@ -79,6 +79,9 @@ class Suchlauf:
         try:
             db = self.oeffne_datenbank()
             stat = Importer(self.cfg, db).lauf(self.cfg["suchen"])
+            alt = datenrechte.inserate_nach_frist(db, self.basis / self.cfg["ausgabe"]["ordner"], datenrechte.frist_aus(self.cfg))
+            if alt:
+                log.info("Datenschutz-Frist: %d Inserate anonymisiert", len(alt))
             # wie „python scout.py lauf“: Report/CSV/Anschreiben-Dateien aktualisieren, ggf. Mail
             zeilen = bewerte_alle(self.cfg, db, self.basis, lauf_start=self.letzter_start)
             sende_mail(self.cfg, zeilen, schreibe_ausgaben(self.cfg, zeilen, self.basis, fehler=stat["fehler"],
