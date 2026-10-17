@@ -1175,6 +1175,8 @@ class Anfrage:
                                   [b["basis"].get("fahrzeug", ""), termin, b.get("adresse") or b["basis"].get("ort") or ""])
 
     def b_planen(self, b: dict, daten: dict) -> dict:
+        if b["status"] in ("abgeschlossen", "abgebrochen"):
+            raise Antwort(409, "Besichtigung ist bereits abgeschlossen – Planen nicht mehr möglich")
         termin, adresse = self._termin(daten.get("termin")), str(daten.get("adresse") or "").strip()[:200] or None
         self.k.team.besichtigung_planen(b["id"], termin, adresse, self._zustaendig_planen(b, daten.get("zustaendig_id")))
         neu = self.k.team.besichtigung(b["id"])
@@ -1188,10 +1190,16 @@ class Anfrage:
         eingaben = daten.get("daten")
         if not isinstance(eingaben, dict):
             raise Antwort(400, "daten fehlen")
+        erwartet = daten.get("version")
+        if erwartet is not None and (isinstance(erwartet, bool) or not isinstance(erwartet, int)):
+            raise Antwort(400, "version muss eine Zahl sein")
         ergebnis = berechne(self.k.katalog(), eingaben, b["basis"])        # verbindlich: Server rechnet nach
-        version = self.k.team.besichtigung_speichern(b["id"], eingaben, ergebnis)
-        konflikt = isinstance(daten.get("version"), int) and daten["version"] != b["version"]
-        return {"ergebnis": ergebnis, "version": version, "konflikt": konflikt}
+        version = self.k.team.besichtigung_speichern(b["id"], eingaben, ergebnis, erwartet)
+        if version is None:                       # P1-07: inzwischen von jemand anderem gespeichert (oder abgeschlossen)
+            aktuell = self.k.team.besichtigung(b["id"])
+            raise Antwort(409, "Diese Besichtigung wurde inzwischen auf einem anderen Gerät gespeichert", grund="version",
+                          extra={"version": aktuell["version"], "daten": aktuell["daten"], "status": aktuell["status"]})
+        return {"ergebnis": ergebnis, "version": version, "konflikt": False}
 
     def b_foto(self, b: dict, daten: dict) -> dict:
         if daten.get("mangel_key") is not None and not isinstance(daten["mangel_key"], str):

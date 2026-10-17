@@ -255,13 +255,19 @@ class TeamSpeicher:
         self.con.commit()
         return cur.rowcount > 0
 
-    def besichtigung_speichern(self, bid: int, daten: dict, ergebnis: dict) -> int:
-        """Speichert Eingaben + Rechnung, setzt Status auf „läuft“. Rückgabe: neue Version."""
-        self.con.execute(
-            "UPDATE besichtigungen SET daten_json=?, ergebnis_json=?, status=CASE WHEN status='geplant' THEN 'laeuft' "
-            "ELSE status END, geaendert_am=?, version=version+1 WHERE id=?",
-            (json.dumps(daten, ensure_ascii=False), json.dumps(ergebnis, ensure_ascii=False), _jetzt(), bid))
+    def besichtigung_speichern(self, bid: int, daten: dict, ergebnis: dict, version: int | None = None) -> int | None:
+        """Speichert Eingaben + Rechnung, setzt Status auf „läuft“. Rückgabe: neue Version – oder None, wenn ``version`` angegeben
+        ist und inzwischen jemand anderes gespeichert hat (P1-07: nichts wird überschrieben). Abgeschlossene bleiben unverändert."""
+        sql = ("UPDATE besichtigungen SET daten_json=?, ergebnis_json=?, status=CASE WHEN status='geplant' THEN 'laeuft' "
+               "ELSE status END, geaendert_am=?, version=version+1 WHERE id=? AND status IN ('geplant', 'laeuft')")
+        werte = [json.dumps(daten, ensure_ascii=False), json.dumps(ergebnis, ensure_ascii=False), _jetzt(), bid]
+        if version is not None:
+            sql += " AND version=?"
+            werte.append(version)
+        cur = self.con.execute(sql, werte)
         self.con.commit()
+        if not cur.rowcount:
+            return None
         return self.con.execute("SELECT version FROM besichtigungen WHERE id=?", (bid,)).fetchone()["version"]
 
     def besichtigung_abschliessen(self, bid: int, protokoll: dict, endpreis: int | None, status: str = "abgeschlossen"):

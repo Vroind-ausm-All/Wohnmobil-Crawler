@@ -1,6 +1,6 @@
 /* Service Worker: App-Gerüst offline verfügbar, zuletzt geladene Daten als Rückfall ohne Netz.
    Änderungen (Speichern, Fotos) puffert die App selbst und sendet sie, sobald wieder Netz da ist. */
-var VERSION = 'wm-scout-4';      // 4: nur noch Positivliste im Zwischenspeicher (G0) – alte Caches werden gelöscht
+var VERSION = 'wm-scout-5';      // 5: Versionskonflikt Besichtigung (P1-07); 4: nur noch Positivliste (G0) – alte Caches werden gelöscht
 var GERUEST = ['/m', '/static/mobil.css', '/static/mobil.js', '/static/besichtigung.js',
                '/static/icon-192.png', '/static/icon-512.png', '/manifest.webmanifest'];
 
