@@ -22,8 +22,8 @@ for _strom in (sys.stdout, sys.stderr):
     if hasattr(_strom, "reconfigure"):
         _strom.reconfigure(encoding="utf-8", errors="replace")
 
-if not (3, 10) <= sys.version_info[:2] <= (3, 13):
-    print(f"Hinweis: Wohnmobil-Scout ist für Python 3.10–3.13 gedacht, verwendet wird {sys.version.split()[0]}.\n"
+if sys.version_info[:2] != (3, 13):
+    print(f"Hinweis: Wohnmobil-Scout ist für Python 3.13 gedacht, verwendet wird {sys.version.split()[0]}.\n"
           "Unter Windows bitte über app.bat starten – das richtet automatisch eine passende Umgebung (.venv) ein.",
           file=sys.stderr)
 _fehlt = [paket for paket, modul in (("requests", "requests"), ("beautifulsoup4", "bs4"), ("PyYAML", "yaml"),

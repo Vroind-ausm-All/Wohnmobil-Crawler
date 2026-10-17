@@ -6,8 +6,8 @@ rem  Legt im Projektordner eine eigene Python-Umgebung (.venv) an und
 rem  installiert dort die Zusatzpakete aus requirements.txt.
 rem  Globale Python-Installationen und andere Projekte bleiben unberuehrt.
 rem
-rem  Bevorzugt wird Python 3.13 (danach 3.12, 3.11, 3.10). Neuere Versionen
-rem  wie 3.14/3.15 werden bewusst nicht verwendet: Fuer sie gibt es noch nicht
+rem  Verwendet wird nur Python 3.13 (Betreiberentscheidung F9, P1-10). Neuere
+rem  Versionen wie 3.14/3.15 werden bewusst nicht verwendet: Fuer sie gibt es noch nicht
 rem  alle Pakete fertig fuer Windows (PyYAML muesste dann kompiliert werden).
 rem
 rem  Aufruf: Doppelklick (mit Pause am Ende) oder von app.bat/lauf.bat
@@ -25,7 +25,7 @@ for %%A in (%*) do (
 )
 set "VENV_PY=%~dp0.venv\Scripts\python.exe"
 set "STEMPEL=%~dp0.venv\requirements.installiert"
-set "VERSION_OK=import sys; sys.exit(0 if (3, 10) <= sys.version_info[:2] <= (3, 13) else 1)"
+set "VERSION_OK=import sys; sys.exit(0 if sys.version_info[:2] == (3, 13) else 1)"
 
 if not exist "scout.py" (
   echo [FEHLER] scout.py fehlt in diesem Ordner.
@@ -104,10 +104,10 @@ endlocal & exit /b 1
 rem ======================================================================
 :venv_anlegen
 set "BASIS="
-rem Python-Launcher "py": gezielt nach 3.13, dann 3.12, 3.11, 3.10 fragen.
+rem Python-Launcher "py": gezielt nach 3.13 fragen.
 rem Vorher in der Versionsliste nachsehen - der neue Python Install Manager
 rem wuerde bei einer fehlenden Version sonst unsichtbar nach Installation fragen.
-for %%V in (3.13 3.12 3.11 3.10) do (
+for %%V in (3.13) do (
   if not defined BASIS (
     call :launcher_kennt %%V && py -%%V -c "%VERSION_OK%" >nul 2>nul && set "BASIS=py -%%V"
   )
@@ -155,7 +155,7 @@ echo  Gefundene Python-Versionen auf diesem PC:
 py --list 2>nul || echo    ^(keine ueber den Python-Launcher gefunden^)
 python --version 2>nul
 echo.
-echo  Wohnmobil-Scout braucht Python 3.13 ^(3.10 bis 3.12 gehen auch^).
+echo  Wohnmobil-Scout braucht Python 3.13 ^(aeltere Versionen werden nicht mehr unterstuetzt^).
 echo  Neuere Versionen wie 3.14 oder 3.15 funktionieren noch nicht, weil
 echo  dafuer nicht alle Pakete fertig fuer Windows verfuegbar sind.
 echo.

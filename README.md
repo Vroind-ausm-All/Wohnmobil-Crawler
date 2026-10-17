@@ -8,7 +8,7 @@ Wohnmobil an und schreibst es mit einem Klick an.
 ## Einrichtung (einmalig, ca. 5 Minuten)
 
 1. **Python 3.13** installieren (python.org → Downloads → Windows → „Python 3.13.x“ →
-   „Windows installer (64-bit)“). 3.10–3.12 gehen auch. **Neuere Versionen wie 3.14/3.15 noch nicht**:
+   „Windows installer (64-bit)“). Ältere Versionen werden nicht unterstützt. **Neuere Versionen wie 3.14/3.15 noch nicht**:
    Für sie gibt es PyYAML nicht fertig für Windows, die Installation bricht dann mit
    „Microsoft Visual C++ 14.0 or greater is required“ ab. 3.13 kann problemlos *zusätzlich* zu
    einer anderen Version installiert sein. Python selbst muss nie geöffnet werden.

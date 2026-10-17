@@ -1,6 +1,8 @@
-"""Phase-1-Abschluss: P1-07 Versionskonflikt Besichtigung, P1-15 Rollenmatrix, P1-14a Löschung von Verkäuferdaten aus Inseraten."""
+"""Phase-1-Abschluss: P1-07 Versionskonflikt, P1-15 Rollenmatrix, P1-14a Löschung, P1-05 Sperre, P1-08 Bewertung ohne DB, P1-10 Python."""
 # ruff: noqa: F811 – Fixtures aus test_team_bearbeitung werden importiert und als Parameter genutzt
 from __future__ import annotations
+
+import sys
 
 from tests.test_team_bearbeitung import anmelden, ids_der_liste, server, team  # noqa: F401 – Fixtures
 
@@ -170,3 +172,17 @@ def test_bewertung_ohne_datenbank(cfg, db, importiert):
     from wmscout.datenbank import STATUS, import_art
     from wmscout import domaene
     assert STATUS is domaene.STATUS and import_art is domaene.import_art                          # alte Importe gelten weiter
+
+
+# ---------------------------------------------------------------- P1-10: nur Python 3.13 (F9)
+def test_python_version_ueberall_gleich():
+    from tests.daten import BASIS
+    lesen = lambda name: (BASIS / name).read_text(encoding="utf-8")                      # noqa: E731
+    assert 'requires-python = ">=3.13,<3.14"' in lesen("pyproject.toml")
+    assert "if sys.version_info[:2] != (3, 13):" in lesen("scout.py")
+    for skript in ("installieren.bat", "installieren.sh"):
+        t = lesen(skript)
+        assert "sys.version_info[:2] == (3, 13)" in t and "3.12" not in t and "3.10" not in t, skript
+    for lock in ("requirements.txt", "requirements-dev.txt"):
+        assert "--python-version 3.13" in lesen(lock) and "python_full_version <" not in lesen(lock), lock
+    assert sys.version_info[:2] == (3, 13)
