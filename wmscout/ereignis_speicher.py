@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 
 from .datenbank import IMPORT_SUCHE, STANDARD_PLATTFORM, inhalt_hash
+from .domaene import PUSH_KANAELE
 from .ereignisse import InseratEreignis
 
 log = logging.getLogger(__name__)
@@ -33,6 +34,9 @@ class EreignisSpeicher:
 
     def _verarbeite(self, ereignis: InseratEreignis) -> str:
         con = self.db.con
+        if ereignis.kanal in PUSH_KANAELE:
+            # Was der Nutzer liefert (E-Mail, Text, Seite), läuft über Importer.importiere mit den Regeln zu Art und Anbieter (ADR-035)
+            raise ValueError(f"Kanal {ereignis.kanal!r} ist ein Push-Eingang – Importer.importiere verwenden, nicht den EreignisSpeicher")
         if ereignis.kanal in ("stream", "api"):
             q = con.execute("SELECT freigegeben, aktiv, zugriffsart FROM quellen WHERE kennung=?",
                             (ereignis.plattform,)).fetchone()

@@ -20,7 +20,7 @@ def _treffer(ad_id="k1", preis=30000, quelle="kleinanzeigen", **mehr) -> dict:
     return {"id": ad_id, "url": f"https://beispiel.invalid/{ad_id}", "titel": "Hymer B 678", "preis": preis, "quelle": quelle, **mehr}
 
 
-def _ereignis(ad_id="m1", preis=34000, typ="neu", plattform="mobilede", kanal="email") -> InseratEreignis:
+def _ereignis(ad_id="m1", preis=34000, typ="neu", plattform="mobile.de", kanal="api") -> InseratEreignis:
     inserat = None if typ == "geloescht" else Inserat(
         quelle=plattform, anzeigen_id=ad_id, url=f"https://beispiel.invalid/{ad_id}", titel="Knaus Sky TI", preis=preis,
         ez_jahr=2018, km=70000)
@@ -38,6 +38,11 @@ def _anzahl(db, tabelle) -> int:
 @pytest.fixture
 def db(tmp_path):
     d = Datenbank(str(tmp_path / "anzeigen.sqlite"))
+    # Ereignisse kommen nur über freigegebene automatische Kanäle (ADR-035); Push-Eingänge prüft tests/test_eingang.py
+    for k in ("mobile.de", "kleinanzeigen"):
+        d.con.execute("INSERT INTO quellen (kennung, zugriffsart, freigegeben, aktiv) VALUES (?, 'api', 1, 1) "
+                      "ON CONFLICT(kennung) DO UPDATE SET zugriffsart='api', freigegeben=1, aktiv=1", (k,))
+    d.con.commit()
     yield d
     d.con.close()
 
@@ -67,14 +72,14 @@ def test_leere_listenwerte_ueberschreiben_v4_nicht(db):
 
 
 def test_eingelesene_seite_hat_kanal_manuell(db):
-    db.speichere_treffer(_treffer("m9", quelle="mobilede"), IMPORT_SUCHE, kanal="manuell")
-    assert tuple(_eins(db, "SELECT plattform, kanal FROM beobachtungen")) == ("mobilede", "manuell")
+    db.speichere_treffer(_treffer("m9", quelle="mobile.de"), IMPORT_SUCHE, kanal="manuell")
+    assert tuple(_eins(db, "SELECT plattform, kanal FROM beobachtungen")) == ("mobile.de", "manuell")
 
 
 def test_ereignis_erscheint_in_der_app_mit_unbekannter_art(db):
     assert EreignisSpeicher(db).verarbeite(_ereignis()) == "neu"
     a = _eins(db, "SELECT * FROM anzeigen WHERE id='m1'")
-    assert (a["quelle"], a["preis"], a["suche"], a["status"]) == ("mobilede", 34000, IMPORT_SUCHE, "neu")
+    assert (a["quelle"], a["preis"], a["suche"], a["status"]) == ("mobile.de", 34000, IMPORT_SUCHE, "neu")
     assert _eins(db, "SELECT legacy_id FROM inserate WHERE anzeigen_id='m1'")[0] == "m1"
 
 
@@ -91,14 +96,14 @@ def test_ereignis_preisaenderung_und_loeschung_in_der_app(db):
 
 
 def test_ereignis_behaelt_eine_bereits_bekannte_art(db):
-    db.speichere_treffer(_treffer("m1", quelle="mobilede"), "Import Alkoven (bestätigt)", kanal="manuell")
+    db.speichere_treffer(_treffer("m1", quelle="mobile.de"), "Import Alkoven (bestätigt)", kanal="manuell")
     EreignisSpeicher(db).verarbeite(_ereignis(preis=33000, typ="geaendert"))
     assert tuple(_eins(db, "SELECT suche, preis FROM anzeigen WHERE id='m1'")) == ("Import Alkoven (bestätigt)", 33000)
     assert _anzahl(db, "inserate") == 1
 
 
 def test_erst_ereignis_dann_suche_ergibt_ein_inserat(db):
-    EreignisSpeicher(db).verarbeite(_ereignis("x7", plattform="kleinanzeigen", kanal="manuell"))
+    EreignisSpeicher(db).verarbeite(_ereignis("x7", plattform="kleinanzeigen"))
     db.speichere_treffer(_treffer("x7", preis=33000), "Alkoven")
     assert _anzahl(db, "inserate") == 1 and _anzahl(db, "anzeigen") == 1
     assert tuple(_eins(db, "SELECT legacy_id, preis FROM inserate")) == ("x7", 33000)
@@ -112,7 +117,7 @@ def test_gleiche_id_anderer_plattform_ueberschreibt_die_app_zeile_nicht(db, capl
     assert tuple(a) == ("kleinanzeigen", 20000, "kontaktiert")
     assert "gehört in „anzeigen“ zu kleinanzeigen" in caplog.text
     rows = db.con.execute("SELECT plattform, legacy_id FROM inserate ORDER BY plattform").fetchall()
-    assert [tuple(r) for r in rows] == [("kleinanzeigen", "123"), ("mobilede", None)]
+    assert [tuple(r) for r in rows] == [("kleinanzeigen", "123"), ("mobile.de", None)]
 
 
 def test_fehler_beim_spiegeln_rollt_auch_anzeigen_zurueck(db, monkeypatch):
@@ -139,13 +144,13 @@ def test_altbestand_ohne_v4_gegenstueck_wird_beim_oeffnen_ergaenzt(tmp_path):
     con = sqlite3.connect(pfad)
     con.executemany("INSERT INTO anzeigen (id, url, titel, preis, quelle, erstmals_gesehen, zuletzt_gesehen) VALUES (?,?,?,?,?,?,?)",
                     [("alt1", "u1", "Bürstner", 25000, "", "2026-10-01T10:00:00", "2026-10-02T10:00:00"),
-                     ("alt2", "u2", "Dethleffs", None, "mobilede", "2026-10-01T10:00:00", "2026-10-01T10:00:00")])
+                     ("alt2", "u2", "Dethleffs", None, "mobile.de", "2026-10-01T10:00:00", "2026-10-01T10:00:00")])
     con.commit()
     vorher = con.execute("SELECT * FROM anzeigen ORDER BY id").fetchall()
     con.close()
     db = Datenbank(pfad)
     rows = db.con.execute("SELECT plattform, anzeigen_id, legacy_id, verfuegbarkeit FROM inserate ORDER BY anzeigen_id").fetchall()
-    assert [tuple(r) for r in rows] == [("kleinanzeigen", "alt1", "alt1", "unbekannt"), ("mobilede", "alt2", "alt2", "unbekannt")]
+    assert [tuple(r) for r in rows] == [("kleinanzeigen", "alt1", "alt1", "unbekannt"), ("mobile.de", "alt2", "alt2", "unbekannt")]
     assert [tuple(r) for r in db.con.execute("SELECT preis, kanal FROM preis_historie")] == [(25000, "abgleich")]
     assert [tuple(r) for r in db.con.execute("SELECT * FROM anzeigen ORDER BY id")] == [tuple(r) for r in vorher]   # unverändert
     assert db.gleiche_v4_ab() == 0                                            # idempotent
@@ -157,8 +162,8 @@ def test_abgleich_verknuepft_ein_vorhandenes_ereignis_inserat(tmp_path):
     pfad = str(tmp_path / "anzeigen.sqlite")
     db = Datenbank(pfad)
     db.con.execute("INSERT INTO inserate (plattform, anzeigen_id, verfuegbarkeit, erstmals_gesehen, zuletzt_gesehen) "
-                   "VALUES ('mobilede', 'v1', 'aktiv', 'x', 'x')")
-    db.con.execute("INSERT INTO anzeigen (id, url, titel, preis, quelle) VALUES ('v1', 'u', 't', 1, 'mobilede')")
+                   "VALUES ('mobile.de', 'v1', 'aktiv', 'x', 'x')")
+    db.con.execute("INSERT INTO anzeigen (id, url, titel, preis, quelle) VALUES ('v1', 'u', 't', 1, 'mobile.de')")
     db.con.commit()
     assert db.gleiche_v4_ab() == 0
     assert tuple(_eins(db, "SELECT COUNT(*), MAX(legacy_id) FROM inserate")) == (1, "v1")

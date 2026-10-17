@@ -52,3 +52,36 @@ def import_art(suche: str | None) -> tuple[str | None, str | None]:
     if rest in IMPORT_ARTEN:
         return rest, VORLAEUFIG                  # Altbestand ohne Markierung
     return None, None
+
+
+# ---------- Plattformen und Eingangskanäle (ADR-035) ----------
+# Kanonische Plattform-IDs (`inserate.plattform`, `anzeigen.quelle`, `Inserat.quelle`). Anzeigen-IDs sind Primärschlüssel über alle
+# Plattformen: Kleinanzeigen-IDs haben kein Präfix, die übrigen ein festes. autoscout24 ist nur vorgemerkt (kein Adapter, keine Freigabe).
+KLEINANZEIGEN, MOBILEDE, AUTOSCOUT24 = "kleinanzeigen", "mobile.de", "autoscout24"
+ID_PRAEFIX = {KLEINANZEIGEN: "", MOBILEDE: "md-", AUTOSCOUT24: "as-"}
+PLATTFORMEN = tuple(ID_PRAEFIX)
+# Eingangskanäle von außen: „stream“/„api“ nur mit Quellenfreigabe, „email“/„manuell“ liefert der Nutzer selbst (Push). Intern
+# schreibt der Suchlauf zusätzlich „suche“ (`beobachtungen.kanal`) und der v4-Abgleich „abgleich“ (`preis_historie.kanal`).
+KANAELE = ("stream", "api", "email", "manuell")
+PUSH_KANAELE = ("email", "manuell")
+
+
+def pruefe_plattform(plattform: str) -> str:
+    if plattform not in PLATTFORMEN:
+        raise ValueError(f"Unbekannte Plattform: {plattform!r} (erlaubt: {', '.join(PLATTFORMEN)})")
+    return plattform
+
+
+def pruefe_kanal(kanal: str) -> str:
+    if kanal not in KANAELE:
+        raise ValueError(f"Unbekannter Eingangskanal: {kanal!r} (erlaubt: {', '.join(KANAELE)})")
+    return kanal
+
+
+def pruefe_anzeigen_id(plattform: str, anzeigen_id: str) -> str:
+    """Die Anzeigen-ID muss zum Präfix der Plattform passen (sonst könnten Plattformen einander überschreiben)."""
+    praefix = ID_PRAEFIX[pruefe_plattform(plattform)]
+    fremd = [p for p in ID_PRAEFIX.values() if p and p != praefix]
+    if not anzeigen_id or not anzeigen_id.startswith(praefix) or any(anzeigen_id.startswith(p) for p in fremd):
+        raise ValueError(f"Anzeigen-ID {anzeigen_id!r} passt nicht zur Plattform {plattform}")
+    return anzeigen_id
