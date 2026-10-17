@@ -73,6 +73,8 @@ MAX_IMPORT_SEKUNDEN = 20       # Zeitbudget je Klick (die Anfrage hält die Date
 GRUENDE = {403: "recht", 409: "konflikt", 503: "belegt"}
 
 
+# Unterschriften und Kontaktdaten des Verkäufers nur im Protokoll-Dokument (/protokoll/ID), nie in der Handy-API (P1-14b)
+OHNE_GERAET = ("unterschrift_verkaeufer", "unterschrift_ankaeufer", "verkaeufer")
 BETRAEGE = ("marktwert_privat", "haendler_vk", "kosten", "ziel_marge", "max_ek", "erstangebot")
 
 
@@ -471,7 +473,9 @@ class Anfrage:
         if m := re.fullmatch(r"/api/fahrzeug/([\w-]+)", p):
             return self.json(200, self.fahrzeug(m.group(1)))
         if m := re.fullmatch(r"/api/besichtigung/(\d+)", p):
-            return self.json(200, self.besichtigung_voll(self.besichtigung(m.group(1))))
+            b = self.besichtigung(m.group(1))
+            # abgeschlossene Besichtigungen braucht niemand offline – nicht im Speicher des Geräts ablegen (P1-14b)
+            return self.json(200, self.besichtigung_voll(b), {"X-Scout-Offline": "nein"} if b["status"] in ("abgeschlossen", "abgebrochen") else None)
         if m := re.fullmatch(r"/api/besichtigung/(\d+)/ics", p):
             b = self.besichtigung(m.group(1))
             if not b.get("termin"):
@@ -855,7 +859,8 @@ class Anfrage:
     def besichtigung_voll(self, b: dict) -> dict:
         e = berechne(self.k.katalog(), b["daten"] or {}, b["basis"])
         return {**self.besichtigung_kurz(b), "basis": b["basis"], "daten": b["daten"], "ergebnis": e,
-                "protokoll": b["protokoll"], "version": b["version"], "fotos": self.k.team.fotos(b["id"])}
+                "protokoll": {k_: v for k_, v in b["protokoll"].items() if k_ not in OHNE_GERAET} if b["protokoll"] else None,
+                "version": b["version"], "fotos": self.k.team.fotos(b["id"])}
 
     def protokoll(self, b: dict) -> str:
         e = b["ergebnis"] or berechne(self.k.katalog(), b["daten"] or {}, b["basis"])

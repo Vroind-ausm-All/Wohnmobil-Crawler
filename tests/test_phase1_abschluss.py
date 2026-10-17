@@ -351,3 +351,21 @@ def test_plan_ohne_unabhaengigen_marktwert_aus_grundlage(cfg, db, tmp_path):
     assert b.sicherheit == "keine"
     v = AnkaufSpeicher(db, cfg, tmp_path / "ankaeufe").plan_vorbereiten({"id": 1, "basis": {"max_ek": 25100, "haendler_vk": 36800}}, 25000, b)
     assert v["plan"]["max_ek"] == 25100 and v["plan"]["haendler_vk"] == 36800 and v["plan"]["quelle"].startswith("Grundlage")
+
+
+def test_abgeschlossene_besichtigung_nicht_auf_dem_geraet(server, team, db):
+    """P1-14b (Q9): Unterschriften/Verkäuferangaben nie in der Handy-API; abgeschlossene Besichtigungen nicht im Offline-Speicher."""
+    from tests.daten import BASIS
+    anna = anmelden(server, "Anna")
+    x = ids_der_liste(anna, "alle", n=1)[0]
+    b = anna("POST", "/api/besichtigung", {"anzeige_id": x})[1]
+    s, offen, r = anna("GET", f"/api/besichtigung/{b['id']}")
+    assert s == 200 and r.getheader("X-Scout-Offline") is None
+    assert anna("POST", f"/api/besichtigung/{b['id']}/abschluss", {"entscheidung": "abgelehnt", "unterschrift_verkaeufer": PNG,
+                                                                   "verkaeufer": {"name": "Erika Beispiel"}})[0] == 200
+    s, fertig, r = anna("GET", f"/api/besichtigung/{b['id']}")
+    assert s == 200 and r.getheader("X-Scout-Offline") == "nein" and fertig["protokoll"]["entscheidung"] == "abgelehnt"
+    assert not {"unterschrift_verkaeufer", "unterschrift_ankaeufer", "verkaeufer"} & set(fertig["protokoll"]) and "Erika" not in str(fertig)
+    assert "Erika" in anna("GET", f"/protokoll/{b['id']}")[1]                                    # das Dokument selbst bleibt vollständig
+    sw = (BASIS / "wmscout" / "web" / "static" / "sw.js").read_text(encoding="utf-8")
+    assert "antwort.headers.get('X-Scout-Offline') === 'nein'" in sw and "c.delete(e.request)" in sw
