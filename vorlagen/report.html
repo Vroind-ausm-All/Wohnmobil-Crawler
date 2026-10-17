@@ -154,9 +154,12 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
 #toast.warn{background:var(--warn-bg);color:var(--warn-ink);font-weight:600}
 @media (max-width:760px){ .spalten{grid-template-columns:1fr} .spalten>div:last-child{order:-1} .brief{min-height:300px} }
 </style>
+{% if app %}<link rel="stylesheet" href="/static/textimport.css">{% endif %}
 </head>
 <body>
 {% set AMPEL = {'gruen':'Grün','gelb':'Gelb','rot':'Rot','grau':'ohne Bewertung'} %}
+{# Anzeige per Link + Text einlesen: jedes Teammitglied, nie Standort-Zugänge (der Server prüft die Rolle ohnehin) #}
+{% set text_darf = app and (not team or not team.ich or team.ich.rolle in ['inhaber', 'mitarbeiter']) %}
 <div class="wrap">
   <header class="top">
     <div>
@@ -169,6 +172,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
       <button id="glocke" class="btn" title="Browser-Hinweis bei neuen Treffern" hidden>🔔 Hinweise an</button>
       <button id="einlesen" class="btn"{% if team and team.ich and team.ich.rolle != 'inhaber' %} hidden{% endif %} title="Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten (Strg+S) einlesen – ohne Internetabruf">⤓ Gespeicherte Seiten einlesen</button>
       <button id="suchen" class="btn"{% if team and team.ich and team.ich.rolle != 'inhaber' %} hidden{% endif %}>↻ Neue Anzeigen suchen</button>
+      {% if text_darf %}<button id="textimport-knopf" class="btn" aria-expanded="false" aria-controls="textimport" title="Eine einzelne Anzeige aus Link und kopiertem Anzeigentext einlesen – ohne Internetabruf">＋ Inserat einlesen (Link + Text)</button>{% endif %}
       <a class="btn" href="/anfragen" title="Fahrzeuge, die Verkäufer uns selbst anbieten">Verkaufsanfragen</a>
       <a class="btn" href="/ankaeufe" title="Gekaufte Fahrzeuge: Vertrag, Übergabe, Kosten, Verkauf, Plan gegen Ist">Ankäufe</a>
     </div>
@@ -176,6 +180,13 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
   </header>
 
   <div class="banner" id="banner" hidden><span id="banner-text"></span><button class="btn" onclick="location.reload()">Liste aktualisieren</button></div>
+
+  {% if text_darf %}
+  <section class="kasten" id="textimport" aria-labelledby="textimport-titel" hidden>
+    <h3 id="textimport-titel">Inserat einlesen (Link + Text)</h3>
+    <div id="textimport-box"></div>
+  </section>
+  {% endif %}
 
   <ol class="anleitung">
     <li><b>Wohnmobil anklicken</b> – faire Bewertung und fertiges Anschreiben ansehen (Text änderbar)</li>
@@ -385,6 +396,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
 
 <div id="toast" role="status" aria-live="polite"><span id="toast-text"></span><button id="toast-zurueck" hidden>Rückgängig</button></div>
 
+{% if text_darf %}<script src="/static/textimport.js"></script>{% endif %}
 <script>
 var SCOUT = {{ app | tojson }};
 var TEAM = {{ team | tojson }};
@@ -810,6 +822,41 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
   // Status beim Laden: Datenbank (App) bzw. Browser-Speicher (Datei)
   karten.forEach(function(k){ zeigeStatus(k.dataset.id, lokal[k.dataset.id] || k.dataset.status); });
   sortiere(); zeige();
+
+{% if text_darf %}
+  // ---------- Inserat einlesen (Link + Text), P2-05 ----------
+  var tiKnopf = document.getElementById('textimport-knopf');
+  if(APP && tiKnopf && window.TextImport){
+    var tiPanel = document.getElementById('textimport'), tiForm = null;
+    tiKnopf.onclick = function(){
+      var auf = tiPanel.hidden;
+      tiPanel.hidden = !auf; tiKnopf.setAttribute('aria-expanded', auf ? 'true' : 'false');
+      if(auf){
+        if(!tiForm) tiForm = TextImport.baue(document.getElementById('textimport-box'), {
+          post: function(url, daten){ return post(url, daten).catch(function(e){ if(e.status === 401) location.href = '/login?weiter=%2F'; throw e; }); },
+          nachErfolg: function(){ if(TEAM_AN) ladeTeam(); },
+          aktionen: function(d){
+            return [
+              {text:'In der Liste öffnen', klick: function(){ location.hash = '#fahrzeug=' + encodeURIComponent(d.anzeige_id); location.reload(); }},
+              {text:'Handy-Ansicht ↗', href: d.fahrzeug_url, neuesFenster: true},
+              {text:'Liste aktualisieren', klick: function(){ location.reload(); }}
+            ];
+          }
+        });
+        tiForm.fokus(); tiPanel.scrollIntoView({block:'nearest'});
+      }
+    };
+  }
+  // Sprung aus dem Ergebnis des Einlesens: Fahrzeugfenster öffnen (Liste ist nach dem Neuladen aktuell)
+  var sprung = /^#fahrzeug=(.+)$/.exec(location.hash);
+  if(sprung){
+    var wunschId = ''; try{ wunschId = decodeURIComponent(sprung[1]); }catch(e){}
+    history.replaceState(null, '', location.pathname + location.search);
+    var ziel = karten.filter(function(k){ return k.dataset.id === wunschId; })[0];
+    if(ziel){ document.querySelector('.bar button[data-f="alle"]').click(); oeffne(wunschId); }
+    else toast('Das Fahrzeug steht nicht in dieser Liste – bitte in der Handy-Ansicht öffnen.', null, 9000, true);
+  }
+{% endif %}
 
   // ---------- Suchlauf (manuell + automatisch) ----------
   var knopf = document.getElementById('suchen');

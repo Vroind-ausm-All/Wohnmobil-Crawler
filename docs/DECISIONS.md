@@ -620,3 +620,24 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   und in der Meldung des App-Suchlaufs (QA-Befund F8, bewusst offen). Das CLI schreibt `config.yaml` nicht; Eingänge werden von Hand (oder `config.local.yaml`) geschaltet.
   P2-05 prüft vor dem Text-Eingang `eingang_pruefen(cfg, "text")`, P2-06 für `email`. Die Oberfläche zeigt `uebersprungen` nur
   in der Meldung des App-Suchlaufs.
+
+## ADR-038 – Text-Import: nur sichere oder eingetragene Preise; gespeicherte Angaben anderer Kanäle bleiben · gilt (17.10.2026)
+
+* **Kontext:** Der Text-Import (P2-05, ADR-035) liest Felder per Heuristik aus kopiertem Freitext. Ein „geschätzter“ Preis aus dem Fließtext
+  („Motor bei 2.500 € überholt“, „Restschuld 15.000 €“) wurde wie ein bestätigter gespeichert, überschrieb den Preis der Anzeige, erzeugte
+  eine Preissenkung und landete in Ampel, Erstangebot, Anschreiben und Nachfass-Text. Ebenso überschrieben grob gelesene Titel, Beschreibung,
+  Marke, Kilometer und Erstzulassung die Werte einer gecrawlten oder aus einer gespeicherten Seite gelesenen Anzeige.
+* **Entscheidung:**
+  1. **Preis nur sicher oder eingetragen.** Sicher = Betrag mit VB/VHB-Bezug, Preis-Label oder allein in einer Zeile, genau ein Wert. Sonst
+     trägt der Nutzer den Preis im Formular ein (`preis`/`vb` der API). Ohne beides wird ohne Preis gespeichert; ein vorhandener Preis
+     bleibt (keine Preisänderung); die Antwort meldet `preis_status` (`text`, `eingetragen`, `unsicher`, `fehlt`) und die Oberfläche lässt die
+     Eingaben stehen. Lieber kein Preis als ein falscher: Ampel, Erstangebot und Anschreiben entstehen nur aus bestätigten Preisen.
+  2. **Gespeicherte Angaben anderer Kanäle bleiben:** der Text füllt nur leere Felder (`Lesung.nur_leere_felder`, `Datenbank.speichere_treffer(…,
+     nur_leere=True)`); der Preis läuft wie immer über die Preis-/Beobachtungshistorie. Werte aus einem früheren Text-Import darf ein neuer
+     Text ersetzen (Markierung in `details_json`, keine Schemaänderung); jeder andere Schreibweg entfernt die Markierung.
+  3. **Widerspricht die Marke** im Text der geschützten Anzeige, wird kein Preis aus dem Text übernommen.
+* **Alternativen:** geschätzten Preis mit Warnhinweis speichern (verworfen: der Hinweis erreicht Ampel, Anschreiben und Nachfass nicht);
+  Herkunft je Feld in einer neuen Spalte (verworfen: Schemaänderung); Text-Import ohne Überschreibschutz (verworfen, siehe Kontext).
+* **Folgen / offen:** Wer den Preis nicht einträgt, bekommt eine Anzeige ohne Preis (graue Ampel) – gewollt. Zeilen aus dem Text-Import
+  vor dieser Entscheidung tragen keine Markierung und gelten als geschützt. Die Erkennung des sicheren Preises bleibt Heuristik über
+  nachgebaute Texte; echte Anzeigen können anders aufgebaut sein.

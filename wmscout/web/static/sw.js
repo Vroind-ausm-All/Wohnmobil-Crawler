@@ -1,7 +1,7 @@
 /* Service Worker: App-Gerüst offline verfügbar, zuletzt geladene Daten als Rückfall ohne Netz.
    Änderungen (Speichern, Fotos) puffert die App selbst und sendet sie, sobald wieder Netz da ist. */
-var VERSION = 'wm-scout-6';      // 6: abgeschlossene Besichtigungen nie im Speicher (P1-14b); 5: Versionskonflikt (P1-07); 4: nur noch Positivliste (G0) – alte Caches werden gelöscht
-var GERUEST = ['/m', '/static/mobil.css', '/static/mobil.js', '/static/besichtigung.js',
+var VERSION = 'wm-scout-8';      // 8: Preisfeld im Formular „Inserat einlesen“ (P2-05); 7: Inserat einlesen (Link + Text, P2-05); 6: abgeschlossene Besichtigungen nie im Speicher (P1-14b); 5: Versionskonflikt (P1-07); 4: nur noch Positivliste (G0) – alte Caches werden gelöscht
+var GERUEST = ['/m', '/static/mobil.css', '/static/mobil.js', '/static/besichtigung.js', '/static/textimport.js', '/static/textimport.css',
                '/static/icon-192.png', '/static/icon-512.png', '/manifest.webmanifest'];
 
 self.addEventListener('install', function (e) {

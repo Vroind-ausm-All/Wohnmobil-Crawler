@@ -135,6 +135,39 @@ unter `uebersprungen` gemeldet (`[{"quelle": …, "grund": "nicht freigegeben" |
 3. Eigene Tests: Parser (Felder korrekt), `suche()` (Seiten, Abbruch), `details()` (404 → `InseratNichtGefunden`),
    Importer-Lauf mit Fake-Abruf (siehe `test_neue_quelle_wird_importiert`).
 
+## 4a. Eingang per Adresse + Text (P2-05)
+
+Kein Adapter, sondern ein Push-Eingang (`wmscout/eingang/text.py`, `TextEingang`, Kanal `manuell`, ADR-010/035): Der Nutzer liefert die
+Adresse einer einzelnen Anzeige und den kopierten Anzeigentext (`POST /api/import/text`, JSON `{"url", "text", "anbieter"}`; Text höchstens
+50 000, Adresse höchstens 2000 Zeichen). Der Server **ruft die Adresse nie ab**:
+
+* Plattform und Anzeigen-ID nur aus der Adresse (Hosts `*kleinanzeigen.de`, `*.mobile.de`; nur http/https; ID über die Helfer der Parser,
+  `md-…` bei mobile.de). Gespeichert wird die aus der ID neu gebildete Detail-Adresse, nie die eingegebene. Fremde Hosts, andere Schemata,
+  Suchseiten und Adressen ohne ID ergeben eine Lesung `unbekannt` mit Hinweis – nichts wird gespeichert (API: 422).
+* Preis, Kilometer, Erstzulassung, PLZ/Ort, Titel und Marke aus dem Text; Fehlendes ergibt den Hinweis „unvollständig: …“, gespeichert
+  wird trotzdem. **Preis: lieber keiner als ein falscher (ADR-038).**
+  Gespeichert wird ein Preis nur, wenn er (a) sicher erkannt ist – Betrag mit VB/VHB davor oder dahinter, mit Label „Preis“/„Kaufpreis“/
+  „Festpreis“ oder allein in einer Zeile, jeweils genau ein Wert (auch „24 900 €“ mit Leerzeichen als Tausendertrenner) – oder (b) vom
+  Nutzer im Formular eingetragen wurde (API: `preis` ganze Zahl 1–2 000 000 oder `null`, `vb` Wahrheitswert; strikt typgeprüft). Die Nutzerangabe
+  hat Vorrang; weicht sie vom sicheren Textpreis ab, steht ein Hinweis da. Beträge im Fließtext („Motor bei 2.500 € überholt“, „Restschuld
+  15.000 €“) sind **nie** ein Preis; ohne sicheren oder eingetragenen Preis wird die Anzeige ohne Preis gespeichert (ein vorhandener Preis
+  bleibt, keine Preisänderung, keine Nachfass-Folge), `preis_status` ist `unsicher` bzw. `fehlt` und der Hinweis nennt die gefundenen Beträge
+  (ohne Jahreszahlen). Beträge nach Neupreis, Tausch, Anzahlung, Rate/mtl., „nachgerüstet“, „unter …“ sowie Zahlen mit Einheit (km, kg, PS …)
+  zählen nie. Die Antwort enthält `preis_vorher` und `preis_aenderung` (`gesenkt`/`gestiegen`/`unveraendert`/`null`).
+* **Herkunft der gespeicherten Werte:** Werte aus Suchlauf, Seitenimport und Mail-Import überschreibt der Text nicht (`Lesung.nur_leere_felder`):
+  nur Leeres wird gefüllt; der Preis läuft wie immer über Preis- und Beobachtungshistorie. Werte, die selbst aus einem Text-Import stammen
+  (Markierung `{"eingang": "text"}` in `details_json`, keine Schemaänderung), darf ein neuer Text ersetzen – ein falsch eingefügter Text
+  lässt sich korrigieren. Jeder andere Kanal, der die Zeile schreibt, entfernt die Markierung. Nennt der Text eine andere Marke als die
+  gespeicherte (geschützte) Anzeige, wird kein Preis aus dem Text übernommen (Hinweis „Text passt offenbar nicht zur gespeicherten Anzeige“);
+  ein ausdrücklich eingetragener Preis gilt trotzdem.
+* Adressen: nur ASCII, Anzeigen-ID ohne führende Null; mobile.de-Adressen der Form `/auto-inserat/<slug>/<id>.html` sind **offen** (Form nicht
+  belegt, wird nicht erraten – nur `details.html?id=…`). Die Fahrzeugart wird nie gesetzt; der Importer leitet höchstens eine vorläufige
+  Art aus dem Titel ab. Empfehlungen anderer Anzeigen am Textende („Ähnliche Anzeigen“) zählen nicht.
+* Datenschutz: Telefonnummern, E-Mail-Adressen, Links, Straßenangaben und Namenszeilen werden vor der Auswertung entfernt (`bereinige`),
+  Gesuche („Suche …“, „Wir kaufen …“) nicht gespeichert, Anbieter nur nach Nutzerangabe (sonst unbekannt).
+* Gespeichert wird allein über `Importer.importiere(lesung, "manuell")`; dieselbe Anzeige über Seite und Text ist eine Zeile
+  (gleiche Plattform + ID). Tests: `tests/test_text_import.py`.
+
 ## 5. Bekannte Einschränkungen (Phase 1)
 
 * Die Datenbank-ID ist noch die Anzeigen-ID. Zwei Quellen mit gleicher ID würden kollidieren. Phase 2 führt

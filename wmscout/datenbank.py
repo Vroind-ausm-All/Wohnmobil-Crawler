@@ -33,6 +33,16 @@ FELDER_UPDATE = ["url", "suche", "titel", "preis", "vb", "ort", "km", "ez_jahr",
                  "kurzbeschreibung", "gewerblich", "bild", "quelle"]
 
 
+# Markierung in ``details_json``: die Zeile stammt aus einem Text-Import (P2-05) und trägt nur grob gelesene Werte – ein neuer Text-Import darf
+# sie ersetzen. Jede andere Schreibweise (Suchlauf, Seitenimport, Mail) löscht die Markierung, danach gelten die Werte als geschützt.
+TEXT_MARKE = '{"eingang": "text"}'
+
+
+def _leer(feld: str, wert) -> bool:
+    """Leer im Sinn von „darf ein grob gelesener Wert füllen“: nichts, oder der Ersatztitel einer Anzeige ohne erkannten Titel."""
+    return wert in (None, "") or (feld == "titel" and str(wert).endswith("(Titel fehlt)"))
+
+
 STANDARD_PLATTFORM = "kleinanzeigen"          # ``anzeigen.quelle`` leer = Altbestand vor Mehrquellen
 
 
@@ -91,18 +101,35 @@ class Datenbank:
             log.warning("Journalmodus %s nicht möglich; die Datenbank bleibt im Modus %s.", ziel, modus)
         return modus
 
-    def speichere_treffer(self, a: dict, suche: str, kanal: str = "suche") -> str:
+    def speichere_treffer(self, a: dict, suche: str, kanal: str = "suche", nur_leere: bool = False) -> str:
         """Fügt ein oder aktualisiert. Rückgabe: 'neu', 'preis' (Preis gesenkt) oder 'bekannt'.
 
         In derselben Transaktion wird der Treffer in die v4-Tabellen gespiegelt (``spiegle_inserat``), damit Ereigniseingang,
-        Preisverlauf und App dieselben Fahrzeuge kennen. ``kanal``: 'suche' (Suchlauf) oder ein Push-Kanal 'manuell'/'email' (über Importer.importiere)."""
+        Preisverlauf und App dieselben Fahrzeuge kennen. ``kanal``: 'suche' (Suchlauf) oder ein Push-Kanal 'manuell'/'email' (über Importer.importiere).
+        ``nur_leere``: vorhandene Felder bleiben (siehe ``_vorhandenes_behalten``)."""
         with self._exklusiv():
-            ergebnis = self.schreibe_anzeige(a, suche)
+            if nur_leere:
+                a = self._vorhandenes_behalten(a)
+            ergebnis = self.schreibe_anzeige(a, suche, text_eigen=nur_leere)
             self.spiegle_inserat(a, kanal)
         return ergebnis
 
-    def schreibe_anzeige(self, a: dict, suche: str) -> str:
-        """Nur Tabelle ``anzeigen``, ohne eigenes Commit (Teil einer Transaktion des Aufrufers)."""
+    def _vorhandenes_behalten(self, a: dict) -> dict:
+        """Für Kanäle mit grob gelesenen Werten (``nur_leere``): bereits gespeicherte Felder bleiben, nur leere werden gefüllt. Preis, VB,
+        Anbietertyp, Suche und Quelle laufen wie immer (Preissenkung, Historie, Händlerhinweis)."""
+        alt = self.con.execute("SELECT * FROM anzeigen WHERE id=?", (a["id"],)).fetchone()
+        if alt is None or alt["details_json"] == TEXT_MARKE:           # neu, oder selbst aus einem Text-Import: der neue Text darf ersetzen
+            return a
+        return {**a, **{k: alt[k] for k in FELDER_UPDATE if k not in ("suche", "preis", "vb", "gewerblich", "quelle") and not _leer(k, alt[k])}}
+
+    def ist_text_eigen(self, ad_id: str) -> bool | None:
+        """None: keine solche Anzeige; True: ihre Werte stammen aus einem Text-Import (ersetzbar); False: aus anderem Kanal (geschützt)."""
+        z = self.con.execute("SELECT details_json FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+        return None if z is None else z["details_json"] == TEXT_MARKE
+
+    def schreibe_anzeige(self, a: dict, suche: str, text_eigen: bool = False) -> str:
+        """Nur Tabelle ``anzeigen``, ohne eigenes Commit (Teil einer Transaktion des Aufrufers). ``text_eigen``: Aufruf aus dem Text-Import –
+        neue Zeilen erhalten ``TEXT_MARKE``; bei jedem anderen Aufruf verliert eine bestehende Zeile die Markierung."""
         jetzt = datetime.now().isoformat(timespec="seconds")
         alt = self.con.execute("SELECT preis FROM anzeigen WHERE id=?", (a["id"],)).fetchone()
         werte = {k: a.get(k) for k in FELDER_UPDATE}
@@ -113,10 +140,11 @@ class Datenbank:
         # Fehlt der Schlüssel ganz (Aufrufer ohne Anbieterangabe), bleibt es wie bisher 0.
         werte["gewerblich"] = None if "gewerblich" in a and a["gewerblich"] is None else int(bool(a.get("gewerblich")))
         if alt is None:
-            spalten = ["id", *werte, "erstmals_gesehen", "zuletzt_gesehen"]
+            neu = {**werte, "details_json": TEXT_MARKE} if text_eigen else werte
+            spalten = ["id", *neu, "erstmals_gesehen", "zuletzt_gesehen"]
             self.con.execute(
                 f"INSERT INTO anzeigen ({','.join(spalten)}) VALUES ({','.join('?' * len(spalten))})",
-                [a["id"], *werte.values(), jetzt, jetzt])
+                [a["id"], *neu.values(), jetzt, jetzt])
             ergebnis = "neu"
         else:
             # Werte aus der Detailseite nicht mit leeren Listenwerten überschreiben
@@ -130,6 +158,8 @@ class Datenbank:
                 ergebnis = "preis"
             sets = ", ".join(f"{k}=?" for k in werte) + ", zuletzt_gesehen=?"
             self.con.execute(f"UPDATE anzeigen SET {sets} WHERE id=?", [*werte.values(), jetzt, a["id"]])
+            if not text_eigen:
+                self.con.execute("UPDATE anzeigen SET details_json=NULL WHERE id=? AND details_json=?", (a["id"], TEXT_MARKE))
         return ergebnis
 
     def spiegle_inserat(self, a: dict, kanal: str) -> int:
@@ -201,16 +231,23 @@ class Datenbank:
             log.info("v4-Abgleich: %d Inserate aus „anzeigen“ ergänzt.", neu)
         return neu
 
-    def speichere_details(self, ad_id: str, d: dict):
+    def speichere_details(self, ad_id: str, d: dict, nur_leere: bool = False):
         felder = {k: d.get(k) for k in ("titel", "preis", "km", "ez_jahr", "marke", "art", "leistung",
                                          "getriebe", "beschreibung")}
         felder = {k: v for k, v in felder.items() if v not in (None, "")}
         if d.get("gewerblich"):
             felder["gewerblich"] = 1
-        felder["details_json"] = json.dumps(d.get("details", {}), ensure_ascii=False)
-        felder["detail_geladen"] = 1
-        sets = ", ".join(f"{k}=?" for k in felder)
-        self.con.execute(f"UPDATE anzeigen SET {sets} WHERE id=?", [*felder.values(), ad_id])
+        if nur_leere:
+            # grob gelesene Werte (eingefügter Text): vorhandene Felder bleiben, Merkmalsliste und „Details geladen“ ebenso
+            alt = self.con.execute("SELECT * FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+            if alt is not None and alt["details_json"] != TEXT_MARKE:
+                felder = {k: v for k, v in felder.items() if k in ("preis", "gewerblich") or _leer(k, alt[k])}
+        else:
+            felder["details_json"] = json.dumps(d.get("details", {}), ensure_ascii=False)
+            felder["detail_geladen"] = 1
+        if felder:
+            sets = ", ".join(f"{k}=?" for k in felder)
+            self.con.execute(f"UPDATE anzeigen SET {sets} WHERE id=?", [*felder.values(), ad_id])
         self.con.commit()
 
     def ohne_details(self, limit: int, kennungen: Collection[str] | None = None) -> list[sqlite3.Row]:

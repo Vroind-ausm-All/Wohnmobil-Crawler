@@ -252,11 +252,11 @@ class Importer:
             stat = {}
         for schluessel in ("suchseiten", "detailseiten", "neu", "preis", "bekannt", "details"):
             stat.setdefault(schluessel, 0)
-        self._speichere_seite(lesung.art, lesung.inserate, stat, lesung.art_filter, lesung.haupttreffer, kanal)
+        self._speichere_seite(lesung.art, lesung.inserate, stat, lesung.art_filter, lesung.haupttreffer, kanal, lesung.nur_leere_felder)
         return stat
 
     def _speichere_seite(self, art: str, inserate: list, stat: dict, seitenart: SuchseitenArt | None = None,
-                         haupttreffer: Collection[str] | None = None, kanal: str = "manuell"):
+                         haupttreffer: Collection[str] | None = None, kanal: str = "manuell", nur_leere: bool = False):
         """Speichert die Inserate einer Such- oder Detailseite (ungeprüft; Eintritt von außen ist `importiere`).
 
         Importierte Inserate bekommen die Suche „Import <Art> (bestätigt|vorläufig)“ bzw. `IMPORT_SUCHE` (Art unbekannt);
@@ -290,9 +290,9 @@ class Importer:
             suche = _neue_suche(self.db.suche_zu(d["id"]), neue_art, herkunft)
             if art == "detail" and not d.get("gewerblich") and self.db.gewerblich_zu(d["id"]):
                 d["gewerblich"] = None            # kein Hinweis auf der Detailseite ≠ „privat“: gewerblicher Listenwert bleibt
-            stat[self.db.speichere_treffer(d, suche, kanal=kanal)] += 1
+            stat[self.db.speichere_treffer(d, suche, kanal=kanal, nur_leere=nur_leere)] += 1
             if art == "detail":
-                self.db.speichere_details(d["id"], d)
+                self.db.speichere_details(d["id"], d, nur_leere=nur_leere)
                 stat["details"] += 1
 
     # ---------- Lauf ----------
