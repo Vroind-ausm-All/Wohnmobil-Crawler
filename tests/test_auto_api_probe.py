@@ -17,8 +17,10 @@ class FakeClient:
 
 
 def angebot(**extras):
-    return {"id": "123", "url": "https://example.invalid/123", "title": "Knaus",
-            "price": 39900, "mileage": 85000, "year": 2018, "is_private": True, **extras}
+    basis = {"id": "123", "url": "https://example.invalid/123", "title": "Knaus",
+             "price": 39900, "mileage": 85000, "year": 2018, "is_private": True}
+    basis.update(extras)
+    return basis
 
 
 def test_kein_automatischer_zugriff_und_nicht_registriert():
