@@ -70,7 +70,7 @@ class Inserat:
     url: str
     titel: str | None = None
     preis: int | None = None             # Euro, ganze Zahl
-    vb: bool = False                     # Verhandlungsbasis
+    vb: bool | None = False              # Verhandlungsbasis (None = unbekannt: überschreibt beim Update nichts)
     ort: str | None = None               # „70173 Stuttgart“
     km: int | None = None
     ez_jahr: int | None = None

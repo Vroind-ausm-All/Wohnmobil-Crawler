@@ -54,6 +54,7 @@ es wird niemand als Bearbeiter eingetragen (eine bestehende Reservierung bleibt 
 | `python scout.py app` | Browser-App: Wohnmobile anklicken, anschreiben, Status und Notizen speichern, Suchlauf starten |
 | `python scout.py lauf` | Crawlen → bewerten → Report, CSV, Anschreiben (+ Mail, falls aktiv) |
 | `python scout.py import` | Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten aus dem Ordner `import/` einlesen, bewerten, Report erzeugen (ohne Internet; anderer Ordner: `--ordner PFAD`) |
+| `python scout.py import --mails` | Suchagent-Benachrichtigungen (`.eml` aus `import/email/`) einlesen, bewerten, Report erzeugen – nur bei eingeschaltetem Eingang `email` |
 | `python scout.py quellen liste` | Pull-Quellen (Suchlauf) und Eingänge mit Status anzeigen; `quellen an KENNUNG` / `quellen aus KENNUNG` schaltet eine Quelle – `an` nur, wenn sie im Code freigegeben ist (Kleinanzeigen ist es nicht; der Suchlauf überspringt sie dann ohne Fehler). Eingänge (`seiten`, `text`, `email`) schaltest du in `config.yaml` unter `eingaenge`; ausgeschaltet wird nichts eingelesen |
 | `python scout.py report` | Report neu erzeugen, z. B. nach Änderung der Kosten in `config.yaml` (ohne Internet) |
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --titel "Knaus Sky TI 650 MEG" --anschreiben` | Einzelfahrzeug durchrechnen und Anschreiben ausgeben (auch für Anfragen außerhalb von Kleinanzeigen; `--text` mit der Beschreibung berücksichtigt Ausstattung/Mängel) |
@@ -267,6 +268,15 @@ Hinweise zum Einlesen:
   erscheint. Das Programm liest sie nicht und speichert sie nicht in der Datenbank – in der Datei unter `import/eingelesen/` steht sie aber.
 - Beim Einlesen einer alten gespeicherten Seite gilt die Anzeige als „zuletzt gesehen: heute“, auch wenn sie
   inzwischen gelöscht oder verkauft sein kann. Lies deshalb möglichst frisch gespeicherte Seiten ein.
+
+**Suchagent-Mails einlesen (E-Mail-Eingang, Gerüst):** Der Eingang ist standardmäßig **aus** (`config.yaml` → `eingaenge` → `email` → `aktiv: true`).
+Benachrichtigungen deines Suchagenten bei Kleinanzeigen oder mobile.de speicherst du als `.eml` – Thunderbird: Mail markieren, *Datei → Speichern unter*
+(Dateityp *E-Mail-Datei (.eml)*) oder per Drag&Drop in den Ordner ziehen; im Webmail „Als .eml herunterladen“ – und legst sie in `import/email/`. Dann in der App
+auf **„✉ Mails einlesen“** klicken oder `python scout.py import --mails` ausführen. Gelesen wird nur, was in der Mail steht: Links werden nie abgerufen, die
+Fahrzeuge kommen mit Titel, Preis (nur aus einer eigenen Preiszeile) und Ort in die Liste; Absender, Empfänger und Betreff werden nicht gespeichert. Ob echte
+Mails so aufgebaut sind, ist noch nicht belegt (Abnahme mit echten Mails steht aus, `docs/QUELLEN.md` Abschnitt 6). Eingelesene Mails liegen danach in
+`import/email/eingelesen/<Datum>/`, nicht erkannte in `nicht_erkannt/`, unlesbare in `fehlerhaft/`; alles davon löscht die Datenschutz-Frist
+(`datenschutz` → `inserate_anonymisieren_nach_monaten`), noch nicht eingelesene Mails nicht, die werden nach Fristablauf gemeldet.
 
 Status (offen / kontaktiert / uninteressant / gekauft) und Notizen setzt du im Fahrzeugfenster. Unter
 „Kontaktiert“ findest du alle angeschriebenen Fahrzeuge mit dem Text, den du geschickt hast.

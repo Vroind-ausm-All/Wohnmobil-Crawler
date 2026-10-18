@@ -248,7 +248,10 @@ whatsapp:
 eingaenge:
   seiten: {aktiv: true}            # im Browser gespeicherte Seiten (Ordner "import", siehe unten)
   text: {aktiv: true}              # URL + eingefügter Text (P2-05)
-  email: {aktiv: false}            # E-Mail-Suchagenten folgen mit P2-06
+  email: {aktiv: false}            # E-Mail-Suchagenten (P2-06): Benachrichtigungen als .eml in import/email/ legen (Thunderbird: Speichern
+                                   # unter, Webmail: als .eml herunterladen); einschalten mit 'aktiv: true', einlesen mit 'python scout.py import --mails'
+                                   # oder dem Knopf in der App. Verlinkte Anzeigen werden nie abgerufen; Absender/Empfänger/Betreff werden nicht gespeichert.
+                                   # Abgelegte Mails (eingelesen/nicht_erkannt/fehlerhaft) löscht die Datenschutz-Frist (datenschutz → inserate_anonymisieren_nach_monaten).
 
 # --- 9. Gespeicherte Seiten einlesen ---------------------------
 # Kleinanzeigen-Seiten selbst im Browser öffnen und mit Strg+S („Webseite, nur HTML“)

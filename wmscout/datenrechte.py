@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 from .auktion import AuktionSpeicher
 from .datenbank import Datenbank
+from .eingang.email import mail_ordner
 from .verkauf import VerkaufSpeicher
 
 log = logging.getLogger("scout")
@@ -147,6 +148,69 @@ def diagnose_nach_frist(ausgabe_ordner: Path, monate: int, jetzt: datetime | Non
     return _loeschen([p for p in alt if p.is_file() and p.stat().st_mtime < grenze])
 
 
+MAIL_ABLAGEN = ("eingelesen", "nicht_erkannt", "fehlerhaft")      # Unterordner von import/email/, die der Scout selbst anlegt (P2-06)
+
+
+def _ist_verknuepfung(pfad: Path) -> bool:
+    """Symbolische Verknüpfung oder Junction (Windows): nie verfolgen – sie könnte aus dem Import-Ordner herausführen."""
+    return pfad.is_symlink() or (hasattr(pfad, "is_junction") and pfad.is_junction())
+
+
+def mails_nach_frist(ordner: Path, monate: int, jetzt: datetime | None = None) -> int:
+    """Alles, was der Scout von Benachrichtigungs-Mails abgelegt hat (`<ordner>` = import/email), nach derselben Frist löschen (P2-06):
+    `eingelesen/<Datum>/*.eml`, `nicht_erkannt/*.eml` und `fehlerhaft/*.eml`. Maßgeblich ist das spätere von Datumsordner (ISO-Name, nicht in der
+    Zukunft) und Änderungszeit der Datei; wo es keinen Datumsordner gibt, die Änderungszeit (der Import setzt sie beim Ablegen auf „jetzt“).
+    Leere Datumsordner verschwinden mit. Verknüpfungen und Junctions werden nie verfolgt, nur `*.eml`-Dateien gelöscht. Noch nicht
+    verarbeitete Mails direkt in `<ordner>` bleiben unberührt (siehe `mails_unverarbeitet`). ``monate`` ≤ 0: nichts."""
+    ordner = Path(ordner)
+    if not monate or monate <= 0 or not ordner.is_dir():
+        return 0
+    jetzt = jetzt or datetime.now()
+    grenze = (jetzt - timedelta(days=round(monate * 30.44))).timestamp()
+    gefunden: list[Path] = []
+    for ablage in MAIL_ABLAGEN:
+        wurzel = ordner / ablage
+        if not wurzel.is_dir() or _ist_verknuepfung(wurzel):
+            continue
+        ebenen = [(None, wurzel)]
+        if ablage == "eingelesen":
+            for tag in (p for p in wurzel.iterdir() if p.is_dir() and not _ist_verknuepfung(p)):
+                try:
+                    datum = datetime.combine(date.fromisoformat(tag.name), time.min)
+                except ValueError:
+                    datum = None
+                ebenen.append((datum.timestamp() if datum and datum <= jetzt else None, tag))
+        for tag_zeit, verzeichnis in ebenen:
+            for p in verzeichnis.iterdir():
+                if p.suffix.lower() == ".eml" and p.is_file() and not _ist_verknuepfung(p) and max(tag_zeit or 0, p.stat().st_mtime) < grenze:
+                    gefunden.append(p)
+    n = _loeschen(gefunden)
+    for tag in {p.parent for p in gefunden if p.parent.parent.name == "eingelesen"}:
+        try:
+            tag.rmdir()                                       # nur wenn leer
+        except OSError:
+            pass
+    return n
+
+
+def mails_unverarbeitet(ordner: Path, monate: int, jetzt: datetime | None = None) -> int:
+    """Anzahl der `*.eml` direkt in `<ordner>` (import/email), die älter als die Frist sind und noch nicht eingelesen wurden. Sie werden nicht gelöscht
+    (Betreiber entscheidet), aber gemeldet. ``monate`` ≤ 0: 0."""
+    from .eingang.email import eml_dateien
+    if not monate or monate <= 0:
+        return 0
+    grenze = ((jetzt or datetime.now()) - timedelta(days=round(monate * 30.44))).timestamp()
+    return sum(1 for p in eml_dateien(Path(ordner)) if p.stat().st_mtime < grenze)
+
+
+def mails_unverarbeitet_gemeldet(cfg: dict, ordner: Path) -> int:
+    """Wie `mails_unverarbeitet` mit der Frist aus der Konfiguration (für Kommandozeile und App: „N Mails seit über Frist unverarbeitet“)."""
+    try:
+        return mails_unverarbeitet(ordner, frist_aus(cfg))
+    except ValueError:
+        return 0
+
+
 def frist_anwenden(db: Datenbank, cfg: dict, basis: Path, foto_ordner: Path) -> list[str]:
     """Nach Suchlauf und Seitenimport sowie beim Start der App (Verkäufernamen kommen vor allem über den Seitenimport).
     Ein Fehler wird protokolliert und bricht den Lauf nie ab."""
@@ -155,6 +219,11 @@ def frist_anwenden(db: Datenbank, cfg: dict, basis: Path, foto_ordner: Path) -> 
         ausgabe = Path(basis) / cfg["ausgabe"]["ordner"]
         erledigt = inserate_nach_frist(db, ausgabe, monate, foto_ordner=foto_ordner)
         diagnose_nach_frist(ausgabe, monate)
+        mail_dir = mail_ordner(cfg, basis)
+        if mails := mails_nach_frist(mail_dir, monate):
+            log.info("Datenschutz-Frist: %d abgelegte Mails gelöscht", mails)
+        if offen := mails_unverarbeitet(mail_dir, monate):
+            log.warning("Datenschutz-Frist: %d Mails liegen seit über %d Monaten unverarbeitet in %s – bitte einlesen oder löschen", offen, monate, mail_dir)
     except Exception:  # noqa: BLE001 – Datenschutz-Wartung darf Suchlauf/Import/Start nicht verhindern
         log.exception("Datenschutz-Frist konnte nicht angewendet werden")
         return []

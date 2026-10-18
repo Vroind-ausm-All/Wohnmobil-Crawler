@@ -10,6 +10,7 @@ from jinja2 import Environment, FileSystemLoader
 from .bewertung.anschreiben import euro, tsd
 from .bearbeitung import IN_ARBEIT
 from .domaene import STATUS
+from .schalter import eingang_aktiv
 
 
 def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None = None, app: dict | None = None,
@@ -32,7 +33,7 @@ def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None =
     }
     return env.get_template("report.html").render(
         stand=datetime.now().strftime("%d.%m.%Y %H:%M"), anzahl=len(zeilen), zeilen=zeilen, zaehl=zaehl,
-        fehler=fehler, app=app or {}, team=team if team and team.get("aktiv") else None,
+        fehler=fehler, app=app or {}, mails_aktiv=eingang_aktiv(cfg, "email"), team=team if team and team.get("aktiv") else None,
         ust_label="USt auf Marge (§25a, 19/119)" if cfg["rechner"]["differenzbesteuerung"] else "USt 19 % im Händler-VK",
         fair_untergrenze=cfg["rechner"].get("fair_untergrenze_privatwert", 0), status_liste=list(STATUS.items()),
         differenzbesteuerung=bool(cfg["rechner"]["differenzbesteuerung"]),

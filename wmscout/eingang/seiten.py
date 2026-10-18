@@ -51,10 +51,10 @@ class BegleitordnerFehler(OSError):
     """Die Datei ist verschoben, der zugehörige Begleitordner (<name>_files) aber nicht."""
 
 
-def import_ordner(cfg: dict) -> Path:
-    """Import-Ordner laut config.yaml (Standard „import“, relativ zum Projektordner)."""
+def import_ordner(cfg: dict, basis: Path | None = None) -> Path:
+    """Import-Ordner laut config.yaml (Standard „import“, relativ zum Projektordner bzw. zu `basis`, wenn angegeben)."""
     ordner = Path(str((cfg.get("import") or {}).get("ordner") or "import")).expanduser()
-    return (ordner if ordner.is_absolute() else PROJEKT / ordner).resolve()
+    return (ordner if ordner.is_absolute() else Path(basis or PROJEKT) / ordner).resolve()
 
 
 def html_dateien(ordner: Path) -> list[Path]:

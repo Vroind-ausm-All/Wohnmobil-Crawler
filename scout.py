@@ -5,6 +5,7 @@
   python scout.py lauf                      Crawlen + bewerten + Report (+ Mail)
   python scout.py report                    Nur Report neu erzeugen (ohne Internet)
   python scout.py import [--ordner PFAD]    Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten einlesen (ohne Internet)
+  python scout.py import --mails [--ordner PFAD]   Suchagent-Benachrichtigungen (.eml in import/email/) einlesen (Eingang „email“, Standard aus)
   python scout.py quellen liste|an|aus [KENNUNG]   Pull-Quellen und Eingänge anzeigen; Quellen schalten (nur im Code freigegebene)
   python scout.py rechne --preis 32900 --ez 2016 --km 98000 --titel "Knaus Sky TI 650 MEG" [--anschreiben]
   python scout.py nutzer anlegen <Name> [--rolle inhaber]   Team-Zugang für Handy-App anlegen
@@ -52,6 +53,7 @@ from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import STATUS, Datenbank, wal_aktiv
 from wmscout.laufsperre import Laufsperre
 from wmscout.eingang import import_ordner
+from wmscout.eingang.email import mail_ordner
 from wmscout.auktion import STATUS as AUKTION_STATUS
 from wmscout.auktion import AuktionSpeicher
 from wmscout import datenrechte, mandanten
@@ -143,7 +145,56 @@ def _anzahl(n: int, einzahl: str, mehrzahl: str) -> str:
     return f"{n} {einzahl if n == 1 else mehrzahl}"
 
 
+def cmd_import_mails(cfg, db, args):
+    """E-Mail-Suchbenachrichtigungen (.eml) aus import/email/ einlesen – ohne Internet, verlinkte Anzeigen werden nicht abgerufen (P2-06)."""
+    try:
+        eingang_pruefen(cfg, "email")
+    except EingangDeaktiviert as e:
+        print(e)                                    # nichts lesen, Ordner nicht anlegen, Dateien bleiben liegen
+        return
+    ordner = Path(args.ordner).expanduser().resolve() if args.ordner else mail_ordner(cfg, BASIS)
+    if not ordner.is_dir():
+        ordner.mkdir(parents=True, exist_ok=True)
+        print(f"Ordner für Mails angelegt: {ordner}")
+    print(f"E-Mail-Suchbenachrichtigungen einlesen aus: {ordner}")
+    start = datetime.now().isoformat(timespec="seconds")
+    stat = Importer(cfg, db).importiere_mails(ordner)
+    if not stat["dateien"]:
+        print("Keine Mails gefunden (.eml).\n"
+              "So geht's: Benachrichtigung des Suchagenten in Thunderbird (Datei → Speichern unter → .eml) bzw. im Webmail als .eml speichern "
+              "und in diesen Ordner legen. Danach diesen Befehl erneut ausführen.")
+    else:
+        print(f"{_anzahl(stat['dateien'], 'Mail', 'Mails')} gelesen: {_anzahl(stat['suchseiten'], 'mit Anzeigen', 'mit Anzeigen')}, "
+              f"{stat['unbekannt']} nicht erkannt, {stat['fehlerhaft']} nicht lesbar")
+        print(f"Ergebnis: {_anzahl(stat['neu'], 'neue Anzeige', 'neue Anzeigen')}, "
+              f"{_anzahl(stat['preis'], 'Preissenkung', 'Preissenkungen')}, {stat['bekannt']} schon bekannt")
+        if stat["dateien"] > stat["unbekannt"] + stat["fehlerhaft"]:
+            print(f"Eingelesene Mails liegen jetzt in: {ordner / 'eingelesen'}")
+        if stat["unbekannt"]:
+            print(f"Nicht erkannte Mails: {ordner / 'nicht_erkannt'}")
+        if stat["fehlerhaft"]:
+            print(f"Nicht lesbare Mails: {ordner / 'fehlerhaft'}")
+        if stat["fehler"]:
+            print("Bitte prüfen:\n" + "\n".join(f"  - {f}" for f in stat["fehler"]))
+    if args.ordner:                                 # abweichender Ordner: die Standard-Frist (import/email) erreicht ihn nicht
+        try:
+            geloescht = datenrechte.mails_nach_frist(ordner, datenrechte.frist_aus(cfg))
+        except ValueError:
+            geloescht = 0
+        if geloescht:
+            print(f"Datenschutz-Frist: {_anzahl(geloescht, 'abgelegte Mail', 'abgelegte Mails')} in {ordner} gelöscht.")
+    if (offen := datenrechte.mails_unverarbeitet_gemeldet(cfg, ordner)):
+        print(f"Achtung: {_anzahl(offen, 'Mail liegt', 'Mails liegen')} seit über der Datenschutz-Frist unverarbeitet im Ordner – bitte einlesen oder löschen.")
+    datenrechte.frist_anwenden(db, cfg, BASIS, foto_ordner(cfg))         # abgelegte Mails nach der Frist löschen (P2-06)
+    if stat["dateien"]:
+        zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
+        erg = schreibe_ausgaben(cfg, zeilen, BASIS, team=_team(cfg, db))
+        print(f"Report: {erg['html']}  ({erg['zaehl']})")
+
+
 def cmd_import(cfg, db, args):
+    if args.mails:
+        return cmd_import_mails(cfg, db, args)
     try:
         eingang_pruefen(cfg, "seiten")
     except EingangDeaktiviert as e:
@@ -507,7 +558,10 @@ def main():
     sub.add_parser("lauf", help="crawlen, bewerten, Report erzeugen")
     sub.add_parser("report", help="Report aus vorhandenen Daten neu erzeugen")
     im = sub.add_parser("import", help="im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten einlesen (ohne Internet)")
-    im.add_argument("--ordner", help="Ordner mit den gespeicherten Seiten (Standard: config.yaml → import → ordner)")
+    im.add_argument("--ordner", help="Ordner mit den gespeicherten Seiten bzw. (mit --mails) den .eml-Dateien "
+                                     "(Standard: config.yaml → import → ordner bzw. dessen Unterordner email)")
+    im.add_argument("--mails", action="store_true",
+                    help="statt Seiten die Suchagent-Benachrichtigungen (.eml in import/email/) einlesen – Eingang „email“ muss eingeschaltet sein")
     qu = sub.add_parser("quellen", help="Pull-Quellen und Eingänge anzeigen; Quellen ein-/ausschalten (nur im Code freigegebene)")
     qu.add_argument("aktion", choices=["liste", "an", "aus"])
     qu.add_argument("kennung", nargs="?", help="Quelle für an/aus, z. B. kleinanzeigen")
