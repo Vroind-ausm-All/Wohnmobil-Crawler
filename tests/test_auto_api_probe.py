@@ -78,3 +78,33 @@ def test_unbekanntes_schema_und_clientfehler():
     with pytest.raises(QuellenFehler, match="Testclient-Fehler"):
         list(AutoApiQuelle({}, client=FakeClient([])).suche(
             Suchauftrag("TI", parameter={"plattform": "mobilede"})))
+
+
+def test_dokumentierte_meta_pagination_stoppt():
+    client = FakeClient([{"offers": [angebot()], "meta": {"page": 1, "next_page": None}}])
+    result = list(AutoApiQuelle({}, client=client).suche(
+        Suchauftrag("TI", parameter={"plattform": "mobilede", "max_seiten": 3})))
+    assert len(result) == 1
+    assert client.aufrufe == [("mobilede", 1)]
+
+
+def test_import_in_temporaere_echte_datenbank(tmp_path):
+    """Echter Scout-Speicher, ausschließlich in pytest-tmp_path; kein Bestandszugriff."""
+    from wmscout.datenbank import Datenbank
+
+    client = FakeClient([{"offers": [angebot()]}])
+    quelle = AutoApiQuelle({}, client=client)
+    eintrag = next(quelle.suche(Suchauftrag(
+        "Teilintegrierter", parameter={"plattform": "mobilede", "max_seiten": 1}))).inserate[0]
+    db = Datenbank(str(tmp_path / "isolation" / "anzeigen.sqlite"))
+    try:
+        datensatz = eintrag.als_datensatz()
+        assert db.speichere_treffer(datensatz, "Teilintegrierter") == "neu"
+        assert db.speichere_treffer(datensatz, "Teilintegrierter") == "bekannt"
+        preis_alt = db.con.execute("SELECT preis FROM anzeigen WHERE id=?", (datensatz["id"],)).fetchone()[0]
+        assert preis_alt == 39900
+        guenstiger = dict(datensatz, preis=37900)
+        assert db.speichere_treffer(guenstiger, "Teilintegrierter") == "preis"
+        assert db.con.execute("SELECT preis FROM anzeigen WHERE id=?", (datensatz["id"],)).fetchone()[0] == 37900
+    finally:
+        db.con.close()
