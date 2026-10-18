@@ -108,7 +108,7 @@ def test_markdown_link_wird_gelesen():
     b"From: " + b"a@b.de, " * 20_000,                                  # früher quadratisch
     b"Subject: " + b"a " * 2_400_000,
     b"".join(b"X-H%d: v\r\n" % i for i in range(100_000)),
-])
+], ids=["encoded_words", "viele_adressen", "langer_betreff", "viele_kopfzeilen"])     # kurze IDs: Windows begrenzt PYTEST_CURRENT_TEST auf 32 767 Zeichen
 def test_riesige_kopfzeilen_werden_sofort_abgelehnt(kopf):
     with pytest.raises(MailFehler, match="Kopf"):
         zeitlich(lambda: zerlege(b"From: a@mail.kleinanzeigen.de\r\n" + kopf + b"\r\n\r\nx"), 2)
