@@ -81,5 +81,7 @@ class AutoApiQuelle(Quelle):
                 raise QuellenFehler("Auto API: unbekanntes Antwortformat (erwartet offers-Liste)")
             daten = [normalisiere_angebot(x, plattform) for x in antwort["offers"]]
             yield Suchseite(nummer=seite, inserate=daten)
-            if not daten:
+            # meta.next_page ist laut offizieller Client-README dokumentiert.
+            meta = antwort.get("meta")
+            if not daten or (isinstance(meta, dict) and meta.get("next_page") is None and "next_page" in meta):
                 return
