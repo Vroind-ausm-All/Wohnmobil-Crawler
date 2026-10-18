@@ -40,7 +40,10 @@ class Lesung:
     haupttreffer: Anzeigen-IDs, für die der Art-Filter gilt (nur die Haupttabelle); None = keine.
     plattform: Plattform der gelesenen Seite, soweit erkannt (für Meldungen).
     zeitpunkt: Zeitpunkt, zu dem das Angebot laut Kanal so aussah (E-Mail: Datum der Mail, sonst Dateizeit); None = jetzt. Der Importer
-               übernimmt Preise aus einem Kanal mit Zeitpunkt nur, wenn er nicht älter ist als die letzte Beobachtung der Anzeige."""
+               übernimmt Preise aus einem Kanal mit Zeitpunkt nur, wenn er nicht älter ist als die letzte Beobachtung der Anzeige.
+    nur_leere_felder: bereits gespeicherte Felder des Inserats bleiben (der Kanal liefert nur grobe, heuristisch gelesene Werte); leere
+    werden gefüllt, der Preis läuft wie immer über Preis- und Beobachtungshistorie.
+    preis_status: nur Text-Eingang: 'eingetragen' (vom Nutzer), 'text' (sicher erkannt), 'unsicher' oder 'fehlt' (dann ohne Preis)."""
 
     art: str
     inserate: list[Inserat] = field(default_factory=list)
@@ -49,6 +52,8 @@ class Lesung:
     haupttreffer: frozenset[str] | None = None
     plattform: str | None = None
     zeitpunkt: datetime | None = None
+    nur_leere_felder: bool = False
+    preis_status: str | None = None
 
 
 @runtime_checkable

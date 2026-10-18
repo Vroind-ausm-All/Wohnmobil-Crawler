@@ -50,7 +50,8 @@ from ..bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids
 from ..bewertung import kalkulation as kalk
 from ..bewertung.besichtigung import berechne, lade_katalog
 from ..datenbank import STATUS, Datenbank
-from ..eingang import import_ordner, relativ_zum_projekt
+from ..eingang import TextEingang, ergebnis_der, import_ordner, relativ_zum_projekt
+from ..eingang.text import ANBIETER, MAX_PREIS, MAX_TEXT, MAX_URL, widerspricht_marke
 from ..eingang.email import mail_ordner
 from ..importer import Importer
 from ..team import BESICHTIGUNG_STATUS, LEERLAUF_STUNDEN, ROLLEN, TeamSpeicher
@@ -63,6 +64,7 @@ MAX_JSON = 1_000_000
 MAX_FOTO = 12_000_000          # Base64-kodiert, entspricht ca. 8 MB Bild
 MAX_IMPORT_DATEIEN = 25        # gespeicherte Seiten je Klick, der Rest beim nächsten Mal
 MAX_IMPORT_SEKUNDEN = 20       # Zeitbudget je Klick (die Anfrage hält die Datenbanksperre)
+TEXT_IMPORT_ROLLEN = ("inhaber", "mitarbeiter")     # Import per Adresse + Text: jedes Teammitglied, nie Standort-Zugänge (ADR-026)
 
 
 # Maschinenlesbarer Grund einer Ablehnung (Feld ``grund`` in der JSON-Antwort), damit Oberflächen z. B. ein fehlendes CSRF-Token
@@ -933,6 +935,8 @@ class Anfrage:
             if self.team_aktiv:
                 self.nur_inhaber()                     # wie der Seitenimport (P1-15)
             return self.json(200, self.mails_einlesen())
+        if p == "/api/import/text":
+            return self.json(200, self.text_einlesen(daten))
         if p == "/api/besichtigung":
             return self.json(200, self.besichtigung_anlegen(daten))
         if p == "/api/verkaufsanfrage":
@@ -1156,6 +1160,72 @@ class Anfrage:
         k.veraendert()
         k.dubletten_verwerfen()
         return {**stat, "ordner": relativ_zum_projekt(ordner), "unverarbeitet": offen}
+
+    def text_einlesen(self, daten: dict) -> dict:
+        """Eine Anzeige aus Adresse + eingefügtem Text (P2-05). Die Adresse wird nie abgerufen (ADR-010): sie liefert nur Plattform und
+        Anzeigen-ID. Gelesen wird mit `TextEingang` (rein, höchstens etwa eine halbe Sekunde), gespeichert allein über `Importer.importiere`
+        (Kanal „manuell“). Gespeichert wird nur ein sicher erkannter oder vom Nutzer eingetragener Preis (ADR-038); Angaben, die aus einem
+        anderen Kanal stammen, bleiben bestehen."""
+        k = self.k
+        if self.team_aktiv and self.nutzer.get("rolle") not in TEXT_IMPORT_ROLLEN:
+            raise Antwort(403, "Anzeigen einlesen dürfen nur Inhaber und Mitarbeiter", grund="recht")
+        try:
+            eingang_pruefen(k.cfg, "text")
+        except EingangDeaktiviert as e:
+            raise Antwort(409, str(e), grund="deaktiviert") from e
+        url, text, anbieter = daten.get("url"), daten.get("text"), daten.get("anbieter")
+        preis, vb = daten.get("preis"), daten.get("vb")
+        if not isinstance(url, str) or not isinstance(text, str) or not (anbieter is None or isinstance(anbieter, str)):
+            raise Antwort(400, "Adresse (url), Anzeigentext (text) und Anbieter (anbieter) werden als Text erwartet")
+        if preis is not None and (isinstance(preis, bool) or not isinstance(preis, int) or not 1 <= preis <= MAX_PREIS):
+            raise Antwort(400, f"Der Preis (preis) muss eine ganze Zahl von 1 bis {MAX_PREIS} sein oder fehlen")
+        if vb is not None and not isinstance(vb, bool):
+            raise Antwort(400, "VB (vb) muss wahr oder falsch sein")
+        if len(url) > MAX_URL or len(text) > MAX_TEXT:
+            raise Antwort(400, f"Adresse höchstens {MAX_URL}, Text höchstens {MAX_TEXT} Zeichen")
+        try:
+            (url + text).encode("utf-8")
+        except UnicodeEncodeError as e:
+            raise Antwort(400, "Adresse oder Text enthalten ungültige Zeichen") from e
+        if anbieter == "":
+            anbieter = None
+        elif anbieter is not None and anbieter not in ANBIETER:
+            raise Antwort(400, "anbieter muss „privat“, „gewerblich“ oder leer sein")
+        eingang = TextEingang()
+        lesung = eingang.lese(eingang.rohdaten(url, text, anbieter, preis=preis, vb=vb))
+        if lesung.art != "detail":
+            raise Antwort(422, lesung.hinweise[0], {"ergebnis": "nicht_gespeichert", "gespeichert": False, "hinweise": lesung.hinweise})
+        inserat, hinweise = lesung.inserate[0], list(lesung.hinweise)
+        alt = k.db.con.execute("SELECT preis, marke FROM anzeigen WHERE id=?", (inserat.anzeigen_id,)).fetchone()
+        if alt is not None and not k.db.ist_text_eigen(inserat.anzeigen_id) and lesung.preis_status != "eingetragen" \
+                and widerspricht_marke(inserat.marke, alt["marke"]):
+            # der Text gehört offenbar zu einer anderen Anzeige als die gespeicherte: keinen Preis daraus übernehmen
+            inserat.preis, inserat.vb, lesung.preis_status = None, False, "unsicher"
+            hinweise.append(f"Text passt offenbar nicht zur gespeicherten Anzeige (Marke {inserat.marke} statt {alt['marke']}) – Preis nicht übernommen")
+        try:
+            ergebnis = ergebnis_der(Importer(k.cfg, k.db).importiere(lesung, eingang.kanal))
+        except ValueError as e:
+            raise Antwort(400, str(e)) from e
+        k.veraendert()
+        k.dubletten_verwerfen()
+        z = k.db.con.execute("SELECT titel, preis, vb, km, ez_jahr, ort, marke, gewerblich FROM anzeigen WHERE id=?", (inserat.anzeigen_id,)).fetchone()
+        erkannt = {"titel": z["titel"], "preis": z["preis"], "vb": bool(z["vb"]), "km": z["km"], "ez_jahr": z["ez_jahr"], "ort": z["ort"],
+                   "marke": z["marke"], "gewerblich": None if z["gewerblich"] is None else bool(z["gewerblich"])}
+        vorher = alt["preis"] if alt is not None else None
+        aenderung = None if vorher is None or z["preis"] is None else ("gesenkt" if z["preis"] < vorher else
+                                                                      "gestiegen" if z["preis"] > vorher else "unveraendert")
+        if anbieter == "privat" and erkannt["gewerblich"]:
+            hinweise.append("Früher als gewerblich erkannt – Angabe „privat“ nicht übernommen")
+        if ergebnis != "neu":
+            anders = [name for feld, name in (("titel", "Titel"), ("km", "Kilometerstand"), ("ez_jahr", "Erstzulassung"), ("ort", "Ort"), ("marke", "Marke"))
+                      if getattr(inserat, feld) not in (None, "") and getattr(inserat, feld) != z[feld] and z[feld] not in (None, "")]
+            if anders:
+                hinweise.append(f"Bereits gespeicherte Angaben bleiben bestehen ({', '.join(anders)}); der Text ergänzte nur Fehlendes und den Preis")
+        log.info("Anzeige %s (%s) per Adresse + Text eingelesen: %s, Preis %s (%s)", inserat.anzeigen_id, lesung.plattform, ergebnis,
+                 lesung.preis_status, self.nutzer.get("name"))
+        return {"ergebnis": ergebnis, "gespeichert": True, "anzeige_id": inserat.anzeigen_id, "plattform": lesung.plattform,
+                "fahrzeug_url": f"/m#/fahrzeug/{quote(inserat.anzeigen_id)}", "hinweise": hinweise, "erkannt": erkannt,
+                "preis_status": lesung.preis_status, "preis_vorher": vorher, "preis_aenderung": aenderung}
 
     def _termin(self, wert) -> str | None:
         if not wert:

@@ -109,24 +109,31 @@ P1-14a/b → P1-15.
 E-Mail-Suchbenachrichtigungen) werden über dieselbe Schnittstelle einheitlich verarbeitet; jede Quelle einzeln
 aktivierbar; unzulässige Direkt-Crawler standardmäßig aus.
 
+**Stand 18.10.2026 (Betreiber):** Phase 2 ist für alle Kanäle ohne API-Zugang umgesetzt (gespeicherte Seiten, URL + Text,
+E-Mail-Suchagenten; Schalter je Quelle und Eingang) – die Abnahme ist damit erfüllt, bis auf die Prüfung mit echten Mails (F3).
+Die übrigen Pakete hängen an Zugängen, die es noch nicht gibt (API-Verträge, AGB-Prüfung im Browser), oder lohnen erst mit
+echten Daten; sie sind zurückgestellt bzw. blockiert. Weiter mit Phase 3; wieder aufnehmen, sobald ein API-Zugang oder echte
+Beispiel-Mails vorliegen.
+
 | ID | Prio | Paket | Agent | Abhängig | Status |
 |---|---|---|---|---|---|
 | P2-00 | P1 | **Architektur Push-Eingänge** (ADR-016/017): Plattform ≠ Eingangskanal, `Eingang.lese(Rohdaten) -> Lesung`, `Importer.importiere(lesung, kanal)` (ADR-035); Vertrags- und Isolationstests für Pull und Push | scout-architect (Entwurf), source-integrations | P1-03 | REVIEW (`claude/phase2-eingang`) – ein Schreibweg, kanonische Plattform-IDs, ADR-035 |
 | P2-01 | P1 | AGB-Originale und `robots.txt` im Browser gegenlesen, Wortlaut mit Abrufdatum in `SOURCES.md` | Betreiber (manuell) + source-researcher | – | **BLOCKED** (Recherche-Umgebung ohne Seitenabruf) |
 | P2-02 | P1 | Migration auf Version 4: `quellen`, `inserate` mit `UNIQUE(plattform, anzeigen_id)`, `beobachtungen.kanal`, `oeffentliche_id`, Start `preis_historie`, `anbieter_typ` dreiwertig – **vor** der zweiten Quelle | scout-data-engineer | P2-00 | DONE (PR #7/#10, gemergt) – Rest (`oeffentliche_id`, dreiwertige Anbieterart) → Phase 3 |
-| P2-03 | P1 | Fehlerisolation je Quelle/Suchauftrag, Quellenstatus (`zuletzt_ok`, `fehler_in_folge`, `gesperrt_bis`) | source-integrations | P2-02 | TODO |
-| P2-04 | P1 | Quellen einzeln aktivierbar (Konfiguration + Tabelle `quellen`) | source-integrations | P2-02, P1-01a | REVIEW |
-| P2-05 | P1 | **Manueller Import**: URL + eingefügter Text oder gespeicherte Seite, ohne Serverabruf (ADR-010); Desktop und Handy | source-integrations, scout-ui-engineer | P2-02 | Teil „gespeicherte Seiten“ DONE (PR #4, gemergt); URL + Text und Handy: TODO (Betreiber 17.10.2026: alle Teammitglieder dürfen per URL + Text importieren) |
+| P2-03 | P1 | Fehlerisolation je Quelle/Suchauftrag, Quellenstatus (`zuletzt_ok`, `fehler_in_folge`, `gesperrt_bis`) | source-integrations | P2-02 | ZURÜCKGESTELLT (18.10.2026) – lohnt erst mit automatischen Quellen; heute läuft keine Pull-Quelle (alle nicht freigegeben), die Push-Eingänge sind je Datei isoliert |
+| P2-04 | P1 | Quellen einzeln aktivierbar (Konfiguration + Tabelle `quellen`) | source-integrations | P2-02, P1-01a | DONE (PR #23, gemergt) |
+| P2-05 | P1 | **Manueller Import**: URL + eingefügter Text oder gespeicherte Seite, ohne Serverabruf (ADR-010); Desktop und Handy | source-integrations, scout-ui-engineer | P2-02 | DONE – gespeicherte Seiten (PR #4), URL + Text auf Desktop und Handy (PR #24, gemergt; ADR-038) |
 | P2-05b | P1 | **mobile.de – gespeicherte Such- und Anzeigenseiten einlesen** (ohne Abruf, ADR-010/022): Parser `quellen/mobilede`, privat/gewerblich, Kategorie als Art, Auslandsorte vorsichtig, nur Wohnmobil-/Wohnwagen-Seiten | source-integrations | P2-05 | 6 echte Seiten: 65 Inserate feldgenau; Datenschutz (keine Telefonnummern, Händlernamen, Tracking); Kleinanzeigen unverändert | DONE (PR #6, gemergt) |
-| P2-05c | P3 | Plausibilität der Fahrzeugart (z. B. Länge/Gewicht je Art; QA P2-05b: „Ford Nugget“ als Alkoven) als Hinweis | acquisition-analyst | P2-05b | Test mit erfundenen Grenzfällen; nur Hinweis, keine Sperre | TODO |
-| P2-05d | P2 | Rechner-Vergleichsbasis: Anbieter unbekannt (`gewerblich` NULL) nicht wie privat werten (`rechner.py`, Vergleich) | acquisition-analyst | P2-05b | Test: NULL-Angebote getrennt bzw. ausgeschlossen; Entscheidung dokumentiert | TODO |
+| P2-05c | P3 | Plausibilität der Fahrzeugart (z. B. Länge/Gewicht je Art; QA P2-05b: „Ford Nugget“ als Alkoven) als Hinweis | acquisition-analyst | P2-05b | Test mit erfundenen Grenzfällen; nur Hinweis, keine Sperre | ZURÜCKGESTELLT (18.10.2026) – gehört zur Bewertung, mit Phase 5 aufnehmen |
+| P2-05d | P2 | Rechner-Vergleichsbasis: Anbieter unbekannt (`gewerblich` NULL) nicht wie privat werten (`rechner.py`, Vergleich) | acquisition-analyst | P2-05b | Test: NULL-Angebote getrennt bzw. ausgeschlossen; Entscheidung dokumentiert | ZURÜCKGESTELLT (18.10.2026) – mit P3-05 (Privat/Händler-Klassifizierung) bzw. Phase 5 aufnehmen |
 | T1 | P1 | **Team-Übersicht Kern/API** (ADR-023): Reservierung „Ich übernehme“, Kontakt durch wen, Ablauf, Inhaber erzwingt/weist zu, Dubletten, Zähler, `wer=meine/frei`, CSV-Spalten | scout-data-engineer | P1-03 | atomar über Prozesse, 409 statt Doppelkontakt, Einzelplatz unverändert | DONE (PR #8, gemergt) |
 | T2 | P1 | **Team-Übersicht Oberfläche** (Desktop + Handy): Badges mit Kürzel, Knöpfe Übernehmen/Abgeben/Zuweisen, Filter, Zählerleiste, Inserat erst nach 200 öffnen, 409-Meldung, mit P1-06 „gesendet ✓“ | scout-ui-engineer | T1, P1-06 | Klickablauf dokumentiert; ohne Nutzer keine Team-Elemente | DONE (PR #11, gemergt) |
 | P2-06 | P1 | **E-Mail-Suchbenachrichtigungen**: `.eml`-Import, Parser zuerst Kleinanzeigen, dann AutoScout24, mobile.de; keine verlinkten Seiten nachladen | source-integrations | P2-02; anonymisierte Beispiel-E-Mails (F3) | REVIEW – `.eml` aus `import/email/` (CLI `import --mails`, Knopf in der Desktop-App, Schalter `eingaenge.email`, Standard aus); Parser nur mit nachgebildeten Mails geprüft, Abnahme mit echten Mails (F3) offen; Frist löscht alles vom Scout Abgelegte |
-| P2-07 | P2 | Optional: IMAP-Abruf eines eigenen Postfachs (Zugangsdaten aus Umgebungsvariablen) | source-integrations | P2-06, Betreiber-Postfach | TODO |
+| P2-05e | P2 | Gemeinsames Feld-Modul für Text- und Mail-Eingang (URL-Prüfung, Preis, km, EZ, PLZ, Gesuch; QA A1) und ein Mechanismus „nur leere Felder“ für beide Kanäle | source-integrations | P2-05, P2-06 | Doppelte Regeln entfernt, Tests beider Eingänge grün | ZURÜCKGESTELLT (18.10.2026) – sinnvoll, sobald echte Mails (F3) die Regeln bestätigen; bis dahin bewusst doppelt |
+| P2-07 | P2 | Optional: IMAP-Abruf eines eigenen Postfachs (Zugangsdaten aus Umgebungsvariablen) | source-integrations | P2-06, Betreiber-Postfach | ZURÜCKGESTELLT (18.10.2026) – optional, `.eml`-Ablage reicht; erst nach Abnahme mit echten Mails (F3) |
 | P2-08 | P2 | mobile.de-API: Adapter-Stub (`zugriffsart = api`, `freigegeben = False`) + Anfrageschreiben an mobile.de vorbereiten | source-integrations, source-researcher | Vertrag | **BLOCKED** bis Zusage |
-| P2-09 | P3 | Stubs/Anfragen AutoScout24, Caraworld, Quoka; Volumenprüfung regionaler Portale | source-researcher | – | TODO |
-| P2-10 | P2 | Datenqualität je Quelle messen (Anteil Preis/EZ/km/PLZ/Anbieterart) | source-integrations | P2-03 | TODO |
+| P2-09 | P3 | Stubs/Anfragen AutoScout24, Caraworld, Quoka; Volumenprüfung regionaler Portale | source-researcher | – | ZURÜCKGESTELLT (18.10.2026) – Anfragen erst nach Betreiberentscheidung F4 (Händlerregistrierung/API-Zugang) |
+| P2-10 | P2 | Datenqualität je Quelle messen (Anteil Preis/EZ/km/PLZ/Anbieterart) | source-integrations | P2-03 | ZURÜCKGESTELLT (18.10.2026) – Messfunktion für Mails vorhanden (`datenqualitaet`); Auswertung je Quelle erst mit echten Daten bzw. mit P3-08 |
 
 ## Phase B (3.0) – Verkäuferportal
 

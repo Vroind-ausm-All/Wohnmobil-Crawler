@@ -18,7 +18,8 @@ das Händlerportal (Positivliste, ADR-026). Jede Änderung und jedes Lesen von V
 | Status setzen (vorbereitet, kontaktiert, Verhandlung, abgesagt …) | ja | nur bei eigenem oder freiem Inserat | nein |
 | Status **„gekauft“** direkt setzen | ja | nein – nur über den Abschluss der Besichtigung | nein |
 | Notiz am Inserat | ja | ja (bewusst frei, Absprache im Team) | nein |
-| **Suchlauf** starten, gespeicherte Seiten **importieren** | ja | nein | nein |
+| **Suchlauf** starten, gespeicherte Seiten (Ordner) **importieren** | ja | nein | nein |
+| Inserat per URL + Text einlesen (`POST /api/import/text`, Desktop und Handy) | ja | ja | nein |
 | Besichtigung anlegen (Inserat ohne EZ: nur mit Marktwert) | ja | ja, übernimmt dabei das Inserat | nein |
 | Besichtigung planen, speichern, Fotos, Abschluss | ja | Besichtiger oder Bearbeiter | nein |
 | Verkaufsanfrage erfassen | ja | ja | nein |

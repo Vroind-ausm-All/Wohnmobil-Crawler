@@ -213,6 +213,17 @@ im Programmordner. Dann in der App auf **„⤓ Gespeicherte Seiten einlesen“*
 Neue Fahrzeuge erscheinen sofort in der Liste; das Programm ruft dafür nichts selbst aus dem Internet ab.
 Eingelesene Dateien wandern nach `import/eingelesen/<Datum>/`, nicht erkannte nach `import/nicht_erkannt/`.
 
+**Anzeige per Adresse + Text einlesen** (jedes Teammitglied, Desktop und Handy; API `POST /api/import/text`): Adresse der einzelnen
+Anzeige (Kleinanzeigen oder mobile.de) und den kopierten Anzeigentext einfügen, optional „privat“/„gewerblich“ wählen. Der Server ruft die
+Adresse **nicht** ab – sie liefert nur Plattform und Anzeigen-ID; Preis, Kilometer, Erstzulassung, PLZ/Ort und Titel kommen aus dem Text
+(fehlt etwas, steht „unvollständig: …“ im Ergebnis; ohne Erstzulassung gibt es keine Beträge). **Ein Preis wird nur gespeichert, wenn er klar gekennzeichnet ist (VB, „Preis: …“, eigene Zeile) oder du ihn im Feld „Preis laut Anzeige“ einträgst** – Beträge im Fließtext zählen nie; bereits vorhandene Angaben anderer Kanäle bleiben bestehen. Telefonnummern, E-Mail-Adressen, Links,
+Straßen und Namenszeilen werden vor dem Speichern entfernt, Gesuche („Suche Wohnmobil …“) nicht gespeichert, die Fahrzeugart höchstens
+„vorläufig“. Dieselbe Anzeige per Seite und per Text ist eine Zeile. Abschaltbar über `eingaenge.text.aktiv: false`.
+Bedienung: Desktop **„＋ Inserat einlesen (Link + Text)“** neben „Gespeicherte Seiten einlesen“, Handy **„Heute“ → „＋ Inserat einlesen“**. Nach dem Einlesen
+zeigt die Seite das Ergebnis (neu / Preis gesenkt / bereits bekannt, erkannte Felder, alle Hinweise) mit Link zum Fahrzeug; „gesendet ✓“ bleibt
+die einzige Bestätigung einer Kontaktaufnahme. Nur Anzeigentext einfügen – keine Namen, Telefonnummern oder Adressen des Verkäufers.
+Online-Aktion: ohne Netz bleibt der Text im Formular stehen, es wird nichts zwischengespeichert.
+
 **Auch mobile.de:** Genauso geht es mit **mobile.de** – Wohnmobil-Suche (Treffer-Liste) oder einzelne Anzeige im Browser öffnen,
 `Strg`+`S`, als „Webseite, komplett“ (so sind die Testseiten gespeichert worden) oder „Webseite, nur HTML“ (für mobile.de noch nicht
 geprüft) im selben Ordner `import` speichern. Kleinanzeigen- und

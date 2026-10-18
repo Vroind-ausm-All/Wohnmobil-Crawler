@@ -9,6 +9,7 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 | Prüfung | Ergebnis |
 |---|---|
 | `pytest -q` (Linux, Python 3.13, vom Orchestrator, Stand vor Zusammenführung mit P2-05) | 1048 bestanden (vorher 940), neu `test_email_eingang.py`, `test_email_haertung.py`, `test_email_betrieb.py` |
+| `pytest -q` nach Zusammenführung mit P2-05 (Integrationszweig inkl. PR #24) | **1365 bestanden** |
 | `ruff check .` | grün |
 | Kein Netzabruf (Sockets und urllib gesperrt), Links aus Mails nie abgerufen | bestanden |
 | Angriffsmails der QA (5 MB Links, 200 000 `[`, 40 000 Encoded Words, 100 000 MIME-Teile, tiefe Verschachtelung) | ≤ 2,5 s, ≤ 152 MB, sonst sauber abgelehnt (vorher bis 253 s bzw. MemoryError) |
@@ -17,6 +18,21 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 | Schalter (CLI, API, Importer), Rollen (nur Inhaber), CSRF, Ordner aus der Anfrage ignoriert | bestanden |
 | QA Runde 1 / Runde 2 | Freigabe mit Auflagen / Ablehnung (K1) – behoben; Runde 3 von der QA **nicht geprüft** |
 | Echte Kleinanzeigen-/mobile.de-Mails (F3), Knopf im Browser, Windows-CI | nicht geprüft |
+## P2-05 – Import per URL + eingefügtem Text (17.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator) | 1257 bestanden (vorher 940), neu `test_text_import.py`, `test_text_import_korrektur.py`, `test_text_import_r2.py`, `test_text_import_oberflaeche.py` |
+| `ruff check .` | grün |
+| Kein Netzabruf der Adresse (Sockets gesperrt), 22+ unzulässige Adressen (Lookalikes, Schema, IDN, Unicode-Ziffern, führende Null) abgelehnt | bestanden |
+| Preise: Fließtext-Beträge (Markise, Reifen, Restschuld, Gutachten, Neupreis …) → kein Preis, keine Preissenkung; „24 900 € VB“ → 24.900; Nutzerpreis aus dem Formular wird gespeichert | bestanden |
+| Bereinigung: Telefon, E-Mail, Straße, Namen entfernt; Fahrzeugdaten (Maße, Gurtplätze, Marken) bleiben; Datenbank-Durchsuchung findet keine Kontaktdaten | bestanden |
+| Laufzeit: 61 bösartige Muster à 50 000 Zeichen (QA) | ≤ 0,46 s (vorher bis 17,5 s) |
+| Rollen (Inhaber, Mitarbeiter 200; Standort 403; ohne Anmeldung 401; ohne CSRF 403), Schalter aus → 409 | bestanden |
+| Angaben aus Suchlauf/Seitenimport bleiben bei Text-Import erhalten, Preissenkung wird weiter erkannt | bestanden |
+| Klicktest Desktop 1280 px und Handy 390 px, hell/dunkel (Runde 1 der Oberfläche) | 61 Prüfungen bestanden, 0 JS-Fehler |
+| QA Runde 1 / Runde 2 | Ablehnung / Ablehnung – Befunde behoben; Runde 3 von der QA **nicht geprüft** |
+| Preisfeld der dritten Runde im Browser, echte kopierte Anzeigentexte, Windows-CI | nicht geprüft (CI folgt im PR) |
 
 ## P2-04 – Quellen und Eingänge schaltbar (17.10.2026) · REVIEW
 
