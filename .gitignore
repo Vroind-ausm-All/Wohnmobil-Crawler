@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+ausgabe/
+daten/
+import/
+# Mandantenbetrieb (G2): Daten und Fotos je Firma – nie ins Repository
+mandanten/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.claude/settings.local.json

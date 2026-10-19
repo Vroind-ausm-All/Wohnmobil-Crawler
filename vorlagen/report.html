@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wohnmobil-Scout</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9A%90%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#f6f5f1; --card:#fff; --ink:#1d1f1c; --mute:#6b6f68; --line:#e2e0d8; --feld:#faf9f6;
+  --gruen:#1f7a4d; --gruen-bg:#e3f2e9; --gelb:#9a6b00; --gelb-bg:#fbf0d4; --rot:#a8322a; --rot-bg:#f8e1de;
+  --akzent:#24524a; --akzent-ink:#fff; --schatten:0 1px 2px rgba(0,0,0,.05),0 4px 14px rgba(0,0,0,.06);
+  /* Team-Badges: bewusst NICHT die Ampelfarben; Kontrast jeweils >= 4,5:1 (Text/Rand auf Karte, Schrift auf gefüllter Fläche) */
+  --tb-blau:#0b4f9c; --tb-violett:#6b2fa8; --tb-grau:#555a53; --tb-voll-ink:#fff; --warn-bg:#8f1d16; --warn-ink:#fff;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#141613; --card:#1d201c; --ink:#e9e8e2; --mute:#9a9e96; --line:#30342f; --feld:#171916;
+  --gruen:#6fd19c; --gruen-bg:#183326; --gelb:#e9bf5a; --gelb-bg:#33290f; --rot:#f08c82; --rot-bg:#3a1c19;
+  --akzent:#8fc9bd; --akzent-ink:#10201c; --schatten:none;
+  --tb-blau:#8cc0ff; --tb-violett:#c9a6ff; --tb-grau:#b4b8b0; --tb-voll-ink:#10151c; --warn-bg:#f08c82; --warn-ink:#2b0a07;
+}}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding:24px 16px 72px}
+.top{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+h1{font-size:22px;margin:0 0 2px;letter-spacing:-.01em}
+h2,h3{margin:0}
+.sub{color:var(--mute);margin:0}
+.warn{color:var(--rot)}
+.hinweis{color:var(--mute);font-size:13px;margin:6px 0 0}
+.suchlauf{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.anleitung{display:flex;flex-wrap:wrap;gap:6px 22px;margin:0 0 16px;padding:10px 14px;list-style:none;counter-reset:s;
+  background:var(--card);border:1px solid var(--line);border-radius:10px;font-size:14px}
+.anleitung li{counter-increment:s}
+.anleitung li::before{content:counter(s);display:inline-grid;place-items:center;width:20px;height:20px;margin-right:6px;
+  border-radius:50%;background:var(--akzent);color:var(--akzent-ink);font-size:12px;font-weight:700}
+kbd{font:12px ui-monospace,monospace;padding:1px 5px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;background:var(--feld)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.kpi b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.kpi span{color:var(--mute);font-size:13px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}
+.bar button,.bar input,.bar select{font:inherit;font-size:14px;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.bar button.an{background:var(--akzent);color:var(--akzent-ink);border-color:var(--akzent)}
+.bar input{cursor:text;flex:1;min-width:180px}
+.raster{display:grid;grid-template-columns:repeat(auto-fill,minmax(285px,1fr));gap:14px}
+.leer{grid-column:1/-1;text-align:center;color:var(--mute);padding:40px 0}
+.karte{position:relative;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:14px;
+  overflow:hidden;cursor:pointer;box-shadow:var(--schatten);transition:transform .12s,border-color .12s}
+.karte:hover,.karte:focus-visible{transform:translateY(-2px);border-color:var(--akzent);outline:none}
+.karte.erledigt{opacity:.55}
+.bild{position:relative;aspect-ratio:16/10;background:var(--feld);display:grid;place-items:center;color:var(--mute);font-size:13px}
+.bild img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.bild .tags{position:absolute;left:8px;top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.tag{font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px;background:var(--line);color:var(--ink)}
+.tag.gruen{background:var(--gruen-bg);color:var(--gruen)} .tag.gelb{background:var(--gelb-bg);color:var(--gelb)}
+.tag.rot{background:var(--rot-bg);color:var(--rot)} .tag.neu{background:var(--akzent);color:var(--akzent-ink)}
+.tag.status{background:var(--ink);color:var(--card)}
+.streif{height:4px;background:var(--line)}
+.gruen>.streif{background:var(--gruen)} .gelb>.streif{background:var(--gelb)} .rot>.streif{background:var(--rot)}
+.inhalt{padding:12px 14px 14px;display:flex;flex-direction:column;gap:6px;flex:1}
+.inhalt h2{font-size:16px;line-height:1.3}
+.meta{color:var(--mute);font-size:13px;margin:0}
+.atitel{font-size:13px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--mute)}
+.zahlen{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0 2px;font-variant-numeric:tabular-nums}
+.zahlen span{display:block;color:var(--mute);font-size:11.5px}
+.zahlen b{font-size:14.5px}
+.zahlen .betont b{color:var(--akzent)}
+.karte-fuss{display:flex;gap:8px;align-items:center;margin-top:auto;padding-top:6px}
+.sperre{color:var(--rot);font-size:13px;margin:0}
+.hinweiszeile{background:var(--gelb-bg);color:var(--gelb);font-size:13px;margin:0 0 6px;padding:4px 8px;border-radius:8px}
+.btn{font:inherit;font-size:14px;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);
+  text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--akzent)}
+.btn.primaer{background:var(--akzent);color:var(--akzent-ink);border-color:var(--akzent);font-weight:600}
+.btn.primaer.leise{background:var(--card);color:var(--akzent)}
+.btn:disabled{opacity:.6;cursor:default}
+.karte-fuss .btn.primaer{flex:1;justify-content:center}
+dialog{width:min(1040px,calc(100% - 24px));max-height:calc(100% - 24px);border:0;border-radius:14px;padding:0;background:var(--card);color:var(--ink)}
+dialog::backdrop{background:rgba(10,12,10,.5)}
+.d-kopf{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:1}
+.d-kopf h2{font-size:19px}
+.schliessen{font-size:22px;line-height:1;padding:4px 10px}
+.spalten{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:22px;padding:16px 18px 20px}
+.spalten h3{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);margin-bottom:8px}
+.spanne{font-size:15px;margin:0 0 4px}
+.sicherheit{font-weight:600} .s-hoch{color:var(--gruen)} .s-mittel{color:var(--gelb)} .s-niedrig,.s-keine{color:var(--rot)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.chip{font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--line)}
+.chip.plus{background:var(--gruen-bg);color:var(--gruen);border-color:transparent}
+.chip.minus{background:var(--rot-bg);color:var(--rot);border-color:transparent}
+table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums;margin-top:8px}
+td{padding:4px 0;border-bottom:1px dashed var(--line);vertical-align:top} td:last-child{text-align:right;padding-left:10px;white-space:nowrap}
+tr.zwischen td{font-weight:600}
+tr.summe td{font-weight:700;border-bottom:none;padding-top:8px;font-size:15px}
+tr.angebot td{font-weight:700;color:var(--akzent);border-bottom:none}
+.fair{margin:10px 0 0;padding:8px 10px;border-radius:8px;background:var(--feld);font-size:13px}
+textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--feld);color:var(--ink);resize:vertical}
+.brief{min-height:360px}
+.aktionen{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.status-zeile{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:14px;font-size:13px;color:var(--mute)}
+.status-zeile button{font:inherit;font-size:13px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.status-zeile button.an{background:var(--ink);color:var(--card);border-color:var(--ink)}
+.notiz{margin-top:10px;font-size:13px;color:var(--mute);display:block}
+.notiz textarea{margin-top:4px;min-height:54px}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(20px);opacity:0;pointer-events:none;transition:.2s;
+  background:var(--ink);color:var(--card);padding:11px 16px;border-radius:10px;font-size:14px;max-width:min(620px,calc(100% - 24px));
+  display:flex;gap:14px;align-items:center;z-index:10;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+#toast.zeigen{opacity:1;transform:translateX(-50%);pointer-events:auto}
+#toast button{font:inherit;font-size:13px;background:none;border:1px solid currentColor;color:inherit;border-radius:6px;padding:3px 9px;cursor:pointer}
+.tag.nachfassen{background:var(--gelb-bg);color:var(--gelb)}
+#liste[data-filter="arbeit"] .karte.erledigt,#liste[data-filter="nachfassen"] .karte.erledigt{opacity:1}
+.kasten{margin:0 0 14px;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--feld)}
+.kasten.hervor{border-color:var(--gelb);background:var(--gelb-bg)}
+.kasten h4{margin:0 0 6px;font-size:14px}
+.kasten textarea{min-height:170px;background:var(--card)}
+.verhandlung .zeile{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.verhandlung input{font:inherit;width:150px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.urteil{margin:8px 0 0;font-size:14px}
+.urteil.gut{color:var(--gruen)} .urteil.knapp{color:var(--gelb)} .urteil.schlecht{color:var(--rot)}
+.antwort-knoepfe{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.antwort-knoepfe button{font:inherit;font-size:13px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.antwort-knoepfe button.an{border-color:var(--akzent);color:var(--akzent);font-weight:600}
+.banner{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 14px;padding:10px 14px;
+  border-radius:10px;background:var(--akzent);color:var(--akzent-ink);font-size:14px}
+.banner .btn{background:var(--card);color:var(--ink);border-color:transparent}
+.karte-fuss{flex-wrap:wrap}
+.karte-fuss .btn:not(.primaer){flex:0 0 auto}
+.karte .btn:disabled,dialog .btn:disabled{opacity:1;color:var(--mute);border-style:dashed}
+.karte .btn.primaer:disabled,dialog .btn.primaer:disabled{background:var(--card);color:var(--mute);border-color:var(--mute)}
+/* Team: Badge = Symbol + Kürzel (nie nur Farbe); eigene Fahrzeuge gefüllt, fremde umrandet */
+.tbbox{display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tb{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:1px 8px;border-radius:99px;line-height:1.4;white-space:nowrap;
+  border:2px solid var(--tb-farbe,var(--tb-grau));color:var(--tb-farbe,var(--tb-grau));background:var(--card)}
+.tb.mein{background:var(--tb-farbe,var(--tb-grau));color:var(--tb-voll-ink)}
+.tb-reserviert{--tb-farbe:var(--tb-blau)}
+.tb-kontaktiert,.tb-verhandlung,.tb-besichtigung,.tb-gekauft,.tb-dublette{--tb-farbe:var(--tb-violett)}
+.tb-frei{border-width:1px;font-weight:600;color:var(--tb-grau)}
+.tb-verwaist{border-style:dashed}
+.teamzeile{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.teamzeile .meta{flex:1 1 240px}
+.teamzeile .btn,.teamzeile select{font-size:14px;min-height:40px}
+.teamzeile select{padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;cursor:pointer}
+.wer{display:inline-flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card)}
+.wer>span{padding:0 8px 0 12px;font-size:14px;color:var(--mute)}
+.bar .wer button{border:0;border-left:1px solid var(--line);border-radius:0;min-height:36px}
+.bar .wer button.an{background:var(--akzent);color:var(--akzent-ink)}
+.zaehlerleiste{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:-6px 0 16px;font-size:13px}
+.zl-titel{font-weight:600;color:var(--mute)}
+.zchip{display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:99px;border:1px solid var(--line);background:var(--card)}
+.zchip.ich{border-color:var(--tb-blau);border-width:2px}
+.zchip.grau{border-style:dashed;color:var(--tb-grau)}
+#toast.warn{background:var(--warn-bg);color:var(--warn-ink);font-weight:600}
+@media (max-width:760px){ .spalten{grid-template-columns:1fr} .spalten>div:last-child{order:-1} .brief{min-height:300px} }
+</style>
+</head>
+<body>
+{% set AMPEL = {'gruen':'Grün','gelb':'Gelb','rot':'Rot','grau':'ohne Bewertung'} %}
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Wohnmobil-Scout</h1>
+      <p class="sub">Stand {{ stand }} · {{ anzahl }} aktive Privatanzeigen{% if fehler %} · <span class="warn">Letzter Lauf: {{ fehler }}</span>{% endif %}</p>
+    </div>
+    {% if app %}
+    <div class="suchlauf">
+      <span id="suchstatus" class="hinweis" aria-live="polite"></span>
+      <button id="glocke" class="btn" title="Browser-Hinweis bei neuen Treffern" hidden>🔔 Hinweise an</button>
+      <button id="einlesen" class="btn" title="Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten (Strg+S) einlesen – ohne Internetabruf">⤓ Gespeicherte Seiten einlesen</button>
+      <button id="suchen" class="btn">↻ Neue Anzeigen suchen</button>
+      <a class="btn" href="/anfragen" title="Fahrzeuge, die Verkäufer uns selbst anbieten">Verkaufsanfragen</a>
+      <a class="btn" href="/ankaeufe" title="Gekaufte Fahrzeuge: Vertrag, Übergabe, Kosten, Verkauf, Plan gegen Ist">Ankäufe</a>
+    </div>
+    {% endif %}
+  </header>
+
+  <div class="banner" id="banner" hidden><span id="banner-text"></span><button class="btn" onclick="location.reload()">Liste aktualisieren</button></div>
+
+  <ol class="anleitung">
+    <li><b>Wohnmobil anklicken</b> – faire Bewertung und fertiges Anschreiben ansehen (Text änderbar)</li>
+    <li><b>✉ Anschreiben</b> – Text ist kopiert, die Anzeige öffnet sich{% if app %}, Status „Text kopiert“ wird gespeichert{% endif %}{% if team %}; ist das Fahrzeug von einem Kollegen belegt, wird nichts geöffnet{% endif %}</li>
+    <li>In der Anzeige den Kontakt öffnen (Kleinanzeigen: <b>„Nachricht schreiben“</b> · mobile.de: <b>„E-Mail“/„Nachricht“</b>-Formular des Anbieters) → <kbd>Strg</kbd>+<kbd>V</kbd> (Mac <kbd>⌘</kbd>+<kbd>V</kbd>) → Senden</li>
+    <li><b>gesendet ✓</b> klicken, sobald du die Nachricht abgeschickt hast – erst dann gilt der Verkäufer als kontaktiert</li>
+    <li><b>Antwort bekommen?</b> Gegenangebot im Fahrzeugfenster eintragen → passende Antwort · keine Antwort → Filter <b>„Nachfassen“</b></li>
+  </ol>
+
+  <div class="kpis">
+    <div class="kpi"><b>{{ zaehl.anschreiben }}</b><span>Anschreiben bereit</span></div>
+    <div class="kpi"><b>{{ zaehl.gruen }}</b><span>Grün – Wunschpreis nah am Max-EK</span></div>
+    <div class="kpi"><b>{{ zaehl.gelb }}</b><span>Gelb – mit Verhandlung möglich</span></div>
+    <div class="kpi"><b>{{ zaehl.neu }}</b><span>Neu seit letztem Lauf</span></div>
+    <div class="kpi"><b>{{ zaehl.nachfassen }}</b><span>Nachfassen fällig</span></div>
+    <div class="kpi"><b>{{ zaehl.arbeit }}</b><span>In Arbeit (Text kopiert, kontaktiert, Verhandlung, Besichtigung)</span></div>
+  </div>
+
+  {% if team %}
+  <div class="zaehlerleiste" id="zaehler" role="region" aria-label="Team-Übersicht">
+    <span class="zl-titel">Team (angemeldet: {{ team.ich.name }}, {{ team.ich.kuerzel }}):</span>
+    {% for z in team.zaehler %}<span class="zchip{{ ' ich' if z.nutzer_id == team.ich.id }}"><b>{{ z.kuerzel }}</b> {{ z.name }} · {{ z.reserviert }} reserviert · {{ z.in_arbeit }} in Arbeit · {{ z.kontakte_heute }} heute kontaktiert</span>{% endfor %}
+    {% if team.ohne_zuordnung %}<span class="zchip grau"><b>?</b> {{ team.ohne_zuordnung }} ohne Zuordnung</span>{% endif %}
+    {% if team.verwaist %}<span class="zchip grau"><b>!</b> {{ team.verwaist }} verwaist</span>{% endif %}
+  </div>
+  {% endif %}
+
+  <div class="bar" role="toolbar">
+    <button data-f="anschreiben" class="an">Anschreiben bereit</button>
+    <button data-f="gruen">Grün</button>
+    <button data-f="gelb">Gelb</button>
+    <button data-f="neu">Neu</button>
+    <button data-f="nachfassen">Nachfassen{% if zaehl.nachfassen %} ({{ zaehl.nachfassen }}){% endif %}</button>
+    <button data-f="arbeit">In Arbeit</button>
+    <button data-f="alle">Alle</button>
+    {% if team %}<div class="wer" role="group" aria-label="Wer"><span>Wer:</span>
+      <button type="button" data-wer="alle" class="an" aria-pressed="true">Alle</button><button type="button" data-wer="meine" aria-pressed="false">Meine</button><button type="button" data-wer="frei" aria-pressed="false">Frei</button>
+    </div>{% endif %}
+    <select id="sort" aria-label="Sortierung">
+      <option value="verh">Sortierung: beste Chance</option>
+      <option value="pot">Gewinnpotenzial</option>
+      <option value="neu">Neueste zuerst</option>
+      <option value="preis">Preis aufsteigend</option>
+      <option value="entf">Entfernung</option>
+      <option value="tage">Längste Standzeit</option>
+    </select>
+    <input id="q" type="search" placeholder="Suchen: Marke, Modell, Ort …" aria-label="Suchen">
+  </div>
+
+  <div class="raster" id="liste">
+  {% for z in zeilen %}{% set a = z.a %}{% set b = z.b %}
+    <article class="karte {{ b.ampel }}" tabindex="0" data-id="{{ a.id }}" data-url="{{ a.url }}" data-quelle="{{ a.quelle or 'kleinanzeigen' }}" data-ampel="{{ b.ampel }}"
+         data-neu="{{ 1 if z.neu else 0 }}" data-bereit="{{ 1 if z.bereit else 0 }}" data-status="{{ a.status or 'neu' }}"
+         data-verh="{{ b.verhaeltnis or 99 }}" data-pot="{{ b.potenzial or -999999 }}" data-preis="{{ a.preis or 0 }}"
+         data-zeit="{{ a.erstmals_gesehen }}" data-entf="{{ a.entfernung_km if a.entfernung_km is not none else 99999 }}"
+         data-tage="{{ a.tage_online or 0 }}" data-nachfassen="{{ 1 if z.nachfassen else 0 }}" data-erst="{{ z.brief_betrag or 0 }}"
+         {% if team %}{% set t = team.bearbeitung.get(a.id) %}data-zustand="{{ t.zustand if t else 'frei' }}" data-bearbeiter="{{ t.bearbeiter.kuerzel if t and t.bearbeiter else '' }}" data-mein="{{ 1 if t and t.mein else 0 }}" data-frei="{{ 1 if not t or (t.zustand in ['frei', 'ohne_zuordnung', 'verwaist'] and not t.dublette_von) else 0 }}"
+         {% endif %}data-text="{{ (a.fahrzeug ~ ' ' ~ a.titel ~ ' ' ~ (a.marke or '') ~ ' ' ~ (a.ort or '') ~ ' ' ~ (a.ez_jahr or '')) | lower }}">
+      <div class="streif"></div>
+      <div class="bild">
+        <span>{{ b.art }}</span>
+        {% if a.bild %}<img src="{{ a.bild }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}
+        <div class="tags">
+          <span class="tag {{ b.ampel }}">{{ AMPEL[b.ampel] }}</span>
+          {% if z.neu %}<span class="tag neu">neu</span>{% endif %}
+          {% if a.preis_vorher %}<span class="tag">Preis gesenkt</span>{% endif %}
+          {% if a.neu_eingestellt %}<span class="tag">neu eingestellt</span>{% endif %}
+          {% if z.nachfassen %}<span class="tag nachfassen">nachfassen</span>{% endif %}
+          <span class="tag status" hidden></span>
+          {% if team %}<span class="tbbox" data-teambadge></span>{% endif %}
+        </div>
+      </div>
+      <div class="inhalt">
+        <h2>{{ a.fahrzeug }}</h2>
+        <p class="meta">EZ {{ a.ez_jahr or '?' }} · {{ (a.km | tsd ~ ' km') if a.km else 'km ?' }} · {{ a.ort or 'Ort ?' }}</p>
+        <p class="meta">{% if a.entfernung_km is not none %}{{ a.entfernung_km | tsd }} km entfernt · {% endif %}{{ 'seit heute online' if not a.tage_online else ('seit 1 Tag online' if a.tage_online == 1 else 'seit ' ~ a.tage_online ~ ' Tagen online') }}</p>
+        <p class="atitel" title="{{ a.titel }}">{{ a.titel }}</p>
+        <div class="zahlen">
+          <div><span>Wunschpreis</span><b>{{ a.preis | euro }}</b></div>
+          <div class="betont"><span>Erstangebot</span><b>{{ b.erstangebot | euro if b.sicherheit != 'keine' else '–' }}</b></div>
+          <div><span>Max-EK</span><b>{{ b.max_ek | euro if b.sicherheit != 'keine' else '–' }}</b></div>
+        </div>
+        {% for h in z.hinweise %}<p class="hinweiszeile">⚠ {{ h }}</p>{% endfor %}
+        {% if z.nachfassen %}<p class="sperre" style="color:var(--gelb)">Nachfassen: {{ z.nachfassen }}</p>
+        {% elif z.sperre and not a.anschreiben_text %}<p class="sperre">Kein Anschreiben: {{ z.sperre }}</p>{% endif %}
+        <div class="karte-fuss">
+          {% if z.nachfassen %}<button class="btn primaer" data-nachfassen-senden>↻ Nachfassen</button>
+          {% elif z.brief %}<button class="btn primaer{{ '' if z.bereit else ' leise' }}" data-schreiben>✉ Anschreiben</button>{% endif %}
+          <button class="btn primaer" data-gesendet hidden title="Erst klicken, wenn die Nachricht wirklich abgeschickt ist">gesendet ✓</button>
+          {% if team %}<button class="btn" data-teamaktion="uebernehmen" hidden>Ich übernehme</button><button class="btn" data-teamaktion="abgeben" hidden>Abgeben</button>{% endif %}
+          <button class="btn" data-oeffnen>Details</button>
+        </div>
+      </div>
+    </article>
+  {% endfor %}
+    <p class="leer" id="leer" hidden>Keine Anzeigen für diesen Filter.</p>
+  </div>
+</div>
+
+<dialog id="dlg" aria-label="Fahrzeugdetails"></dialog>
+
+<div id="ablage" hidden>
+{% for z in zeilen %}{% set a = z.a %}{% set b = z.b %}
+  <section id="d{{ a.id }}" data-id="{{ a.id }}" data-vk="{{ b.haendler_vk }}" data-kosten="{{ b.kosten }}"
+           data-maxek="{{ b.max_ek }}" data-erst="{{ b.erstangebot }}" data-preis="{{ a.preis or 0 }}" data-zielmarge="{{ b.ziel_marge }}"
+           data-nfbetrag="{{ z.nachfass_betrag or '' }}">
+    <div class="d-kopf">
+      <div>
+        <h2>{{ a.fahrzeug }}</h2>
+        <p class="meta">{{ b.art }} · EZ {{ a.ez_jahr or '?' }}{% if b.alter is not none %} ({{ b.alter }} J.){% endif %} · {{ (a.km | tsd ~ ' km') if a.km else 'km ?' }} · {{ a.ort }} · Wunschpreis {{ a.preis | euro }}{{ ' VB' if a.vb }}</p>
+        <p class="meta">Anzeige: „{{ a.titel }}“{% if a.entfernung_km is not none %} · {{ a.entfernung_km | tsd }} km entfernt{% endif %} · {{ 'seit heute online' if not a.tage_online else 'seit ' ~ a.tage_online ~ (' Tag' if a.tage_online == 1 else ' Tagen') ~ ' online' }}{% if a.duplikat %} · <span class="warn">{{ a.duplikat }}</span>{% endif %}</p>
+        {% if team %}<div class="teamzeile"><span class="tbbox" data-teambadge></span><span class="meta" data-teaminfo></span>
+          <button class="btn" data-teamaktion="uebernehmen" hidden>Ich übernehme</button><button class="btn" data-teamaktion="abgeben" hidden>Abgeben</button>
+          {% if team.ich.rolle == 'inhaber' %}<button class="btn" data-teamaktion="erzwingen" hidden>Übernahme erzwingen</button>
+          <select data-zuweisen aria-label="Zuweisen an" hidden><option value="">Zuweisen ▾</option></select>{% endif %}
+        </div>{% endif %}
+      </div>
+      <button class="btn schliessen" data-schliessen aria-label="Schließen">×</button>
+    </div>
+    <div class="spalten">
+      <div>
+        <h3>Faire Bewertung</h3>
+        {% if b.sicherheit == 'keine' %}
+          <p class="warn">{{ b.vergleich_basis }}. Ohne Erstzulassung kein belastbarer Einkaufspreis – im Anschreiben wird deshalb nach EZ/km gefragt.</p>
+        {% else %}
+          <p class="spanne">Marktniveau <b>{{ b.marktwert_angebote | euro }}</b>{% if b.spanne_von %} <span class="meta">(plausibel {{ b.spanne_von | euro }} – {{ b.spanne_bis | euro }})</span>{% endif %}</p>
+          <p class="meta">Sicherheit: <span class="sicherheit s-{{ b.sicherheit }}">{{ b.sicherheit }}</span> · {{ b.vergleich_basis }}</p>
+          {% if b.wertfaktoren or b.km_korrektur %}
+          <div class="chips">
+            {% if b.km_korrektur %}<span class="chip {{ 'plus' if b.km_korrektur > 0 else 'minus' }}">km-Stand für das Alter {{ b.km_korrektur | prozent }}</span>{% endif %}
+            {% for n, w in b.wertfaktoren.items() %}<span class="chip {{ 'plus' if w > 0 else 'minus' }}">{{ n }} {{ w | prozent }}</span>{% endfor %}
+          </div>
+          {% endif %}
+          <table>
+            {% if b.modellwert %}<tr><td>Referenzwert (Neupreis × Restwert, km, Ausstattung)</td><td>{{ b.modellwert | euro }}</td></tr>{% endif %}
+            <tr><td>Marktniveau Angebote{% if b.marktfaktor %} (Faktor {{ '%.2f' | format(b.marktfaktor) | replace('.', ',') }}){% endif %}</td><td>{{ b.marktwert_angebote | euro }}</td></tr>
+            <tr><td>Marktwert privat (nach Verhandlung)</td><td>{{ b.marktwert_privat | euro }}</td></tr>
+            <tr class="zwischen"><td>Händler-VK (Ziel)</td><td>{{ b.haendler_vk | euro }}</td></tr>
+            {% for name, wert in b.kosten_posten.items() %}<tr><td>− {{ name }}</td><td>{{ wert | euro }}</td></tr>{% endfor %}
+            <tr><td>− Ziel-Marge (netto)</td><td>{{ b.ziel_marge | euro }}</td></tr>
+            <tr><td>− {{ ust_label }}</td><td>{{ z.ust | euro }}</td></tr>
+            <tr class="summe"><td>Max. Einkaufspreis</td><td>{{ b.max_ek | euro }}</td></tr>
+            <tr class="angebot"><td>{{ "Erstangebot (im Anschreiben)" if z.brief_betrag else "Erstangebot (rechnerisch, nicht im Anschreiben)" }}</td><td>{{ b.erstangebot | euro }}</td></tr>
+            <tr><td>Gewinn bei Kauf zum Wunschpreis</td><td>{{ b.potenzial | euro }}</td></tr>
+          </table>
+          <p class="fair"><b>Fair-Check:</b> Erstangebot = {{ b.fair_anteil | anteil }}, Max-EK = {{ b.max_anteil | anteil }} vom Marktwert privat.
+            {% if fair_untergrenze %}Untergrenze {{ fair_untergrenze | anteil }}.{% endif %}{% if b.fair_hinweis %} {{ b.fair_hinweis }}.{% endif %}</p>
+        {% endif %}
+      </div>
+      <div>
+        {% if z.nachfassen %}
+        <div class="kasten hervor">
+          <h4>Nachfassen: {{ z.nachfassen }}</h4>
+          <textarea id="n{{ a.id }}" aria-label="Nachfass-Text">{{ z.nachfass_text }}</textarea>
+          <div class="aktionen"><button class="btn primaer" data-nachfassen-senden>↻ Kopieren &amp; Anzeige öffnen</button></div>
+        </div>
+        {% endif %}
+        {% for h in z.hinweise %}<p class="hinweiszeile">⚠ {{ h }}</p>{% endfor %}
+        <h3>Anschreiben</h3>
+        {% if z.brief %}
+          {% if not z.bereit %}<p class="warn" style="margin:0 0 8px">Ampel {{ AMPEL[b.ampel] }}: Das Erstangebot liegt deutlich unter dem Wunschpreis – nur senden, wenn du es trotzdem versuchen willst.</p>{% endif %}
+          <textarea class="brief" id="t{{ a.id }}" aria-label="Anschreiben">{{ z.brief }}</textarea>
+        {% elif a.anschreiben_text %}
+          <p class="hinweis" style="margin:0 0 8px">{% if a.status == 'vorbereitet' %}Text kopiert – noch nicht als gesendet bestätigt (Knopf „gesendet ✓“ unten):{% elif a.kontaktiert_am %}Gesendet am {{ a.kontaktiert_am | replace('T', ' um ') }}:{% else %}Gesendeter Text:{% endif %}</p>
+          <textarea class="brief" id="t{{ a.id }}" readonly>{{ a.anschreiben_text }}</textarea>
+        {% else %}
+          <p class="sperre">Kein Anschreiben: {{ z.sperre }}</p>
+        {% endif %}
+        <div class="aktionen">
+          {% if z.brief %}
+            <button class="btn primaer" data-schreiben>✉ Kopieren &amp; Anzeige öffnen</button>
+            <button class="btn" data-kopieren>Nur kopieren</button>
+          {% endif %}
+          {% if z.brief or a.anschreiben_text %}<button class="btn" data-erneut hidden>✉ Erneut kopieren &amp; Anzeige öffnen</button>{% endif %}
+          <button class="btn primaer" data-gesendet hidden title="Erst klicken, wenn die Nachricht wirklich abgeschickt ist">gesendet ✓</button>
+          <a class="btn" href="{{ a.url if (a.url or '').lower().startswith(('http://', 'https://')) else '#' }}" target="_blank" rel="noopener">Anzeige öffnen ↗</a>
+        </div>
+        <div class="status-zeile">Status:
+          {% for schluessel, name in status_liste %}<button data-status="{{ schluessel }}">{{ name }}</button>{% endfor %}
+        </div>
+        {% if b.sicherheit != 'keine' and b.max_ek %}
+        <div class="kasten verhandlung" style="margin-top:14px">
+          <h4>Verhandlungs-Assistent</h4>
+          <div class="zeile">
+            <label for="g{{ a.id }}" class="meta">Gegenangebot des Verkäufers</label>
+            <input id="g{{ a.id }}" type="number" inputmode="numeric" step="100" min="0" placeholder="z. B. {{ a.preis or '' }}" data-gegen>
+            <span class="meta">€</span>
+          </div>
+          <p class="urteil" data-urteil hidden></p>
+          <div data-antwortbereich hidden>
+            <div class="antwort-knoepfe" data-antwortarten></div>
+            <textarea data-antwort rows="7" aria-label="Antwort an den Verkäufer"></textarea>
+            <div class="aktionen"><button class="btn primaer" data-antwort-kopieren>Antwort kopieren &amp; Anzeige öffnen</button></div>
+          </div>
+        </div>
+        {% endif %}
+        {% if app %}
+          <label class="notiz">Notiz (wird gespeichert)<textarea data-notiz rows="2">{{ a.notiz or '' }}</textarea></label>
+        {% else %}
+          <p class="hinweis">Status wird nur in diesem Browser gemerkt. Dauerhaft: <code>python scout.py app</code> verwenden oder <code>python scout.py status {{ a.id }} kontaktiert</code>.</p>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endfor %}
+</div>
+
+<div id="toast" role="status" aria-live="polite"><span id="toast-text"></span><button id="toast-zurueck" hidden>Rückgängig</button></div>
+
+<script>
+var SCOUT = {{ app | tojson }};
+var TEAM = {{ team | tojson }};
+var STATUS = {{ status_liste | tojson }};
+var SIGNATUR = {{ signatur | tojson }};
+var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
+(function(){
+  var APP = SCOUT && SCOUT.token ? SCOUT : null;
+  var TEAM_AN = !!(APP && TEAM && TEAM.aktiv);        // Team-Elemente nur mit Server UND angelegten Nutzern
+  var liste = document.getElementById('liste'), dlg = document.getElementById('dlg'), ablage = document.getElementById('ablage');
+  var karten = [].slice.call(liste.querySelectorAll('.karte')), filter = 'anschreiben';
+  var STATUS_TEXT = {}; STATUS.forEach(function(s){ STATUS_TEXT[s[0]] = s[1]; });
+  var ARBEIT = {vorbereitet:1, kontaktiert:1, verhandlung:1, besichtigung:1};
+
+  function zwei(n){ return (n < 10 ? '0' : '') + n; }
+  function jetztLokal(){ var d = new Date(); return d.getFullYear() + '-' + zwei(d.getMonth() + 1) + '-' + zwei(d.getDate()) + 'T' + zwei(d.getHours()) + ':' + zwei(d.getMinutes()) + ':' + zwei(d.getSeconds()); }
+  function eur(x){ return Math.round(x).toLocaleString('de-DE') + ' €'; }
+  function runde100(x){ return Math.round(x / 100) * 100; }
+
+  function ladeLokal(){ try{ return JSON.parse(localStorage.getItem('scout-status') || '{}'); }catch(e){ return {}; } }
+  function sichereLokal(o){ try{ localStorage.setItem('scout-status', JSON.stringify(o)); }catch(e){} }
+  var lokal = APP ? {} : ladeLokal();
+
+  function karte(id){ return liste.querySelector('.karte[data-id="' + id + '"]'); }
+  function abschnitt(id){ return document.getElementById('d' + id); }
+  function zeigeStatus(id, status){
+    var k = karte(id); if(!k) return;
+    k.dataset.status = status;
+    var tag = k.querySelector('.tag.status');
+    tag.hidden = status === 'neu'; tag.textContent = STATUS_TEXT[status] || '';
+    k.classList.toggle('erledigt', status !== 'neu');
+    var d = abschnitt(id);
+    if(d) d.querySelectorAll('[data-status]').forEach(function(b){ b.classList.toggle('an', b.dataset.status === status); });
+    // „Anschreiben“ nur solange offen; „gesendet ✓“ und „erneut kopieren“ nur nach dem Kopieren (Text kopiert)
+    [k, d].forEach(function(el){
+      if(!el) return;
+      el.querySelectorAll('[data-schreiben]').forEach(function(b){ b.hidden = status !== 'neu'; });
+      el.querySelectorAll('[data-gesendet],[data-erneut]').forEach(function(b){ b.hidden = status !== 'vorbereitet'; });
+    });
+    if(TEAM_AN) zeichneKarteTeam(id);
+  }
+  // Fehler tragen status (HTTP), grund (csrf|recht|zugriff|konflikt|belegt) und daten (ganze Antwort, bei 409 mit „team“)
+  function post(url, daten){
+    return fetch(url, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','X-Scout-Token':APP.token}, body:JSON.stringify(daten)})
+      .then(function(r){
+        return r.json().catch(function(){ return {}; }).then(function(d){
+          if(!r.ok){ var e = new Error(d.fehler || ('Fehler ' + r.status)); e.status = r.status; e.grund = d.grund || ''; e.daten = d; throw e; }
+          return d;
+        });
+      }, function(){ var e = new Error('App nicht erreichbar – läuft das schwarze Fenster noch?'); e.status = 0; e.grund = 'netz'; e.daten = {}; throw e; });
+  }
+  // Der Status wird erst nach der Antwort des Servers angezeigt (im Team kann er mit 409 abgelehnt werden)
+  function speichere(id, status, text, betrag){
+    if(!APP){ zeigeStatus(id, status); if(status === 'neu') delete lokal[id]; else lokal[id] = status; sichereLokal(lokal); return Promise.resolve({}); }
+    return post('/api/status', {id:id, status:status, text:text || null, betrag:betrag || null}).then(function(d){
+      zeigeStatus(id, status); if(TEAM_AN) ladeTeam(); return d;
+    });
+  }
+  // Einheitliche Fehleranzeige. ``praefix``: z. B. „Nicht senden“ – bei Konflikt wird der Server-Text (wer, seit wann) angehängt.
+  function zeigeFehler(id, e, praefix){
+    if(e.status === 401){ location.href = '/login?weiter=%2F'; return; }
+    if(e.grund === 'csrf'){ toast('Sitzung abgelaufen – bitte die Seite neu laden (F5).', null, 12000, true); return; }
+    if(e.grund === 'belegt'){ toast('Datenbank kurz belegt – bitte erneut versuchen.', null, 8000, true); return; }
+    if(e.status === 409){
+      if(TEAM_AN && e.daten && e.daten.team && id) setzeTeam(id, e.daten.team);
+      toast('✕ ' + (praefix || 'Nicht gespeichert') + ' – ' + e.message, null, 14000, true); return;
+    }
+    toast((praefix ? praefix + ': ' : '') + e.message, null, 8000, true);
+  }
+  // Betrag aus einem Text wie „… biete ich Ihnen … 32.300 € an“
+  function betragAus(text){
+    var m = text.match(/(\d{1,3}(?:\.\d{3})+|\d{4,6})\s*€\s+an\b/g);
+    return m ? parseInt(m[m.length - 1].replace(/[^\d]/g, ''), 10) : null;
+  }
+
+  // Kopieren: erst synchron (klappt auch bei file://), sonst Clipboard-API
+  function kopiere(text){
+    var ziel = dlg.open ? dlg : document.body, ta = document.createElement('textarea'), ok = false;
+    ta.value = text; ta.setAttribute('readonly',''); ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+    ziel.appendChild(ta); ta.select();
+    try{ ok = document.execCommand('copy'); }catch(e){}
+    ziel.removeChild(ta);
+    if(!ok && navigator.clipboard){ navigator.clipboard.writeText(text).catch(function(){}); ok = true; }
+    return ok;
+  }
+  var toastTimer;
+  function toast(text, rueckgaengig, dauer, warnung){
+    var t = document.getElementById('toast'), b = document.getElementById('toast-zurueck');
+    t.classList.toggle('warn', !!warnung); t.setAttribute('role', warnung ? 'alert' : 'status');
+    document.getElementById('toast-text').textContent = text;
+    b.hidden = !rueckgaengig; b.onclick = function(){ rueckgaengig(); t.classList.remove('zeigen'); };
+    t.classList.add('zeigen'); clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ t.classList.remove('zeigen'); }, rueckgaengig ? 9000 : (dauer || 5000));
+  }
+  var KONTAKT = {'mobile.de': 'Auf mobile.de das „E-Mail“/„Nachricht“-Formular des Anbieters öffnen', kleinanzeigen: 'Auf Kleinanzeigen „Nachricht schreiben“ klicken'};
+  function hinweisFuer(k){ return '  ' + (KONTAKT[k.dataset.quelle] || 'In der Anzeige den Kontakt zum Anbieter öffnen') + ', Strg+V, senden.'; }
+  // Sicherheitskern (Doppelkontakt vermeiden): Das Fenster wird VOR dem Serveraufruf leer geöffnet (nur direkt im Klick erlaubt, sonst
+  // blockiert der Browser es). Erst wenn der Server übernommen bzw. den Status gespeichert hat (200), wird die Anzeige geladen und der
+  // Text kopiert. Bei 409 (ein Kollege hält das Fahrzeug) wird das Fenster geschlossen, nichts kopiert, und der Hinweis steht groß da.
+  function oeffneLeer(){
+    var w = null;
+    try{ w = window.open('', '_blank'); if(w) w.opener = null; }catch(e){}
+    return w;
+  }
+  function oeffneAnzeige(fenster, url){
+    if(!/^https?:\/\//i.test(url || '')){ if(fenster) fenster.close(); return false; }       // nur http(s)
+    if(fenster && !fenster.closed){ fenster.location.href = url; return true; }
+    return !!window.open(url, '_blank', 'noopener');                                          // Popup blockiert: Knopf „Anzeige öffnen“
+  }
+  function senden(id, text, aktion, danach){
+    var k = karte(id), fenster = oeffneLeer();
+    aktion().then(function(){
+      var ok = kopiere(text);
+      var offen = oeffneAnzeige(fenster, k.dataset.url);
+      if(dlg.open) dlg.close();
+      danach(ok, offen);
+    }, function(e){
+      if(fenster) fenster.close();
+      zeigeFehler(id, e, 'Nicht senden');
+    });
+  }
+
+  function anschreiben(id){
+    var t = document.getElementById('t' + id), k = karte(id); if(!t || !k) return;
+    var vorher = k.dataset.status, text = t.value;
+    senden(id, text, function(){ return speichere(id, 'vorbereitet', text, betragAus(text) || +k.dataset.erst || null); }, function(ok, offen){
+      var ende = ' Danach hier „gesendet ✓“ klicken.';
+      toast(ok ? 'Text kopiert ✓' + hinweisFuer(k) + ende + (offen ? '' : ' (Anzeige: Fenster wurde blockiert – „Anzeige öffnen“ nutzen.)')
+               : 'Kopieren ging nicht – bitte im Detailfenster den Text markieren und kopieren.',
+            vorher === 'neu' ? function(){ speichere(id, 'neu').catch(function(e){ zeigeFehler(id, e); }); } : null);
+    });
+  }
+  function gesendet(id){
+    var k = karte(id); if(!k) return;
+    if(TEAM_AN && teamObj(id).zustand === 'ohne_zuordnung' &&
+       !confirm('Dieses Fahrzeug gehört (nach abgelaufener Reservierung) keinem Kollegen. Hast du die Nachricht wirklich selbst abgeschickt?')) return;
+    speichere(id, 'kontaktiert').then(function(){ toast('Als gesendet gespeichert ✓ – gilt jetzt als kontaktiert.'); },
+                                      function(e){ zeigeFehler(id, e, 'Nicht gespeichert'); });
+  }
+  function nachfassen(id){
+    var t = document.getElementById('n' + id), k = karte(id); if(!t || !k) return;
+    var text = t.value, betrag = +abschnitt(id).dataset.nfbetrag || null;
+    senden(id, text, function(){
+      return APP ? post('/api/nachgefasst', {id:id, text:text, betrag:betrag}).then(function(){ if(TEAM_AN) ladeTeam(); }) : speichere(id, 'kontaktiert');
+    }, function(ok){
+      k.dataset.nachfassen = '0';
+      var tag = k.querySelector('.tag.nachfassen'); if(tag) tag.remove();
+      toast(ok ? 'Nachfass-Text kopiert ✓' + hinweisFuer(k) : 'Kopieren ging nicht – bitte Text markieren und kopieren.');
+    });
+  }
+
+  // ---------- Verhandlungs-Assistent ----------
+  function gewinn(sec, ek){
+    var vk = +sec.dataset.vk, kosten = +sec.dataset.kosten;
+    if(!P25A) return vk / 1.19 - ek - kosten;
+    return vk > ek ? (vk - ek) * 100 / 119 - kosten : vk - ek - kosten;
+  }
+  var VORBEHALT = 'vorbehaltlich einer Besichtigung mit kurzer Probefahrt und sofern der Zustand Ihrer Beschreibung entspricht';
+  function antwortText(art, x, y){
+    var gruss = '\n\nViele Grüße\n' + SIGNATUR.ansprechpartner + '\n' + SIGNATUR.firma + ' · ' + SIGNATUR.telefon;
+    var start = 'Hallo,\n\nvielen Dank für Ihre Rückmeldung. ';
+    if(art === 'zusage') return start + eur(x) + ' passen für mich – ' + VORBEHALT + '. Wann würde Ihnen ein Termin passen? Zahlung sofort, Abholung und Abmeldung übernehmen wir.' + gruss;
+    if(art === 'mitte') return start + eur(x) + ' sind mir für das Fahrzeug leider etwas zu viel. Treffen wir uns in der Mitte bei ' + eur(y) + '? Das gilt ' + VORBEHALT + ' – dann können wir kurzfristig abwickeln: Zahlung sofort, Abholung durch uns.' + gruss;
+    if(art === 'letztes') return start + eur(x) + ' kann ich als Händler leider nicht darstellen, weil bei uns noch Aufbereitung, Gasprüfung, Gewährleistung und Standzeit dazukommen. Mein letztes Angebot wäre ' + eur(y) + ' – ' + VORBEHALT + '. Wenn das für Sie passt, melden Sie sich gern.' + gruss;
+    return start + 'Bei ' + eur(x) + ' kommen wir leider nicht zusammen. Falls Sie es sich anders überlegen, melden Sie sich gern – ansonsten viel Erfolg beim Verkauf!' + gruss;
+  }
+  var ART_NAME = {zusage:'Zusage zu ', mitte:'Gegenvorschlag ', letztes:'Letztes Angebot ', absage:'Freundlich absagen'};
+  function bewerteGegen(sec){
+    var x = Math.round(+sec.querySelector('[data-gegen]').value);
+    var urteil = sec.querySelector('[data-urteil]'), bereich = sec.querySelector('[data-antwortbereich]');
+    if(!x || x < 500){ urteil.hidden = true; bereich.hidden = true; return; }
+    var erst = +sec.dataset.erst, max = +sec.dataset.maxek, g = gewinn(sec, x), arten;
+    if(x <= max){
+      var mitte = Math.min(max, runde100((erst + x) / 2));
+      urteil.className = 'urteil ' + (x <= erst ? 'gut' : 'knapp');
+      urteil.textContent = (x <= erst ? '✓ Auf oder unter deinem Erstangebot. ' : '✓ Unter deinem Max-EK (' + eur(max) + ') – annehmbar. ')
+        + 'Gewinn bei ' + eur(x) + ': ' + eur(g) + ' (Ziel-Marge ' + eur(+sec.dataset.zielmarge) + ').';
+      arten = x <= erst ? [['zusage', x]] : (x - erst <= 500 ? [['zusage', x], ['mitte', mitte]] : [['mitte', mitte], ['zusage', x]]);
+    } else {
+      urteil.className = 'urteil schlecht';
+      urteil.textContent = '✗ Über deinem Max-EK (' + eur(max) + '). Bei ' + eur(x) + (g < 0 ? ' machst du ' + eur(-g) + ' Verlust.'
+        : ' bleiben nur ' + eur(g) + ' Gewinn statt Ziel-Marge ' + eur(+sec.dataset.zielmarge) + '.');
+      arten = [['letztes', max], ['absage', x]];
+    }
+    var knoepfe = sec.querySelector('[data-antwortarten]'), feld = sec.querySelector('[data-antwort]');
+    knoepfe.innerHTML = '';
+    arten.forEach(function(a, i){
+      var b = document.createElement('button');
+      b.type = 'button'; b.textContent = ART_NAME[a[0]] + (a[0] === 'absage' ? '' : eur(a[1]));
+      b.onclick = function(){
+        knoepfe.querySelectorAll('button').forEach(function(x){ x.classList.remove('an'); });
+        b.classList.add('an'); feld.value = antwortText(a[0], x, a[1]);
+        sec.dataset.antwortBetrag = a[0] === 'absage' ? '' : a[1];
+      };
+      knoepfe.appendChild(b);
+      if(i === 0) b.onclick();
+    });
+    urteil.hidden = false; bereich.hidden = false;
+  }
+  function antwortSenden(sec){
+    var id = sec.dataset.id, text = sec.querySelector('[data-antwort]').value, k = karte(id);
+    var s = k.dataset.status, neu = s === 'besichtigung' ? s : 'verhandlung';
+    senden(id, text, function(){ return speichere(id, neu, null, +sec.dataset.antwortBetrag || null); }, function(ok){
+      toast(ok ? 'Antwort kopiert ✓' + hinweisFuer(k) : 'Kopieren ging nicht – bitte Text markieren und kopieren.');
+    });
+  }
+
+  // ---------- Detailfenster ----------
+  function oeffne(id){
+    var d = abschnitt(id); if(!d) return;
+    if(dlg.firstElementChild) ablage.appendChild(dlg.firstElementChild);
+    dlg.appendChild(d); zeigeStatus(id, karte(id).dataset.status);
+    dlg.showModal(); dlg.scrollTop = 0;
+  }
+  dlg.addEventListener('close', function(){ if(dlg.firstElementChild) ablage.appendChild(dlg.firstElementChild); });
+  dlg.addEventListener('click', function(e){
+    if(e.target === dlg || e.target.closest('[data-schliessen]')){ dlg.close(); return; }
+    var d = e.target.closest('section'); if(!d) return;
+    var id = d.dataset.id;
+    if(e.target.closest('[data-schreiben]')) anschreiben(id);
+    else if(e.target.closest('[data-nachfassen-senden]')) nachfassen(id);
+    else if(e.target.closest('[data-antwort-kopieren]')) antwortSenden(d);
+    else if(e.target.closest('[data-kopieren]')) toast(kopiere(document.getElementById('t' + id).value) ? 'Text kopiert ✓' : 'Kopieren ging nicht – bitte Text markieren.');
+    else if(e.target.closest('[data-gesendet]')) gesendet(id);
+    else if(e.target.closest('[data-erneut]')) erneut(id);
+    else if(e.target.closest('[data-teamaktion]')) teamKlick(id, e.target.closest('[data-teamaktion]').dataset.teamaktion);
+    else if(e.target.closest('[data-status]')){
+      var st = e.target.closest('[data-status]').dataset.status;
+      speichere(id, st).catch(function(err){ zeigeFehler(id, err); });
+    }
+  });
+  dlg.addEventListener('input', function(e){ if(e.target.matches('[data-gegen]')) bewerteGegen(e.target.closest('section')); });
+  dlg.addEventListener('change', function(e){
+    if(TEAM_AN && e.target.matches('[data-zuweisen]')){ zuweisen(e.target.closest('section').dataset.id, e.target); return; }
+    if(!APP || !e.target.matches('[data-notiz]')) return;
+    post('/api/notiz', {id:e.target.closest('section').dataset.id, notiz:e.target.value})
+      .then(function(){ toast('Notiz gespeichert'); }, function(){ toast('Notiz konnte nicht gespeichert werden'); });
+  });
+
+  liste.addEventListener('click', function(e){
+    var k = e.target.closest('.karte'); if(!k) return;
+    if(e.target.closest('[data-schreiben]')) anschreiben(k.dataset.id);
+    else if(e.target.closest('[data-nachfassen-senden]')) nachfassen(k.dataset.id);
+    else if(e.target.closest('[data-gesendet]')) gesendet(k.dataset.id);
+    else if(e.target.closest('[data-teamaktion]')) teamKlick(k.dataset.id, e.target.closest('[data-teamaktion]').dataset.teamaktion);
+    else oeffne(k.dataset.id);
+  });
+  liste.addEventListener('keydown', function(e){
+    var k = e.target.closest('.karte');
+    if(k && e.target === k && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); oeffne(k.dataset.id); }
+  });
+
+{% if team %}
+  // ---------- Team (nur App mit angelegten Nutzern): Badges, Übernehmen/Abgeben/Zuweisen, Filter „Wer“ ----------
+  // Badge = Symbol + Kürzel (nie nur Farbe). Der Server entscheidet; die Seite zeigt nur, was er zuletzt gemeldet hat.
+  var wer = 'alle';
+  var ZUSTAND_TEXT = {frei:'frei', reserviert:'reserviert', kontaktiert:'kontaktiert', ohne_zuordnung:'ohne Zuordnung', verwaist:'verwaist'};
+  var SYMBOL = {reserviert:'◔', kontaktiert:'✉', ohne_zuordnung:'?', verwaist:'!', dublette:'⧉'};
+  function inhaber(){ return !!(TEAM && TEAM.ich && TEAM.ich.rolle === 'inhaber'); }
+  function teamObj(id){
+    return (TEAM && TEAM.bearbeitung && TEAM.bearbeitung[id]) ||
+      {zustand:'frei', bearbeiter:null, mein:false, dublette_von:null, darf:{uebernehmen:true, abgeben:false, zuweisen:inhaber(), erzwingen:inhaber()}};
+  }
+  function istFrei(t){ return (t.zustand === 'frei' || t.zustand === 'ohne_zuordnung' || t.zustand === 'verwaist') && !t.dublette_von; }
+  function datum(s){ return s ? s.slice(8, 10) + '.' + s.slice(5, 7) + '. ' + s.slice(11, 16) : ''; }
+  function teamText(t){
+    var p = t.bearbeiter, dub = t.dublette_von;
+    if(!p && dub && dub.bearbeiter) return 'Dublette (' + dub.id + ') bearbeitet ' + (dub.mein ? 'du' : dub.bearbeiter.name) + ' – nicht doppelt anschreiben';
+    if(t.zustand === 'reserviert') return (t.mein ? 'Von dir' : 'Von ' + p.name) + ' reserviert seit ' + datum(t.seit) + (t.laeuft_ab ? ', frei ab ' + datum(t.laeuft_ab) : '');
+    if(t.zustand === 'kontaktiert') return (t.mein ? 'Du bearbeitest es' : (p ? p.name : 'Ein Kollege') + ' bearbeitet es')
+                                          + (t.kontaktiert_von ? ' · kontaktiert von ' + t.kontaktiert_von.name + ' am ' + datum(t.kontaktiert_am) : '');
+    if(t.zustand === 'ohne_zuordnung') return 'In Arbeit, aber niemandem zugeordnet – übernehmen, wenn du es bearbeitest';
+    if(t.zustand === 'verwaist') return 'Bearbeiter deaktiviert – übernehmen oder zuweisen';
+    return 'Frei – noch niemand bearbeitet es';
+  }
+  function badge(t){
+    var p = t.bearbeiter, dub = !p && t.dublette_von && t.dublette_von.bearbeiter ? t.dublette_von : null;
+    var z = dub ? 'dublette' : t.zustand, b = document.createElement('span');
+    b.className = 'tb tb-' + z + ((t.mein || (dub && dub.mein)) ? ' mein' : '');
+    b.textContent = (SYMBOL[z] || '•') + ' ' + (p ? p.kuerzel : dub ? dub.bearbeiter.kuerzel : ZUSTAND_TEXT[z] || z);
+    b.title = teamText(t);
+    return b;
+  }
+  function zeichneKarteTeam(id){
+    var t = teamObj(id), k = karte(id), d = abschnitt(id), darf = t.darf || {};
+    var fremd = !t.mein && !istFrei(t);
+    if(k){ k.dataset.zustand = t.zustand; k.dataset.mein = t.mein ? '1' : '0'; k.dataset.frei = istFrei(t) ? '1' : '0'; }
+    [k, d].forEach(function(el){
+      if(!el) return;
+      el.querySelectorAll('[data-teambadge]').forEach(function(box){ box.textContent = ''; if(t.zustand !== 'frei' || t.dublette_von) box.appendChild(badge(t)); });
+      el.querySelectorAll('[data-teaminfo]').forEach(function(x){ x.textContent = teamText(t); });
+      el.querySelectorAll('[data-teamaktion="uebernehmen"]').forEach(function(b){ b.hidden = !darf.uebernehmen || t.mein; });
+      el.querySelectorAll('[data-teamaktion="abgeben"]').forEach(function(b){ b.hidden = !darf.abgeben; });
+      el.querySelectorAll('[data-teamaktion="erzwingen"]').forEach(function(b){ b.hidden = !darf.erzwingen || !fremd || darf.uebernehmen; });
+      el.querySelectorAll('[data-zuweisen]').forEach(function(s){ s.hidden = !darf.zuweisen; });
+      // Belegt ein Kollege das Fahrzeug, ist Anschreiben gesperrt (der Server lehnte es ohnehin mit 409 ab)
+      el.querySelectorAll('[data-schreiben],[data-nachfassen-senden],[data-erneut],[data-gesendet]').forEach(function(b){
+        b.disabled = fremd; b.title = fremd ? teamText(t) : (b.matches('[data-gesendet]') ? 'Erst klicken, wenn die Nachricht wirklich abgeschickt ist' : '');
+      });
+    });
+  }
+  function setzeTeam(id, obj){
+    if(!TEAM || !obj) return;
+    var alt = TEAM.bearbeitung[id];
+    TEAM.bearbeitung[id] = Object.assign({}, obj, {status: alt && alt.status});
+    zeichneKarteTeam(id); zeige();
+  }
+  function zeichneZaehler(){
+    var box = document.getElementById('zaehler'); if(!box || !TEAM) return;
+    box.textContent = '';
+    var titel = document.createElement('span'); titel.className = 'zl-titel';
+    titel.textContent = 'Team (angemeldet: ' + TEAM.ich.name + ', ' + TEAM.ich.kuerzel + '):'; box.appendChild(titel);
+    function chip(klasse, fett, text){
+      var c = document.createElement('span'), b = document.createElement('b'); c.className = 'zchip' + klasse;
+      b.textContent = fett; c.appendChild(b); c.appendChild(document.createTextNode(' ' + text)); box.appendChild(c);
+    }
+    TEAM.zaehler.forEach(function(z){
+      chip(z.nutzer_id === TEAM.ich.id ? ' ich' : '', z.kuerzel, z.name + ' · ' + z.reserviert + ' reserviert · ' + z.in_arbeit + ' in Arbeit · '
+           + z.kontakte_heute + ' heute kontaktiert');
+    });
+    if(TEAM.ohne_zuordnung) chip(' grau', '?', TEAM.ohne_zuordnung + ' ohne Zuordnung');
+    if(TEAM.verwaist) chip(' grau', '!', TEAM.verwaist + ' verwaist');
+  }
+  function fuelleZuweisen(){
+    document.querySelectorAll('[data-zuweisen]').forEach(function(s){
+      while(s.options.length > 1) s.remove(1);
+      TEAM.nutzer.filter(function(n){ return n.aktiv; }).forEach(function(n){
+        var o = document.createElement('option'); o.value = n.id; o.textContent = n.kuerzel + ' – ' + n.name; s.appendChild(o);
+      });
+    });
+  }
+  // Frischer Stand vom Server (nach eigenen Aktionen, beim Zurückkehren zur Seite und jede Minute): zeigt Arbeit der Kollegen
+  function ladeTeam(){
+    if(!TEAM_AN) return;
+    fetch('/api/team', {credentials:'same-origin'}).then(function(r){ return r.ok ? r.json() : null; }).then(function(d){
+      if(!d || !d.aktiv) return;
+      TEAM = d; zeichneZaehler();
+      karten.forEach(function(k){
+        var t = TEAM.bearbeitung[k.dataset.id];
+        if(t && t.status && t.status !== k.dataset.status) zeigeStatus(k.dataset.id, t.status); else zeichneKarteTeam(k.dataset.id);
+      });
+      zeige();
+    }).catch(function(){});
+  }
+  function teamAktion(id, art, daten, meldung){
+    return post('/api/bearbeitung/' + encodeURIComponent(id) + '/' + art, daten || {}).then(function(d){
+      setzeTeam(id, d.team); if(meldung) toast(meldung); ladeTeam();
+    }, function(e){ zeigeFehler(id, e); });
+  }
+  function uebernehmen(id){
+    var tage = TEAM.reservierung_tage;
+    teamAktion(id, 'uebernehmen', {}, 'Übernommen ✓ – für dich reserviert' + (tage ? ' (' + tage + (tage === 1 ? ' Tag' : ' Tage') + ')' : ''));
+  }
+  function erzwingen(id){
+    var t = teamObj(id);
+    if(!confirm('Übernahme erzwingen? ' + teamText(t) + '. Der Kollege verliert das Fahrzeug.')) return;
+    teamAktion(id, 'uebernehmen', {erzwingen:true}, 'Übernahme erzwungen ✓');
+  }
+  function abgeben(id){ teamAktion(id, 'abgeben', {}, 'Abgegeben – das Fahrzeug ist wieder frei'); }
+  function zuweisen(id, sel){
+    var nid = +sel.value; sel.value = ''; if(!nid) return;
+    var n = TEAM.nutzer.filter(function(x){ return x.id === nid; })[0];
+    teamAktion(id, 'zuweisen', {nutzer_id:nid}, 'Zugewiesen an ' + (n ? n.name : 'Kollegen') + ' ✓');
+  }
+  function erneut(id){
+    var t = document.getElementById('t' + id), k = karte(id); if(!t || !k) return;
+    senden(id, t.value, function(){ return Promise.resolve(); }, function(ok){
+      toast(ok ? 'Text erneut kopiert ✓' + hinweisFuer(k) + ' Danach „gesendet ✓“ klicken.' : 'Kopieren ging nicht – bitte Text markieren und kopieren.');
+    });
+  }
+  if(TEAM_AN){
+    fuelleZuweisen();
+    document.querySelectorAll('[data-wer]').forEach(function(b){
+      b.onclick = function(){
+        document.querySelectorAll('[data-wer]').forEach(function(x){ x.classList.remove('an'); x.setAttribute('aria-pressed', 'false'); });
+        b.classList.add('an'); b.setAttribute('aria-pressed', 'true'); wer = b.dataset.wer; zeige();
+      };
+    });
+    document.addEventListener('visibilitychange', function(){ if(!document.hidden) ladeTeam(); });
+    setInterval(function(){ if(!document.hidden && !(window.Live && Live.verbunden())) ladeTeam(); }, 60000);
+    // Live (G1): nur mit Server – die Datei-Fassung des Berichts lädt kein Skript nach
+    var live = document.createElement('script'); live.src = '/static/live.js';
+    live.onload = function(){ Live.an(['team'], ladeTeam); }; document.head.appendChild(live);
+  }
+  function teamKlick(id, art){ ({uebernehmen:uebernehmen, abgeben:abgeben, erzwingen:erzwingen})[art](id); }
+{% endif %}
+
+  // ---------- Filter & Sortierung ----------
+  function zeige(){
+    var q = document.getElementById('q').value.toLowerCase().trim(), sichtbar = 0;
+    liste.dataset.filter = filter;
+    karten.forEach(function(k){
+      var s = k.dataset.status;
+      var ok = filter === 'alle' || (filter === 'anschreiben' && ((k.dataset.bereit === '1' && s === 'neu') || s === 'vorbereitet'))
+            || (filter === 'nachfassen' && k.dataset.nachfassen === '1') || (filter === 'arbeit' && ARBEIT[s])
+            || (filter === 'neu' && k.dataset.neu === '1') || ((filter === 'gruen' || filter === 'gelb') && k.dataset.ampel === filter);
+      if(q && q.split(/\s+/).some(function(w){ return k.dataset.text.indexOf(w) < 0; })) ok = false;
+      if(TEAM_AN && ((wer === 'meine' && k.dataset.mein !== '1') || (wer === 'frei' && k.dataset.frei !== '1'))) ok = false;
+      k.hidden = !ok; if(ok) sichtbar++;
+    });
+    document.getElementById('leer').hidden = sichtbar > 0;
+  }
+  function sortiere(){
+    var s = document.getElementById('sort').value;
+    karten.sort(function(a, b){
+      if(s === 'verh') return a.dataset.verh - b.dataset.verh;
+      if(s === 'pot') return b.dataset.pot - a.dataset.pot;
+      if(s === 'preis') return a.dataset.preis - b.dataset.preis;
+      if(s === 'entf') return a.dataset.entf - b.dataset.entf;
+      if(s === 'tage') return b.dataset.tage - a.dataset.tage;
+      return a.dataset.zeit < b.dataset.zeit ? 1 : -1;
+    }).forEach(function(k){ liste.insertBefore(k, document.getElementById('leer')); });
+  }
+  document.querySelectorAll('.bar button[data-f]').forEach(function(b){
+    b.onclick = function(){
+      document.querySelectorAll('.bar button[data-f]').forEach(function(x){ x.classList.remove('an'); });
+      b.classList.add('an'); filter = b.dataset.f; zeige();
+    };
+  });
+  document.getElementById('q').oninput = zeige;
+  document.getElementById('sort').onchange = sortiere;
+
+  // Status beim Laden: Datenbank (App) bzw. Browser-Speicher (Datei)
+  karten.forEach(function(k){ zeigeStatus(k.dataset.id, lokal[k.dataset.id] || k.dataset.status); });
+  sortiere(); zeige();
+
+  // ---------- Suchlauf (manuell + automatisch) ----------
+  var knopf = document.getElementById('suchen');
+  if(APP && knopf){
+    var anzeige = document.getElementById('suchstatus'), glocke = document.getElementById('glocke');
+    var manuell = false, bekanntesEnde, timer;   // undefined = noch nicht abgefragt
+    var plane = function(ms){ clearTimeout(timer); timer = setTimeout(pruefe, ms); };
+    var melde = function(s){
+      if(!('Notification' in window) || Notification.permission !== 'granted' || !(s.neue_treffer || s.nachfassen)) return;
+      try{ new Notification('Wohnmobil-Scout', {body: s.neue_treffer + ' neue Wohnmobile mit fertigem Anschreiben'
+                                                + (s.nachfassen ? ' · ' + s.nachfassen + '× nachfassen' : '')}); }catch(e){}
+    };
+    var pruefe = function(){
+      fetch('/api/suchlauf').then(function(r){ return r.json(); }).then(function(s){
+        if(s.laeuft){
+          if(bekanntesEnde === undefined) bekanntesEnde = null;
+          knopf.disabled = true; knopf.textContent = 'Suche läuft …'; anzeige.textContent = s.meldung || ''; plane(3000); return;
+        }
+        knopf.disabled = false; knopf.textContent = '↻ Neue Anzeigen suchen';
+        var heute = jetztLokal().slice(0, 10);
+        anzeige.textContent = s.naechste_auto ? 'Nächste automatische Suche: ' + (s.naechste_auto.slice(0, 10) > heute ? 'morgen ' : '')
+                                               + s.naechste_auto.slice(11, 16) + ' Uhr' : '';
+        var neuesEnde = bekanntesEnde !== undefined && s.ende && s.ende !== bekanntesEnde;
+        bekanntesEnde = s.ende;
+        if(neuesEnde){
+          var text = s.fehler ? 'Suchlauf beendet mit Fehler: ' + s.fehler : s.meldung;
+          if(manuell){ toast(text + ' – Liste wird neu geladen.'); setTimeout(function(){ location.reload(); }, 1800); }
+          else {
+            document.getElementById('banner-text').textContent = text;
+            document.getElementById('banner').hidden = false;
+            melde(s);
+          }
+        }
+        plane(60000);
+      }).catch(function(){ anzeige.textContent = 'App nicht erreichbar – läuft das schwarze Fenster noch?'; plane(60000); });
+    };
+    knopf.onclick = function(){
+      post('/api/suchlauf', {}).then(function(){ manuell = true; knopf.disabled = true; knopf.textContent = 'Suche läuft …'; plane(1000); },
+                                    function(){ toast('Suchlauf konnte nicht gestartet werden'); });
+    };
+    // Gespeicherte Seiten (Strg+S) aus dem Import-Ordner einlesen – der Server ruft dabei nichts aus dem Internet ab
+    var einlesen = document.getElementById('einlesen');
+    var mehrzahl = function(n, eins, viele){ return n + ' ' + (n === 1 ? eins : viele); };
+    einlesen.onclick = function(){
+      einlesen.disabled = true; einlesen.textContent = 'Wird eingelesen …';
+      var fertig = function(){ einlesen.disabled = false; einlesen.textContent = '⤓ Gespeicherte Seiten einlesen'; };
+      fetch('/api/import', {method:'POST', headers:{'Content-Type':'application/json','X-Scout-Token':APP.token}, body:'{}'})
+        .then(function(r){ return r.json().then(function(d){ if(!r.ok) throw new Error(d.fehler || r.status); return d; }); })
+        .then(function(s){
+          if(!s.dateien){
+            fertig();
+            toast('Keine gespeicherten Seiten gefunden in ' + s.ordner + ' – Seite (Kleinanzeigen oder mobile.de) mit Strg+S speichern: Kleinanzeigen als „Webseite, nur HTML“, mobile.de als „Webseite, komplett“, in diesen Ordner.');
+            return;
+          }
+          var gelesen = s.dateien - s.unbekannt - s.fehlerhaft;
+          var text = mehrzahl(gelesen, 'Seite', 'Seiten') + ' eingelesen: ' + s.neu + ' neu, '
+                     + mehrzahl(s.preis, 'Preissenkung', 'Preissenkungen') + ', ' + s.bekannt + ' bekannt';
+          if(s.details) text += ', ' + s.details + ' mit Details';
+          if(s.unbekannt) text += ' · ' + mehrzahl(s.unbekannt, 'Seite', 'Seiten') + ' nicht erkannt (verschoben nach nicht_erkannt/)';
+          if(s.fehlerhaft) text += ' · ' + mehrzahl(s.fehlerhaft, 'Datei', 'Dateien') + ' nicht lesbar (bleiben liegen)';
+          if(s.fehler.length > s.unbekannt + s.fehlerhaft) text += ' · ' + (s.fehler.length - s.unbekannt - s.fehlerhaft) + ' mit Hinweis zum Verschieben';
+          if(s.uebrig) text += ' · ' + s.uebrig + ' weitere beim nächsten Klick';
+          if(s.fehler.length){
+            text += ' – ' + s.fehler.slice(0, 2).join(' | ') + (s.fehler.length > 2 ? ' | … (alle in ausgabe/scout.log)' : '');
+          }
+          if(s.fehler.length){                         // Meldungen lesbar lassen: nicht automatisch neu laden
+            fertig();
+            toast(text + ' – zum Aktualisieren der Liste die Seite neu laden (F5).', null, 20000);
+            return;
+          }
+          toast(text + ' – Liste wird neu geladen.');
+          setTimeout(function(){ location.reload(); }, 4000);
+        })
+        .catch(function(e){ fertig(); toast('Einlesen fehlgeschlagen: ' + e.message); });
+    };
+    if('Notification' in window && Notification.permission === 'default'){
+      glocke.hidden = false;
+      glocke.onclick = function(){ Notification.requestPermission().then(function(p){ glocke.hidden = p !== 'default'; if(p === 'granted') toast('Hinweise aktiviert ✓'); }); };
+    }
+    pruefe();
+  }
+})();
+</script>
+</body>
+</html>

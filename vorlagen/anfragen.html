@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#24524a">
+<link rel="icon" href="/static/icon-192.png">
+<title>Verkaufsanfragen – {{ firma }}</title>
+<link rel="stylesheet" href="/static/mobil.css">
+<style>
+main{max-width:1100px;margin:0 auto;padding:16px}
+nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px}
+.spalten{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:16px;align-items:start}
+@media (max-width:820px){.spalten{grid-template-columns:1fr}}
+.karte{cursor:pointer} .karte.aktiv{outline:2px solid var(--akzent)}
+.fotos{display:flex;flex-wrap:wrap;gap:6px} .fotos img{width:120px;height:90px;object-fit:cover;border-radius:6px}
+.verlauf{font-size:13px;color:var(--mute);padding-left:18px}
+.leer{padding:24px 0}
+.kalk table{font-size:12px} .kalk ul{padding-left:18px;font-size:13px}
+</style>
+</head>
+<body>
+<main>
+  <nav class="oben"><a href="/verkaufen">+ Anfrage erfassen</a>{% if ich.rolle == 'inhaber' %}<a href="/standorte">Standorte</a>{% endif %}<a href="/haendler">Händlerportal</a><a href="/ankaeufe">Ankäufe</a><a href="/">Ankaufsliste</a></nav>
+  <h1>Verkaufsanfragen</h1>
+  <p class="leise">Fahrzeuge, die Verkäufer uns selbst anbieten – getrennt von beobachteten Inseraten. Keine automatische Nachricht an Verkäufer.</p>
+  <div class="reihe" role="group" aria-label="Status">
+    <button class="knopf klein primaer" data-filter="">Alle offenen</button>{% for key, text in status.items() %}<button class="knopf klein" data-filter="{{ key }}">{{ text }}</button>{% endfor %}
+  </div>
+  <div class="spalten">
+    <div id="liste"><p class="leise">Lade …</p></div>
+    <div id="detail"><p class="leise leer">Anfrage links auswählen.</p></div>
+  </div>
+</main>
+<script src="/static/kalkulation.js"></script>
+<script src="/static/live.js"></script>
+<script>
+var TOKEN = {{ token | tojson }}, STATUS = {{ status | tojson }}, KANAELE = {{ kanaele | tojson }}, INHABER = {{ 'true' if ich.rolle == 'inhaber' else 'false' }};
+(function(){
+  var filter = '', aktiv = null;
+  var OFFEN = {eingegangen:1, in_pruefung:1, angebot:1};
+  function esc(s){ return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function eur(x){ return x === null || x === undefined ? '–' : Math.round(x).toLocaleString('de-DE') + ' €'; }
+  function tsd(x){ return x ? Number(x).toLocaleString('de-DE') : '?'; }
+  function datum(s){ return s ? s.slice(8, 10) + '.' + s.slice(5, 7) + '.' + s.slice(0, 4) + ' ' + s.slice(11, 16) : ''; }
+  function ampel(a){ return '<span class="tag ' + esc(a) + '">' + esc({gruen:'Grün', gelb:'Gelb', rot:'Rot'}[a] || '–') + '</span>'; }
+  function api(url, d){
+    var opt = {credentials:'same-origin', headers:{}};
+    if(d !== undefined){ opt.method = 'POST'; opt.headers['Content-Type'] = 'application/json'; opt.headers['X-Scout-Token'] = TOKEN; opt.body = JSON.stringify(d); }
+    return fetch(url, opt).then(function(r){
+      if(r.status === 401){ location.href = '/login?weiter=%2Fanfragen'; throw new Error('Bitte anmelden'); }
+      return r.json().catch(function(){ return {}; }).then(function(x){ if(!r.ok) throw new Error(x.fehler || ('Fehler ' + r.status)); return x; });
+    });
+  }
+  function liste(){
+    return api('/api/verkaufsanfragen' + (filter ? '?status=' + filter : '')).then(function(l){
+      if(!filter) l = l.filter(function(a){ return OFFEN[a.status]; });
+      var el = document.getElementById('liste');
+      el.innerHTML = l.length ? l.map(function(a){
+        var b = a.bewertung;
+        return '<div class="karte' + (a.id === aktiv ? ' aktiv' : '') + '" data-id="' + a.id + '" tabindex="0">' +
+          '<div class="zeile"><span class="titel">' + esc([a.marke, a.modell].filter(Boolean).join(' ')) + '</span>' + ampel(b.ampel) + '</div>' +
+          '<p class="leise">' + esc(a.referenz) + ' · ' + esc(a.art) + ' · EZ ' + esc(a.ez_jahr) + ' · ' + tsd(a.km) + ' km · ' + esc(a.plz) + ' ' + esc(a.ort || '') + '</p>' +
+          '<p class="leise">' + esc(STATUS[a.status]) + ' · ' + esc(KANAELE[a.kanal]) + ' · ' + datum(a.erstellt_am) + (a.bearbeiter ? ' · ' + esc(a.bearbeiter) : '') +
+          (a.fotos_anzahl ? ' · ' + a.fotos_anzahl + ' Fotos' : '') + '</p>' +
+          '<div class="zahlen"><div><span>Preisvorstellung</span>' + eur(a.preisvorstellung) + '</div><div><span>Erstangebot</span><b>' + eur(b.erstangebot) +
+          '</b></div><div><span>Max-EK</span>' + eur(b.max_ek) + '</div></div></div>';
+      }).join('') : '<p class="leise leer">Keine Anfragen.</p>';
+    }).catch(function(e){ document.getElementById('liste').innerHTML = '<p class="hinweis warn">' + esc(e.message) + '</p>'; });
+  }
+  function zeit(u){ return u ? new Date(u).toLocaleString('de-DE', {dateStyle:'short', timeStyle:'short'}) : ''; }
+  function auktionBlock(x){
+    var mp = x.mindestpreis ? eur(x.mindestpreis) + (x.mindestpreis_erreicht ? ' ✓ erreicht' : ' (nicht erreicht)') : 'ohne';
+    return '<div class="auktionsblock" style="border-top:1px solid var(--linie,#ddd);padding-top:6px;margin-top:6px">' +
+      '<p><b>' + esc(x.status_text) + '</b>' + (x.ergebnis_text ? ' · ' + esc(x.ergebnis_text) : '') + (x.grund ? ' · ' + esc(x.grund) : '') + '</p>' +
+      '<div class="zahlen"><div><span>Höchstgebot</span><b>' + (x.hoechstgebot ? eur(x.hoechstgebot) : '–') + '</b></div><div><span>Mindestpreis</span>' + mp +
+      '</div><div><span>Start</span>' + eur(x.startpreis) + '</div></div>' +
+      '<p class="leise">' + zeit(x.start_utc) + ' bis ' + zeit(x.ende_utc) + ' · ' + x.gebote_anzahl + ' Gebote' + (x.fuehrend ? ' · führend: ' + esc(x.fuehrend) : '') + '</p>' +
+      (x.gebote.length ? '<ul class="verlauf">' + x.gebote.map(function(g){ return '<li>' + eur(g.betrag) + ' · ' + esc(g.standort) + (g.nutzer ? ' (' + esc(g.nutzer) + ')' : '') + ' · ' + zeit(g.zeitpunkt_utc) + '</li>'; }).join('') + '</ul>' : '') +
+      '<div class="reihe">' + (INHABER && x.status === 'laeuft' ? '<button class="knopf klein" data-auktion-aktion="abbrechen" data-auktion-id="' + x.id + '">Abbrechen</button>' : '') +
+      (INHABER && x.status === 'beendet' ? (x.gewinner_gebot_id ? '<button class="knopf klein primaer" data-auktion-aktion="zuschlag" data-auktion-id="' + x.id + '">Zuschlag bestätigen (Demo)</button>' : '') +
+        '<button class="knopf klein" data-auktion-aktion="ablehnen" data-auktion-id="' + x.id + '">Kein Zuschlag</button>' : '') +
+      '<button class="knopf klein" data-auktion-aktion="pruefen" data-auktion-id="' + x.id + '">Protokoll prüfen</button></div><div data-protokoll="' + x.id + '"></div></div>';
+  }
+  function auktionKarte(a){
+    var aktiv = a.auktionen.some(function(x){ return x.status === 'laeuft' || x.status === 'beendet' || x.status === 'zugeschlagen'; });
+    var start = INHABER && !aktiv && a.freigegeben_am && OFFEN[a.status];
+    return '<div class="karte" id="auktion"><h3>Demo-Auktion <span class="tag">nicht verbindlich</span></h3>' +
+      (start ? '<p class="leise">Geprüfte Standorte bieten; ein Zuschlag gilt erst nach deiner Bestätigung und ist nur eine Demo.</p>' +
+        '<div class="reihe"><label style="flex:1">Startpreis €<input id="a-start" type="number" min="1" step="1" placeholder="automatisch"></label>' +
+        '<label style="flex:1">Mindestpreis € (leer = ohne)<input id="a-mindest" type="number" min="1" step="1" value="' + esc(a.preisvorstellung || '') + '"></label>' +
+        '<label style="flex:1">Laufzeit Std.<input id="a-laufzeit" type="number" min="1" step="1" value="24"></label></div>' +
+        '<button class="knopf klein primaer" data-auktion-aktion="starten">Demo-Auktion starten</button>'
+        : (!a.auktionen.length ? '<p class="leise">' + (a.freigegeben_am ? 'Noch keine Auktion.' + (INHABER ? '' : ' Starten kann nur der Inhaber.') : 'Erst nach Freigabe für Standorte möglich.') + '</p>' : '')) +
+      a.auktionen.map(auktionBlock).join('') + '</div>';
+  }
+  function kalkKarte(a){
+    var laufend = a.auktionen.filter(function(x){ return x.status === 'laeuft' || x.status === 'beendet'; })[0];
+    var vorschlag = (laufend && laufend.hoechstgebot) || a.preisvorstellung || '';
+    return '<div class="karte" id="kalkkarte"><h3>Deal-Kalkulation</h3><p class="leise">Gewinn und Max-EK für einen Betrag, Transport ab Firmensitz. ' +
+      'Jedes Gebot eines Standorts wird mit seiner Kalkulation (Transport ab Standort) gespeichert.</p>' +
+      '<div class="reihe"><label style="flex:1">Betrag €<input id="k-betrag" type="number" min="1" step="1" value="' + esc(vorschlag) + '"></label>' +
+      '<button class="knopf klein" data-kalk-aktion="rechnen">Rechnen</button><button class="knopf klein primaer" data-kalk-aktion="speichern">Speichern</button></div>' +
+      '<div id="k-ergebnis"></div>' +
+      (a.kalkulationen.length ? '<h4>Gespeicherte Kalkulationen</h4><ul class="verlauf">' + a.kalkulationen.map(function(k){
+        return '<li>' + zeit(k.zeitpunkt_utc) + ' · ' + (k.anlass === 'gebot' ? 'Gebot ' + esc(k.standort || '') : 'gespeichert') + ' · ' + eur(k.betrag) +
+          ' · Gewinn erw. ' + eur(k.gewinn) + ' · <a href="#" data-kalk-aktion="nachrechnen" data-kalk-id="' + k.id + '">nachrechnen</a> <span data-nachrechnung="' + k.id + '"></span></li>';
+      }).join('') + '</ul>' : '') + '</div>';
+  }
+  function kalkAktion(t){
+    var art = t.dataset.kalkAktion, ziel = document.getElementById('k-ergebnis');
+    if(art === 'nachrechnen') return api('/api/kalkulation/' + t.dataset.kalkId).then(function(x){
+      var n = x.nachrechnung;
+      document.querySelector('[data-nachrechnung="' + x.id + '"]').innerHTML = n.gleich ? '<span class="tag gruen">identisch nachgerechnet ✓</span>'
+        : '<span class="tag rot">abweichend' + (!n.hash_ok ? ' – Eingabe verändert' : !n.version_gleich ? ' – andere Rechenversion' : '') + '</span>';
+      ziel.innerHTML = '<p class="leise">Gespeicherte Kalkulation #' + x.id + ' vom ' + zeit(x.zeitpunkt_utc) + (x.standort ? ' (' + esc(x.standort) + ')' : '') + '</p>' +
+        Kalkulation.html(x.ergebnis, x.eingabe_hash.slice(0, 12));
+    }, function(err){ alert(err.message); });
+    var betrag = zahl('k-betrag');
+    if(!(betrag > 0)){ alert('Bitte einen ganzen Euro-Betrag eingeben'); return; }
+    if(art === 'speichern') return api('/api/verkaufsanfrage/' + aktiv + '/kalkulation', {betrag: betrag}).then(function(){ return detail(aktiv); }, function(err){ alert(err.message); });
+    ziel.innerHTML = '<p class="leise">Rechne …</p>';
+    return api('/api/verkaufsanfrage/' + aktiv + '/kalkulation?betrag=' + betrag).then(function(x){ ziel.innerHTML = Kalkulation.html(x.ergebnis, x.eingabe_hash); },
+      function(err){ ziel.innerHTML = '<p class="hinweis warn">' + esc(err.message) + '</p>'; });
+  }
+  var NUTZER = null;
+  function besichtigungKarte(a){
+    var offen = a.besichtigungen.some(function(b){ return b.status === 'geplant' || b.status === 'laeuft'; });
+    return '<div class="karte" id="besichtigungkarte"><h3>Besichtigung und Ankauf</h3>' +
+      (a.besichtigungen.length ? '<ul class="verlauf">' + a.besichtigungen.map(function(b){
+        return '<li>#' + b.id + ' · ' + esc({geplant:'geplant', laeuft:'läuft', abgeschlossen:'abgeschlossen', abgebrochen:'abgebrochen'}[b.status] || b.status) +
+          (b.termin ? ' · ' + esc(b.termin.replace('T', ' ')) : '') + (b.zustaendig ? ' · ' + esc(b.zustaendig.name) : '') +
+          ' · <a href="/m#/besichtigung/' + b.id + '">in der Handy-App öffnen</a>' + (b.status === 'abgeschlossen' ? ' · <a href="/protokoll/' + b.id + '" target="_blank" rel="noopener">Protokoll</a>' : '') + '</li>';
+      }).join('') + '</ul>' : '') +
+      (a.ankaeufe.length ? '<p>' + a.ankaeufe.map(function(k){ return '<a class="knopf klein primaer" href="/ankaeufe#' + k.id + '">Ankauf ' + esc(k.referenz) + ' – ' + esc(k.status_text) + '</a>'; }).join(' ') + '</p>' : '') +
+      (OFFEN[a.status] && !offen ? '<p class="leise">Die Besichtigung läuft in der Handy-App (Prüfpunkte, Messungen, Fotos, Unterschriften). Grundlage: Bewertung bzw. bestätigter Zuschlag.</p>' +
+        '<div class="reihe"><label style="flex:1">Termin<input id="b-termin" type="datetime-local"></label><label style="flex:2">Adresse<input id="b-adresse" maxlength="200" value="' + esc([a.plz, a.ort].filter(Boolean).join(' ')) + '"></label></div>' +
+        '<label>Zuständig<select id="b-zustaendig"><option value="">ich</option>' + (NUTZER || []).map(function(n){ return '<option value="' + n.id + '">' + esc(n.name) + '</option>'; }).join('') + '</select></label>' +
+        '<button class="knopf klein primaer" data-besichtigung="planen">Besichtigung planen</button>' : '') + '</div>';
+  }
+  function zahl(id){ var v = document.getElementById(id).value.trim(); return v === '' ? null : parseInt(v, 10); }
+  function auktionAktion(t){
+    var id = t.dataset.auktionId, art = t.dataset.auktionAktion;
+    if(art === 'pruefen') return api('/api/auktion/' + id).then(function(x){
+      var p = x.pruefung;
+      document.querySelector('[data-protokoll="' + id + '"]').innerHTML = '<p class="hinweis ' + (p.ok ? 'ok">Protokoll unverändert ✓ (' + p.eintraege + ' Einträge insgesamt)' : 'warn">Protokoll beschädigt: ' + p.fehler.map(esc).join('; ')) + '</p>' +
+        '<ul class="verlauf">' + x.protokoll.map(function(e){ return '<li>' + zeit(e.zeitpunkt_utc) + ' · ' + esc(e.ereignis) + (e.daten.betrag ? ' ' + eur(e.daten.betrag) : '') + ' · <code>' + esc(e.hash.slice(0, 12)) + '</code></li>'; }).join('') + '</ul>';
+    }, function(err){ alert(err.message); });
+    var p;
+    if(art === 'starten'){
+      var d = {startpreis: zahl('a-start'), mindestpreis: zahl('a-mindest'), laufzeit_stunden: zahl('a-laufzeit')};
+      if(d.startpreis === null) delete d.startpreis;
+      if(d.laufzeit_stunden === null) delete d.laufzeit_stunden;
+      if(!confirm('Demo-Auktion starten? Geprüfte Standorte können dann bieten.')) return;
+      p = api('/api/verkaufsanfrage/' + aktiv + '/auktion', d);
+    } else {
+      var frage = {abbrechen:'Auktion abbrechen? Bisherige Gebote bleiben im Protokoll.', zuschlag:'Zuschlag für das Höchstgebot bestätigen? (Demo – nicht verbindlich)', ablehnen:'Ohne Zuschlag abschließen?'}[art];
+      if(!confirm(frage)) return;
+      p = api('/api/auktion/' + id + '/' + art, art === 'abbrechen' ? {grund: prompt('Grund (optional)') || ''} : {});
+    }
+    p.then(function(){ return detail(aktiv); }, function(err){ alert(err.message); });
+  }
+  function detail(id){
+    aktiv = id;
+    document.querySelectorAll('#liste .karte').forEach(function(k){ k.classList.toggle('aktiv', +k.dataset.id === id); });
+    return api('/api/verkaufsanfrage/' + id).then(function(a){
+      var b = a.bewertung, s = a.spanne_verkaeufer;
+      document.getElementById('detail').innerHTML =
+        '<div class="karte"><h2 style="margin-top:0">' + esc([a.marke, a.modell].filter(Boolean).join(' ')) + ' ' + ampel(b.ampel) + '</h2>' +
+        '<p class="leise">' + esc(a.referenz) + ' · ' + esc(a.art) + ' · EZ ' + esc(a.ez_jahr) + ' · ' + tsd(a.km) + ' km · eingegangen ' + datum(a.erstellt_am) + ' (' + esc(KANAELE[a.kanal]) + ')</p>' +
+        '<div class="zahlen"><div><span>Preisvorstellung</span>' + eur(a.preisvorstellung) + '</div><div><span>Erstangebot</span><b>' + eur(b.erstangebot) +
+        '</b></div><div><span>Max-EK</span>' + eur(b.max_ek) + '</div></div>' +
+        '<p class="leise">Marktniveau ' + eur(b.marktwert) + (b.spanne_von ? ' (Spanne ' + eur(b.spanne_von) + ' – ' + eur(b.spanne_bis) + ')' : '') +
+        ' · Sicherheit ' + esc(b.sicherheit) + ' · ' + esc(b.vergleich_basis || '') + '</p>' +
+        (s ? '<p class="leise">Dem Verkäufer gezeigt: ' + eur(s[0]) + ' – ' + eur(s[1]) + '</p>' : '<p class="leise">Dem Verkäufer wurde keine Spanne gezeigt (Datenlage zu unsicher oder abgeschaltet).</p>') + '</div>' +
+        '<div class="karte"><h3>Verkäufer</h3><p>' + esc(a.name) + ' · ' + esc(a.plz) + ' ' + esc(a.ort || '') + '</p><p>' +
+        (a.telefon ? '<a href="tel:' + esc(a.telefon) + '">' + esc(a.telefon) + '</a> ' : '') + (a.email ? '<a href="mailto:' + esc(a.email) + '">' + esc(a.email) + '</a>' : '') + '</p>' +
+        '<p class="leise">Einwilligung am ' + datum(a.einwilligung_am) + ' (Text ' + esc(a.einwilligung_version) + ')</p>' +
+        (INHABER && a.status !== 'zurueckgezogen' ? '<button class="knopf klein" data-widerruf="1">Widerruf: personenbezogene Daten löschen</button>' : '') + '</div>' +
+        '<div class="karte"><h3>Zustand</h3>' + (a.maengel.length ? '<p>' + a.maengel.map(function(m){ return '⚠ ' + esc(m.text); }).join('<br>') + '</p>' : '<p class="leise">Keine Mängel angegeben.</p>') +
+        (a.beschreibung ? '<p style="white-space:pre-wrap">' + esc(a.beschreibung) + '</p>' : '') +
+        (a.fotos.length ? '<div class="fotos">' + a.fotos.map(function(f){ var u = '/anfrage-fotos/' + a.id + '/' + encodeURIComponent(f.datei); return '<a href="' + u + '" target="_blank" rel="noopener"><img src="' + u + '" alt="Foto"></a>'; }).join('') + '</div>' : '<p class="leise">Keine Fotos.</p>') + '</div>' +
+        '<div class="karte"><h3>Standorte</h3>' +
+        (a.weitergabe_einwilligung_am ? '<p class="leise">Verkäufer stimmt der Weitergabe an Standorte zu (' + datum(a.weitergabe_einwilligung_am) + ').</p>'
+                                      : '<p class="leise">Keine Zustimmung des Verkäufers zur Weitergabe – nicht freigebbar.</p>') +
+        (a.freigegeben_am ? '<p class="hinweis ok">Für geprüfte Standorte freigegeben seit ' + datum(a.freigegeben_am) + '</p>' : '') +
+        (INHABER && a.weitergabe_einwilligung_am ? (a.freigegeben_am ? '<button class="knopf klein" data-freigabe="0">Freigabe zurücknehmen</button>'
+            : '<p class="leise">Vor der Freigabe Beschreibung und Fotos auf Kontaktdaten prüfen.</p><button class="knopf klein primaer" data-freigabe="1">Für Standorte freigeben</button>') : '') +
+        (a.interessen.length ? '<p>Interesse: ' + a.interessen.map(function(i){ return esc(i.standort) + ' (' + datum(i.zeitpunkt) + ')'; }).join(', ') + '</p>' : '') + '</div>' +
+        auktionKarte(a) + kalkKarte(a) + besichtigungKarte(a) +
+        '<div class="karte"><h3>Bearbeitung</h3><p class="leise">Bearbeiter: ' + esc(a.bearbeiter || '–') + '</p>' +
+        '<div class="reihe"><button class="knopf klein" data-aktion="uebernehmen">Ich übernehme</button>' + (a.bearbeiter_id ? '<button class="knopf klein" data-aktion="abgeben">Abgeben</button>' : '') + '</div>' +
+        '<div class="reihe">' + Object.keys(STATUS).map(function(k){ return '<button class="knopf klein' + (k === a.status ? ' primaer' : '') + '" data-status="' + k + '">' + esc(STATUS[k]) + '</button>'; }).join('') + '</div>' +
+        '<label>Notiz<textarea id="notiz" style="min-height:70px">' + esc(a.notiz || '') + '</textarea></label>' +
+        '<h3>Verlauf</h3><ul class="verlauf">' + a.verlauf.map(function(v){
+          return '<li>' + datum(v.zeitpunkt) + ' · ' + esc(v.ereignis) + (v.neu ? ': ' + esc(v.ereignis === 'status' ? STATUS[v.neu] || v.neu : v.ereignis === 'foto' ? 'Foto' : v.neu) : '') + (v.nutzer ? ' (' + esc(v.nutzer) + ')' : '') + '</li>';
+        }).join('') + '</ul></div>';
+      document.getElementById('notiz').onchange = function(e){ api('/api/verkaufsanfrage/' + id + '/notiz', {notiz:e.target.value}).then(function(){ detail(id); }); };
+      if(document.getElementById('k-betrag').value) kalkAktion({dataset:{kalkAktion:'rechnen'}});
+    }).catch(function(e){ document.getElementById('detail').innerHTML = '<p class="hinweis warn">' + esc(e.message) + '</p>'; });
+  }
+  document.getElementById('liste').addEventListener('click', function(e){ var k = e.target.closest('.karte'); if(k) detail(+k.dataset.id); });
+  document.getElementById('liste').addEventListener('keydown', function(e){ var k = e.target.closest('.karte'); if(k && e.key === 'Enter') detail(+k.dataset.id); });
+  document.getElementById('detail').addEventListener('click', function(e){
+    var t = e.target.closest('[data-status],[data-aktion],[data-freigabe],[data-auktion-aktion],[data-kalk-aktion],[data-widerruf],[data-besichtigung]'); if(!t || !aktiv) return;
+    if(t.dataset.kalkAktion){ e.preventDefault(); return kalkAktion(t); }
+    if(t.dataset.besichtigung){
+      var d = {termin: document.getElementById('b-termin').value || null, adresse: document.getElementById('b-adresse').value,
+               zustaendig_id: document.getElementById('b-zustaendig').value || null};
+      return api('/api/verkaufsanfrage/' + aktiv + '/besichtigung', d).then(function(){ return detail(aktiv); }, function(err){ alert(err.message); });
+    }
+    if(t.dataset.widerruf){
+      if(!confirm('Widerruf ausführen? Name, Kontakt, Beschreibung, Notiz und Fotos werden unwiderruflich gelöscht, die Freigabe zurückgenommen.')) return;
+      return api('/api/verkaufsanfrage/' + aktiv + '/widerruf', {}).then(function(){ return Promise.all([liste(), detail(aktiv)]); }, function(err){ alert(err.message); });
+    }
+    if(t.dataset.auktionAktion) return auktionAktion(t);
+    var p = t.dataset.freigabe ? api('/api/verkaufsanfrage/' + aktiv + '/freigabe', {freigeben: t.dataset.freigabe === '1'})
+          : t.dataset.status ? api('/api/verkaufsanfrage/' + aktiv + '/status', {status:t.dataset.status})
+                             : api('/api/verkaufsanfrage/' + aktiv + '/uebernehmen', {abgeben: t.dataset.aktion === 'abgeben'});
+    p.then(function(){ return Promise.all([liste(), detail(aktiv)]); }, function(err){ alert(err.message); });
+  });
+  document.querySelectorAll('[data-filter]').forEach(function(b){
+    b.onclick = function(){
+      document.querySelectorAll('[data-filter]').forEach(function(x){ x.classList.remove('primaer'); });
+      b.classList.add('primaer'); filter = b.dataset.filter; liste();
+    };
+  });
+  api('/api/nutzer').then(function(n){ NUTZER = n; }, function(){ NUTZER = []; });
+  liste().then(function(){ var m = /^#(\d+)$/.exec(location.hash); if(m) detail(+m[1]); });
+  // Live (G1): Änderungen von Kollegen und Geboten sofort sehen – das Detail nur, solange hier nichts eingegeben wird
+  function tippt(){ var x = document.activeElement; return !!x && /^(INPUT|TEXTAREA|SELECT)$/.test(x.tagName) && document.getElementById('detail').contains(x); }
+  Live.an(['anfrage', 'auktion', 'ankauf', 'besichtigung'], function(){ liste(); if(aktiv && !tippt()) detail(aktiv); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, "claude/**", "feature/auto-api-integration-step1"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests (${{ matrix.os }}, Python 3.13)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Abhängigkeiten (gesperrt, nur fertige Pakete)
+        run: |
+          python -m pip install --disable-pip-version-check --only-binary=:all: -r requirements-dev.txt
+      - name: Ruff
+        run: python -m ruff check .
+      - name: Pytest
+        run: python -m pytest
+
+  windows-start:
+    name: Windows-Start (installieren.bat)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: installieren.bat – erster Lauf legt .venv an
+        shell: cmd
+        run: |
+          call installieren.bat /still
+          if errorlevel 1 exit /b 1
+          if not exist .venv\Scripts\python.exe exit /b 1
+          .venv\Scripts\python.exe --version
+      - name: installieren.bat – zweiter Lauf hat nichts zu tun
+        shell: cmd
+        run: |
+          call installieren.bat /still
+          if errorlevel 1 exit /b 1
+      - name: Programm aus .venv startbar
+        shell: cmd
+        run: |
+          .venv\Scripts\python.exe scout.py --help
+          if errorlevel 1 exit /b 1
+          .venv\Scripts\python.exe scout.py rechne --preis 42900 --ez 2017 --km 85000 --titel "Knaus Sky TI 650 MEG" --anschreiben
+      - name: Tests in der .venv
+        shell: cmd
+        run: |
+          .venv\Scripts\python.exe -m pip install --disable-pip-version-check --only-binary=:all: -r requirements-dev.txt
+          .venv\Scripts\python.exe -m pytest
+
+  unix-start:
+    name: Linux-Start (installieren.sh)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: ./installieren.sh && ./installieren.sh
+      - run: .venv/bin/python scout.py --help
+
+  pip-audit:
+    name: Abhängigkeiten auf bekannte Schwachstellen (pip-audit, nicht blockierend)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: pip-audit gegen die gesperrten Abhängigkeiten
+        run: |
+          python -m pip install --disable-pip-version-check pip-audit
+          python -m pip_audit --strict -r requirements.txt

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#24524a">
+<link rel="icon" href="/static/icon-192.png">
+<title>Standorte – {{ firma }}</title>
+<link rel="stylesheet" href="/static/mobil.css">
+<style>main{max-width:800px;margin:0 auto;padding:16px} nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px}</style>
+</head>
+<body>
+<main>
+  <nav class="oben"><a href="/haendler">Händlerportal (Vorschau)</a><a href="/anfragen">Verkaufsanfragen</a><a href="/">Ankaufsliste</a></nav>
+  <h1>Standorte / Händler</h1>
+  <p class="leise">Ein Standort sieht freigegebene Verkaufsanfragen erst, wenn er hier <b>geprüft</b> ist. Sperren wirkt sofort.
+    Zugänge für Standort-Mitarbeiter: <code>python scout.py nutzer anlegen NAME --rolle haendler --standort "STANDORT"</code></p>
+  <form id="neu" class="karte">
+    <h3 style="margin-top:0">Neuer Standort</h3>
+    <label>Name *<input name="name" required maxlength="100"></label>
+    <div class="reihe"><label style="flex:1">PLZ<input name="plz" maxlength="10"></label><label style="flex:2">Ort<input name="ort" maxlength="80"></label></div>
+    <button class="knopf primaer" type="submit">Anlegen</button>
+  </form>
+  <div id="liste"><p class="leise">Lade …</p></div>
+</main>
+<script>
+var TOKEN = {{ token | tojson }}, STATUS = {{ standort_status | tojson }};
+(function(){
+  function esc(s){ return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function api(url, d){
+    var opt = {credentials:'same-origin', headers:{}};
+    if(d !== undefined){ opt.method = 'POST'; opt.headers['Content-Type'] = 'application/json'; opt.headers['X-Scout-Token'] = TOKEN; opt.body = JSON.stringify(d); }
+    return fetch(url, opt).then(function(r){ return r.json().catch(function(){ return {}; }).then(function(x){ if(!r.ok) throw new Error(x.fehler || ('Fehler ' + r.status)); return x; }); });
+  }
+  function lade(){
+    return api('/api/standorte').then(function(d){
+      document.getElementById('liste').innerHTML = d.standorte.length ? d.standorte.map(function(s){
+        var leute = d.nutzer.filter(function(n){ return n.standort_id === s.id; }).map(function(n){ return esc(n.name) + (n.aktiv ? '' : ' (gesperrt)'); });
+        return '<div class="karte"><div class="zeile"><span class="titel">' + esc(s.name) + '</span><span class="tag">' + esc(STATUS[s.status]) + '</span></div>' +
+          '<p class="leise">' + esc(s.plz || '') + ' ' + esc(s.ort || '') + (s.geprueft_am ? ' · geprüft am ' + esc(s.geprueft_am.slice(0, 10)) : '') + '</p>' +
+          '<p class="leise">Zugänge: ' + (leute.length ? leute.join(', ') : 'noch keine') + '</p><div class="reihe">' +
+          Object.keys(STATUS).filter(function(k){ return k !== s.status; }).map(function(k){
+            return '<button class="knopf klein' + (k === 'geprueft' ? ' primaer' : '') + '" data-id="' + s.id + '" data-status="' + k + '">' +
+              ({geprueft:'Als geprüft freischalten', gesperrt:'Sperren', offen:'Zurück auf „zur Prüfung“'})[k] + '</button>';
+          }).join('') + '</div></div>';
+      }).join('') : '<p class="leise">Noch keine Standorte.</p>';
+    }).catch(function(e){ document.getElementById('liste').innerHTML = '<p class="hinweis warn">' + esc(e.message) + '</p>'; });
+  }
+  document.getElementById('liste').addEventListener('click', function(e){
+    var b = e.target.closest('[data-status]'); if(!b) return;
+    api('/api/standorte/' + b.dataset.id + '/status', {status:b.dataset.status}).then(lade, function(err){ alert(err.message); });
+  });
+  document.getElementById('neu').onsubmit = function(e){
+    e.preventDefault(); var f = e.target;
+    api('/api/standorte', {name:f.elements.name.value, plz:f.elements.plz.value, ort:f.elements.ort.value}).then(function(){ f.reset(); lade(); }, function(err){ alert(err.message); });
+  };
+  lade();
+})();
+</script>
+</body>
+</html>
