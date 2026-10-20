@@ -4,6 +4,23 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P3-02b – Dubletten bestätigen, ablehnen, aufheben mit Wirkung (20.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 1638 bestanden (vorher 1529), neu `test_dubletten_entscheiden.py`, `test_dubletten_oberflaeche.py` |
+| `ruff check .` | grün |
+| Bestätigen hängt um, Protokoll vollständig, idempotent; Konflikt bei „verschieden“ in der Gruppe; Ketten und Verzweigungen | bestanden |
+| Aufheben nur LIFO, bit-gleich; Zufallsketten (10 Seeds in der Suite, 40 bei der QA) | bestanden |
+| Fehler mitten in der Transaktion → vollständiger Rollback; drei gleichzeitige Verbindungen (QA, je 30×) → keine Inkonsistenz | bestanden |
+| Wirkung: Gruppe sperrt Anschreiben (auch über Mitglied ohne Preis, H1), Team-Sperre sofort (D2) und im Wettlauf (D3), heuristische Nachbarn der Mitglieder (M1); „verschieden“ hebt Paar-Sperre auf; Vergleichsbasis zählt die Gruppe einmal | bestanden |
+| Ohne Entscheidungen bit-gleich zur reinen Heuristik; `bewerte_zeilen` ohne Datenbank-Import | bestanden |
+| Rechte je Rolle × Aktion, CSRF, ungültige IDs → 400, Audit | bestanden |
+| Oberfläche: kein innerHTML mit Daten, Links nur http(s), Rendern nach Rolle; Klicktest Desktop 1280 / Handy 390, hell/dunkel | 31 Prüfungen bestanden, 0 JS-Fehler |
+| Leistung (QA, 50 000 Inserate, 13 000 Entscheidungen) | Wirkung laden 0,12 s; Gruppe je Anzeige 0,03 ms |
+| QA (eine Runde) | Freigabe mit Auflagen – H1, M1, N2 behoben; N1/N3 Backlog (P3-02c); Korrekturen **nicht** erneut von der QA geprüft |
+| Windows-CI, Service-Worker-Update im Browser, echte Geräte, echte Marktdaten | nicht geprüft (CI folgt im PR) |
+
 ## P3-02a – Fahrzeugidentität: Grundlage, Vorschläge nur lesend (20.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

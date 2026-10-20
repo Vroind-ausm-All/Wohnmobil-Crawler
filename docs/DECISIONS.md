@@ -722,7 +722,20 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   6. Rückweg: Sicherung `vor-v12` zurückspielen.
 * **Alternativen:** Vorschlagstabelle mit Status „offen“ nach jedem Lauf (mehr Schreibhaken, veraltet bei Änderungen); Merkmale als
   Spalten am Fahrzeug (veralten); automatische Zusammenführung bei „hoch“ (vom Betreiber abgelehnt).
-* **Folgen / offen:** P3-02a hat keine fachliche Wirkung (Test). P3-02b: Bestätigen/Ablehnen/Aufheben (LIFO), Gruppenwirkung auf
+* **Folgen / offen:** P3-02a hat keine fachliche Wirkung (Test). P3-02b (umgesetzt, siehe Nachtrag unten): Bestätigen/Ablehnen/Aufheben (LIFO), Gruppenwirkung auf
   Team-Sperre und Bewertung mit sofortiger Cache-Leerung, Prüfung in derselben Transaktion; `PRAGMA foreign_keys` ist nirgends aktiv –
   Existenz der Datensätze im Code prüfen. Die Invariante „`finde_duplikate` ⇒ mindestens mittel“ gilt außer bei Modellnummer- oder
   Art-Widerspruch; `finde_duplikate` selbst ist unverändert.
+* **Nachtrag P3-02b (20.10.2026, umgesetzt):**
+  1. Bestätigen hängt alle Inserate des Fahrzeugs mit der größeren ID an das mit der kleineren (Zeilen `zusammen`); Aufheben nur in
+     umgekehrter Reihenfolge (LIFO), stellt den Zustand bit-gleich her (Zeilen `zurueck`); verwaiste Fahrzeuge bleiben bestehen.
+     Konflikt (409), wenn die entstehende Gruppe ein Paar mit geltendem „verschieden“ enthält.
+  2. Wirkung an einer Stelle (`dubletten.wende_an`): Nachbarn eines Inserats = eigene Gruppe ∪ heuristische Nachbarn aller
+     Gruppenmitglieder (eine Stufe, keine Hülle über Heuristik-Ketten) ∪ deren Gruppen, minus Paare mit geltendem „verschieden“.
+     Ohne Entscheidungen bit-gleich zur reinen Heuristik. Wirkt auf Anschreiben-Sperre (auch über Gruppenmitglieder ohne Preis),
+     Team-Sperre (Gruppe zusätzlich per SQL in derselben Transaktion) und Vergleichsbasis (Gruppe zählt einmal, nur Inserate mit Preis).
+  3. Cache wird nach jeder Entscheidung sofort geleert. `bearbeitung` und Reservierungen bleiben unverändert; die Antwort warnt, wenn
+     Gruppenmitglieder von verschiedenen Kollegen gehalten werden. Fahrzeugstatus nur abgeleitet (`domaene.fahrzeug_status`).
+  4. Oberfläche: Desktop mit Vorschlagsliste, „Gleiches Fahrzeug“/„Verschieden“ (je nach Recht, mit Rückfrage) und Gruppe samt
+     Verlauf und „Aufheben“ im Fahrzeugfenster; Handy nur Anzeige.
+  5. Offen (Backlog): Index `fahrzeug_zuordnungen(entscheidung_id)` (nächste Schemaänderung), Audit-Objekt mit Entscheidungs-ID.

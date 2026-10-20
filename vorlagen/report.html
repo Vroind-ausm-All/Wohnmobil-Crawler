@@ -154,7 +154,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
 #toast.warn{background:var(--warn-bg);color:var(--warn-ink);font-weight:600}
 @media (max-width:760px){ .spalten{grid-template-columns:1fr} .spalten>div:last-child{order:-1} .brief{min-height:300px} }
 </style>
-{% if app %}<link rel="stylesheet" href="/static/textimport.css">{% endif %}
+{% if app %}<link rel="stylesheet" href="/static/textimport.css"><link rel="stylesheet" href="/static/dubletten.css">{% endif %}
 </head>
 <body>
 {% set AMPEL = {'gruen':'Grün','gelb':'Gelb','rot':'Rot','grau':'ohne Bewertung'} %}
@@ -186,6 +186,9 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
   <section class="kasten" id="textimport" aria-labelledby="textimport-titel" hidden>
     <h3 id="textimport-titel">Inserat einlesen (Link + Text)</h3>
     <div id="textimport-box"></div>
+  </section>
+  <section class="kasten" id="dubletten" aria-labelledby="dub-titel" hidden>
+    <div id="dubletten-box"></div>
   </section>
   {% endif %}
 
@@ -223,6 +226,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <button data-f="nachfassen">Nachfassen{% if zaehl.nachfassen %} ({{ zaehl.nachfassen }}){% endif %}</button>
     <button data-f="arbeit">In Arbeit</button>
     <button data-f="alle">Alle</button>
+    {% if text_darf %}<button type="button" id="dub-knopf" aria-expanded="false" aria-controls="dubletten" title="Inserate, die dasselbe Fahrzeug sein könnten – der Mensch entscheidet">Dublettenvorschläge<span id="dub-n"></span></button>{% endif %}
     {% if team %}<div class="wer" role="group" aria-label="Wer"><span>Wer:</span>
       <button type="button" data-wer="alle" class="an" aria-pressed="true">Alle</button><button type="button" data-wer="meine" aria-pressed="false">Meine</button><button type="button" data-wer="frei" aria-pressed="false">Frei</button>
     </div>{% endif %}
@@ -346,6 +350,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
         </div>
         {% endif %}
         {% for h in z.hinweise %}<p class="hinweiszeile">⚠ {{ h }}</p>{% endfor %}
+        {% if text_darf %}<div class="dub-platz" data-dub-gruppe hidden></div>{% endif %}
         <h3>Anschreiben</h3>
         {% if z.brief %}
           {% if not z.bereit %}<p class="warn" style="margin:0 0 8px">Ampel {{ AMPEL[b.ampel] }}: Das Erstangebot liegt deutlich unter dem Wunschpreis – nur senden, wenn du es trotzdem versuchen willst.</p>{% endif %}
@@ -397,7 +402,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
 
 <div id="toast" role="status" aria-live="polite"><span id="toast-text"></span><button id="toast-zurueck" hidden>Rückgängig</button></div>
 
-{% if text_darf %}<script src="/static/textimport.js"></script>{% endif %}
+{% if text_darf %}<script src="/static/textimport.js"></script><script src="/static/dubletten.js"></script>{% endif %}
 <script>
 var SCOUT = {{ app | tojson }};
 var TEAM = {{ team | tojson }};
@@ -611,6 +616,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     if(dlg.firstElementChild) ablage.appendChild(dlg.firstElementChild);
     dlg.appendChild(d); zeigeStatus(id, karte(id).dataset.status);
     dlg.showModal(); dlg.scrollTop = 0;
+    if(window.dubGruppe) window.dubGruppe(d);
   }
   dlg.addEventListener('close', function(){ if(dlg.firstElementChild) ablage.appendChild(dlg.firstElementChild); });
   dlg.addEventListener('click', function(e){
@@ -846,6 +852,61 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
         });
         tiForm.fokus(); tiPanel.scrollIntoView({block:'nearest'});
       }
+    };
+  }
+  // ---------- Dubletten (P3-02b, ADR-040): Vorschläge prüfen, „gleiches Fahrzeug“ / „verschieden“ entscheiden, im Fahrzeugfenster aufheben ----------
+  // Nie automatisch: jede Entscheidung braucht eine Bestätigung; Rechte prüft der Server (Bestätigen Inhaber + Mitarbeiter, Ablehnen/Aufheben nur Inhaber).
+  var dubKnopf = document.getElementById('dub-knopf');
+  if(APP && dubKnopf && window.Dubletten){
+    var dubPanel = document.getElementById('dubletten'), dubListe = null;
+    var dubFehler = function(e){ if(e.status === 401) location.href = '/login?weiter=%2F'; throw e; };
+    var dubPost = function(url, daten){ return post(url, daten).catch(dubFehler); };
+    var dubGet = function(url){
+      return fetch(url, {credentials:'same-origin'}).then(function(r){
+        return r.json().catch(function(){ return {}; }).then(function(d){
+          if(!r.ok){ var e = new Error(d.fehler || ('Fehler ' + r.status)); e.status = r.status; e.grund = d.grund || ''; throw e; }
+          return d;
+        });
+      }).catch(dubFehler);
+    };
+    var dubAktualisiert = function(){
+      if(TEAM_AN) ladeTeam();
+      document.getElementById('banner-text').textContent = 'Dublettenentscheidung gespeichert. Damit Bewertung, Vergleichsbasis und Anschreiben-Sperren stimmen, die Liste aktualisieren.';
+      document.getElementById('banner').hidden = false;
+    };
+    var dubVorschlaege = Dubletten.vorschlaege(document.getElementById('dubletten-box'), {
+      get: dubGet, post: dubPost, statusText: function(s){ return STATUS_TEXT[s] || s; },
+      meldung: function(t, warnung){ toast(t, null, warnung ? 12000 : 5000, !!warnung); },
+      nachAktion: dubAktualisiert,
+      zaehler: function(n, unvollstaendig){ document.getElementById('dub-n').textContent = ' (' + n + (unvollstaendig ? '+' : '') + ')'; }
+    });
+    dubVorschlaege.laden();
+    dubKnopf.onclick = function(){
+      var auf = dubPanel.hidden;
+      dubPanel.hidden = !auf; dubKnopf.setAttribute('aria-expanded', auf ? 'true' : 'false');
+      if(auf){ dubVorschlaege.laden(); dubPanel.scrollIntoView({block:'nearest'}); }
+    };
+    // Abschnitt „Gleiches Fahrzeug“ im Fahrzeugfenster: Gruppe, abgeleiteter Fahrzeugstatus, Verlauf, Aufheben (nur Inhaber, nur ohne spätere Zusammenführung)
+    window.dubGruppe = function(sektion){
+      var platz = sektion && sektion.querySelector('[data-dub-gruppe]'), id = sektion && sektion.dataset.id; if(!platz) return;
+      var zeige = function(){
+        return dubGet('/api/dubletten/entscheidungen?anzeige=' + encodeURIComponent(id)).then(function(d){
+          platz.textContent = '';
+          var box = Dubletten.gruppeBox(d, {
+            aktuell: id, verlauf: true, statusText: function(s){ return STATUS_TEXT[s] || s; },
+            oeffnen: function(anzeige){ if(karte(anzeige)){ dlg.close(); oeffne(anzeige); } else toast('Dieses Inserat steht nicht in der Liste – bitte über „Anzeige öffnen ↗“ ansehen.'); },
+            aufheben: function(e, knopf){
+              if(!Dubletten.aufhebenFrage(e)) return;
+              knopf.disabled = true;
+              dubPost('/api/dubletten/aufheben', {entscheidung_id: e.id}).then(function(){
+                toast('Entscheidung aufgehoben ✓'); dubAktualisiert(); dubVorschlaege.laden(); zeige();
+              }, function(err){ knopf.disabled = false; toast(Dubletten.fehlerText(err), null, 14000, true); zeige(); });
+            }
+          });
+          if(box){ platz.appendChild(box); platz.hidden = false; } else platz.hidden = true;
+        }, function(){ platz.hidden = true; });
+      };
+      zeige();
     };
   }
   // Sprung aus dem Ergebnis des Einlesens: Fahrzeugfenster öffnen (Liste ist nach dem Neuladen aktuell)

@@ -50,7 +50,9 @@ from ..bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids
 from ..bewertung import kalkulation as kalk
 from ..bewertung.besichtigung import berechne, lade_katalog
 from ..datenbank import STATUS, Datenbank
-from ..dubletten import MAX_LIMIT, STANDARD_LIMIT, Ergebnis, pruefe_dubletten
+from ..domaene import fahrzeug_status
+from ..dubletten import (MAX_LIMIT, STANDARD_LIMIT, DublettenFehler, DublettenKonflikt, Ergebnis, bestaetige, darf_ablehnen, darf_aufheben,
+                         darf_bestaetigen, entscheidungen_zu, gruppe, halter_der_gruppe, hebe_auf, inserat_zu_anzeige, lehne_ab, pruefe_dubletten)
 from ..normalisierung.identitaet import REGEL_VERSION
 from ..eingang import TextEingang, ergebnis_der, import_ordner, relativ_zum_projekt
 from ..eingang.text import ANBIETER, MAX_PREIS, MAX_TEXT, MAX_URL, widerspricht_marke
@@ -492,8 +494,11 @@ class Anfrage:
             if not limit.isdigit() or not 1 <= int(limit) <= MAX_LIMIT:
                 raise Antwort(400, f"limit muss zwischen 1 und {MAX_LIMIT} liegen")
             erg = k.dubletten_vorschlaege()
-            return self.json(200, {"vorschlaege": erg.vorschlaege[:int(limit)], "anzahl": len(erg.vorschlaege), "limit": int(limit),
+            darf = {"darf_bestaetigen": darf_bestaetigen(self.nutzer.get("rolle")), "darf_ablehnen": darf_ablehnen(self.nutzer.get("rolle"))}
+            return self.json(200, {"vorschlaege": [{**v, **darf} for v in erg.vorschlaege[:int(limit)]], "anzahl": len(erg.vorschlaege), "limit": int(limit),
                                    "unvollstaendig": bool(erg.gekuerzt), "hinweis": erg.hinweis, "regel_version": REGEL_VERSION})
+        if p == "/api/dubletten/entscheidungen":
+            return self.json(200, self.dubletten_entscheidungen((self.query.get("anzeige") or [""])[0]))
         if p == "/api/fahrzeuge":
             return self.json(200, self.fahrzeuge())
         if m := re.fullmatch(r"/api/fahrzeug/([\w-]+)", p):
@@ -957,6 +962,8 @@ class Anfrage:
             return self.json(200, self.mails_einlesen())
         if p == "/api/import/text":
             return self.json(200, self.text_einlesen(daten))
+        if m := re.fullmatch(r"/api/dubletten/(bestaetigen|ablehnen|aufheben)", p):
+            return self.json(200, self.dublette_entscheiden(m.group(1), daten))
         if p == "/api/besichtigung":
             return self.json(200, self.besichtigung_anlegen(daten))
         if p == "/api/verkaufsanfrage":
@@ -1144,6 +1151,55 @@ class Anfrage:
         if not ok:
             raise Antwort(404, "Anfrage nicht gefunden")
         return {"ok": True}
+
+    def dubletten_stand(self, inserat_id: int) -> dict:
+        """Gruppe (Inserate desselben Fahrzeugs), abgeleiteter Fahrzeugstatus und Entscheidungen zu einem Inserat."""
+        k = self.k
+        mitglieder = gruppe(k.db, inserat_id)
+        return {"inserat_id": inserat_id, "gruppe": mitglieder, "fahrzeug_status": fahrzeug_status(m["status"] for m in mitglieder),
+                "entscheidungen": entscheidungen_zu(k.db, *(m["inserat_id"] for m in mitglieder))}
+
+    def dubletten_entscheidungen(self, anzeige_id: str) -> dict:
+        """Entscheidungen und Gruppe zu einer Anzeige (``?anzeige=<Anzeigen-ID>``); Inhaber und Mitarbeiter."""
+        if self.nutzer.get("rolle") not in TEXT_IMPORT_ROLLEN:
+            raise Antwort(403, "Nur für Inhaber und Mitarbeiter", grund="recht")
+        iid = inserat_zu_anzeige(self.k.db, anzeige_id) if anzeige_id else None
+        if iid is None:
+            raise Antwort(404, "Inserat nicht gefunden")
+        rolle = self.nutzer.get("rolle")
+        return {"anzeige": anzeige_id, **self.dubletten_stand(iid), "darf_bestaetigen": darf_bestaetigen(rolle),
+                "darf_ablehnen": darf_ablehnen(rolle), "darf_aufheben": darf_aufheben(rolle)}
+
+    def dublette_entscheiden(self, aktion: str, daten: dict) -> dict:
+        """Bestätigen („gleich“), Ablehnen („verschieden“) und Aufheben einer Dublettenentscheidung (P3-02b, ADR-040). Rechte:
+        bestätigen Inhaber und Mitarbeiter, ablehnen und aufheben nur der Inhaber (403 „recht“); Widerspruch zum Stand 409 „konflikt“;
+        unbekannte oder unsinnige IDs 400. Danach sind Bewertung und Team-Sperre sofort neu (Zwischenspeicher verworfen)."""
+        k, rolle, nutzer_id = self.k, self.nutzer.get("rolle"), self.nutzer.get("id")
+        if not {"bestaetigen": darf_bestaetigen, "ablehnen": darf_ablehnen, "aufheben": darf_aufheben}[aktion](rolle):
+            raise Antwort(403, "Diese Entscheidung trifft der Inhaber" if aktion != "bestaetigen" else "Nur für Inhaber und Mitarbeiter", grund="recht")
+        try:
+            if aktion == "aufheben":
+                erg = hebe_auf(k.db, daten.get("entscheidung_id"), nutzer_id)
+                zeile = k.db.con.execute("SELECT inserat_a FROM dubletten_entscheidungen WHERE id = ?", (erg["entscheidung_id"],)).fetchone()
+                iid = zeile[0]
+            else:
+                erg = (bestaetige if aktion == "bestaetigen" else lehne_ab)(k.db, daten.get("a"), daten.get("b"), nutzer_id)
+                iid = min(daten["a"], daten["b"])
+        except DublettenFehler as e:
+            raise Antwort(400, str(e)) from e
+        except DublettenKonflikt as e:
+            raise Antwort(409, str(e)) from e
+        finally:
+            k.veraendert()
+            k.dubletten_verwerfen()
+        antwort = {"ok": True, **erg, **self.dubletten_stand(iid)}
+        if aktion == "bestaetigen":
+            _, grenze = self.jetzt_grenze()
+            halter = halter_der_gruppe(k.db, [m["anzeigen_id"] for m in antwort["gruppe"]], grenze)
+            if len({h["bearbeiter_id"] for h in halter}) > 1:
+                antwort["warnung"] = {"grund": "verschiedene_halter", "halter": halter,
+                                      "text": "Inserate dieser Gruppe werden von verschiedenen Kollegen gehalten – Reservierungen wurden nicht übertragen"}
+        return antwort
 
     def seiten_einlesen(self) -> dict:
         """Gespeicherte Seiten aus dem konfigurierten Import-Ordner – nie ein Pfad aus der Anfrage, kein Netzabruf."""

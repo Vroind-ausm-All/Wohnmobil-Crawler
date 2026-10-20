@@ -289,6 +289,14 @@ class Datenbank:
         grenze = (datetime.now() - timedelta(days=tage)).isoformat(timespec="seconds")
         return self.con.execute("SELECT * FROM anzeigen WHERE zuletzt_gesehen >= ?", (grenze,)).fetchall()
 
+    def anzeigen_zu(self, ids) -> list[sqlite3.Row]:
+        """Zeilen von ``anzeigen`` zu den IDs (auch ohne Preis oder lange nicht gesehen)."""
+        ids, zeilen = sorted(set(ids)), []
+        for i in range(0, len(ids), 500):
+            teil = ids[i:i + 500]
+            zeilen += self.con.execute(f"SELECT * FROM anzeigen WHERE id IN ({','.join('?' * len(teil))})", teil).fetchall()
+        return zeilen
+
     def alle_mit_preis(self) -> list[sqlite3.Row]:
         return self.con.execute("SELECT * FROM anzeigen WHERE preis IS NOT NULL").fetchall()
 
@@ -501,11 +509,27 @@ class Datenbank:
                 "AND bearbeiter_id IN (SELECT id FROM nutzer WHERE aktiv=1) AND COALESCE(uebernommen_am, '')>=?",
                 (ziel_id, jetzt, *ids, ziel_id, grenze))
 
+    def bestaetigte_gruppe(self, ad_id: str, weitere=()) -> list[str]:
+        """Anzeigen-IDs der übrigen Inserate desselben Fahrzeugs wie ``ad_id`` und wie die ``weitere``n (bestätigte Dubletten, P3-02b). Liest
+        die Datenbank selbst – innerhalb derselben Transaktion wie die Sperrprüfung, damit eine gleichzeitige Bestätigung nicht an der
+        Prüfung vorbeikommt (TOCTOU)."""
+        ids = sorted({ad_id, *weitere})
+        gruppe = [r[0] for r in self.con.execute(
+            "SELECT DISTINCT i2.anzeigen_id FROM inserate i1 JOIN inserate i2 ON i2.fahrzeug_id = i1.fahrzeug_id AND i2.id <> i1.id "
+            f"WHERE i1.anzeigen_id IN ({','.join('?' * len(ids))}) ORDER BY i2.anzeigen_id", ids)]
+        return [g for g in gruppe if g != ad_id]
+
+    def _mit_gruppe(self, ad_id: str, dubletten) -> list[str]:
+        """``dubletten`` (aus dem Zwischenspeicher) ∪ bestätigte Fahrzeuggruppe von ``ad_id`` und der Listenmitglieder aus der Datenbank,
+        ohne ``ad_id``."""
+        liste = [d for d in dubletten if d != ad_id]
+        return sorted({*liste, *self.bestaetigte_gruppe(ad_id, liste)})
+
     def _uebernimm(self, ad_id: str, nutzer_id: int, jetzt: str, grenze: str, erzwingen: bool, dubletten) -> bool:
         """Nur innerhalb von ``_exklusiv``: Dubletten prüfen (liest), dann EIN bedingtes UPSERT (rowcount 0 = Konflikt).
         Mit ``erzwingen`` wandern nicht kontaktierte Reservierungen der Dubletten auf den Übernehmer; eine kontaktierte Dublette
-        eines anderen verhindert es (False)."""
-        andere = [d for d in dubletten if d != ad_id]
+        eines anderen verhindert es (False). Die bestätigte Fahrzeuggruppe kommt hier aus der Datenbank dazu (``bestaetigte_gruppe``)."""
+        andere = self._mit_gruppe(ad_id, dubletten)
         if andere:
             if not erzwingen and self._fremde_halter(andere, nutzer_id, grenze):
                 return False
@@ -546,8 +570,8 @@ class Datenbank:
         ``dubletten``: nicht kontaktierte Reservierungen der Gruppe gehen mit auf ``ziel_id`` über (``grenze`` wie bei
         ``uebernimm``); hat ein anderer Kollege eine Dublette bereits kontaktiert, ``BearbeitungsKonflikt`` mit deren ID und
         nichts geändert – erst dort zuweisen."""
-        andere = [d for d in dubletten if d != anzeige_id]
         with self._exklusiv():
+            andere = self._mit_gruppe(anzeige_id, dubletten)
             d = self._kontaktierte_dublette_anderer(andere, ziel_id)
             if d:
                 raise BearbeitungsKonflikt(d)

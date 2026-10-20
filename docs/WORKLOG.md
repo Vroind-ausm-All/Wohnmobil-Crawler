@@ -6,6 +6,24 @@ Wert „–“.
 
 ---
 
+## P3-02b – Dubletten bestätigen, ablehnen, aufheben mit Wirkung (20.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Backend `scout-data-engineer`, Oberfläche `scout-ui-engineer`, QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/dubletten.py` (Entscheiden, Wirkung, Rechte), `wmscout/domaene.py` (`fahrzeug_status`),
+  `wmscout/bewertung/auswertung.py` (Wirkung in `dubletten_ids`, `bewerte_alle`, `bewerte_zeilen`, Vergleichsbasis),
+  `wmscout/datenbank.py` (Gruppe in der Team-Sperre, `anzeigen_zu`), `wmscout/web/api.py` (`POST /api/dubletten/bestaetigen|ablehnen|aufheben`,
+  `GET /api/dubletten/entscheidungen`), `wmscout/audit.py`, `wmscout/verkauf.py`, `scout.py` (CLI, nur Einzelplatz),
+  `wmscout/web/static/dubletten.js/.css` (neu), `vorlagen/report.html`, `vorlagen/mobil.html`, `mobil.js`, `sw.js` (wm-scout-9),
+  Tests `test_dubletten_entscheiden.py`, `test_dubletten_oberflaeche.py` (neu), README, HANDY-APP, ADR-040 (Nachtrag), ROADMAP.
+- **Implementierte Funktionen:** siehe ADR-040 Nachtrag P3-02b. Rechte: bestätigen Inhaber/Mitarbeiter, ablehnen/aufheben Inhaber,
+  Händler nie. Keine Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. H1 (Gruppenmitglied ohne Preis sperrte Anschreiben nicht)
+  und M1 (heuristische Nachbarn der Gruppenmitglieder fehlten in der Gruppenwirkung) behoben, N2 behoben; N1/N3 als P3-02c im Backlog.
+  Korrekturen nicht erneut von der QA geprüft (Gegenproben durch den Agenten).
+- **Bekannte Risiken:** Trefferqualität nur an synthetischen Daten; Service-Worker-Update im Browser und echte Geräte nicht geprüft.
+- **Nächster sinnvoller Schritt:** P3-03 (Preisverlauf, Re-Import-Test).
+
 ## P3-02a – Fahrzeugidentität: Grundlage, Vorschläge nur lesend (20.10.2026) · Status: REVIEW
 
 - **Verantwortlicher Agent:** Plan `scout-architect`; Umsetzung `scout-data-engineer`; QA `qa-security-reviewer`; Doku Orchestrator.

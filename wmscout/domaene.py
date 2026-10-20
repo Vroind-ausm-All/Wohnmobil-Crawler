@@ -12,6 +12,17 @@ STATUS = {"neu": "offen", "vorbereitet": "Text kopiert", "kontaktiert": "kontakt
           "besichtigung": "Besichtigung", "gekauft": "gekauft", "abgesagt": "abgesagt",
           "uninteressant": "uninteressant"}
 
+# Rangfolge für den abgeleiteten Fahrzeugstatus (höher = weiter im Ankauf); gespeichert wird er nicht (ADR-039 Nr. 3)
+_STATUS_RANG = {s: i for i, s in enumerate(("neu", "uninteressant", "abgesagt", "vorbereitet", "kontaktiert", "verhandlung", "besichtigung", "gekauft"))}
+
+
+def fahrzeug_status(stati) -> str:
+    """Status eines Fahrzeugs aus den Ankaufsstati seiner Inserate: gekauft > besichtigung > verhandlung > kontaktiert > vorbereitet >
+    abgesagt > uninteressant > neu. ``None``/leer zählt als „neu“, unbekannte Werte werden ignoriert; ohne Inserate „neu“."""
+    bekannt = [(s or "neu") for s in stati if (s or "neu") in _STATUS_RANG]
+    return max(bekannt, key=_STATUS_RANG.__getitem__, default="neu")
+
+
 # `suche` von Inseraten aus gespeicherten Seiten: werden nie per Detailabruf nachgeladen (ADR-010)
 IMPORT_SUCHE = "Import (gespeicherte Seite)"
 

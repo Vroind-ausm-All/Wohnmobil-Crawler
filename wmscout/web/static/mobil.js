@@ -234,6 +234,18 @@
     if (e.status === 409 && id) fahrzeug(id);
   }
 
+  // Gleiches Fahrzeug (P3-02b): nur Anzeige der Gruppe und des Fahrzeugstatus – entschieden wird am Büro-PC. Ohne Netz oder Recht bleibt der Abschnitt weg.
+  function dublettenAnzeigen(id) {
+    var platz = document.getElementById("dub-gruppe");
+    if (!platz || !textDarf() || !window.Dubletten) return;
+    api("/api/dubletten/entscheidungen?anzeige=" + encodeURIComponent(id)).then(function (d) {
+      if (inhalt.dataset.id !== String(id) || !document.getElementById("dub-gruppe")) return;
+      var box = Dubletten.gruppeBox(d, { aktuell: id, verlauf: false, statusText: function (s) { return (S.ich.status || {})[s] || s; },
+                                         href: function (a) { return "#/fahrzeug/" + encodeURIComponent(a); } });
+      if (box) platz.appendChild(box);
+    }).catch(function () { /* offline oder kein Recht: kein Abschnitt */ });
+  }
+
   function fahrzeug(id) {
     return Promise.all([api("/api/fahrzeug/" + encodeURIComponent(id)), nutzerListe()]).then(function (r) {
       var f = r[0], nutzer = r[1], b = f.bewertung, ich = S.ich.nutzer;
@@ -252,6 +264,7 @@
           '<div class="reihe">' + (darf.uebernehmen && !t.mein ? '<button class="knopf klein" data-aktion="uebernehmen">Ich übernehme</button>' : "") +
           (darf.abgeben ? '<button class="knopf klein" data-aktion="abgeben">Abgeben</button>' : "") +
           (darf.erzwingen && fremd && !darf.uebernehmen ? '<button class="knopf klein" data-aktion="erzwingen">Übernahme erzwingen</button>' : "") + "</div></div>" : "") +
+        '<div id="dub-gruppe"></div>' +
         (f.status === "vorbereitet" ? '<p class="hinweis info">Text kopiert – noch nicht als gesendet bestätigt.</p>' +
           '<button class="knopf primaer voll" data-aktion="gesendet"' + sperr + '>gesendet ✓</button>' : "") +
         (f.nachfass_text ? "<h2>Nachfassen</h2><p class=\"leise\">" + esc(f.nachfassen) + '</p><textarea id="nf">' + esc(f.nachfass_text) + "</textarea>" +
@@ -274,6 +287,7 @@
       inhalt.dataset.id = f.id; inhalt.dataset.url = f.url; inhalt.dataset.quelle = f.quelle || ""; inhalt.dataset.erst = f.brief_betrag || "";
       inhalt.dataset.nfbetrag = f.nachfass_betrag || "";
       document.getElementById("notiz").onchange = function (e) { api("/api/notiz", { id: f.id, notiz: e.target.value }).then(function () { toast("Notiz gespeichert"); }); };
+      dublettenAnzeigen(f.id);
     });
   }
 
