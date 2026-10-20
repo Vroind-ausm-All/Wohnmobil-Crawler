@@ -4,6 +4,23 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P3-01 – Fahrzeuge getrennt von Inseraten, Schema v11 (20.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator) | 1384 bestanden (vorher 1365), neu `test_fahrzeuge.py` (19) |
+| `ruff check .` | grün |
+| Altbestand v1, v2, v10 (mit Kollision `legacy_id` NULL, Team-, Besichtigungs-, Ankaufsdaten) → v11: je Inserat ein Fahrzeug, alle bisherigen Tabellen zeilen- und inhaltsgleich, `integrity_check`/`foreign_key_check` ok | bestanden |
+| Sicherung `vor-v11` vorhanden, zurückspielbar, danach erneute Migration | bestanden |
+| Idempotenz, zwei gleichzeitige Prozesse (QA: 5×) → Schritt genau einmal | bestanden |
+| Fehler an jeder der 27 Stellen des Schritts (QA) → Version 10, Schema unverändert | bestanden |
+| Neue Inserate über Suche, Seiten-, Text-, Mail-Import, Ereigniseingang, Abgleich → je ein Fahrzeug; `inserat_id` in Beobachtungen/Preisverlauf korrekt | bestanden |
+| Alter Code (v10) öffnet v11-Datenbank → Abbruch ohne Schreiben (QA) | bestanden |
+| Laufzeit Migration inkl. Sicherung | 50 000 Inserate 0,3–0,4 s; 500 000 Inserate 5,0 s (QA) |
+| Mandanten: zwei Datenbanken migrieren unabhängig, je eigene Sicherung | bestanden |
+| Gegenproben (Trigger aus, Invarianten aus, Sicherung übersprungen) | alle erkannt |
+| Windows-CI, echte Betreiberdatenbank | nicht geprüft (CI folgt im PR) |
+
 ## P2-06 – E-Mail-Suchagenten (.eml) (17.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

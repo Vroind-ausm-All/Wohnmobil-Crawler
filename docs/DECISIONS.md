@@ -113,7 +113,7 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Folgen:** Etwas mehr Handarbeit beim Import; Datenqualität hängt vom eingefügten Text ab. Parser müssen mit
   unvollständigen Daten umgehen und fehlende Felder als „unvollständig“ markieren.
 
-## ADR-011 – Fahrzeug, Inserat und Ankauf trennen · vorgeschlagen (Phasen 2–3)
+## ADR-011 – Fahrzeug, Inserat und Ankauf trennen · vorgeschlagen (Phasen 2–3) · teilweise ersetzt durch ADR-039
 
 * **Kontext:** Heute ist die Anzeigen-ID der Primärschlüssel; Ankaufsstatus, Verfügbarkeit und Preis hängen am Inserat.
   Ein neu eingestelltes oder auf zwei Plattformen inseriertes Fahrzeug wird mehrfach geführt und ggf. erneut angeschrieben.
@@ -677,3 +677,27 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Folgen / offen:** Wer den Preis nicht einträgt, bekommt eine Anzeige ohne Preis (graue Ampel) – gewollt. Zeilen aus dem Text-Import
   vor dieser Entscheidung tragen keine Markierung und gelten als geschützt. Die Erkennung des sicheren Preises bleibt Heuristik über
   nachgebaute Texte; echte Anzeigen können anders aufgebaut sein.
+
+## ADR-039 – Fahrzeugidentität additiv (Schema v11); `anzeigen` bleibt Arbeitstabelle; Ankaufsstatus vorerst am Inserat · gilt (18.10.2026)
+
+* **Kontext:** ADR-011 und ARCHITECTURE §8 planten für Phase 3 eine Umbenennung von `anzeigen` mit lesender View und den
+  Ankaufsstatus am Fahrzeug („Version 5“). Seit ADR-024/035 ist `anzeigen` aber der aktive Schreibweg aller Kanäle (Suche,
+  Seiten-, Text-, Mail-Import, Status, Team), und die Versionen 5–10 sind anderweitig belegt.
+* **Entscheidung (Betreiber 18.10.2026):**
+  1. Schema v11 legt nur `fahrzeuge` (Kennung, Herkunft `migration`/`eingang`, Zeitpunkt UTC) und `inserate.fahrzeug_id` an.
+     Jedes vorhandene Inserat bekommt genau ein eigenes Fahrzeug; neue Inserate bekommen es per Trigger
+     `inserate_fahrzeug_anlegen`. Es wird nichts automatisch zusammengeführt.
+  2. `anzeigen` bleibt eine Tabelle – keine Umbenennung, keine View.
+  3. Der Ankaufsstatus bleibt in `anzeigen.status`/`bearbeitung`. Mit P3-02 wird ein Fahrzeugstatus beim Lesen aus den
+     Inseraten eines Fahrzeugs abgeleitet; ein gespeicherter Status am Fahrzeug bekommt nach P3-06 eine eigene Entscheidung.
+  4. Rückweg: die automatische Sicherung `vor-v11` zurückspielen (danach Geschriebenes geht verloren); kein Rückstufungsskript.
+  5. Die Gleichheit `fahrzeuge.id = inserate.id` gilt nur für den Altbestand; Code greift immer über `inserate.fahrzeug_id` zu.
+* **Alternativen:** Status sofort ans Fahrzeug (hohes Risiko über alle Statuspfade, kein Nutzen bei 1:1); View `anzeigen` mit
+  INSTEAD-OF-Triggern (verdeckte Logik in jedem Schreibweg); `anzeigen.fahrzeug_id` (widerspricht dem Zielmodell).
+* **Folgen:** ADR-011 ist für Status und View ersetzt. ADR-023 („`bearbeitung` umschlüsseln“) wandert nach P3-02. Merkmale,
+  FIN und Fingerabdruck des Fahrzeugs folgen mit P3-02 als neue Spalten.
+* **Hinweise aus der QA (niedrig, offen für P3-02):** `fahrzeuge.id` ist ohne AUTOINCREMENT – nach dem Zurückspielen einer
+  Sicherung können IDs erneut vergeben werden; Fahrzeug-IDs deshalb nicht in Dateinamen, URLs oder Exporte übernehmen (oder dann
+  AUTOINCREMENT einführen). In `inserate` nur mit einfachem INSERT oder UPSERT schreiben (INSERT OR REPLACE hinterließe ein verwaistes
+  Fahrzeug). Ein von Hand angelegter gleichnamiger Trigger würde von `CREATE TRIGGER IF NOT EXISTS` übernommen – nur durch manuelle
+  Eingriffe erreichbar.

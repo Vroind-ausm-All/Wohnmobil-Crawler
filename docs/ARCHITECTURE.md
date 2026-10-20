@@ -176,9 +176,10 @@ der ursprüngliche Plan.
 |---|---|---|
 | v3 | 1 | `schema_version` anlegen, Altbestände als v1/v2 erkennen; minimale `suchlaeufe` (id, quelle, start, ende, laeuft_bis, ergebnis) als Laufsperre; WAL, `busy_timeout`; Indizes nur nach `EXPLAIN QUERY PLAN` |
 | v4 | 2 | `quellen`, `suchprofile`, `suchlaeufe` vollständig; `inserate` aus `anzeigen` (`plattform = COALESCE(quelle, 'kleinanzeigen')`), `beobachtungen` mit `kanal`; `oeffentliche_id` = alte ID bei Kleinanzeigen, sonst `<quelle>_<id>` (passt zu Routen `\w+` und `besichtigungen.anzeige_id`); `preis_historie` mit Herkunft „migration“ |
-| v5 | 3 | je Inserat ein Fahrzeug; Ankaufsstatus → `fahrzeuge`; „gelöscht“ → `verfuegbarkeit = offline`; `gewerblich` → `anbieter_typ` (Altdaten-Regel: Betreiberfrage); `kontakte` aus `anschreiben_text`; `besichtigungen.fahrzeug_id`; Dubletten nur als bestätigte Vorschläge |
+| v11 | 3 | **umgesetzt (P3-01, ADR-039):** `fahrzeuge` + `inserate.fahrzeug_id`, je Inserat ein Fahrzeug, Trigger für neue Inserate; Status bleibt am Inserat |
+| später | 3 | (ursprünglich „v5“, Versionen 5–10 sind anderweitig belegt) Ankaufsstatus → `fahrzeuge`; „gelöscht“ → `verfuegbarkeit = offline`; `gewerblich` → `anbieter_typ` (Altdaten-Regel: Betreiberfrage); `kontakte` aus `anschreiben_text`; `besichtigungen.fahrzeug_id`; Dubletten nur als bestätigte Vorschläge |
 
-**Kompatibilitätsschicht:** Die Klasse `Datenbank` bleibt Fassade mit den bisherigen Methoden und Zeilen-Dicts.
+**Kompatibilitätsschicht (überholt durch ADR-039: `anzeigen` bleibt Tabelle, keine View):** Die Klasse `Datenbank` bleibt Fassade mit den bisherigen Methoden und Zeilen-Dicts.
 Die alte Tabelle wird zu `anzeigen_alt_v2` umbenannt; eine lesende View `anzeigen` mit den bisherigen Spalten hält
 `bewerte_alle`, Desktop-App, Handy-App und CSV unverändert lauffähig. Schreibzugriffe nur über die Fassade.
 
