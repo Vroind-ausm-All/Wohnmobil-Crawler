@@ -4,7 +4,8 @@ Versionen: 1 = ZIP-Stand (Tabelle ``anzeigen`` im Ur-Schema), 2 = Stand vor Phas
 3 = Phase 1 (``schema_version``, ``bearbeitung``), 4 = vorbereiteter Mehrquellen-Ereigniseingang, 5 = Verkäuferportal,
 6 = Händlerportal (Standorte), 7 = Demo-Auktionen, 8 = gespeicherte Kalkulationen (Deal Intelligence),
 9 = Ankaufsvorgänge (Besichtigung bis Verkauf), 10 = Audit-Protokoll und Leerlauf-Zeit der Sitzungen (G0b),
-11 = Fahrzeuge getrennt von Inseraten (P3-01, ``fahrzeuge`` + ``inserate.fahrzeug_id``).
+11 = Fahrzeuge getrennt von Inseraten (P3-01, ``fahrzeuge`` + ``inserate.fahrzeug_id``),
+12 = Dublettenentscheidungen und Zuordnungsprotokoll (P3-02a, nur Tabellen, noch ohne fachliche Wirkung).
 Jeder Schritt läuft in einer eigenen Transaktion, ist idempotent
 (``IF NOT EXISTS``, Spaltenprüfung) und wird erst nach erfolgreicher Sicherung der Datenbank ausgeführt.
 Die DDL der Schritte ist eingefroren: spätere Änderungen gehören in einen neuen Schritt, nicht in einen alten.
@@ -18,7 +19,7 @@ from pathlib import Path
 
 from .sicherung import SicherungsFehler, oeffne_lesend, sichere
 
-AKTUELLE_VERSION = 11
+AKTUELLE_VERSION = 12
 
 
 class MigrationsFehler(RuntimeError):
@@ -314,9 +315,62 @@ def _zaehle_v11(con: sqlite3.Connection) -> dict[str, int]:
     return {t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in _ZAEHLE_V11 if t in vorhanden}
 
 
+_SPALTEN_V12 = {
+    "dubletten_entscheidungen": ["id", "inserat_a", "inserat_b", "entscheidung", "status", "konfidenz", "gruende_json", "regel_version",
+                                 "nutzer_id", "zeitpunkt", "aufgehoben_von", "aufgehoben_am"],
+    "fahrzeug_zuordnungen": ["id", "entscheidung_id", "inserat_id", "von_fahrzeug", "nach_fahrzeug", "art", "nutzer_id", "zeitpunkt"],
+}
+
+
+def _schritt_12(con: sqlite3.Connection):
+    """Additive v12 (P3-02a): Grundlage für bestätigte Dublettenentscheidungen. ``dubletten_entscheidungen`` hält je Inseratspaar
+    (``inserat_a < inserat_b``) höchstens EINE geltende Entscheidung (gleich/verschieden); aufgehobene bleiben als Verlauf stehen.
+    Eine Entscheidung wird nie gelöscht und nie inhaltlich geändert: erlaubt ist nur ``gilt`` → ``aufgehoben`` mit ``aufgehoben_am``
+    (``aufgehoben_von`` = Nutzer-ID, im Einzelplatz ohne Nutzer NULL); eine neue Entscheidung ist eine neue Zeile (Trigger).
+    ``fahrzeug_zuordnungen`` protokolliert jedes Umhängen eines Inserats auf ein anderes Fahrzeug (nur anfügbar, Trigger).
+    Beide Tabellen bleiben vorerst leer; es wird NICHTS zusammengeführt und kein Bestandsdatensatz verändert."""
+    vorher = _zaehle_v11(con)
+    con.execute("""CREATE TABLE IF NOT EXISTS dubletten_entscheidungen (
+        id INTEGER PRIMARY KEY,
+        inserat_a INTEGER NOT NULL REFERENCES inserate(id), inserat_b INTEGER NOT NULL REFERENCES inserate(id),
+        entscheidung TEXT NOT NULL CHECK(entscheidung IN ('gleich', 'verschieden')),
+        status TEXT NOT NULL CHECK(status IN ('gilt', 'aufgehoben')),
+        konfidenz TEXT CHECK(konfidenz IS NULL OR konfidenz IN ('hoch', 'mittel')),
+        gruende_json TEXT NOT NULL, regel_version INTEGER NOT NULL,
+        nutzer_id INTEGER, zeitpunkt TEXT NOT NULL, aufgehoben_von INTEGER, aufgehoben_am TEXT,
+        CHECK(inserat_a < inserat_b))""")
+    con.execute("""CREATE UNIQUE INDEX IF NOT EXISTS idx_dubletten_gilt ON dubletten_entscheidungen(inserat_a, inserat_b)
+        WHERE status = 'gilt'""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_dubletten_b ON dubletten_entscheidungen(inserat_b)")      # „Entscheidungen zu Inserat X“
+    con.execute("""CREATE TRIGGER IF NOT EXISTS dubletten_entscheidungen_kein_delete BEFORE DELETE ON dubletten_entscheidungen
+        BEGIN SELECT RAISE(ABORT, 'dubletten_entscheidungen wird nicht gelöscht, nur aufgehoben'); END""")
+    unveraendert = " AND ".join(f"NEW.{c} IS OLD.{c}" for c in ("id", "inserat_a", "inserat_b", "entscheidung", "konfidenz", "gruende_json",
+                                                              "regel_version", "nutzer_id", "zeitpunkt"))
+    con.execute(f"""CREATE TRIGGER IF NOT EXISTS dubletten_entscheidungen_nur_aufheben BEFORE UPDATE ON dubletten_entscheidungen
+        WHEN NOT (OLD.status = 'gilt' AND NEW.status = 'aufgehoben' AND OLD.aufgehoben_am IS NULL AND NEW.aufgehoben_am IS NOT NULL
+                  AND OLD.aufgehoben_von IS NULL AND {unveraendert})
+        BEGIN SELECT RAISE(ABORT, 'dubletten_entscheidungen: nur gilt -> aufgehoben (mit aufgehoben_am) erlaubt'); END""")
+    con.execute("""CREATE TABLE IF NOT EXISTS fahrzeug_zuordnungen (
+        id INTEGER PRIMARY KEY,
+        entscheidung_id INTEGER NOT NULL REFERENCES dubletten_entscheidungen(id),
+        inserat_id INTEGER NOT NULL REFERENCES inserate(id),
+        von_fahrzeug INTEGER NOT NULL REFERENCES fahrzeuge(id), nach_fahrzeug INTEGER NOT NULL REFERENCES fahrzeuge(id),
+        art TEXT NOT NULL CHECK(art IN ('zusammen', 'zurueck')), nutzer_id INTEGER, zeitpunkt TEXT NOT NULL)""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_zuordnungen_inserat ON fahrzeug_zuordnungen(inserat_id, id)")
+    for art in ("UPDATE", "DELETE"):
+        con.execute(f"""CREATE TRIGGER IF NOT EXISTS fahrzeug_zuordnungen_kein_{art.lower()} BEFORE {art} ON fahrzeug_zuordnungen
+            BEGIN SELECT RAISE(ABORT, 'fahrzeug_zuordnungen ist nur anfügbar'); END""")
+    for tabelle, erwartet in _SPALTEN_V12.items():      # eine schon vorhandene, abweichende Tabelle würde von IF NOT EXISTS übergangen
+        if [r[1] for r in con.execute(f"PRAGMA table_info({tabelle})")] != erwartet:
+            raise MigrationsFehler(f"Schritt 12: Tabelle {tabelle} hat nicht die erwarteten Spalten")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 12 geändert: {vorher} -> {nachher}")
+
+
 SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4, 5: _schritt_5,
                                                              6: _schritt_6, 7: _schritt_7, 8: _schritt_8, 9: _schritt_9,
-                                                             10: _schritt_10, 11: _schritt_11}
+                                                             10: _schritt_10, 11: _schritt_11, 12: _schritt_12}
 
 _SCHEMA_VERSION = ("CREATE TABLE IF NOT EXISTS schema_version ("
                    "version INTEGER PRIMARY KEY, angewendet_am TEXT NOT NULL)")

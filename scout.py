@@ -10,6 +10,7 @@
   python scout.py rechne --preis 32900 --ez 2016 --km 98000 --titel "Knaus Sky TI 650 MEG" [--anschreiben]
   python scout.py nutzer anlegen <Name> [--rolle inhaber]   Team-Zugang für Handy-App anlegen
   python scout.py sichern                   Datenbank (und Fotos) sichern -> daten/sicherungen
+  python scout.py dubletten [--stufe hoch|mittel]   Offene Dublettenvorschläge anzeigen (nur lesen)
   python scout.py wiederherstellen <Datei> --bestaetigt [--ohne-fotos]   Sicherung zurückspielen (App und Suchlauf vorher beenden)
   python scout.py status <ID> kontaktiert [--nutzer NAME]   Status setzen (neu|kontaktiert|verhandlung|besichtigung|gekauft|abgesagt|
                                             uninteressant|vorbereitet); mit --nutzer im Team für diesen Mitarbeiter (sonst „ohne Zuordnung“)
@@ -60,6 +61,7 @@ from wmscout import datenrechte, mandanten
 from wmscout.audit import AuditSpeicher
 from wmscout.nutzung import nutzung
 from wmscout.deal import DealSpeicher
+from wmscout.dubletten import MAX_LIMIT, STANDARD_LIMIT, pruefe_dubletten
 from wmscout.haendler import STANDORT_STATUS, HaendlerSpeicher
 from wmscout.importer import Importer
 from wmscout.quellen import QUELLEN
@@ -526,6 +528,22 @@ def cmd_nutzung(cfg, db, args):
         print(f"  · {z['nutzer']:<16} {z['rolle'] or '':<12} {z['zugriffe']} Zugriffe, {z['aenderungen']} Änderungen")
 
 
+def cmd_dubletten(cfg, db, args):
+    """Offene Dublettenvorschläge (P3-02a) – nur lesen; zusammengeführt wird nichts."""
+    if not 1 <= args.limit <= MAX_LIMIT:
+        sys.exit(f"--limit muss zwischen 1 und {MAX_LIMIT} liegen")
+    erg = pruefe_dubletten(db)
+    vorschlaege = [v for v in erg.vorschlaege if args.stufe in (None, v["stufe"])]
+    for v in vorschlaege[:args.limit]:
+        a, b = v["a"], v["b"]
+        print(f"[{v['stufe']}] {a['plattform']}:{a['anzeigen_id']} ~ {b['plattform']}:{b['anzeigen_id']}  "
+              f"({a['titel'] or '?'} | {b['titel'] or '?'})\n        " + "; ".join(v["gruende"]))
+    print(f"{len(vorschlaege)} offene Vorschläge" + (f" (angezeigt: {args.limit})" if len(vorschlaege) > args.limit else "")
+          + " – nur Vorschläge, es wurde nichts zusammengeführt.")
+    if erg.hinweis:
+        print(f"Hinweis: {erg.hinweis}")
+
+
 def cmd_status(cfg, db, args):
     """Ohne ``--nutzer`` wie bisher: kein Eintrag in `bearbeitung`, ein kontaktiertes Inserat gilt im Team als „ohne Zuordnung“.
     Mit ``--nutzer`` gilt die Team-Regel wie in der App (Übernahme, Konflikt mit Kollegen, Kontakt durch wen)."""
@@ -611,6 +629,9 @@ def main():
     md.add_argument("--name")
     md.add_argument("--url", help="nur anlegen: eigene Adresse, z. B. https://firma-b.example.de")
     md.add_argument("--monat", help="nur nutzung: JJJJ-MM")
+    du = sub.add_parser("dubletten", help="offene Dublettenvorschläge auflisten (nur lesen, nichts wird zusammengeführt)")
+    du.add_argument("--stufe", choices=["hoch", "mittel"], help="nur diese Stufe")
+    du.add_argument("--limit", type=int, default=STANDARD_LIMIT, help=f"höchstens so viele anzeigen (1–{MAX_LIMIT})")
     ka = sub.add_parser("kalkulation", help="gespeicherte Kalkulationen (Gebote) nachrechnen")
     ka.add_argument("aktion", choices=["pruefen"])
     s = sub.add_parser("status", help="Status einer Anzeige setzen")
@@ -656,7 +677,7 @@ def main():
     {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "quellen": cmd_quellen, "rechne": cmd_rechne,
      "nutzer": cmd_nutzer, "status": cmd_status, "standort": cmd_standort,
      "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage, "audit": cmd_audit, "nutzung": cmd_nutzung,
-     "inserat": cmd_inserat}[args.cmd](cfg, db, args)
+     "inserat": cmd_inserat, "dubletten": cmd_dubletten}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":

@@ -50,6 +50,8 @@ from ..bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids
 from ..bewertung import kalkulation as kalk
 from ..bewertung.besichtigung import berechne, lade_katalog
 from ..datenbank import STATUS, Datenbank
+from ..dubletten import MAX_LIMIT, STANDARD_LIMIT, Ergebnis, pruefe_dubletten
+from ..normalisierung.identitaet import REGEL_VERSION
 from ..eingang import TextEingang, ergebnis_der, import_ordner, relativ_zum_projekt
 from ..eingang.text import ANBIETER, MAX_PREIS, MAX_TEXT, MAX_URL, widerspricht_marke
 from ..eingang.email import mail_ordner
@@ -138,6 +140,7 @@ class Kontext:
         self.sperre = threading.Lock()          # Datenbankzugriffe nacheinander, Netzwerk parallel
         self._zeilen: tuple[float, list[dict]] | None = None
         self._dubletten: tuple[tuple, float, dict[str, list[str]]] | None = None
+        self._vorschlaege: tuple[int, float, Ergebnis] | None = None
         self.whatsapp = WhatsAppCloud(cfg)
         self.env = Environment(loader=FileSystemLoader(str(basis / "vorlagen")), autoescape=True)
         self.env.filters["euro"] = euro
@@ -164,6 +167,14 @@ class Kontext:
 
     def dubletten_verwerfen(self):
         self._dubletten = None
+        self._vorschlaege = None
+
+    def dubletten_vorschlaege(self) -> Ergebnis:
+        """Offene Dublettenvorschläge (P3-02a); wie `dubletten_von` zwischengespeichert (Datenbankstand, 30 s)."""
+        schluessel = self.db.daten_version()
+        if not self._vorschlaege or self._vorschlaege[0] != schluessel or time.monotonic() - self._vorschlaege[1] > 30:
+            self._vorschlaege = (schluessel, time.monotonic(), pruefe_dubletten(self.db))
+        return self._vorschlaege[2]
 
     def zeile(self, anzeige_id: str) -> dict:
         for z in self.zeilen():
@@ -474,6 +485,15 @@ class Anfrage:
             return self.json(200, k.katalog())
         if p == "/api/heute":
             return self.json(200, self.heute())
+        if p == "/api/dubletten-vorschlaege":
+            if self.nutzer.get("rolle") not in TEXT_IMPORT_ROLLEN:       # Inhaber und Mitarbeiter; Standort-Zugänge nie
+                raise Antwort(403, "Nur für Inhaber und Mitarbeiter", grund="recht")
+            limit = (self.query.get("limit") or [str(STANDARD_LIMIT)])[0]
+            if not limit.isdigit() or not 1 <= int(limit) <= MAX_LIMIT:
+                raise Antwort(400, f"limit muss zwischen 1 und {MAX_LIMIT} liegen")
+            erg = k.dubletten_vorschlaege()
+            return self.json(200, {"vorschlaege": erg.vorschlaege[:int(limit)], "anzahl": len(erg.vorschlaege), "limit": int(limit),
+                                   "unvollstaendig": bool(erg.gekuerzt), "hinweis": erg.hinweis, "regel_version": REGEL_VERSION})
         if p == "/api/fahrzeuge":
             return self.json(200, self.fahrzeuge())
         if m := re.fullmatch(r"/api/fahrzeug/([\w-]+)", p):

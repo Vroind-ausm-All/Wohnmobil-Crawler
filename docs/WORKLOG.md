@@ -6,6 +6,27 @@ Wert „–“.
 
 ---
 
+## P3-02a – Fahrzeugidentität: Grundlage, Vorschläge nur lesend (20.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Plan `scout-architect`; Umsetzung `scout-data-engineer`; QA `qa-security-reviewer`; Doku Orchestrator.
+  Betreiberentscheidungen 20.10.2026: Rechte (bestätigen alle, ablehnen/aufheben Inhaber), Ablehnung hebt Sperre auf, nie automatisch,
+  keine FIN/Personenmerkmale (ADR-040).
+- **Geänderte Dateien:** `wmscout/migrationen.py` (Schritt 12), `wmscout/normalisierung/identitaet.py` (neu), `wmscout/dubletten.py`
+  (neu), `wmscout/normalisierung/geo.py` (vorberechnete PLZ-Näherung, ab 2 Stellen ergebnisgleich), `wmscout/web/api.py`
+  (`GET /api/dubletten-vorschlaege`), `scout.py` (`dubletten`), Tests `test_identitaet.py`, `test_dubletten_vorschlaege.py` (neu),
+  `test_fahrzeuge.py`; Doku ADR-040, Nachtrag ADR-039, ROADMAP (P3-02 geteilt in a/b).
+- **Implementierte Funktionen:** Schema v12 (Entscheidungen mit Lösch- und Änderungsschutz, Zuordnungen nur anfügbar); Vergleich zweier
+  Inserate mit Stufe „hoch“/„mittel“ und Gründen; Blockbildung mit Obergrenze; Vorschlagsliste lesend für Inhaber und Mitarbeiter.
+  Bewertung, Anschreiben und Team-Sperre unverändert.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. B1 (verschiedene Grundrisse als „hoch“), B2 (quadratische
+  Laufzeit ohne Grenze unter der App-Sperre), B3 (gleichzeitig aktive Händlerinserate), B4 (tautologischer Wirkungstest), B6, B7 behoben,
+  B5 (Schutz der Entscheidungen) im Schema ergänzt; `PRAGMA foreign_keys` und Rechnen außerhalb der App-Sperre offen für P3-02b.
+  Korrekturen nicht erneut von der QA geprüft (Gegenproben durch den Agenten).
+- **Bekannte Risiken:** Trefferqualität nur an synthetischen Daten; Modellnummer-Erkennung heuristisch; flakiger Zeittest in
+  `test_text_import_korrektur.py` (QA B8, Backlog).
+- **Nächster sinnvoller Schritt:** P3-02b.
+
 ## P3-01 – Fahrzeuge getrennt von Inseraten, Schema v11 (20.10.2026) · Status: REVIEW
 
 - **Phase:** 3 (Datenbank und Marktbeobachtung), freigegeben vom Betreiber am 18.10.2026; Phase 2 abgeschlossen (PR #23–#25).
