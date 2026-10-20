@@ -26,7 +26,7 @@ _LESEN = (
     (re.compile(r"/ankauf-dokumente/(\d+)/.+"), "ankauf"),
     (re.compile(r"/api/audit"), "audit"),
 )
-_OBJEKT = re.compile(r"/(verkaufsanfrage|besichtigung|ankauf|auktion|anzeige|bearbeitung|nutzer|standorte|kalkulation)/([\w-]+)")
+_OBJEKT = re.compile(r"/(verkaufsanfrage|besichtigung|ankauf|auktion|anzeige|bearbeitung|nutzer|standorte|kalkulation|dubletten)/([\w-]+)")
 
 
 def einordnen(methode: str, pfad: str) -> tuple[str, str | None] | None:
@@ -35,7 +35,7 @@ def einordnen(methode: str, pfad: str) -> tuple[str, str | None] | None:
         if pfad in ("/api/login", "/api/logout"):
             return pfad.rsplit("/", 1)[1], None
         m = _OBJEKT.search(pfad)
-        return "aendern", (f"{m.group(1)}:{m.group(2)}" if m else None)
+        return "aendern", (f"{'dublette' if m.group(1) == 'dubletten' else m.group(1)}:{m.group(2)}" if m else None)
     if methode == "GET":
         for muster, art in _LESEN:
             if m := muster.fullmatch(pfad):

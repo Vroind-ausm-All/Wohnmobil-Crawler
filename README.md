@@ -207,6 +207,13 @@ Grundlage, die Kalkulation bewusst nachzustellen (ADR-029).
 Zähler je Mitarbeiter (Mitarbeiter sehen nur die eigenen), der Filter **Wer: Alle / Meine / Frei** blendet fremde Fahrzeuge
 aus. Der Stand der Kollegen wird jede Minute und beim Zurückkehren zur Seite neu geladen.
 
+**Dubletten entscheiden (Büro-PC, Inhaber und Mitarbeiter):** Der Filter **„Dublettenvorschläge (n)“** zeigt Inserate, die dasselbe Fahrzeug
+sein könnten (Stufe „hoch“ oder „mittel“ mit Gründen, beide Inserate nebeneinander). **„Gleiches Fahrzeug“** (Inhaber und Mitarbeiter)
+führt sie zusammen: nicht doppelt anschreiben, zählt einmal in der Vergleichsbasis. **„Verschieden“** (nur Inhaber) sperrt das Paar für
+künftige Vorschläge. Beides fragt vorher mit den Folgen nach; nichts passiert automatisch. Im Fahrzeugfenster zeigt „Gleiches Fahrzeug“
+die Gruppe, den Fahrzeugstatus und den Verlauf; **„Aufheben“** (nur Inhaber) nimmt eine Entscheidung zurück (Reihenfolge: erst die
+spätere Zusammenführung). Halten verschiedene Kollegen Inserate einer Gruppe, erscheint eine Warnung. Auf dem Handy wird die Gruppe nur angezeigt.
+
 **Gespeicherte Seiten einlesen:** Öffne eine Suchergebnisseite oder eine einzelne Anzeige auf Kleinanzeigen
 ganz normal im Browser, drücke `Strg`+`S` und speichere sie als „Webseite, nur HTML“ in den Ordner `import`
 im Programmordner. Dann in der App auf **„⤓ Gespeicherte Seiten einlesen“** klicken (oder `python scout.py import`).

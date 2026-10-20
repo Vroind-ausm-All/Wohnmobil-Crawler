@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from .bewertung.auswertung import bewerte_anzeige, vergleichsbasis
+from .bewertung.auswertung import bewerte_anzeige, vergleichsbasis_aus
 from .bewertung.rechner import Bewertung, Rechner
 from .datenbank import IMPORT_ARTEN, Datenbank
 from .normalisierung.fahrzeug import ergaenze_fahrzeug
@@ -126,7 +126,7 @@ def als_fahrzeug(anfrage: dict) -> dict:
 
 
 def vergleich_aus(db: Datenbank) -> list[dict]:
-    return vergleichsbasis([ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()])
+    return vergleichsbasis_aus(db)
 
 
 def bewerte(cfg: dict, anfrage: dict, vergleich: list[dict], rechner: Rechner | None = None) -> Bewertung:

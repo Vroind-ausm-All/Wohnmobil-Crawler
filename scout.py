@@ -11,6 +11,7 @@
   python scout.py nutzer anlegen <Name> [--rolle inhaber]   Team-Zugang für Handy-App anlegen
   python scout.py sichern                   Datenbank (und Fotos) sichern -> daten/sicherungen
   python scout.py dubletten [--stufe hoch|mittel]   Offene Dublettenvorschläge anzeigen (nur lesen)
+  python scout.py dubletten bestaetigen|ablehnen ID1 ID2 | aufheben NR   Dublette entscheiden (nur Einzelplatz)
   python scout.py wiederherstellen <Datei> --bestaetigt [--ohne-fotos]   Sicherung zurückspielen (App und Suchlauf vorher beenden)
   python scout.py status <ID> kontaktiert [--nutzer NAME]   Status setzen (neu|kontaktiert|verhandlung|besichtigung|gekauft|abgesagt|
                                             uninteressant|vorbereitet); mit --nutzer im Team für diesen Mitarbeiter (sonst „ohne Zuordnung“)
@@ -40,6 +41,7 @@ import argparse
 import logging
 import logging.handlers
 import os
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -49,7 +51,7 @@ import yaml
 from wmscout.ausgabe import schreibe_ausgaben
 from wmscout.benachrichtigung import sende_mail
 from wmscout.bewertung.anschreiben import Anschreiber, euro
-from wmscout.bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids, vergleichsbasis
+from wmscout.bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids, vergleichsbasis_aus
 from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import STATUS, Datenbank, wal_aktiv
 from wmscout.laufsperre import Laufsperre
@@ -271,7 +273,7 @@ def cmd_rechne(cfg, db, args):
                            "marke": args.marke, "titel": args.titel or args.marke or "", "beschreibung": args.text,
                            "suche": args.art, "ort": args.ort, "vb": True})
     # gleiche Vergleichsbasis und Bewertung wie bewerte_alle (Rechner-Sicht, ohne ältere Dubletten; M6-2)
-    vergleich = vergleichsbasis([ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()])
+    vergleich = vergleichsbasis_aus(db)
     b = bewerte_anzeige(Rechner(cfg), a, vergleich, marktwert_manuell=args.marktwert)
     print(f"\nFahrzeug                 : {a['fahrzeug']} ({b.art}, EZ {a['ez_jahr'] or '?'}, "
           f"{a['km'] or '?'} km)")
@@ -528,8 +530,36 @@ def cmd_nutzung(cfg, db, args):
         print(f"  · {z['nutzer']:<16} {z['rolle'] or '':<12} {z['zugriffe']} Zugriffe, {z['aenderungen']} Änderungen")
 
 
+def cmd_dubletten_entscheiden(cfg, db, args):
+    """Bestätigen, ablehnen oder aufheben per Kommandozeile (P3-02b) – nur im Einzelplatz (ohne angelegte Nutzer); im Team entscheidet die App
+    mit Rechteprüfung und Protokoll. IDs: Anzeigen-IDs (bestaetigen, ablehnen) bzw. die Nummer der Entscheidung (aufheben)."""
+    from wmscout.dubletten import DublettenFehler, DublettenKonflikt, bestaetige, hebe_auf, inserat_zu_anzeige, lehne_ab
+    if TeamSpeicher(db, foto_ordner(cfg)).hat_nutzer():
+        sys.exit("Mit angelegten Nutzern entscheidet die App (Rechte und Protokoll); die Kommandozeile gilt nur im Einzelplatz.")
+    try:
+        if args.aktion == "aufheben":
+            if len(args.ids) != 1 or not re.fullmatch(r"[0-9]+", args.ids[0]):
+                sys.exit("Aufheben: genau eine Entscheidungsnummer, z. B.: python scout.py dubletten aufheben 3")
+            erg = hebe_auf(db, int(args.ids[0]))
+            print(f"Entscheidung {erg['entscheidung_id']} aufgehoben" + (f"; zurückgehängt: {len(erg['zurueck'])} Inserat(e)" if erg["zurueck"] else "")
+                  if erg["neu"] else f"Entscheidung {erg['entscheidung_id']} war schon aufgehoben")
+            return
+        if len(args.ids) != 2:
+            sys.exit(f"{args.aktion.capitalize()}: genau zwei Anzeigen-IDs, z. B.: python scout.py dubletten {args.aktion} 123456 md-789")
+        iids = [inserat_zu_anzeige(db, i) for i in args.ids]
+        if None in iids:
+            sys.exit(f"Anzeige {args.ids[iids.index(None)]} nicht gefunden")
+        erg = (bestaetige if args.aktion == "bestaetigen" else lehne_ab)(db, iids[0], iids[1])
+    except (DublettenFehler, DublettenKonflikt) as e:
+        sys.exit(f"Nicht gespeichert: {e}")
+    wort = "gleiches Fahrzeug" if args.aktion == "bestaetigen" else "verschiedene Fahrzeuge"
+    print(f"Entscheidung {erg['entscheidung_id']}: {wort}" if erg["neu"] else "Schon so entschieden bzw. dasselbe Fahrzeug – nichts geändert")
+
+
 def cmd_dubletten(cfg, db, args):
-    """Offene Dublettenvorschläge (P3-02a) – nur lesen; zusammengeführt wird nichts."""
+    """Offene Dublettenvorschläge (P3-02a) – nur lesen; zusammengeführt wird nichts. Mit ``bestaetigen``/``ablehnen``/``aufheben`` P3-02b."""
+    if args.aktion:
+        return cmd_dubletten_entscheiden(cfg, db, args)
     if not 1 <= args.limit <= MAX_LIMIT:
         sys.exit(f"--limit muss zwischen 1 und {MAX_LIMIT} liegen")
     erg = pruefe_dubletten(db)
@@ -629,7 +659,10 @@ def main():
     md.add_argument("--name")
     md.add_argument("--url", help="nur anlegen: eigene Adresse, z. B. https://firma-b.example.de")
     md.add_argument("--monat", help="nur nutzung: JJJJ-MM")
-    du = sub.add_parser("dubletten", help="offene Dublettenvorschläge auflisten (nur lesen, nichts wird zusammengeführt)")
+    du = sub.add_parser("dubletten", help="offene Dublettenvorschläge auflisten (nur lesen) oder im Einzelplatz entscheiden: "
+                                          "bestaetigen ID1 ID2 | ablehnen ID1 ID2 | aufheben NUMMER")
+    du.add_argument("aktion", nargs="?", choices=["bestaetigen", "ablehnen", "aufheben"], help="ohne Angabe: Vorschläge auflisten")
+    du.add_argument("ids", nargs="*", help="Anzeigen-IDs bzw. Nummer der Entscheidung")
     du.add_argument("--stufe", choices=["hoch", "mittel"], help="nur diese Stufe")
     du.add_argument("--limit", type=int, default=STANDARD_LIMIT, help=f"höchstens so viele anzeigen (1–{MAX_LIMIT})")
     ka = sub.add_parser("kalkulation", help="gespeicherte Kalkulationen (Gebote) nachrechnen")

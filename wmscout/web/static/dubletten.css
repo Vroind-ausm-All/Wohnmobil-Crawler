@@ -1,0 +1,33 @@
+/* Dubletten (P3-02b) – gemeinsam für Desktop- und Handy-App; nutzt deren CSS-Variablen (heller/dunkler Modus). Status immer auch als Text. */
+.dub-box{margin:14px 0;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink)}
+.dub-box h4,.dub-box h5{margin:0 0 6px}
+.dub-box h5{margin-top:12px;font-size:14px;color:var(--mute)}
+.dub-status{margin:0 0 8px;font-weight:600}
+.dub-liste,.dub-verlauf,.dub-gruende{margin:0;padding-left:18px}
+.dub-liste li,.dub-verlauf li{margin:6px 0;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
+.dub-titel{font-weight:600;overflow-wrap:anywhere}
+.dub-meta,.dub-leise{color:var(--mute);font-size:14px}
+.dub-leise{margin:4px 0}
+.dub-sperr{color:var(--gelb)}
+.dub-link{color:var(--akzent);display:inline-flex;align-items:center;min-height:44px}
+.dub-knopf{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 16px;border-radius:10px;border:1px solid var(--line);
+  background:var(--card);color:var(--ink);font:inherit;font-size:15px;cursor:pointer}
+.dub-knopf.klein{padding:6px 12px}
+.dub-knopf:hover{border-color:var(--akzent)}
+.dub-knopf.primaer{background:var(--akzent);color:var(--akzent-ink);border-color:var(--akzent);font-weight:600}
+.dub-knopf:disabled{opacity:.6;cursor:default}
+.dub{max-width:1100px}
+.dub-kopf{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.dub-kopf h3{margin:0}
+.dub-karten{display:grid;gap:12px;margin-top:10px}
+.dub-karte{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.dub-stufe{display:inline-block;padding:2px 10px;border-radius:99px;font-size:13px;font-weight:700;border:2px solid var(--gelb);color:var(--gelb);background:var(--gelb-bg)}
+.dub-stufe-hoch{border-color:var(--gruen);color:var(--gruen);background:var(--gruen-bg)}
+.dub-paar{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0}
+.dub-seite{display:flex;flex-direction:column;gap:2px;min-width:0}
+.dub-aktionen{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.dub-warnung{margin:10px 0;padding:10px 14px;border-radius:10px;border:2px solid var(--gelb);background:var(--gelb-bg);color:var(--gelb)}
+.dub-warnung ul{margin:6px 0;padding-left:18px}
+.dub-fehler{margin:10px 0;padding:8px 12px;border-radius:10px;border:2px solid var(--rot);background:var(--rot-bg);color:var(--rot);font-weight:600}
+.dub-info{margin:6px 0;color:var(--mute);font-size:14px}
+@media (max-width:760px){.dub-paar{grid-template-columns:1fr}}

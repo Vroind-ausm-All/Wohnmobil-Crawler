@@ -417,9 +417,10 @@ def test_sortierung_hoch_vor_mittel(db):
     assert stufen == sorted(stufen, key=["hoch", "mittel"].index) and stufen[0] == "hoch" and "mittel" in stufen
 
 
-def test_entscheidungen_und_zuordnungen_wirken_nicht_auf_bewertung_und_team_sperre(cfg, db, importiert):
-    """Frisch gelesen: ``bewerte_alle`` (Bewertung, Anschreiben, Dubletten) und ``dubletten_ids`` (Team-Sperre) vor und nach dem Eintragen von
-    Entscheidungen (gleich + verschieden) und einer Zuordnungszeile – kein Vergleich vorab gelesener Listen."""
+def test_zeilen_ohne_umhaengung_wirken_nicht_auf_bewertung_und_team_sperre(cfg, db, importiert):
+    """Frisch gelesen: ``bewerte_alle`` (Bewertung, Anschreiben, Dubletten) und ``dubletten_ids`` (Team-Sperre) vor und nach dem Eintragen einer
+    „gleich“-Zeile und einer Zuordnungszeile ohne Umhängung der Fahrzeuge (nur ``inserate.fahrzeug_id`` wirkt; seit P3-02b wirkt auch
+    „verschieden“, siehe ``test_dubletten_entscheiden.py``) – kein Vergleich vorab gelesener Listen."""
     for i in range(3):
         db.speichere_treffer(treffer(f"d{i}", km=90000 + 500 * i, titel="Knaus Sky TI 650 MEG privat"), "Alkoven")
     vorher, ids_vorher = repr(bewerte_alle(cfg, db, BASIS, "2026-10-01T00:00:00")), dubletten_ids(db)
@@ -429,7 +430,6 @@ def test_entscheidungen_und_zuordnungen_wirken_nicht_auf_bewertung_und_team_sper
     i0, i1, i2 = (inserat_id(db, f"d{i}") for i in range(3))
     sql = ("INSERT INTO dubletten_entscheidungen (inserat_a, inserat_b, entscheidung, status, gruende_json, regel_version, zeitpunkt) "
            "VALUES (?, ?, ?, 'gilt', '[]', 2, ?)")
-    db.con.execute(sql, (i0, i1, "verschieden", JETZT))
     e = db.con.execute(sql, (i1, i2, "gleich", JETZT)).lastrowid
     db.con.execute("INSERT INTO fahrzeug_zuordnungen (entscheidung_id, inserat_id, von_fahrzeug, nach_fahrzeug, art, zeitpunkt) "
                    "VALUES (?, ?, 1, 2, 'zusammen', ?)", (e, i2, JETZT))

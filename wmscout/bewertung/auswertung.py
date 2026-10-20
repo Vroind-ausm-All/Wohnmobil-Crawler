@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ..domaene import STATUS, UNBEKANNT, import_art
+from ..dubletten import Wirkung, lade_wirkung, wende_an
 from ..normalisierung.fahrzeug import arten_im_text, ergaenze_fahrzeug
 from ..normalisierung.geo import entfernung_km
 from .anschreiben import Anschreiber, betrag_im_brief, euro, hinweise, sperrgrund
@@ -40,9 +41,12 @@ def finde_duplikate(alle: list[dict]) -> dict[str, list[dict]]:
 
 def dubletten_ids(db: Datenbank) -> dict[str, list[str]]:
     """id → sortierte IDs der Dubletten – dieselbe Gruppierung wie in `bewerte_alle` (`dubletten_ids` je Zeile), aber ohne
-    Rechner, Anschreiben und Entfernungen. Für die Team-Prüfung bei Schreibzugriffen (Reservierung wirkt auf die Fahrzeuggruppe)."""
+    Rechner, Anschreiben und Entfernungen. Für die Team-Prüfung bei Schreibzugriffen (Reservierung wirkt auf die Fahrzeuggruppe).
+    Heuristik ∪ bestätigte Fahrzeuggruppe, ohne Paare mit Entscheidung „verschieden“ (P3-02b); die Gruppe gilt auch für Inserate ohne Preis."""
     alle = [ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()]
-    return {i: sorted(b["id"] for b in andere) for i, andere in finde_duplikate(alle).items()}
+    ids = {i: [b["id"] for b in andere] for i, andere in finde_duplikate(alle).items()}
+    ids = wende_an(ids, lade_wirkung(db), lambda i: i, lambda i: i)
+    return {i: sorted(andere) for i, andere in ids.items()}
 
 
 def fuer_rechner(a: dict) -> dict:
@@ -133,6 +137,13 @@ def vergleichsbasis(alle: list[dict], duplikate: dict[str, list[dict]] | None = 
                                                      for b in duplikate.get(a["id"], []))]
 
 
+def vergleichsbasis_aus(db: Datenbank) -> list[dict]:
+    """``vergleichsbasis`` über alle Inserate mit Preis, mit den geltenden Dublettenentscheidungen (wie `bewerte_alle`)."""
+    alle = [ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()]
+    nach_id = {a["id"]: a for a in alle}
+    return vergleichsbasis(alle, wende_an(finde_duplikate(alle), lade_wirkung(db), nach_id.get, lambda a: a["id"]))  # nur Inserate mit Preis
+
+
 def _datum(iso: str | None) -> str:
     return f"{iso[8:10]}.{iso[5:7]}." if iso and len(iso) >= 10 else "?"
 
@@ -153,20 +164,32 @@ def nachfass_grund(a: dict, cfg: dict, jetzt: datetime) -> str | None:
 
 
 def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None = None) -> list[dict]:
-    """Liest die Inserate aus der Datenbank und bewertet sie (``bewerte_zeilen``)."""
-    return bewerte_zeilen(cfg, basis, [dict(r) for r in db.alle_mit_preis()], [dict(r) for r in db.aktive()], lauf_start)
+    """Liest die Inserate und die geltenden Dublettenentscheidungen aus der Datenbank und bewertet sie (``bewerte_zeilen``)."""
+    wirkung = lade_wirkung(db)
+    mitglieder = {i for g in wirkung.gruppen for i in g}
+    return bewerte_zeilen(cfg, basis, [dict(r) for r in db.alle_mit_preis()], [dict(r) for r in db.aktive()], lauf_start,
+                          wirkung=wirkung, gruppenzeilen=[dict(r) for r in db.anzeigen_zu(mitglieder)])
 
 
 def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[dict], lauf_start: str | None = None,
-                   jetzt: datetime | None = None) -> list[dict]:
+                   jetzt: datetime | None = None, wirkung: Wirkung | None = None, gruppenzeilen: list[dict] = ()) -> list[dict]:
     """Bewertung ohne Datenbank (P1-08, ADR-015): ``mit_preis`` = alle Inserate mit Preis (Vergleichsbasis, Dubletten),
-    ``aktive`` = die zu bewertenden Inserate – beide als einfache Dicts mit den Spalten der Tabelle ``anzeigen``."""
+    ``aktive`` = die zu bewertenden Inserate – beide als einfache Dicts mit den Spalten der Tabelle ``anzeigen``.
+    ``wirkung``: geltende Dublettenentscheidungen (bestätigte Fahrzeuggruppen, „verschieden“-Paare); ohne sie gilt nur die Heuristik.
+    ``gruppenzeilen``: Zeilen der Gruppenmitglieder (auch ohne Preis oder lange nicht gesehen). Sperren und Markierungen berücksichtigen
+    jedes Mitglied, das als ``mit_preis``-, ``aktive``- oder Gruppenzeile vorliegt; die Vergleichsbasis nur Inserate mit Preis."""
     rechner, schreiber = Rechner(cfg), Anschreiber(cfg, basis)
     jetzt = jetzt or datetime.now()
     standort = str(cfg["anschreiben"].get("plz") or "") or None
     alle = [ergaenze_fahrzeug(dict(r)) for r in mit_preis]
-    duplikate = finde_duplikate(alle)
-    vergleich = vergleichsbasis(alle, duplikate)
+    nach_id = {a["id"]: a for a in alle}
+    heuristisch = finde_duplikate(alle)
+    vergleich = vergleichsbasis(alle, wende_an(heuristisch, wirkung, nach_id.get, lambda a: a["id"]))
+    if wirkung is None or wirkung.leer:
+        duplikate = heuristisch
+    else:                                   # Mitglieder ohne Preis zählen für Sperren und Markierungen, nicht für die Vergleichsbasis
+        sonst = {z["id"]: ergaenze_fahrzeug(dict(z)) for z in [*aktive, *gruppenzeilen] if z["id"] not in nach_id}
+        duplikate = wende_an(heuristisch, wirkung, {**sonst, **nach_id}.get, lambda a: a["id"])
     zeilen = []
     for r in aktive:
         a = ergaenze_fahrzeug(dict(r))
