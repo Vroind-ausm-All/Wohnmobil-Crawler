@@ -3,7 +3,8 @@
 Versionen: 1 = ZIP-Stand (Tabelle ``anzeigen`` im Ur-Schema), 2 = Stand vor Phase 1 (ergänzte Spalten + Team-Tabellen),
 3 = Phase 1 (``schema_version``, ``bearbeitung``), 4 = vorbereiteter Mehrquellen-Ereigniseingang, 5 = Verkäuferportal,
 6 = Händlerportal (Standorte), 7 = Demo-Auktionen, 8 = gespeicherte Kalkulationen (Deal Intelligence),
-9 = Ankaufsvorgänge (Besichtigung bis Verkauf), 10 = Audit-Protokoll und Leerlauf-Zeit der Sitzungen (G0b).
+9 = Ankaufsvorgänge (Besichtigung bis Verkauf), 10 = Audit-Protokoll und Leerlauf-Zeit der Sitzungen (G0b),
+11 = Fahrzeuge getrennt von Inseraten (P3-01, ``fahrzeuge`` + ``inserate.fahrzeug_id``).
 Jeder Schritt läuft in einer eigenen Transaktion, ist idempotent
 (``IF NOT EXISTS``, Spaltenprüfung) und wird erst nach erfolgreicher Sicherung der Datenbank ausgeführt.
 Die DDL der Schritte ist eingefroren: spätere Änderungen gehören in einen neuen Schritt, nicht in einen alten.
@@ -12,12 +13,12 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .sicherung import SicherungsFehler, oeffne_lesend, sichere
 
-AKTUELLE_VERSION = 10
+AKTUELLE_VERSION = 11
 
 
 class MigrationsFehler(RuntimeError):
@@ -267,9 +268,55 @@ def _schritt_10(con: sqlite3.Connection):
     _neue_spalte(con, "sitzungen", "zuletzt", "TEXT")
 
 
+def _schritt_11(con: sqlite3.Connection):
+    """Additive v11 (P3-01, ADR-039): ein Fahrzeug ist nicht dasselbe wie ein Inserat. Neue Tabelle ``fahrzeuge`` (bewusst nur
+    Kennung, Herkunft, Zeitpunkt – Merkmale, FIN und Status folgen mit P3-02) und neue Spalte ``inserate.fahrzeug_id``.
+    Jedes vorhandene Inserat bekommt genau ein eigenes Fahrzeug; es wird NICHTS zusammengeführt (Zuordnungen nur vorgeschlagen).
+    Der Ankaufsstatus bleibt am Inserat (``anzeigen``/``bearbeitung``). Nichts Bestehendes wird verändert oder gelöscht."""
+    con.execute("""CREATE TABLE IF NOT EXISTS fahrzeuge (
+        id INTEGER PRIMARY KEY, erstellt_am TEXT NOT NULL,
+        herkunft TEXT NOT NULL CHECK(herkunft IN ('migration', 'eingang')))""")
+    _neue_spalte(con, "inserate", "fahrzeug_id", "INTEGER REFERENCES fahrzeuge(id)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_inserate_fahrzeug ON inserate(fahrzeug_id)")
+    vorher = _zaehle_v11(con)
+    # Altbestand set-basiert. Die Gleichheit fahrzeuge.id = inserate.id gilt NUR für diesen Altbestand; kein Code darf sich darauf
+    # verlassen (Zugriff immer über inserate.fahrzeug_id).
+    con.execute("INSERT INTO fahrzeuge (id, erstellt_am, herkunft) SELECT id, ?, 'migration' FROM inserate WHERE fahrzeug_id IS NULL",
+                (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),))
+    con.execute("UPDATE inserate SET fahrzeug_id = id WHERE fahrzeug_id IS NULL")
+    # Neue Inserate (Suche, Seiten-/Text-/Mail-Import, Ereigniseingang, Abgleich) bekommen ohne Zutun ein eigenes Fahrzeug.
+    # In `inserate` nur mit einfachem INSERT oder UPSERT schreiben: INSERT OR REPLACE ließe ein verwaistes Fahrzeug zurück.
+    con.execute("""CREATE TRIGGER IF NOT EXISTS inserate_fahrzeug_anlegen AFTER INSERT ON inserate WHEN NEW.fahrzeug_id IS NULL
+        BEGIN
+            INSERT INTO fahrzeuge (erstellt_am, herkunft) VALUES (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'eingang');
+            UPDATE inserate SET fahrzeug_id = last_insert_rowid() WHERE id = NEW.id;
+        END""")
+    nachher = _zaehle_v11(con)
+    if nachher != {**vorher, "fahrzeuge": nachher["inserate"]}:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 11 geändert: {vorher} -> {nachher}")
+    ohne = con.execute("SELECT COUNT(*) FROM inserate WHERE fahrzeug_id IS NULL").fetchone()[0]
+    if ohne:
+        raise MigrationsFehler(f"{ohne} Inserate ohne Fahrzeug nach Schritt 11")
+    verschieden = con.execute("SELECT COUNT(DISTINCT fahrzeug_id) FROM inserate").fetchone()[0]
+    if verschieden != nachher["inserate"]:
+        raise MigrationsFehler(f"Schritt 11: Fahrzeuge und Inserate passen nicht 1:1 ({verschieden} verschiedene Fahrzeuge, {nachher['inserate']} Inserate)")
+    lose = con.execute("SELECT COUNT(*) FROM inserate WHERE fahrzeug_id NOT IN (SELECT id FROM fahrzeuge)").fetchone()[0]
+    if lose:
+        raise MigrationsFehler(f"Schritt 11: {lose} Inserate verweisen auf ein fehlendes Fahrzeug")
+
+
+_ZAEHLE_V11 = ("inserate", "beobachtungen", "preis_historie", "bearbeitung", "besichtigungen", "ankaeufe", "anzeigen", "fahrzeuge")
+
+
+def _zaehle_v11(con: sqlite3.Connection) -> dict[str, int]:
+    """Zeilenzahlen der Tabellen, die Schritt 11 nicht verändern darf (plus ``fahrzeuge``, das genau so viele Zeilen wie ``inserate`` bekommt)."""
+    vorhanden = _tabellen(con)
+    return {t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in _ZAEHLE_V11 if t in vorhanden}
+
+
 SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4, 5: _schritt_5,
                                                              6: _schritt_6, 7: _schritt_7, 8: _schritt_8, 9: _schritt_9,
-                                                             10: _schritt_10}
+                                                             10: _schritt_10, 11: _schritt_11}
 
 _SCHEMA_VERSION = ("CREATE TABLE IF NOT EXISTS schema_version ("
                    "version INTEGER PRIMARY KEY, angewendet_am TEXT NOT NULL)")

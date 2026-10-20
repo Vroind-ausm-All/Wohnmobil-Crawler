@@ -6,6 +6,24 @@ Wert „–“.
 
 ---
 
+## P3-01 – Fahrzeuge getrennt von Inseraten, Schema v11 (20.10.2026) · Status: REVIEW
+
+- **Phase:** 3 (Datenbank und Marktbeobachtung), freigegeben vom Betreiber am 18.10.2026; Phase 2 abgeschlossen (PR #23–#25).
+  Betreiberentscheidungen: Ankaufsstatus bleibt am Inserat; Rückweg = Sicherung `vor-v11` (ADR-039).
+- **Verantwortlicher Agent:** Plan `scout-architect`; Umsetzung `scout-data-engineer`; QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/migrationen.py` (Schritt 11, Invarianten), `wmscout/datenbank.py` (lesend: `fahrzeug_id_zu`,
+  `inserate_von_fahrzeug`), Tests `test_fahrzeuge.py` (19, neu), `test_migration.py`/`test_ereignisse.py` (Versionslisten über
+  `AKTUELLE_VERSION`), Doku ADR-039 (ADR-011 teilweise ersetzt), ROADMAP, ARCHITECTURE.
+- **Implementierte Funktionen:** Tabelle `fahrzeuge`, Spalte `inserate.fahrzeug_id` mit Index; jedes vorhandene Inserat bekommt genau ein
+  Fahrzeug, neue Inserate per Trigger; nichts wird zusammengeführt; keine bestehenden Daten verändert. Sicherung vorher, eine
+  Transaktion, idempotent, Invarianten (Zeilenzahlen, 1:1, keine Lücken) mit Rollback.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA FREIGABE, kein kritischer/hoher/mittlerer Befund. Abbruch an allen 27 Stellen des Schritts → vollständiger
+  Rollback; alter Code lehnt v11-Datenbank ab, ohne zu schreiben; Trigger-ID-Rückgabe korrekt. 4 niedrige Hinweise: zwei Testmängel
+  behoben, zwei als Hinweis in ADR-039 bzw. als Code-Kommentar festgehalten.
+- **Bekannte Risiken:** Windows-CI und echte Betreiberdatenbank nicht geprüft (Datenbankgröße F5 offen).
+- **Nächster sinnvoller Schritt:** P3-02 (Fahrzeugidentität, Dublettenvorschläge mit Bestätigung).
+
 ## P2-06 – E-Mail-Suchagenten (.eml) (17.10.2026) · Status: REVIEW
 
 - **Verantwortlicher Agent:** `source-integrations`; zwei QA-Runden `qa-security-reviewer`; Abschluss der dritten Runde (Tests zu K1,

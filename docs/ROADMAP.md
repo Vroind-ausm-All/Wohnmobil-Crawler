@@ -204,7 +204,7 @@ erhalten (Re-Import-Test).
 
 | ID | Prio | Paket | Agent | Status |
 |---|---|---|---|---|
-| P3-01 | P1 | Migration auf Version 5: `fahrzeuge`, Ankaufsstatus am Fahrzeug, Kompatibilitäts-View `anzeigen` | scout-data-engineer | TODO |
+| P3-01 | P1 | Migration auf **Version 11**: `fahrzeuge` + `inserate.fahrzeug_id`, je Inserat ein Fahrzeug, Trigger für neue Inserate; Ankaufsstatus bleibt am Inserat, keine View (ADR-039, Betreiber 18.10.2026) | scout-data-engineer | REVIEW |
 | P3-02 | P1 | Fahrzeugidentität (FIN, Fingerabdruck mit Konfidenz), Dublettenvorschläge mit Bestätigung | scout-data-engineer | TODO |
 | P3-03 | P1 | Vollständiger Preisverlauf, `beobachtungen` mit Kanal und Zeitpunkt; **Re-Import-Test** (identische Inserate erneut importieren → kein Datensatz doppelt, Historie vollständig) | scout-data-engineer | TODO |
 | P3-04 | P2 | Verfügbarkeit (`aktiv`/`reserviert`/`offline`/`verkauft`/`unbekannt`) + `zuletzt_bestaetigt` | scout-data-engineer | TODO |

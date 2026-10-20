@@ -292,6 +292,19 @@ class Datenbank:
     def alle_mit_preis(self) -> list[sqlite3.Row]:
         return self.con.execute("SELECT * FROM anzeigen WHERE preis IS NOT NULL").fetchall()
 
+    def fahrzeug_id_zu(self, ad_id: str) -> int | None:
+        """Fahrzeug (``fahrzeuge.id``) der ``anzeigen``-Zeile; None, wenn die Anzeige oder ihr v4-Inserat fehlt. Verbindung über
+        (Plattform, Anzeigen-ID), nicht über ``legacy_id`` (bei Kollision NULL). Nur lesend."""
+        zeile = self.con.execute(
+            "SELECT i.fahrzeug_id FROM anzeigen a JOIN inserate i "
+            "ON i.plattform = COALESCE(NULLIF(a.quelle, ''), ?) AND i.anzeigen_id = a.id WHERE a.id = ?",
+            (STANDARD_PLATTFORM, ad_id)).fetchone()
+        return zeile[0] if zeile else None
+
+    def inserate_von_fahrzeug(self, fahrzeug_id: int) -> list[sqlite3.Row]:
+        """Alle Inserate (je Quelle eines) zu einem Fahrzeug, älteste zuerst. Nur lesend."""
+        return self.con.execute("SELECT * FROM inserate WHERE fahrzeug_id = ? ORDER BY id", (fahrzeug_id,)).fetchall()
+
     def letzter_lauf(self) -> datetime | None:
         """Zeitpunkt, zu dem zuletzt Anzeigen gesehen wurden (≈ letzter Suchlauf)."""
         wert = self.con.execute("SELECT MAX(zuletzt_gesehen) FROM anzeigen").fetchone()[0]
