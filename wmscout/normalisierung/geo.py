@@ -13,6 +13,7 @@ from pathlib import Path
 PLZ_DATEI = Path(__file__).with_name("plz_de.csv")
 STRASSENFAKTOR = 1.25          # Fahrstrecke ≈ Luftlinie × 1,25 (Durchschnitt in Deutschland)
 _koordinaten: dict[str, tuple[float, float]] | None = None
+_mittel: dict[str, tuple[float, float]] | None = None          # Mittel je 3- und 2-stelligem Präfix (einmal berechnet, nicht je Abfrage)
 INLAND = {"D", "DE", "DEU", "GER", "BRD"}
 _LAENDERKUERZEL = re.compile(r"^\s*([A-Z]{1,3})\s*-\s*\d")        # „SE-123 45 Ort“, „NL-1234AB Ort“, „FR-75001 Paris“
 
@@ -26,6 +27,17 @@ def _lade() -> dict[str, tuple[float, float]]:
             if len(teile) == 3 and teile[0].isdigit():
                 _koordinaten[teile[0]] = (float(teile[1]), float(teile[2]))
     return _koordinaten
+
+
+def _lade_mittel() -> dict[str, tuple[float, float]]:
+    global _mittel
+    if _mittel is None:
+        gruppen: dict[str, list[tuple[float, float]]] = {}
+        for p, k in _lade().items():
+            for stellen in (3, 2):
+                gruppen.setdefault(p[:stellen], []).append(k)
+        _mittel = {pre: (sum(k[0] for k in ks) / len(ks), sum(k[1] for k in ks) / len(ks)) for pre, ks in gruppen.items()}
+    return _mittel
 
 
 def auslands_kuerzel(text: str | None) -> str | None:
@@ -44,18 +56,21 @@ def plz_aus_text(text: str | None) -> str | None:
     return m.group(1) if m else None
 
 
+def plz_bekannt(plz: str | None) -> bool:
+    """Liegt die PLZ exakt in der Tabelle vor (sonst ist ``koordinaten`` nur ein Näherungswert)?"""
+    return bool(plz) and plz in _lade()
+
+
 def koordinaten(plz: str | None) -> tuple[float, float] | None:
-    """Exakte PLZ, sonst Mittel der PLZ mit gleichen ersten drei bzw. zwei Ziffern."""
+    """Exakte PLZ, sonst Mittel der PLZ mit gleichen ersten drei bzw. zwei Ziffern (``plz_bekannt`` sagt, ob die PLZ exakt vorliegt).
+    Ab zwei Stellen ergebnisgleich zur früheren Suche über die ganze Tabelle; eine einstellige PLZ liefert None (zu ungenau)."""
     if not plz:
         return None
     daten = _lade()
     if plz in daten:
         return daten[plz]
-    for stellen in (3, 2):
-        naechste = [k for p, k in daten.items() if p.startswith(plz[:stellen])]
-        if naechste:
-            return (sum(k[0] for k in naechste) / len(naechste), sum(k[1] for k in naechste) / len(naechste))
-    return None
+    mittel = _lade_mittel()
+    return mittel.get(plz[:3]) or mittel.get(plz[:2])
 
 
 def entfernung_km(plz_a: str | None, plz_b: str | None) -> int | None:

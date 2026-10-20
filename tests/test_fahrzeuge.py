@@ -122,7 +122,7 @@ def test_migration_altbestand_jedes_inserat_ein_fahrzeug_nichts_veraendert(tmp_p
         assert vorher_version == 10 and len(vorher["inserate"][1]) == 4 and len(vorher["bearbeitung"][1]) == 1       # Kollision, Bearbeitung da
         assert len(vorher["ankaeufe"][1]) == len(vorher["besichtigungen"][1]) == 1
         assert _sql(pfad, "SELECT COUNT(*) FROM inserate WHERE legacy_id IS NULL")[0][0] == 1        # die Kollision
-        assert versionen(pfad)[-2:] == [10, 11]
+        assert versionen(pfad)[-(AKTUELLE_VERSION - 9):] == list(range(10, AKTUELLE_VERSION + 1))
     _pruefe_ein_fahrzeug_je_inserat(pfad)
     assert _nachher_wie_vorher(pfad, vorher) == vorher                    # alle bisherigen Tabellen und Spalten zeilen- UND inhaltsgleich
     assert {r[0] for r in _sql(pfad, "SELECT herkunft FROM fahrzeuge")} == {"migration"}
@@ -211,9 +211,9 @@ def test_fehler_im_schritt_rollt_alles_zurueck(tmp_path, monkeypatch):
         migriere(pfad, ziel)
     _kein_stand_11(pfad)
     assert _abbild(pfad) == vorher
-    assert any("vor-v11" in k.name for k in sicherungen(ziel, "db"))             # Rückweg bleibt erhalten
+    assert any(f"vor-v{AKTUELLE_VERSION}" in k.name for k in sicherungen(ziel, "db"))             # Rückweg bleibt erhalten
     monkeypatch.undo()
-    assert migriere(pfad, ziel) == [11]                                           # nach Behebung läuft es durch
+    assert migriere(pfad, ziel) == list(range(11, AKTUELLE_VERSION + 1))                                           # nach Behebung läuft es durch
 
 
 def test_invariante_inserate_und_fahrzeuge_passen_nicht_zusammen_rollback(tmp_path, monkeypatch):

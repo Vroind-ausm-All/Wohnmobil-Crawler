@@ -696,8 +696,33 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   INSTEAD-OF-Triggern (verdeckte Logik in jedem Schreibweg); `anzeigen.fahrzeug_id` (widerspricht dem Zielmodell).
 * **Folgen:** ADR-011 ist für Status und View ersetzt. ADR-023 („`bearbeitung` umschlüsseln“) wandert nach P3-02. Merkmale,
   FIN und Fingerabdruck des Fahrzeugs folgen mit P3-02 als neue Spalten.
+* **Nachtrag (20.10.2026, ADR-040):** Merkmale und Fingerabdruck werden **nicht** als Spalten am Fahrzeug gespeichert – sie würden veralten, wenn sich die Normalisierung ändert; der Vergleich rechnet beim Lesen.
 * **Hinweise aus der QA (niedrig, offen für P3-02):** `fahrzeuge.id` ist ohne AUTOINCREMENT – nach dem Zurückspielen einer
   Sicherung können IDs erneut vergeben werden; Fahrzeug-IDs deshalb nicht in Dateinamen, URLs oder Exporte übernehmen (oder dann
   AUTOINCREMENT einführen). In `inserate` nur mit einfachem INSERT oder UPSERT schreiben (INSERT OR REPLACE hinterließe ein verwaistes
   Fahrzeug). Ein von Hand angelegter gleichnamiger Trigger würde von `CREATE TRIGGER IF NOT EXISTS` übernommen – nur durch manuelle
   Eingriffe erreichbar.
+
+## ADR-040 – Dubletten: Vorschläge beim Lesen, gespeichert werden nur Entscheidungen (Schema v12) · gilt (20.10.2026)
+
+* **Kontext:** Ein Fahrzeug kann auf mehreren Plattformen oder nach Neueinstellung mehrfach erscheinen (P3-02). Inserate enthalten keine
+  FIN; Bild-Hashes bräuchten einen Bilderabruf (Regeln 11/12). Die heutige Heuristik `finde_duplikate` sperrt bereits Anschreiben,
+  Vergleichsbasis und Team-Übernahme, ohne Fahrzeuge zusammenzuführen.
+* **Entscheidung (Betreiber 20.10.2026):**
+  1. Offene Vorschläge werden beim Lesen berechnet (`wmscout/normalisierung/identitaet.py` `vergleiche`, rein; `wmscout/dubletten.py`),
+     nicht gespeichert. Gespeichert werden nur menschliche Entscheidungen (`dubletten_entscheidungen`: gleich/verschieden, gilt/aufgehoben,
+     Gründe eingefroren, Regelversion) und Umhängungen (`fahrzeug_zuordnungen`, nur anfügbar).
+  2. Stufen nur „hoch“/„mittel“ mit erklärenden Gründen, keine Prozentwerte. Widerspruch (kein Vorschlag): andere Marke, EZ-Abstand > 1,
+     verschiedene bekannte Serie, km-Rückgang > 3.000, abweichende Modellnummer im Titel, andere Fahrzeugart. Gleichzeitig online →
+     höchstens „mittel“. Geschätzte PLZ-Lage wird als „ungefähr“ benannt.
+  3. Keine FIN, kein Verkäufername, kein Telefon als Merkmal. Nie automatisch zusammenführen.
+  4. Rechte (wirksam ab P3-02b): Bestätigen Inhaber und Mitarbeiter; Ablehnen und Aufheben nur Inhaber; Händler nie. Eine Ablehnung
+     „verschieden“ hebt die heuristische Sperre für das Paar auf (protokolliert).
+  5. Grenzen: höchstens 2000 Paare je Block (Marke, EZ ±1) mit Hinweis „Gruppe zu groß“, Ausgabe begrenzt (`limit` ≤ 1000).
+  6. Rückweg: Sicherung `vor-v12` zurückspielen.
+* **Alternativen:** Vorschlagstabelle mit Status „offen“ nach jedem Lauf (mehr Schreibhaken, veraltet bei Änderungen); Merkmale als
+  Spalten am Fahrzeug (veralten); automatische Zusammenführung bei „hoch“ (vom Betreiber abgelehnt).
+* **Folgen / offen:** P3-02a hat keine fachliche Wirkung (Test). P3-02b: Bestätigen/Ablehnen/Aufheben (LIFO), Gruppenwirkung auf
+  Team-Sperre und Bewertung mit sofortiger Cache-Leerung, Prüfung in derselben Transaktion; `PRAGMA foreign_keys` ist nirgends aktiv –
+  Existenz der Datensätze im Code prüfen. Die Invariante „`finde_duplikate` ⇒ mindestens mittel“ gilt außer bei Modellnummer- oder
+  Art-Widerspruch; `finde_duplikate` selbst ist unverändert.

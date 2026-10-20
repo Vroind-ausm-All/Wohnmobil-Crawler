@@ -4,6 +4,22 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P3-02a – Fahrzeugidentität: Grundlage, Vorschläge nur lesend (20.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 1529 bestanden (vorher 1384), neu `test_identitaet.py`, `test_dubletten_vorschlaege.py` |
+| `ruff check .` | grün |
+| Migration v1, v2, v10, v11 → v12: Zählungen und Inhalte gleich, Sicherung `vor-v12` zurückspielbar, Idempotenz, Rollback bei Abbruch an jeder der 29 Stellen des Schritts | bestanden |
+| Entscheidungen: Löschschutz, nur `gilt → aufgehoben`; Zuordnungen nur anfügbar | bestanden |
+| Keine fachliche Wirkung: `bewerte_alle` und `dubletten_ids` nach eingetragenen Entscheidungen/Zuordnungen frisch gelesen identisch; Snapshot-Hash `bewerte_zeilen` gleich dem Stand vorher | bestanden |
+| Invariante `finde_duplikate` ⇒ mindestens „mittel“ (außer Modellnummer-/Art-Widerspruch); QA-Fuzz 300 Seeds: 0 Verletzungen, 0 verlorene Paare an Blockgrenzen | bestanden |
+| Falsch-Positive: Knaus Sky TI 650 vs. 700, Summit 600 vs. 640, Alkoven vs. Teilintegriert → kein Vorschlag; gleichzeitig online → höchstens „mittel“ | bestanden |
+| Laufzeit: 50 100 Zeilen Vergleich 0,9 s; Worst Case 3000 gleiche Fahrzeuge 0,02 s (Obergrenze 2000 Paare/Block, Hinweis); 50 030 Inserate aus der Datenbank 13,7–15,3 s (vor der Korrektur gemessen) | gemessen |
+| API-Rollen (Inhaber/Mitarbeiter 200, Händler 403, ohne Anmeldung 401), `limit`, Cache-Neuberechnung; CLI `scout.py dubletten` | bestanden |
+| QA (eine Runde) | Freigabe mit Auflagen – B1–B4, B6, B7 behoben, B5 ergänzt; Korrekturen **nicht** erneut von der QA geprüft |
+| Windows-CI, echte Marktdaten | nicht geprüft (CI folgt im PR) |
+
 ## P3-01 – Fahrzeuge getrennt von Inseraten, Schema v11 (20.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |
