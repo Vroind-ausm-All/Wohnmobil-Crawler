@@ -4,6 +4,23 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P3-03 – Vollständiger Preisverlauf und Re-Import-Test (21.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 1686 bestanden (vorher 1638), neu `test_reimport.py`, `test_preisverlauf.py` |
+| `ruff check .` | grün |
+| Re-Import identischer Daten über Suche, gespeicherte Seiten, Text, Mail, Ereignis (`api`) – auch kanalübergreifend und zweimal hintereinander: Dump **aller** Tabellen (aus `sqlite_master`) unverändert außer `zuletzt_gesehen`; Ergebnis „bekannt“ | bestanden |
+| Andere Reihenfolge der Kanäle → gleicher fachlicher Endstand (6 Reihenfolgen in der Suite, 24 in der Voruntersuchung) | bestanden |
+| Preisverlauf über Kanäle (Senkung, Erhöhung, zurück): vollständig, chronologisch, letzter Eintrag = aktueller Preis für alle Inserate | bestanden |
+| Ältere Mail ändert neueren Preis nicht (gegen `zuletzt_gesehen` und gegen den Preisverlauf); Mail-Datum als Zeitpunkt, älter als 365 Tage → Einlesezeit | bestanden |
+| Detailpreis über den echten Abrufweg in der Historie; Fehler beim Schreiben → vollständiger Rollback; Detailpreis 0 keine Senkung | bestanden |
+| Re-Import nach Dubletten-Zusammenführung: Gruppe bleibt, keine neuen Fahrzeuge | bestanden |
+| Re-Import nach Anonymisierung: kein Personendatum kehrt zurück (gespeicherte Seite, Suche, Text, Mail, Ereignis, Abgleich) | bestanden |
+| `GET /api/preisverlauf`: Rollen (200/403/401), 404/400, schreibt nichts, keine Personendaten | bestanden |
+| QA (eine Runde) | Freigabe mit Auflagen – M1, M2, N1–N3 behoben; Korrekturen **nicht** erneut von der QA geprüft |
+| Echte Seiten/Mails, Windows-CI, Last | nicht geprüft (CI folgt im PR) |
+
 ## P3-02b – Dubletten bestätigen, ablehnen, aufheben mit Wirkung (20.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

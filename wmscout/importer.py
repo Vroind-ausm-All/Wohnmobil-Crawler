@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Collection
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from .datenbank import BESTAETIGT, IMPORT_SUCHE, VORLAEUFIG, Datenbank, import_art, import_suche
@@ -29,14 +29,21 @@ from .ereignis_speicher import EreignisSpeicher
 from .normalisierung.fahrzeug import art_schluessel
 from .quellen import (QUELLEN, STANDARD_QUELLE, Abruf, InseratNichtGefunden, NetzwerkFehler, Quelle, QuelleGesperrt,
                       QuellenFehler, Suchauftrag, erstelle_quelle)
+from .preisverlauf import preisverlauf
 from .quellen.basis import ART_QUELLE_KATEGORIE
 from .schalter import eingang_pruefen, quelle_laeuft
 
 log = logging.getLogger("scout")
 
+MAX_MAIL_ALTER_TAGE = 365          # ein älteres Mail-Datum gilt als unplausibel: als Beobachtungszeitpunkt zählt das Einlesen
+
 LAYOUT_HINWEIS = ("{quelle}-Seite geladen, aber keine Anzeigen erkannt – vermutlich wurde das Seitenlayout "
                   "geändert. Die Seite liegt zur Analyse in {datei}; die Selektoren stehen im Parser der Quelle "
                   "(wmscout/quellen/{kennung}/parser.py).")
+
+
+def _zu_alt(zeitpunkt: datetime | None) -> bool:
+    return zeitpunkt is not None and zeitpunkt.astimezone(timezone.utc) < datetime.now(timezone.utc) - timedelta(days=MAX_MAIL_ALTER_TAGE)
 
 
 def _art(text: str | None) -> str | None:
@@ -289,6 +296,8 @@ class Importer:
                     continue
                 for h in lesung.hinweise:
                     stat["fehler"].append(f"{datei.name}: {h}")
+                if _zu_alt(lesung.zeitpunkt):
+                    stat["fehler"].append(f"{datei.name}: Datum der Mail liegt über {MAX_MAIL_ALTER_TAGE} Tage zurück – als Zeitpunkt gilt das Einlesen")
                 aeltere_vorher = stat["aeltere"]
                 self.importiere(lesung, eingang.kanal, stat)
                 if stat["aeltere"] > aeltere_vorher:
@@ -323,16 +332,26 @@ class Importer:
         Rückgabe: (Datensatz, `gesehen_am` für die Datenbank, Preis wegen älterer Mail nicht übernommen)."""
         jetzt = datetime.now()
         gesehen_am = None
+        zu_alt = _zu_alt(zeitpunkt)
         if zeitpunkt is not None:
             gesehen_am = min(zeitpunkt.astimezone().replace(tzinfo=None), jetzt).isoformat(timespec="seconds")
         alt = self.db.con.execute("SELECT url, titel, ort, km, ez_jahr, marke, zuletzt_gesehen FROM anzeigen WHERE id=?", (d["id"],)).fetchone()
         if alt is None:
-            return d, gesehen_am, False
+            return d, None if zu_alt else gesehen_am, False
         d = dict(d)
         for feld in ("url", "titel", "ort", "km", "ez_jahr", "marke"):
             if alt[feld] not in (None, ""):
                 d[feld] = None
         aelter = bool(gesehen_am and alt["zuletzt_gesehen"] and gesehen_am < alt["zuletzt_gesehen"])
+        if gesehen_am and not aelter:             # zusätzlich gegen den jüngsten Eintrag im Preisverlauf (jeder Kanal, auch der Detailabruf)
+            try:
+                verlauf = preisverlauf(self.db, d["id"])
+            except LookupError:
+                verlauf = []
+            if verlauf and verlauf[-1]["zeitpunkt"]:
+                aelter = datetime.fromisoformat(gesehen_am).astimezone(timezone.utc) < datetime.fromisoformat(verlauf[-1]["zeitpunkt"])
+        if zu_alt:
+            gesehen_am = None                     # unplausibel altes Datum: als Zeitpunkt gilt das Einlesen (Preis zählt nur, wenn die Mail nicht älter ist)
         if aelter:
             d["preis"], d["vb"] = None, None
         return d, gesehen_am, aelter
