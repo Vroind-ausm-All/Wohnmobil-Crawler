@@ -54,6 +54,7 @@ from ..domaene import fahrzeug_status
 from ..dubletten import (MAX_LIMIT, STANDARD_LIMIT, DublettenFehler, DublettenKonflikt, Ergebnis, bestaetige, darf_ablehnen, darf_aufheben,
                          darf_bestaetigen, entscheidungen_zu, gruppe, halter_der_gruppe, hebe_auf, inserat_zu_anzeige, lehne_ab, pruefe_dubletten)
 from ..normalisierung.identitaet import REGEL_VERSION
+from ..preisverlauf import inserat_zu_anzeigen_id, preisverlauf
 from ..eingang import TextEingang, ergebnis_der, import_ordner, relativ_zum_projekt
 from ..eingang.text import ANBIETER, MAX_PREIS, MAX_TEXT, MAX_URL, widerspricht_marke
 from ..eingang.email import mail_ordner
@@ -499,6 +500,8 @@ class Anfrage:
                                    "unvollstaendig": bool(erg.gekuerzt), "hinweis": erg.hinweis, "regel_version": REGEL_VERSION})
         if p == "/api/dubletten/entscheidungen":
             return self.json(200, self.dubletten_entscheidungen((self.query.get("anzeige") or [""])[0]))
+        if p == "/api/preisverlauf":
+            return self.json(200, self.preisverlauf_antwort((self.query.get("anzeige") or [""])[0], (self.query.get("umfang") or ["inserat"])[0]))
         if p == "/api/fahrzeuge":
             return self.json(200, self.fahrzeuge())
         if m := re.fullmatch(r"/api/fahrzeug/([\w-]+)", p):
@@ -1169,6 +1172,28 @@ class Anfrage:
         rolle = self.nutzer.get("rolle")
         return {"anzeige": anzeige_id, **self.dubletten_stand(iid), "darf_bestaetigen": darf_bestaetigen(rolle),
                 "darf_ablehnen": darf_ablehnen(rolle), "darf_aufheben": darf_aufheben(rolle)}
+
+    def preisverlauf_antwort(self, anzeige_id: str, umfang: str) -> dict:
+        """Preisverlauf einer Anzeige (``?anzeige=<Anzeigen-ID>``), chronologisch mit Kanal und Zeitpunkt (P3-03); nur lesend, Inhaber und Mitarbeiter.
+        ``umfang=inserat`` (Standard): nur dieses Inserat; ``umfang=fahrzeug``: alle Inserate desselben Fahrzeugs (bestätigte Dubletten) gemeinsam."""
+        if self.nutzer.get("rolle") not in TEXT_IMPORT_ROLLEN:
+            raise Antwort(403, "Nur für Inhaber und Mitarbeiter", grund="recht")
+        if umfang not in ("inserat", "fahrzeug"):
+            raise Antwort(400, "umfang muss inserat oder fahrzeug sein")
+        db = self.k.db
+        iid = inserat_zu_anzeigen_id(db, anzeige_id) if anzeige_id else None
+        if iid is None:
+            raise Antwort(404, "Inserat nicht gefunden")
+        fid = db.con.execute("SELECT fahrzeug_id FROM inserate WHERE id = ?", (iid,)).fetchone()[0]
+        if umfang == "fahrzeug" and fid is not None:
+            verlauf = preisverlauf(db, fahrzeug_id=fid)
+            inserate = [{"anzeigen_id": r["anzeigen_id"], "plattform": r["plattform"]} for r in db.inserate_von_fahrzeug(fid)]
+        else:
+            verlauf = preisverlauf(db, anzeige_id)
+            inserate = [{"anzeigen_id": r["anzeigen_id"], "plattform": r["plattform"]} for r in db.con.execute(
+                "SELECT anzeigen_id, plattform FROM inserate WHERE id = ?", (iid,))]
+        return {"anzeige": anzeige_id, "umfang": umfang, "inserat_id": iid, "fahrzeug_id": fid, "inserate": inserate, "anzahl": len(verlauf),
+                "verlauf": verlauf}
 
     def dublette_entscheiden(self, aktion: str, daten: dict) -> dict:
         """Bestätigen („gleich“), Ablehnen („verschieden“) und Aufheben einer Dublettenentscheidung (P3-02b, ADR-040). Rechte:

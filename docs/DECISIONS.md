@@ -739,3 +739,23 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   4. Oberfläche: Desktop mit Vorschlagsliste, „Gleiches Fahrzeug“/„Verschieden“ (je nach Recht, mit Rückfrage) und Gruppe samt
      Verlauf und „Aufheben“ im Fahrzeugfenster; Handy nur Anzeige.
   5. Offen (Backlog): Index `fahrzeug_zuordnungen(entscheidung_id)` (nächste Schemaänderung), Audit-Objekt mit Entscheidungs-ID.
+
+## ADR-041 – Preisverlauf: jede Preisbeobachtung mit Kanal und Zeitpunkt; Personendaten kehren nach Anonymisierung nicht zurück · gilt (21.10.2026)
+
+* **Kontext:** P3-03 verlangt einen vollständigen Preisverlauf und dass identische Inserate ohne Datenverlust erneut eingelesen
+  werden können. `preis_historie`/`beobachtungen` (seit v4) erfassten bereits Erstpreis, Senkung und Erhöhung, aber nicht den Preis aus
+  dem Netz-Detailabruf, und beim Kanal `email` die Importzeit statt des Mail-Datums.
+* **Entscheidung:**
+  1. Ohne Schemaänderung. Neuer Kanalwert `detail` für Preise aus dem Detailabruf; ein Detailabruf zählt als Beobachtung
+     (`zuletzt_gesehen`). Beim Kanal `email` gilt das Datum der Mail als Beobachtungszeitpunkt – liegt es mehr als 365 Tage zurück,
+     gilt die Einlesezeit (mit Hinweis).
+  2. Eine Mail ändert den Preis nicht, wenn sie älter ist als der jüngste Eintrag im Preisverlauf des Inserats (ergänzt die
+     P2-06-Regel gegen `zuletzt_gesehen`).
+  3. Ein fehlender Preis löscht keinen bekannten Preis (kein Eintrag „kein Preis“).
+  4. Lesend: `wmscout/preisverlauf.py` (Zeitpunkte nach UTC, auf Sekunden gekürzt; je Inserat oder je Fahrzeug über alle seine
+     Inserate) und `GET /api/preisverlauf?anzeige=…&umfang=inserat|fahrzeug` (Inhaber, Mitarbeiter).
+  5. Datenschutz: Ist ein Inserat anonymisiert (`anonymisiert_am`), übernimmt ein erneutes Einlesen keine Personendaten
+     (`verkaeufer_name`); Fahrzeugdaten und Preis werden weiter aktualisiert.
+* **Folgen / offen:** Weicht die Anzeigenseite systematisch vom Listenpreis ab, entsteht je Abweichung ein Eintrag (echte
+  widersprüchliche Quelldaten). Ein Reihenfolgeschutz für `api`/`stream`-Ereignisse fehlt noch und ist vor der Freigabe einer
+  API-Quelle nötig. Die Oberfläche zeigt den Verlauf noch nicht (Phase 6).

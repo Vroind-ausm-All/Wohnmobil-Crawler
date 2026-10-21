@@ -55,6 +55,11 @@ def jetzt_utc() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _als_utc(zeit: str) -> str:
+    """ISO-Zeit nach UTC; ohne Zeitzone gilt die lokale (so speichert ``anzeigen``)."""
+    return datetime.fromisoformat(zeit).astimezone(timezone.utc).isoformat(timespec="seconds")
+
+
 def wal_aktiv(cfg: dict) -> bool:
     """``ausgabe.wal`` aus config.yaml (Standard ``true``); nur echte Wahrheitswerte, damit „nein“ nicht als wahr gilt."""
     wert = (cfg.get("ausgabe") or {}).get("wal", True)
@@ -114,7 +119,7 @@ class Datenbank:
             if nur_leere:
                 a = self._vorhandenes_behalten(a)
             ergebnis = self.schreibe_anzeige(a, suche, gesehen_am, text_eigen=nur_leere)
-            self.spiegle_inserat(a, kanal)
+            self.spiegle_inserat(a, kanal, zeitpunkt=_als_utc(gesehen_am) if gesehen_am else None)
         return ergebnis
 
     def _vorhandenes_behalten(self, a: dict) -> dict:
@@ -168,11 +173,13 @@ class Datenbank:
                 self.con.execute("UPDATE anzeigen SET details_json=NULL WHERE id=? AND details_json=?", (a["id"], TEXT_MARKE))
         return ergebnis
 
-    def spiegle_inserat(self, a: dict, kanal: str) -> int:
+    def spiegle_inserat(self, a: dict, kanal: str, zeitpunkt: str | None = None) -> int:
         """v4-Gegenstück eines ``anzeigen``-Datensatzes (ohne eigenes Commit). Schlüssel ist (Plattform, Anzeigen-ID); ein zuerst
         über den Ereigniseingang angelegtes Inserat wird verknüpft (``legacy_id``) statt verdoppelt. Gesehen in Suche oder
-        Seite heißt verfügbar. ``beobachtungen`` und ``preis_historie`` erhalten nur Änderungen. Rückgabe: ``inserate.id``."""
+        Seite heißt verfügbar. ``beobachtungen`` und ``preis_historie`` erhalten nur Änderungen. Rückgabe: ``inserate.id``.
+        ``zeitpunkt`` (ISO, UTC): Zeitpunkt der Beobachtung in ``beobachtungen``/``preis_historie``, wenn er nicht „jetzt“ ist (E-Mail: Datum der Mail)."""
         plattform, ad_id, jetzt = a.get("quelle") or STANDARD_PLATTFORM, a["id"], jetzt_utc()
+        beobachtet = zeitpunkt or jetzt
         alt = self.con.execute("SELECT * FROM inserate WHERE plattform=? AND anzeigen_id=?", (plattform, ad_id)).fetchone()
         url = a.get("url") or (alt["url"] if alt else None)
         titel = a.get("titel") or (alt["titel"] if alt else None)
@@ -194,10 +201,10 @@ class Datenbank:
         if typ:
             self.con.execute(
                 """INSERT INTO beobachtungen (inserat_id, plattform, kanal, ereignis_typ, ereignis_id, zeitpunkt, preis, inhalt_hash)
-                   VALUES (?, ?, ?, ?, NULL, ?, ?, ?)""", (inserat_id, plattform, kanal, typ, jetzt, preis, inhalt_hash(signatur)))
+                   VALUES (?, ?, ?, ?, NULL, ?, ?, ?)""", (inserat_id, plattform, kanal, typ, beobachtet, preis, inhalt_hash(signatur)))
             if preis is not None and (alt is None or alt["preis"] != preis):
                 self.con.execute("INSERT INTO preis_historie (inserat_id, zeitpunkt, preis, kanal) VALUES (?, ?, ?, ?)",
-                                 (inserat_id, jetzt, preis, kanal))
+                                 (inserat_id, beobachtet, preis, kanal))
         return inserat_id
 
     def verknuepfe_inserat(self, inserat_id: int, ad_id: str):
@@ -238,6 +245,11 @@ class Datenbank:
         return neu
 
     def speichere_details(self, ad_id: str, d: dict, nur_leere: bool = False):
+        """Details einer Anzeige speichern (Preis ggf. mit Historie). Eine Transaktion: bei jedem Fehler bleibt alles beim Alten."""
+        with self._exklusiv():
+            self._speichere_details(ad_id, d, nur_leere)
+
+    def _speichere_details(self, ad_id: str, d: dict, nur_leere: bool):
         felder = {k: d.get(k) for k in ("titel", "preis", "km", "ez_jahr", "marke", "art", "leistung",
                                          "getriebe", "beschreibung")}
         felder = {k: v for k, v in felder.items() if v not in (None, "")}
@@ -249,12 +261,38 @@ class Datenbank:
             if alt is not None and alt["details_json"] != TEXT_MARKE:
                 felder = {k: v for k, v in felder.items() if k in ("preis", "gewerblich") or _leer(k, alt[k])}
         else:
-            felder["details_json"] = json.dumps(d.get("details", {}), ensure_ascii=False)
+            felder["details_json"] = json.dumps(self._ohne_personendaten(ad_id, d.get("details", {})), ensure_ascii=False)
             felder["detail_geladen"] = 1
+        if "preis" in felder:
+            self._preis_aus_details(ad_id, felder["preis"])
         if felder:
             sets = ", ".join(f"{k}=?" for k in felder)
             self.con.execute(f"UPDATE anzeigen SET {sets} WHERE id=?", [*felder.values(), ad_id])
-        self.con.commit()
+
+    def _ohne_personendaten(self, ad_id: str, details: dict) -> dict:
+        """Eine bereits anonymisierte Zeile (``anonymisiert_am`` in ``details_json``, ``datenrechte.inserat_anonymisieren``) bekommt beim erneuten
+        Einlesen keine Personendaten zurück: der Profilname fällt weg, die Marke bleibt. Fahrzeugmerkmale werden weiter aktualisiert."""
+        z = self.con.execute("SELECT details_json FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+        try:
+            alt = json.loads(z["details_json"] or "{}") if z else {}
+        except ValueError:
+            return details
+        if not isinstance(alt, dict) or "anonymisiert_am" not in alt:
+            return details
+        return {**{k: v for k, v in details.items() if k != "verkaeufer_name"}, "anonymisiert_am": alt["anonymisiert_am"]}
+
+    def _preis_aus_details(self, ad_id: str, preis: int):
+        """Nennt die Detailseite einen anderen Preis als gespeichert (Netzabruf nach dem Suchlauf), gehört die Änderung wie bei jedem
+        anderen Kanal in Preissenkung und Preisverlauf (Kanal „detail“); sonst bliebe sie ohne Spur und ``inserate.preis`` veraltet."""
+        z = self.con.execute("SELECT preis, quelle, url, titel FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+        if z is None or z["preis"] == preis:
+            return
+        jetzt = datetime.now().isoformat(timespec="seconds")
+        # Der Abruf ist eine Beobachtung: ``zuletzt_gesehen`` rückt vor, sonst setzte eine ältere Mail den Preis zurück (K1 vergleicht damit)
+        self.con.execute("UPDATE anzeigen SET zuletzt_gesehen=MAX(COALESCE(zuletzt_gesehen, ''), ?) WHERE id=?", (jetzt, ad_id))
+        if preis and z["preis"] and preis < z["preis"]:
+            self.con.execute("UPDATE anzeigen SET preis_vorher=?, preis_geaendert_am=? WHERE id=?", (z["preis"], jetzt, ad_id))
+        self.spiegle_inserat({"id": ad_id, "quelle": z["quelle"], "url": z["url"], "titel": z["titel"], "preis": preis}, "detail")
 
     def ohne_details(self, limit: int, kennungen: Collection[str] | None = None) -> list[sqlite3.Row]:
         """Inserate für den Detailabruf – ohne solche aus gespeicherten Seiten (kein Netzabruf, ADR-010).

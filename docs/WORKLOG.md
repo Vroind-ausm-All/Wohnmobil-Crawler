@@ -6,6 +6,20 @@ Wert „–“.
 
 ---
 
+## P3-03 – Vollständiger Preisverlauf und Re-Import-Test (21.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** `scout-data-engineer`; QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/datenbank.py` (Mail-Zeitpunkt, Detailpreis mit Historie in einer Transaktion, `_ohne_personendaten`),
+  `wmscout/importer.py` (Mail-Altersregel gegen Preisverlauf, Untergrenze Mail-Datum), `wmscout/preisverlauf.py` (neu),
+  `wmscout/web/api.py` (`GET /api/preisverlauf`), Tests `test_reimport.py`, `test_preisverlauf.py` (neu), Doku ADR-041, ROADMAP.
+- **Implementierte Funktionen:** siehe ADR-041. Keine Schemaänderung; P3-02c (Index) bleibt offen, weil keine Migration nötig war.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. M1 (Detailpreis ohne Transaktion), M2 (Mail zwischen
+  Suche und Detailabruf setzte Preis zurück), N1–N3 behoben. Vorab vom Orchestrator entschieden: Personendaten kommen nach
+  Anonymisierung beim erneuten Einlesen nicht zurück (Lücke gefunden und geschlossen). Korrekturen nicht erneut von der QA geprüft.
+- **Bekannte Risiken:** nachgebaute Seiten, Mails und Texte; Reihenfolgeschutz für Ereignisse offen.
+- **Nächster sinnvoller Schritt:** P3-04 (Verfügbarkeit) oder Abschluss-Prüfung der Phase-3-Abnahme.
+
 ## P3-02b – Dubletten bestätigen, ablehnen, aufheben mit Wirkung (20.10.2026) · Status: REVIEW
 
 - **Verantwortlicher Agent:** Backend `scout-data-engineer`, Oberfläche `scout-ui-engineer`, QA `qa-security-reviewer`; Doku Orchestrator.
