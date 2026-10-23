@@ -11,6 +11,7 @@ from .datenbank import IMPORT_SUCHE, STANDARD_PLATTFORM, inhalt_hash
 from .domaene import PUSH_KANAELE
 from .ereignisse import InseratEreignis
 from .quellen import QUELLEN
+from .verfuegbarkeit import OFFLINE, aus_signal, erkenne_signal
 
 log = logging.getLogger(__name__)
 
@@ -58,32 +59,36 @@ class EreignisSpeicher:
 
         zeit = ereignis.empfangen_am.isoformat()
         if ereignis.typ == "geloescht":
-            status = "offline"
+            gewuenscht = OFFLINE
             url, titel, preis = alt["url"], alt["titel"], alt["preis"]
         else:
-            status = "aktiv"
             i = ereignis.inserat
             url = i.url or (alt["url"] if alt else None)
             titel = i.titel if i.titel is not None else (alt["titel"] if alt else None)
             preis = i.preis if i.preis is not None else (alt["preis"] if alt else None)
+            gewuenscht = aus_signal(erkenne_signal(titel))          # zu sehen = verfügbar, außer der Titel sagt „reserviert“/„verkauft“
+        # Altersregel: ein Ereignis vor der letzten Bestätigung ändert die Verfügbarkeit nicht (Preis und Titel laufen wie bisher)
+        status, bestaetigt = self.db.verfuegbarkeit_nach_regel(alt, gewuenscht, zeit)
 
         neu = alt is None
         alt_signatur = (alt["url"], alt["titel"], alt["preis"], alt["verfuegbarkeit"]) if alt else None
         signatur = (url, titel, preis, status)
         if alt_signatur == signatur:
+            if bestaetigt != alt["zuletzt_bestaetigt"]:            # gleicher Stand erneut bestätigt: nur der Zeitpunkt rückt vor
+                con.execute("UPDATE inserate SET zuletzt_bestaetigt=? WHERE id=?", (bestaetigt, alt["id"]))
             return "bekannt"
 
         if neu:
             con.execute(
                 """INSERT INTO inserate (plattform, anzeigen_id, url, titel, preis, verfuegbarkeit,
-                   erstmals_gesehen, zuletzt_gesehen) VALUES (?,?,?,?,?,?,?,?)""",
-                (ereignis.plattform, ereignis.anzeigen_id, url, titel, preis, status, zeit, zeit))
+                   erstmals_gesehen, zuletzt_gesehen, zuletzt_bestaetigt) VALUES (?,?,?,?,?,?,?,?,?)""",
+                (ereignis.plattform, ereignis.anzeigen_id, url, titel, preis, status, zeit, zeit, bestaetigt))
             inserat_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
         else:
             inserat_id = alt["id"]
             con.execute(
-                "UPDATE inserate SET url=?, titel=?, preis=?, verfuegbarkeit=?, zuletzt_gesehen=? WHERE id=?",
-                (url, titel, preis, status, zeit, inserat_id))
+                "UPDATE inserate SET url=?, titel=?, preis=?, verfuegbarkeit=?, zuletzt_gesehen=?, zuletzt_bestaetigt=? WHERE id=?",
+                (url, titel, preis, status, zeit, bestaetigt, inserat_id))
 
         con.execute(
             """INSERT INTO beobachtungen

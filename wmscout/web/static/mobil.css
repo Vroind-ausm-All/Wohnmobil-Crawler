@@ -93,3 +93,5 @@ body.login{display:grid;place-items:center;min-height:100vh;padding:16px}
 @media (prefers-color-scheme: dark){.tb-reserviert{--tb:#8cc0ff} .tb-kontaktiert,.tb-dublette{--tb:#c9a6ff} .tb.mein{color:#10151c}}
 .karte.team .zeile{gap:8px;flex-wrap:wrap}
 .knopf:disabled{opacity:.5;cursor:not-allowed}
+/* Verfügbarkeit (P3-04): rot = verkauft/offline, gelb = reserviert bzw. vermutlich offline */
+.tag.verf{background:var(--rot-bg);color:var(--rot)} .tag.verf.reserviert,.tag.verf.vermutlich{background:var(--gelb-bg);color:var(--gelb)}

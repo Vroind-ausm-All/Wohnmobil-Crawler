@@ -47,6 +47,7 @@ from ..bearbeitung import (IN_ARBEIT, OFFEN, VORBEREITET, BearbeitungsKonflikt, 
 from ..benachrichtigung import WhatsAppCloud, whatsapp_link
 from ..bewertung.anschreiben import euro, tsd
 from ..bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids
+from ..verfuegbarkeit import fahrzeug_von, offline_nach_tagen
 from ..bewertung import kalkulation as kalk
 from ..bewertung.besichtigung import berechne, lade_katalog
 from ..datenbank import STATUS, Datenbank
@@ -224,7 +225,10 @@ def fahrzeug_kurz(z: dict, team: dict | None = None) -> dict:
             "ampel": b.ampel, "erstangebot": b.erstangebot if b.sicherheit != "keine" else None,
             "brief_betrag": z.get("brief_betrag"),
             "max_ek": b.max_ek if b.sicherheit != "keine" else None, "bereit": z["bereit"], "nachfassen": z["nachfassen"],
-            "sperre": z["sperre"], "hinweise": z["hinweise"], "neu": z["neu"], "team": team}
+            "sperre": z["sperre"], "hinweise": z["hinweise"], "neu": z["neu"], "team": team,
+            # Verfügbarkeit des Inserats (Markt), getrennt vom Ankaufsstatus; „vermutlich offline“ ist abgeleitet, nicht gespeichert (P3-04)
+            "verfuegbarkeit": a.get("verfuegbarkeit") or "unbekannt", "zuletzt_bestaetigt": a.get("zuletzt_bestaetigt"),
+            "vermutlich_offline": bool(a.get("vermutlich_offline")), "verfuegbarkeit_text": a.get("verfuegbarkeit_text")}
 
 
 def ics(b: dict, cfg: dict, link: str | None) -> str:
@@ -855,11 +859,17 @@ class Anfrage:
         wer = (self.query.get("wer") or ["alle"])[0]
         if wer not in ("alle", "meine", "frei"):
             raise Antwort(400, "wer muss alle, meine oder frei sein")
+        verfuegbar = (self.query.get("verfuegbar") or ["standard"])[0]
+        if verfuegbar not in ("standard", "alle", "nur"):
+            raise Antwort(400, "verfuegbar muss standard, alle oder nur sein")
         sicht = self.team_sicht()
         if wer != "alle" and not sicht:
             raise Antwort(400, "Team nicht aktiv (keine Nutzer angelegt) – „wer“ gibt es nur im Team")
         auswahl = []
         for z in self.k.zeilen():
+            # standard: verkaufte/offline Anzeigen ohne Ankaufsarbeit ausgeblendet; nur: alle nicht verfügbaren; alle: nichts ausgeblendet
+            if (verfuegbar == "standard" and z["ausblenden"]) or (verfuegbar == "nur" and z["a"].get("nicht_verfuegbar")):
+                continue
             s = z["a"].get("status") or "neu"
             t = sicht.objekt(z) if sicht else None
             if (wer == "meine" and not t["mein"]) or (wer == "frei" and not sicht.ist_frei(t)):
@@ -880,7 +890,16 @@ class Anfrage:
                 "nachfass_text": z["nachfass_text"],
                 "nachfass_betrag": z["nachfass_betrag"], "anschreiben_text": z["a"].get("anschreiben_text"),
                 "notiz": z["a"].get("notiz"), "besichtigungen": [self.besichtigung_kurz(b, sicht) for b in
-                                                                 self.k.team.besichtigungen(offen=False, anzeige_id=anzeige_id)]}
+                                                                 self.k.team.besichtigungen(offen=False, anzeige_id=anzeige_id)],
+                "verfuegbarkeit_fahrzeug": self.verfuegbarkeit_fahrzeug(anzeige_id)}
+
+    def verfuegbarkeit_fahrzeug(self, anzeige_id: str) -> dict | None:
+        """Abgeleitete Verfügbarkeit des Fahrzeugs über alle seine Inserate (bestätigte Dubletten, P3-02b/P3-04); None ohne v4-Gegenstück."""
+        db = self.k.db
+        fid = db.fahrzeug_id_zu(anzeige_id)
+        if fid is None:
+            return None
+        return fahrzeug_von(db.con, fid, datetime.now(), offline_nach_tagen(self.k.cfg))
 
     def besichtigung_kurz(self, b: dict, sicht: TeamSicht | None = None) -> dict:
         link = self.k.app_link(f"/m#/besichtigung/{b['id']}")

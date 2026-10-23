@@ -759,3 +759,30 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Folgen / offen:** Weicht die Anzeigenseite systematisch vom Listenpreis ab, entsteht je Abweichung ein Eintrag (echte
   widersprüchliche Quelldaten). Ein Reihenfolgeschutz für `api`/`stream`-Ereignisse fehlt noch und ist vor der Freigabe einer
   API-Quelle nötig. Die Oberfläche zeigt den Verlauf noch nicht (Phase 6).
+
+## ADR-042 – Verfügbarkeit am Inserat, getrennt vom Ankaufsstatus; `zuletzt_bestaetigt` (Schema v13) · gilt (23.10.2026)
+
+* **Kontext:** P3-04. Bisher setzte ein 404 im Detailabruf den Ankaufsstatus auf „gelöscht“ (Wert ohne Platz in `domaene.STATUS`), und
+  die Bewertung ließ solche Zeilen ganz weg. `inserate.verfuegbarkeit` (v4) wurde nur auf „aktiv“ gesetzt; einen Zeitpunkt der letzten
+  Bestätigung gab es nicht (`zuletzt_gesehen` ist „jede Beobachtung“, bei Mails die Einlesezeit).
+* **Entscheidung:**
+  1. Verfügbarkeit ist eine Eigenschaft des Marktinserats (aktiv, reserviert, offline, verkauft, unbekannt), getrennt vom
+     Ankaufsstatus. Schema v13: `inserate.zuletzt_bestaetigt` (UTC); Rückfüllung nur für „aktiv“/„offline“; dazu Index
+     `fahrzeug_zuordnungen(entscheidung_id)` (P3-02c).
+  2. Nur aus vorhandenen Beobachtungen, kein zusätzlicher Netzabruf: Sichtung → aktiv; eindeutige Statusmarke im Titel → reserviert
+     bzw. verkauft (Positivliste: „– VERKAUFT“, „[Verkauft]“, „(reserviert)“, „ist leider schon verkauft“ …; im Zweifel kein Signal,
+     „Rentner verkauft …“ zählt nicht); 404 im Detailabruf oder Löschereignis → offline.
+  3. Altersregel für alle Kanäle: Eine Beobachtung, die älter ist als `zuletzt_bestaetigt`, ändert die Verfügbarkeit nicht.
+     Zeitpunkt: Mail-Datum, Dateizeit der gespeicherten Seite, Ereigniszeit; Text-Import = jetzt.
+  4. „Vermutlich offline“ wird nie gespeichert, sondern beim Lesen abgeleitet (`verfuegbarkeit.offline_nach_tagen`, Standard 14).
+  5. Wirkung: verkauft/offline → kein Anschreiben (Sperrgrund); reserviert und „vermutlich offline“ → nur Hinweis. Nicht verfügbare
+     Anzeigen ohne jede Ankaufsarbeit (Status neu, keine Reservierung, Besichtigung, Notiz, Ankauf) werden in der Standardliste
+     ausgeblendet (Desktop „nur verfügbare“, API `verfuegbar=standard|alle|nur`); laufende Arbeit bleibt immer sichtbar.
+  6. Alter Status „gelöscht“ wird nicht umgeschrieben und gilt beim Lesen wie „offline“; neue 404-Fälle ändern den Ankaufsstatus nicht.
+  7. Fahrzeug-Verfügbarkeit nur abgeleitet, Rangfolge aktiv > reserviert > unbekannt > vermutlich offline > offline > verkauft.
+  8. Rückweg: Sicherung `vor-v13`.
+* **Alternativen:** Verfügbarkeit im Ankaufsstatus belassen (vermischt Markt und Team-Arbeit); „lange nicht gesehen“ als offline
+  speichern (würde ohne Beobachtung umschreiben); Negativliste für „verkauft“ (QA: sperrte typische Privat-Titel).
+* **Folgen / offen:** Reservierungs-/Verkauft-Kennzeichen der Portale selbst (z. B. Badges auf der Detailseite) werden von den Parsern
+  noch nicht gelesen (Quellenarbeit). Englisch „sold“ wird nicht erkannt. Reihenfolgeschutz für Preis/Titel bei `api`/`stream` weiter
+  offen (ADR-041).

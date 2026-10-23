@@ -32,6 +32,7 @@ from .quellen import (QUELLEN, STANDARD_QUELLE, Abruf, InseratNichtGefunden, Net
 from .preisverlauf import preisverlauf
 from .quellen.basis import ART_QUELLE_KATEGORIE
 from .schalter import eingang_pruefen, quelle_laeuft
+from .verfuegbarkeit import utc_text
 
 log = logging.getLogger("scout")
 
@@ -167,10 +168,9 @@ class Importer:
                     if leer == 5 and leer == i:       # die ersten fünf Detailseiten alle leer
                         self._layout_problem(quelle, "diagnose_detailseite.html",
                                              getattr(quelle, "letzte_rohdaten", None) or "")
-                self.db.speichere_details(zeile["id"], inserat.als_datensatz())
+                self.db.speichere_details(zeile["id"], inserat.als_datensatz(), netz_abruf=True)
             except InseratNichtGefunden:
-                if zeile["status"] in (None, "neu"):      # Ankaufs-Status (kontaktiert …) nicht überschreiben
-                    self.db.setze_status(zeile["id"], "gelöscht")
+                self.db.markiere_offline(zeile["id"])         # Verfügbarkeit statt Ankaufsstatus „gelöscht“ (P3-04); der Ankaufsstatus bleibt
                 self.db.speichere_details(zeile["id"], {})
             except (QuelleGesperrt, NetzwerkFehler):
                 raise
@@ -226,7 +226,9 @@ class Importer:
                     continue
                 for h in lesung.hinweise:                                 # übersprungene Treffer, fehlende Anbieterkästen …
                     stat["fehler"].append(f"{datei.name}: {h}")
-                self.importiere(lesung, eingang.kanal, stat)
+                # Die Seite zeigt den Stand vom Speichern: die Verfügbarkeit gilt ab der Dateizeit, nicht ab dem Einlesen (Altersregel gegen ein späteres 404)
+                gespeichert = min(datetime.fromtimestamp(datei.stat().st_mtime, timezone.utc), datetime.now(timezone.utc))
+                self.importiere(lesung, eingang.kanal, stat, verfuegbar_am=gespeichert)
             except Exception as e:  # noqa: BLE001 – eine kaputte Datei darf die übrigen nicht aufhalten
                 stat["fehlerhaft"] += 1
                 melde(f"{datei.name}: nicht eingelesen ({e}) – Datei bleibt liegen")
@@ -356,14 +358,16 @@ class Importer:
             d["preis"], d["vb"] = None, None
         return d, gesehen_am, aelter
 
-    def importiere(self, lesung: Lesung, kanal: str, stat: dict | None = None) -> dict:
+    def importiere(self, lesung: Lesung, kanal: str, stat: dict | None = None, verfuegbar_am: datetime | None = None) -> dict:
         """Einziger Schreibweg für Push-Eingänge (ADR-035): speichert eine `Lesung` über den Kanal `kanal` ('manuell', 'email').
 
         Prüft Kanal, Plattform und Anzeigen-ID, bevor etwas geschrieben wird (ValueError). Gespeichert wird immer über
         `speichere_treffer` mit den Regeln zur Fahrzeugart und zu „gewerblich“ von `_speichere_seite` – nie über den
         `EreignisSpeicher` (der gilt nur für api/stream, `importiere_ereignis`). Nicht speicherbare Lesungen ('unbekannt',
         'detail_ohne_id') behandelt der Aufrufer. `stat` (optional) wird fortlaufend ergänzt, auch wenn mittendrin ein Fehler
-        auftritt. Rückgabe: Zähler suchseiten, detailseiten, neu, preis, bekannt, details."""
+        auftritt. Rückgabe: Zähler suchseiten, detailseiten, neu, preis, bekannt, details.
+        ``verfuegbar_am``: Zeitpunkt, ab dem die Verfügbarkeit gilt, wenn er nicht „jetzt“ ist (gespeicherte Seite: Dateizeit; Mail: ihr Datum, auch ein
+        unplausibel altes – dann ändert sie keine neuere Verfügbarkeit und ein neues Inserat gilt sofort als „vermutlich offline“). Text-Import: jetzt."""
         if pruefe_kanal(kanal) not in PUSH_KANAELE:
             raise ValueError(f"Eingangskanal {kanal!r} ist kein Push-Eingang (erlaubt: {', '.join(PUSH_KANAELE)})")
         if lesung.art not in ("suche", "detail"):
@@ -375,12 +379,12 @@ class Importer:
         for schluessel in ("suchseiten", "detailseiten", "neu", "preis", "bekannt", "details"):
             stat.setdefault(schluessel, 0)
         self._speichere_seite(lesung.art, lesung.inserate, stat, lesung.art_filter, lesung.haupttreffer, kanal, lesung.zeitpunkt,
-                             lesung.nur_leere_felder)
+                             lesung.nur_leere_felder, verfuegbar_am)
         return stat
 
     def _speichere_seite(self, art: str, inserate: list, stat: dict, seitenart: SuchseitenArt | None = None,
                          haupttreffer: Collection[str] | None = None, kanal: str = "manuell", zeitpunkt: datetime | None = None,
-                         nur_leere: bool = False):
+                         nur_leere: bool = False, verfuegbar_am: datetime | None = None):
         """Speichert die Inserate einer Such- oder Detailseite (ungeprüft; Eintritt von außen ist `importiere`).
 
         Importierte Inserate bekommen die Suche „Import <Art> (bestätigt|vorläufig)“ bzw. `IMPORT_SUCHE` (Art unbekannt);
@@ -418,7 +422,10 @@ class Importer:
                 stat["aeltere"] = stat.get("aeltere", 0) + (aelter and inserat.preis is not None)
             if art == "detail" and not d.get("gewerblich") and self.db.gewerblich_zu(d["id"]):
                 d["gewerblich"] = None            # kein Hinweis auf der Detailseite ≠ „privat“: gewerblicher Listenwert bleibt
-            stat[self.db.speichere_treffer(d, suche, kanal=kanal, gesehen_am=gesehen_am, nur_leere=nur_leere)] += 1
+            if kanal == "email" and zeitpunkt is not None:
+                verfuegbar_am = zeitpunkt                      # Datum der Mail, auch wenn es als Beobachtungszeitpunkt unplausibel alt ist
+            verfuegbar = utc_text(min(verfuegbar_am, datetime.now(timezone.utc))) if verfuegbar_am else None
+            stat[self.db.speichere_treffer(d, suche, kanal=kanal, gesehen_am=gesehen_am, nur_leere=nur_leere, verfuegbar_am=verfuegbar)] += 1
             if art == "detail":
                 self.db.speichere_details(d["id"], d, nur_leere=nur_leere)
                 stat["details"] += 1

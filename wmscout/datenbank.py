@@ -14,6 +14,7 @@ from .bearbeitung import IN_ARBEIT, VORBEREITET, BearbeitungsKonflikt
 from .domaene import (  # noqa: F401 – Kompatibilität: bisher hier definiert
     _MARKE, BESTAETIGT, IMPORT_ARTEN, IMPORT_SUCHE, STATUS, UNBEKANNT, VORLAEUFIG, import_art, import_suche)
 from .migrationen import NEUE_SPALTEN, migriere  # noqa: F401 – NEUE_SPALTEN bleibt hier importierbar (Kompatibilität)
+from .verfuegbarkeit import OFFLINE, aus_signal, erkenne_signal, zu_utc
 
 log = logging.getLogger(__name__)
 # Sekunden, die ein Zugriff auf eine von anderen gesperrte Datenbank wartet. Mit WAL warten nur noch Schreibende aufeinander
@@ -107,19 +108,22 @@ class Datenbank:
         return modus
 
     def speichere_treffer(self, a: dict, suche: str, kanal: str = "suche", gesehen_am: str | None = None,
-                          nur_leere: bool = False) -> str:
+                          nur_leere: bool = False, verfuegbar_am: str | None = None) -> str:
         """Fügt ein oder aktualisiert. Rückgabe: 'neu', 'preis' (Preis gesenkt) oder 'bekannt'.
 
         In derselben Transaktion wird der Treffer in die v4-Tabellen gespiegelt (``spiegle_inserat``), damit Ereigniseingang,
         Preisverlauf und App dieselben Fahrzeuge kennen. ``kanal``: 'suche' (Suchlauf) oder ein Push-Kanal 'manuell'/'email' (über Importer.importiere).
         ``gesehen_am`` (ISO, lokal, nicht in der Zukunft): Zeitpunkt der Beobachtung, wenn er nicht „jetzt“ ist (E-Mail: Datum der Mail);
         ``zuletzt_gesehen`` wird damit nie zurückgesetzt, nur nach vorn bewegt.
-        ``nur_leere``: vorhandene Felder bleiben (siehe ``_vorhandenes_behalten``)."""
+        ``nur_leere``: vorhandene Felder bleiben (siehe ``_vorhandenes_behalten``).
+        ``verfuegbar_am`` (ISO mit Zeitzone): Zeitpunkt, zu dem das Inserat wirklich zu sehen war, wenn er nicht „jetzt“ ist (Datum der gespeicherten
+        Seite, Datum der Mail – auch ein unplausibel altes). Er gilt nur für die Verfügbarkeit (Altersregel, ``zuletzt_bestaetigt``),
+        nicht für das Protokoll."""
         with self._exklusiv():
             if nur_leere:
                 a = self._vorhandenes_behalten(a)
             ergebnis = self.schreibe_anzeige(a, suche, gesehen_am, text_eigen=nur_leere)
-            self.spiegle_inserat(a, kanal, zeitpunkt=_als_utc(gesehen_am) if gesehen_am else None)
+            self.spiegle_inserat(a, kanal, zeitpunkt=_als_utc(gesehen_am) if gesehen_am else None, verfuegbar_am=verfuegbar_am)
         return ergebnis
 
     def _vorhandenes_behalten(self, a: dict) -> dict:
@@ -173,7 +177,7 @@ class Datenbank:
                 self.con.execute("UPDATE anzeigen SET details_json=NULL WHERE id=? AND details_json=?", (a["id"], TEXT_MARKE))
         return ergebnis
 
-    def spiegle_inserat(self, a: dict, kanal: str, zeitpunkt: str | None = None) -> int:
+    def spiegle_inserat(self, a: dict, kanal: str, zeitpunkt: str | None = None, verfuegbar_am: str | None = None) -> int:
         """v4-Gegenstück eines ``anzeigen``-Datensatzes (ohne eigenes Commit). Schlüssel ist (Plattform, Anzeigen-ID); ein zuerst
         über den Ereigniseingang angelegtes Inserat wird verknüpft (``legacy_id``) statt verdoppelt. Gesehen in Suche oder
         Seite heißt verfügbar. ``beobachtungen`` und ``preis_historie`` erhalten nur Änderungen. Rückgabe: ``inserate.id``.
@@ -184,19 +188,21 @@ class Datenbank:
         url = a.get("url") or (alt["url"] if alt else None)
         titel = a.get("titel") or (alt["titel"] if alt else None)
         preis = a.get("preis") if a.get("preis") is not None else (alt["preis"] if alt else None)
-        signatur = (url, titel, preis, "aktiv")
+        # Gesehen heißt verfügbar, außer der Titel sagt „reserviert“/„verkauft“; eine ältere Beobachtung überschreibt keine neuere (Altersregel)
+        verfuegbar, bestaetigt = self.verfuegbarkeit_nach_regel(alt, aus_signal(erkenne_signal(titel)), verfuegbar_am or beobachtet)
+        signatur = (url, titel, preis, verfuegbar)
         if alt is None:
             self.con.execute(
                 """INSERT INTO inserate (plattform, anzeigen_id, legacy_id, url, titel, preis, verfuegbarkeit,
-                   erstmals_gesehen, zuletzt_gesehen)
-                   VALUES (?, ?, CASE WHEN EXISTS (SELECT 1 FROM inserate WHERE legacy_id=?) THEN NULL ELSE ? END, ?, ?, ?, 'aktiv', ?, ?)""",
-                (plattform, ad_id, ad_id, ad_id, url, titel, preis, jetzt, jetzt))
+                   erstmals_gesehen, zuletzt_gesehen, zuletzt_bestaetigt)
+                   VALUES (?, ?, CASE WHEN EXISTS (SELECT 1 FROM inserate WHERE legacy_id=?) THEN NULL ELSE ? END, ?, ?, ?, ?, ?, ?, ?)""",
+                (plattform, ad_id, ad_id, ad_id, url, titel, preis, verfuegbar, jetzt, jetzt, bestaetigt))
             inserat_id, typ = self.con.execute("SELECT last_insert_rowid()").fetchone()[0], "neu"
         else:
             inserat_id = alt["id"]
             typ = None if (alt["url"], alt["titel"], alt["preis"], alt["verfuegbarkeit"]) == signatur else "geaendert"
-            self.con.execute("UPDATE inserate SET url=?, titel=?, preis=?, verfuegbarkeit='aktiv', zuletzt_gesehen=? WHERE id=?",
-                             (url, titel, preis, jetzt, inserat_id))
+            self.con.execute("UPDATE inserate SET url=?, titel=?, preis=?, verfuegbarkeit=?, zuletzt_gesehen=?, zuletzt_bestaetigt=? WHERE id=?",
+                             (url, titel, preis, verfuegbar, jetzt, bestaetigt, inserat_id))
             self.verknuepfe_inserat(inserat_id, ad_id)
         if typ:
             self.con.execute(
@@ -206,6 +212,76 @@ class Datenbank:
                 self.con.execute("INSERT INTO preis_historie (inserat_id, zeitpunkt, preis, kanal) VALUES (?, ?, ?, ?)",
                                  (inserat_id, beobachtet, preis, kanal))
         return inserat_id
+
+    @staticmethod
+    def verfuegbarkeit_nach_regel(alt, neu: str, beobachtet: str) -> tuple[str, str]:
+        """(Verfügbarkeit, ``zuletzt_bestaetigt``) nach einer Beobachtung zum Zeitpunkt ``beobachtet`` (UTC-Text): Liegt sie vor der letzten
+        Bestätigung des Inserats, bleibt der gespeicherte Stand (z. B. eine Mail von gestern gegen ein Löschereignis von heute); sonst gilt ``neu``.
+        Ohne vorhandene Zeile oder ohne Bestätigung gilt immer ``neu``."""
+        zeit = zu_utc(beobachtet)
+        vorige = zu_utc(alt["zuletzt_bestaetigt"]) if alt is not None else None
+        if vorige is not None and zeit is not None and zeit < vorige:
+            return alt["verfuegbarkeit"], alt["zuletzt_bestaetigt"]
+        return neu, beobachtet if zeit is None else zeit.isoformat(timespec="seconds")
+
+    def markiere_offline(self, ad_id: str, kanal: str = "detail", zeitpunkt: str | None = None) -> bool:
+        """Die Quelle meldet das Inserat als nicht mehr vorhanden (Detailabruf: 404): Verfügbarkeit ``offline``, als Beobachtung vermerkt
+        (``ereignis_typ`` „geloescht“, ``kanal``). Der Ankaufsstatus in ``anzeigen`` bleibt unberührt; ``zuletzt_gesehen`` rückt nicht vor (nicht
+        gesehen). Eine neuere Bestätigung (Altersregel) gewinnt. Rückgabe: True, wenn sich die Verfügbarkeit geändert hat."""
+        with self._exklusiv():
+            z = self.con.execute("SELECT quelle FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+            if z is None:
+                return False
+            alt = self.con.execute("SELECT * FROM inserate WHERE plattform=? AND anzeigen_id=?", (z["quelle"] or STANDARD_PLATTFORM, ad_id)).fetchone()
+            if alt is None:
+                return False
+            beobachtet = zeitpunkt or jetzt_utc()
+            wert, bestaetigt = self.verfuegbarkeit_nach_regel(alt, OFFLINE, beobachtet)
+            if wert != OFFLINE:
+                return False
+            self.con.execute("UPDATE inserate SET verfuegbarkeit=?, zuletzt_bestaetigt=? WHERE id=?", (OFFLINE, bestaetigt, alt["id"]))
+            if alt["verfuegbarkeit"] == OFFLINE:
+                return False
+            self.con.execute(
+                """INSERT INTO beobachtungen (inserat_id, plattform, kanal, ereignis_typ, ereignis_id, zeitpunkt, preis, inhalt_hash)
+                   VALUES (?, ?, ?, 'geloescht', NULL, ?, ?, ?)""",
+                (alt["id"], alt["plattform"], kanal, bestaetigt, alt["preis"], inhalt_hash((alt["url"], alt["titel"], alt["preis"], OFFLINE))))
+            return True
+
+    def bestaetige_verfuegbarkeit(self, ad_id: str, titel: str | None, kanal: str = "detail", zeitpunkt: str | None = None) -> bool:
+        """Ein erfolgreicher Netz-Detailabruf hat das Inserat gesehen: ``aktiv`` (oder das Signal im Titel), mit Altersregel. Ändert sich der
+        Wert, entsteht eine Beobachtung; sonst rückt nur ``zuletzt_bestaetigt`` vor. Rückgabe: True, wenn sich die Verfügbarkeit geändert hat."""
+        with self._exklusiv():
+            z = self.con.execute("SELECT quelle FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+            alt = self.con.execute("SELECT * FROM inserate WHERE plattform=? AND anzeigen_id=?",
+                                   (z["quelle"] or STANDARD_PLATTFORM, ad_id)).fetchone() if z else None
+            if alt is None:
+                return False
+            beobachtet = zeitpunkt or jetzt_utc()
+            wert, bestaetigt = self.verfuegbarkeit_nach_regel(alt, aus_signal(erkenne_signal(titel or alt["titel"])), beobachtet)
+            self.con.execute("UPDATE inserate SET verfuegbarkeit=?, zuletzt_bestaetigt=? WHERE id=?", (wert, bestaetigt, alt["id"]))
+            if wert == alt["verfuegbarkeit"]:
+                return False
+            self.con.execute(
+                """INSERT INTO beobachtungen (inserat_id, plattform, kanal, ereignis_typ, ereignis_id, zeitpunkt, preis, inhalt_hash)
+                   VALUES (?, ?, ?, 'geaendert', NULL, ?, ?, ?)""",
+                (alt["id"], alt["plattform"], kanal, bestaetigt, alt["preis"], inhalt_hash((alt["url"], alt["titel"], alt["preis"], wert))))
+            return True
+
+    def anzeigen_mit_arbeit(self) -> set[str]:
+        """Anzeigen-IDs, an denen im Team schon gearbeitet wird, ohne dass der Ankaufsstatus es zeigt: Bearbeitung/Reservierung, Besichtigung oder
+        Ankauf. Solche Anzeigen werden bei offline/verkauft nicht ausgeblendet. Nur lesend."""
+        return {r[0] for r in self.con.execute(
+            "SELECT anzeige_id FROM bearbeitung UNION SELECT anzeige_id FROM besichtigungen UNION "
+            "SELECT anzeige_id FROM ankaeufe WHERE anzeige_id IS NOT NULL")}
+
+    def verfuegbarkeit_zu(self) -> dict[str, dict]:
+        """Rohwerte der Verfügbarkeit je Anzeigen-ID (``anzeigen.id``) für ``verfuegbarkeit.ergaenze``; Verbindung über (Plattform, Anzeigen-ID).
+        Eine einzige Abfrage über alle Inserate; nur lesend."""
+        return {r["anzeige_id"]: {k: r[k] for k in ("inserat_verfuegbarkeit", "inserat_bestaetigt", "inserat_gesehen")} for r in self.con.execute(
+            "SELECT a.id AS anzeige_id, i.verfuegbarkeit AS inserat_verfuegbarkeit, i.zuletzt_bestaetigt AS inserat_bestaetigt, "
+            "i.zuletzt_gesehen AS inserat_gesehen FROM anzeigen a JOIN inserate i "
+            "ON i.plattform = COALESCE(NULLIF(a.quelle, ''), ?) AND i.anzeigen_id = a.id", (STANDARD_PLATTFORM,))}
 
     def verknuepfe_inserat(self, inserat_id: int, ad_id: str):
         """``legacy_id`` setzen, sofern noch frei (dieselbe Anzeigen-ID auf zwei Plattformen: nur die erste wird verknüpft)."""
@@ -244,10 +320,13 @@ class Datenbank:
             log.info("v4-Abgleich: %d Inserate aus „anzeigen“ ergänzt.", neu)
         return neu
 
-    def speichere_details(self, ad_id: str, d: dict, nur_leere: bool = False):
-        """Details einer Anzeige speichern (Preis ggf. mit Historie). Eine Transaktion: bei jedem Fehler bleibt alles beim Alten."""
+    def speichere_details(self, ad_id: str, d: dict, nur_leere: bool = False, netz_abruf: bool = False):
+        """Details einer Anzeige speichern (Preis ggf. mit Historie). Eine Transaktion: bei jedem Fehler bleibt alles beim Alten.
+        ``netz_abruf``: die Details kommen aus einem Abruf der Detailseite – das Inserat war dort zu sehen (Verfügbarkeit bestätigt, Kanal ``detail``)."""
         with self._exklusiv():
             self._speichere_details(ad_id, d, nur_leere)
+            if netz_abruf and (d.get("titel") or d.get("details")):
+                self.bestaetige_verfuegbarkeit(ad_id, d.get("titel"))
 
     def _speichere_details(self, ad_id: str, d: dict, nur_leere: bool):
         felder = {k: d.get(k) for k in ("titel", "preis", "km", "ez_jahr", "marke", "art", "leistung",

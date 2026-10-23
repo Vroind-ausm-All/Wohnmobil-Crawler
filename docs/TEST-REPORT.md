@@ -4,6 +4,22 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P3-04 – Verfügbarkeit und zuletzt_bestaetigt (23.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 1863 bestanden (vorher 1686), neu `test_verfuegbarkeit.py` (177) |
+| `ruff check .` | grün |
+| Migration v1, v2, v10, v11, v12 → v13: Zählungen und SHA-256 über Inseratspalten gleich, Sicherung `vor-v13` zurückspielbar, Idempotenz, Abbruch an jeder der 24 Stellen des Schritts → Rollback; alter Code (v12) lehnt v13-DB ab (QA) | bestanden |
+| Übergänge je Kanal (Suche, Seite, Text, Mail, Ereignis, Detailabruf-404), Altersregel (Mail, Ereignis, ältere gespeicherte Seite, alte Mail) | bestanden |
+| Titel-Erkennung: 17 Positiv-, 42 Negativfälle (u. a. „Rentner verkauft …“, „Probefahrt reserviert“); Ende-zu-Ende 13 Privat-Titel ohne Sperre | bestanden |
+| Wirkung: verkauft/offline gesperrt, reserviert nur Hinweis; Ausblenden nur ohne Ankaufsarbeit (Reservierung, Besichtigung, Notiz, Ankauf bleiben sichtbar); alter Status „gelöscht“ wie offline | bestanden |
+| Re-Import (P3-03) bleibt bit-gleich (außer `zuletzt_gesehen`/`zuletzt_bestaetigt`) | bestanden |
+| API-Felder, `verfuegbar=` (400 bei unbekannt), CSV-Spalten, KPI | bestanden |
+| Browser (QA, Chromium): Desktop 1280 und Handy 390 – Abzeichen, Checkbox „nur verfügbare“, XSS-Titel escaped, 0 JS-Fehler | 15 Prüfungen bestanden (vor der Korrekturrunde) |
+| QA (eine Runde) | Freigabe mit Auflagen – F1 (HOCH), F2–F4 behoben; Korrekturen **nicht** erneut von der QA geprüft |
+| Echte Portalseiten, Windows-CI | nicht geprüft (CI folgt im PR) |
+
 ## P3-03 – Vollständiger Preisverlauf und Re-Import-Test (21.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

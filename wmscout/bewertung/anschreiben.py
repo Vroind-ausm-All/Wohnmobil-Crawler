@@ -91,6 +91,8 @@ def hinweise(a: dict, b=None) -> list[str]:
     Außerdem: Ort im Ausland (`a["ausland"]` – keine Entfernung, Transport ungewiss) und unbekannter Anbieter (`gewerblich` ist
     None, z. B. fehlender Anbieterkasten der Trefferliste) – beides sperrt nichts, steht aber sichtbar am Fahrzeug."""
     liste = []
+    if a.get("verfuegbarkeit_hinweis"):                   # reserviert / vermutlich nicht mehr online (P3-04): sperrt nichts
+        liste.append(a["verfuegbarkeit_hinweis"])
     _, herkunft = import_art(a.get("suche"))
     if herkunft == VORLAEUFIG:
         liste.append(HINWEIS_ART_VORLAEUFIG)
@@ -147,10 +149,13 @@ def anrede_name(roh) -> str | None:
 
 
 def sperrgrund(a: dict, cfg: dict) -> str | None:
-    """Warum diese Anzeige nicht angeschrieben werden soll (oder None). Die Fahrzeugart sperrt nicht – siehe hinweise()."""
+    """Warum diese Anzeige nicht angeschrieben werden soll (oder None). Die Fahrzeugart sperrt nicht – siehe hinweise(). Verkaufte und
+    nicht mehr online stehende Anzeigen sind gesperrt; „reserviert“ und „vermutlich offline“ nicht (nur Hinweis)."""
     f = cfg["filter"]
     if a.get("gewerblich"):
         return "gewerblicher Anbieter"
+    if a.get("verfuegbarkeit_sperre"):                    # verkauft oder offline (auch Altbestand-Status „gelöscht“), P3-04
+        return a["verfuegbarkeit_sperre"]
     if a.get("status") not in (None, "neu"):
         return f"Status: {STATUS.get(a['status'], a['status'])}"
     if a.get("duplikat"):

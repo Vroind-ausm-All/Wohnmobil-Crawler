@@ -6,6 +6,25 @@ Wert „–“.
 
 ---
 
+## P3-04 – Verfügbarkeit und zuletzt_bestaetigt (23.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** `scout-data-engineer` (inkl. kleiner Oberflächenteile); QA `qa-security-reviewer` mit Browser-Check;
+  Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/migrationen.py` (Schritt 13), `wmscout/verfuegbarkeit.py` (neu), `wmscout/datenbank.py`,
+  `wmscout/ereignis_speicher.py`, `wmscout/importer.py`, `wmscout/bewertung/anschreiben.py`, `wmscout/bewertung/auswertung.py`,
+  `wmscout/ausgabe.py` (CSV, KPI), `wmscout/web/api.py`, `config.yaml` (`verfuegbarkeit`), `vorlagen/report.html`, `mobil.js`,
+  `mobil.css`, `sw.js` (wm-scout-10), Tests `test_verfuegbarkeit.py` (neu) und Anpassungen; Doku ADR-042, ROADMAP.
+- **Implementierte Funktionen:** siehe ADR-042.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“. F1 HOCH (typische Privat-Titel wie „Rentner verkauft …“ wurden als verkauft
+  gesperrt und ausgeblendet) → Positivliste; F2 (Team-Reservierung bei offline ausgeblendet) → laufende Arbeit bleibt sichtbar,
+  Regel nur im Server; F3, F4 (ältere gespeicherte Seite/alte Mail hob offline auf) behoben; Abbruchtest Schritt 13 übernommen.
+  Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** „reserviert“ sperrt nicht (nur Hinweis); Schwelle „vermutlich offline“ 14 Tage, nur
+  Hinweis; „nur verfügbare“ standardmäßig an.
+- **Bekannte Risiken:** Portal-eigene Reserviert-/Verkauft-Kennzeichen werden nicht gelesen; nachgebaute Testdaten.
+- **Nächster sinnvoller Schritt:** P3-05 (Privat/Händler mit Herkunft).
+
 ## P3-03 – Vollständiger Preisverlauf und Re-Import-Test (21.10.2026) · Status: REVIEW
 
 - **Verantwortlicher Agent:** `scout-data-engineer`; QA `qa-security-reviewer`; Doku Orchestrator.
