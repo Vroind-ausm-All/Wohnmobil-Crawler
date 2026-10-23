@@ -21,7 +21,7 @@ from pathlib import Path
 
 from .sicherung import SicherungsFehler, oeffne_lesend, sichere
 
-AKTUELLE_VERSION = 15
+AKTUELLE_VERSION = 16
 
 
 class MigrationsFehler(RuntimeError):
@@ -465,10 +465,24 @@ def _schritt_15(con: sqlite3.Connection):
         raise MigrationsFehler("Schritt 15: Zeilen von „anzeigen“ haben sich verändert")
 
 
+def _schritt_16(con: sqlite3.Connection):
+    """Additive v16 (P3-07, ADR-045): Indizes nach ``EXPLAIN QUERY PLAN`` der im Betrieb laufenden Abfragen. ``idx_anzeigen_detail_offen`` (Teilindex
+    nur über Anzeigen ohne Detailseite) bedient die Warteschlange des Detailabrufs (``WHERE detail_geladen=0 … ORDER BY erstmals_gesehen DESC LIMIT``)
+    ohne Tabellendurchlauf und Sortierung; ``idx_besichtigung_anfrage`` die Suche nach offenen Besichtigungen einer Verkaufsanfrage. Keine Daten
+    werden verändert."""
+    vorher = _zaehle_v11(con)
+    con.execute("CREATE INDEX IF NOT EXISTS idx_anzeigen_detail_offen ON anzeigen(erstmals_gesehen) WHERE detail_geladen = 0")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_besichtigung_anfrage ON besichtigungen(anfrage_id)")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 16 geändert: {vorher} -> {nachher}")
+
+
 SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4, 5: _schritt_5,
                                                              6: _schritt_6, 7: _schritt_7, 8: _schritt_8, 9: _schritt_9,
                                                              10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
-                                                             14: _schritt_14, 15: _schritt_15}
+                                                             14: _schritt_14, 15: _schritt_15,
+                                                             16: _schritt_16}
 
 _SCHEMA_VERSION = ("CREATE TABLE IF NOT EXISTS schema_version ("
                    "version INTEGER PRIMARY KEY, angewendet_am TEXT NOT NULL)")

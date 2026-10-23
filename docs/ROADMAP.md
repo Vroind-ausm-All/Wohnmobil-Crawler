@@ -211,8 +211,8 @@ erhalten (Re-Import-Test).
 | P3-03 | P1 | Vollständiger Preisverlauf, `beobachtungen` mit Kanal und Zeitpunkt; **Re-Import-Test** (identische Inserate erneut importieren → kein Datensatz doppelt, Historie vollständig) | scout-data-engineer | ohne Schemaänderung; `GET /api/preisverlauf`; offen: Reihenfolgeschutz für api/stream-Ereignisse (vor Freigabe einer API-Quelle), kein Zurücksetzen auf „kein Preis“ – DONE (PR #30, gemergt) |
 | P3-04 | P2 | Verfügbarkeit (`aktiv`/`reserviert`/`offline`/`verkauft`/`unbekannt`) + `zuletzt_bestaetigt` | scout-data-engineer | DONE (PR #31 gemergt; Schema v13, ADR-042) |
 | P3-05 | P2 | Privat/Händler-Klassifizierung mit Herkunft der Einstufung | scout-data-engineer | DONE (PR #32 gemergt; Schema v14, ADR-043; mit P2-05d) |
-| P3-06 | P1 | `kontakte` als Ereignisse (vorbereitet/bestätigt, Kanal, Nutzer) | scout-data-engineer | REVIEW (Schema v15, ADR-044) |
-| P3-07 | P2 | Indizes nach `EXPLAIN QUERY PLAN`, Vorfilter für Vergleichsauswahl (R12) | scout-data-engineer | TODO |
+| P3-06 | P1 | `kontakte` als Ereignisse (vorbereitet/bestätigt, Kanal, Nutzer) | scout-data-engineer | DONE (PR #33 gemergt; Schema v15, ADR-044) |
+| P3-07 | P2 | Indizes nach `EXPLAIN QUERY PLAN`, Vorfilter für Vergleichsauswahl (R12) | scout-data-engineer | REVIEW (Schema v16, ADR-045) |
 | P3-08 | P2 | Markierungen für unvollständige/widersprüchliche Angaben, Datenqualitätswert je Fahrzeug | scout-data-engineer | TODO |
 
 ## Phase 4 – Deutschlandweite Suchstrategie

@@ -6,6 +6,21 @@ Wert „–“.
 
 ---
 
+## P3-07 – Indizes nach Abfrageplan, Vorfilter der Vergleichsauswahl (23.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Orchestrator (Messung und Umsetzung im Stil von `scout-data-engineer`); QA `qa-security-reviewer`; Doku Orchestrator.
+- **Vorgehen:** Profil der Bewertung auf nachgebautem Bestand (90 % in `Rechner.vergleiche`); alle in 13 Testmodulen ausgeführten
+  SQL-Anweisungen mitgeschnitten (370 verschiedene) und mit `EXPLAIN QUERY PLAN` auf 3.000 Inseraten auf Tabellendurchläufe geprüft.
+- **Geänderte Dateien:** `wmscout/bewertung/rechner.py` (`Vergleichsliste`), `wmscout/bewertung/auswertung.py`, `wmscout/migrationen.py`
+  (Schritt 16), Tests `test_vorfilter.py` (neu); Doku ADR-045, ROADMAP (P3-06 DONE, P3-07 REVIEW), ARCHITECTURE (R12).
+- **Implementierte Funktionen:** siehe ADR-045.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, nur NIEDRIG. B1 (nicht ganzzahliges Jahr fiel still heraus) → Restliste; B2 (Änderung bei
+  gleicher Länge) → jede Listenänderung verwirft den Index; B3 (Kalkulations-Auszug ohne Vorfilter) → Backlog; B4 kein Handlungsbedarf.
+  Korrekturen nicht erneut von der QA geprüft.
+- **Bekannte Risiken:** Messung auf nachgebauten Daten; gespeicherte Bewertungen und die fachliche Abgrenzung der Vergleichsbasis offen (P5).
+- **Nächster sinnvoller Schritt:** P3-08 (Markierungen für unvollständige/widersprüchliche Angaben, Datenqualitätswert).
+
 ## P3-06 – Kontakte als Ereignisse (23.10.2026) · Status: REVIEW
 
 - **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-data-engineer`, inkl. kleiner Oberflächenteile); QA

@@ -126,6 +126,44 @@ def privatangebot(b: dict) -> bool:
     return not b.get("gewerblich") and not ("gewerblich" in b and b["gewerblich"] is None)
 
 
+class Vergleichsliste(list):
+    """Vergleichsangebote mit Vorfilter (P3-07, R12): einmal je Liste nach (Fahrzeugart, Erstzulassungsjahr) einsortiert – nur Angebote, die die
+    datenabhängigen Bedingungen von ``Rechner.vergleiche`` überhaupt erfüllen können (Preis ab 1.000 €, Privatangebot, Jahr bekannt). ``kandidaten``
+    liefert die Angebote des Jahresfensters in der ursprünglichen Reihenfolge; ``vergleiche`` prüft sie danach vollständig wie bisher – das Ergebnis
+    ist identisch, nur ohne den Durchlauf über alle Inserate je bewerteter Anzeige. Ein Jahr, das keine ganze Zahl ist (z. B. 2015.5 oder Text),
+    landet in einer Restliste, die immer mitgeprüft wird. Jede Änderung der Liste verwirft den Index; Änderungen an den Einträgen selbst nicht –
+    die Einträge nach dem Anlegen nicht verändern."""
+
+    _index: dict | None = None
+    _rest: list = []
+
+    def kandidaten(self, art: str, ez_jahr: int, toleranz: int) -> list[dict]:
+        if self._index is None:
+            index: dict[tuple, list] = {}
+            rest = []
+            for pos, b in enumerate(self):
+                if b.get("preis") and b["preis"] >= 1000 and privatangebot(b) and b.get("ez_jahr"):
+                    j = b["ez_jahr"]
+                    if isinstance(j, int) or (isinstance(j, float) and j.is_integer()):
+                        index.setdefault((art_schluessel(b.get("suche"), b.get("art"), b.get("titel")), int(j)), []).append((pos, b))
+                    else:
+                        rest.append((pos, b))
+            self._index, self._rest = index, rest
+        treffer = [t for j in range(ez_jahr - toleranz, ez_jahr + toleranz + 1) for t in self._index.get((art, j), ())] + self._rest
+        return [b for _, b in sorted(treffer, key=lambda t: t[0])]
+
+    def _veraendert(name):                                     # jede Änderung der Liste verwirft den Index
+        def methode(self, *a, **k):
+            self._index = None
+            return getattr(list, name)(self, *a, **k)
+        methode.__name__ = name
+        return methode
+
+    for _name in ("__setitem__", "__delitem__", "__iadd__", "__imul__", "append", "extend", "insert", "pop", "remove", "sort", "reverse", "clear"):
+        locals()[_name] = _veraendert(_name)
+    del _name, _veraendert
+
+
 class Rechner:
     def __init__(self, cfg: dict, stichtag: datetime | None = None):
         """``stichtag`` (lokale Zeit): Alter und „alte Anzeige“ relativ zu diesem Zeitpunkt statt zu jetzt – damit eine gespeicherte
@@ -208,6 +246,8 @@ class Rechner:
         jt, kt = self.c["vergleich_jahre_toleranz"], self.c["vergleich_km_toleranz"]
         art, marke, serie = self.art(a), (a.get("marke") or "").lower(), (a.get("serie") or "").lower()
         alt_grenze = ((self.stichtag or datetime.now()) - timedelta(days=180)).isoformat(timespec="seconds")
+        if isinstance(alle, Vergleichsliste) and isinstance(a.get("ez_jahr"), int) and isinstance(jt, int):
+            alle = alle.kandidaten(art, a["ez_jahr"], jt)                  # Vorfilter; die Prüfungen unten bleiben vollständig
         erg = []
         for b in alle:
             if b.get("id") == a.get("id") or not b.get("preis") or b["preis"] < 1000 or not privatangebot(b):

@@ -91,7 +91,7 @@ config.yaml (suchen) → Suchauftrag → KleinanzeigenQuelle.suche → Hoefliche
 | R9 | Verfügbarkeit nur geschätzt; Inserate nach 21 Tagen in der App nicht mehr bearbeitbar | `datenbank.py:77`; `api.py:74-78` | MITTEL | Spalte `verfuegbarkeit` + `zuletzt_bestaetigt` | P3-04 |
 | R10 | Preisverlauf geht verloren | `datenbank.py:51-54` | MITTEL | `preis_historie` (nur anhängen) | P2-02 (Start), P3-03 |
 | R11 | Dubletten flüchtig/lückenhaft; Ankaufsstatus am Inserat | `auswertung.py:24,74-83` | MITTEL | `fahrzeuge` mit Fingerabdruck, Zusammenführung nur als Vorschlag | P3-02 |
-| R12 | Bewertung O(aktive × alle) im Lock; Vergleichsbasis enthält gelöschte/alte Inserate | `auswertung.py:59`; `rechner.py:200,217` | MITTEL | SQL-Vorfilter, Indizes, gespeicherte `bewertungen` | P3-07, P5 |
+| R12 | Bewertung O(aktive × alle) im Lock; Vergleichsbasis enthält gelöschte/alte Inserate | `auswertung.py:59`; `rechner.py:200,217` | MITTEL | SQL-Vorfilter, Indizes, gespeicherte `bewertungen` | P3-07, P5 – **teilweise behoben** (P3-07, ADR-045): Vorfilter nach Art/EZ im Speicher, Indizes v16; gespeicherte `bewertungen` und Abgrenzung alter/offline Inserate weiter offen (P5) |
 | R13 | „gewerblich unbekannt“ wird als privat behandelt | `datenbank.py:40` | MITTEL | `anbieter_typ` privat/haendler/unbekannt | P2-02, P3-05 – **behoben**: NULL seit P2-02, Herkunft und Rechner seit P3-05 (ADR-043) |
 | R14 | Besichtigung: letzter Schreiber gewinnt, Konflikt wird nur gemeldet | `api.py:434-437` | MITTEL | `UPDATE … WHERE version=?`, sonst 409 | P1-07 |
 | R15 | Bewertung hängt an der Datenbank | `auswertung.py:8,65`; `anschreiben.py:9` | MITTEL | `STATUS` in Domänenmodul; `bewerte_alle` bekommt Listen | P1-08 |

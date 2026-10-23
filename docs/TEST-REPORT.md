@@ -4,6 +4,21 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P3-07 – Indizes nach Abfrageplan, Vorfilter der Vergleichsauswahl (23.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 1985 bestanden (vorher 1964), neu `test_vorfilter.py` (21) |
+| `ruff check .` | grün |
+| Vorfilter ändert kein Ergebnis: 7 Zufallsbestände (je 400 Inserate mit Randfällen: Preis fehlt/<1.000/=1.000, Anbieter privat/gewerblich/unbekannt/ohne Schlüssel, Jahr fehlt/Kommazahl/2015.5, alte Anzeigen) und Toleranz 3/0/−1/2.0/6 – jede Bewertung, Sperre und jeder Brief gleich wie ohne Vorfilter | bestanden |
+| Liste verändert (anhängen, ersetzen bei gleicher Länge, pop+insert) → gleiches Ergebnis wie vollständiger Durchlauf; Jahr als Text bricht wie bisher ab | bestanden |
+| Abfragepläne der tatsächlich ausgeführten Detail-Warteschlange (mit/ohne Quellenfilter): Teilindex, keine Sortierung; Besichtigung zur Anfrage: Index | bestanden |
+| Migration v1, v2, v10, v15 → v16: Daten unverändert, Indizes da, Sicherung `vor-v16`, Idempotenz, Rollback | bestanden |
+| Messung (Orchestrator, nachgebauter Bestand, ohne Profiler, gleiche Ergebnisse geprüft): 1.000 / 3.000 / 6.000 Inserate 0,61 → 0,45 s / 3,42 → 1,34 s / 13,8–14,3 → 3,6–3,8 s; Detail-Warteschlange 200 Abfragen bei 20.000 Anzeigen 0,32 → 0,02 s | gemessen |
+| Abfragepläne: 370 mitgeschnittene Anweisungen aus 13 Testmodulen auf 3.000 Inseraten, 37 mit Tabellendurchlauf, davon 2 im Betrieb relevant (behoben) | geprüft |
+| QA (eine Runde, vor der Korrekturrunde: 61 + 38 bestanden, eigene Proben) | Freigabe mit Auflagen – B1, B2 behoben, B3 Backlog; Korrekturen **nicht** erneut von der QA geprüft |
+| Echte Datenbank des Betreibers, Windows-CI | nicht geprüft (CI folgt im PR) |
+
 ## P3-06 – Kontakte als Ereignisse (23.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |
