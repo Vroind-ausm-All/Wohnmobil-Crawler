@@ -190,6 +190,11 @@ nachfassen:
   max_anzahl: 1                    # so oft wird höchstens nachgefasst (Preissenkungen zählen extra)
   vorlage: vorlagen/nachfassen.txt
 
+# Verfügbarkeit (P3-04): Ein Inserat, das so viele Tage nicht mehr bestätigt wurde (gesehen in Suche, Seite, Mail, Text), wird beim Anzeigen als
+# „vermutlich offline“ gekennzeichnet. Gespeichert wird das nicht; das Anschreiben bleibt möglich, es erscheint nur ein Hinweis.
+verfuegbarkeit:
+  offline_nach_tagen: 14           # ganze Zahl 1 bis 3650; ungültige Werte gelten als 14
+
 # --- 7. App -----------------------------------------------------
 app:
   port: 8765

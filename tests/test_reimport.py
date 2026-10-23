@@ -32,7 +32,7 @@ from wmscout.team import TeamSpeicher
 
 SEITEN = BASIS / "tests" / "seiten"
 # Beobachtungszeitpunkte rücken beim erneuten Sehen legitim vor – alles andere muss gleich bleiben
-ZEITSPALTEN = {"anzeigen": {"zuletzt_gesehen"}, "inserate": {"zuletzt_gesehen"}}
+ZEITSPALTEN = {"anzeigen": {"zuletzt_gesehen"}, "inserate": {"zuletzt_gesehen", "zuletzt_bestaetigt"}}
 MD_ID = "md-3900000099"
 KANAELE = ("suche", "seiten", "text", "mail", "api")
 

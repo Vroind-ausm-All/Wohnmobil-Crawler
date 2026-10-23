@@ -207,9 +207,9 @@ erhalten (Re-Import-Test).
 | P3-01 | P1 | Migration auf **Version 11**: `fahrzeuge` + `inserate.fahrzeug_id`, je Inserat ein Fahrzeug, Trigger für neue Inserate; Ankaufsstatus bleibt am Inserat, keine View (ADR-039, Betreiber 18.10.2026) | scout-data-engineer | REVIEW |
 | P3-02a | P1 | Fahrzeugidentität – Grundlage: Schema v12 (Entscheidungen, Zuordnungen), Vergleich mit Stufe und Gründen, Vorschläge nur lesend (API, CLI), ohne fachliche Wirkung (ADR-040) | scout-data-engineer | DONE (PR #28, gemergt) |
 | P3-02b | P1 | Dubletten bestätigen/ablehnen/aufheben (Rechte laut ADR-040), Wirkung auf Team-Sperre und Bewertung, Oberfläche Desktop (Handy nur Anzeige) | scout-data-engineer, scout-ui-engineer | DONE (PR #29, gemergt) |
-| P3-02c | P3 | Index `fahrzeug_zuordnungen(entscheidung_id)` bei der nächsten Schemaänderung; Audit-Objekt mit Entscheidungs-ID (QA P3-02b N1/N3) | scout-data-engineer | TODO |
-| P3-03 | P1 | Vollständiger Preisverlauf, `beobachtungen` mit Kanal und Zeitpunkt; **Re-Import-Test** (identische Inserate erneut importieren → kein Datensatz doppelt, Historie vollständig) | scout-data-engineer | REVIEW – ohne Schemaänderung; `GET /api/preisverlauf`; offen: Reihenfolgeschutz für api/stream-Ereignisse (vor Freigabe einer API-Quelle), kein Zurücksetzen auf „kein Preis“ |
-| P3-04 | P2 | Verfügbarkeit (`aktiv`/`reserviert`/`offline`/`verkauft`/`unbekannt`) + `zuletzt_bestaetigt` | scout-data-engineer | TODO |
+| P3-02c | P3 | Index `fahrzeug_zuordnungen(entscheidung_id)` bei der nächsten Schemaänderung; Audit-Objekt mit Entscheidungs-ID (QA P3-02b N1/N3) | scout-data-engineer | Index DONE mit P3-04 (v13); Audit-Objekt offen |
+| P3-03 | P1 | Vollständiger Preisverlauf, `beobachtungen` mit Kanal und Zeitpunkt; **Re-Import-Test** (identische Inserate erneut importieren → kein Datensatz doppelt, Historie vollständig) | scout-data-engineer | ohne Schemaänderung; `GET /api/preisverlauf`; offen: Reihenfolgeschutz für api/stream-Ereignisse (vor Freigabe einer API-Quelle), kein Zurücksetzen auf „kein Preis“ – DONE (PR #30, gemergt) |
+| P3-04 | P2 | Verfügbarkeit (`aktiv`/`reserviert`/`offline`/`verkauft`/`unbekannt`) + `zuletzt_bestaetigt` | scout-data-engineer | REVIEW (Schema v13, ADR-042) |
 | P3-05 | P2 | Privat/Händler-Klassifizierung mit Herkunft der Einstufung | scout-data-engineer | TODO |
 | P3-06 | P1 | `kontakte` als Ereignisse (vorbereitet/bestätigt, Kanal, Nutzer) | scout-data-engineer | TODO |
 | P3-07 | P2 | Indizes nach `EXPLAIN QUERY PLAN`, Vorfilter für Vergleichsauswahl (R12) | scout-data-engineer | TODO |

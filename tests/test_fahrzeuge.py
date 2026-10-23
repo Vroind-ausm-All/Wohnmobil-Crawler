@@ -66,6 +66,9 @@ def baue_v10(pfad, monkeypatch, extra: int = 0):
         _alt_schritte(m, 10)
         db = Datenbank(str(pfad), wal=False)
         try:
+            # Der heutige Code schreibt ``inserate.zuletzt_bestaetigt`` (Schritt 13); der Stand von Schema 10 kennt die Spalte nicht: für das Schreiben
+            # anlegen und vor dem Schließen wieder entfernen, so entsteht ein Altbestand ohne die Spalte
+            db.con.execute("ALTER TABLE inserate ADD COLUMN zuletzt_bestaetigt TEXT")
             db.speichere_treffer({"id": "k1", "url": "https://x.invalid/k1", "titel": "Knaus Sky TI", "preis": 30000, "quelle": "kleinanzeigen"}, "Alkoven")
             db.speichere_treffer({"id": "k2", "url": "https://x.invalid/k2", "titel": "Hymer B 544", "preis": 1, "quelle": None}, "Alkoven")
             db.speichere_treffer({"id": "m1", "url": "https://x.invalid/m1", "titel": "Dethleffs", "preis": 41500, "quelle": "mobile.de"}, "Import")
@@ -85,6 +88,8 @@ def baue_v10(pfad, monkeypatch, extra: int = 0):
             for i in range(extra):
                 db.con.execute("INSERT INTO inserate (plattform, anzeigen_id, verfuegbarkeit, erstmals_gesehen, zuletzt_gesehen) "
                                "VALUES ('kleinanzeigen', ?, 'aktiv', 'a', 'b')", (f"x{i}",))
+            db.con.commit()
+            db.con.execute("ALTER TABLE inserate DROP COLUMN zuletzt_bestaetigt")
             db.con.commit()
         finally:
             db.con.close()

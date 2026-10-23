@@ -57,6 +57,8 @@ kbd{font:12px ui-monospace,monospace;padding:1px 5px;border:1px solid var(--line
 .tag.gruen{background:var(--gruen-bg);color:var(--gruen)} .tag.gelb{background:var(--gelb-bg);color:var(--gelb)}
 .tag.rot{background:var(--rot-bg);color:var(--rot)} .tag.neu{background:var(--akzent);color:var(--akzent-ink)}
 .tag.status{background:var(--ink);color:var(--card)}
+.tag.verf{background:var(--rot-bg);color:var(--rot)} .tag.verf.reserviert,.tag.verf.vermutlich{background:var(--gelb-bg);color:var(--gelb)}
+.bar label.verfbox{font-size:14px;display:flex;align-items:center;gap:6px;cursor:pointer}
 .streif{height:4px;background:var(--line)}
 .gruen>.streif{background:var(--gruen)} .gelb>.streif{background:var(--gelb)} .rot>.streif{background:var(--rot)}
 .inhalt{padding:12px 14px 14px;display:flex;flex-direction:column;gap:6px;flex:1}
@@ -230,6 +232,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     {% if team %}<div class="wer" role="group" aria-label="Wer"><span>Wer:</span>
       <button type="button" data-wer="alle" class="an" aria-pressed="true">Alle</button><button type="button" data-wer="meine" aria-pressed="false">Meine</button><button type="button" data-wer="frei" aria-pressed="false">Frei</button>
     </div>{% endif %}
+    <label class="verfbox" title="Blendet verkaufte und nicht mehr online stehende Anzeigen aus, an denen noch nichts bearbeitet wurde"><input type="checkbox" id="nurverf" checked>nur verfügbare</label>
     <select id="sort" aria-label="Sortierung">
       <option value="verh">Sortierung: beste Chance</option>
       <option value="pot">Gewinnpotenzial</option>
@@ -245,6 +248,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
   {% for z in zeilen %}{% set a = z.a %}{% set b = z.b %}
     <article class="karte {{ b.ampel }}" tabindex="0" data-id="{{ a.id }}" data-url="{{ a.url }}" data-quelle="{{ a.quelle or 'kleinanzeigen' }}" data-ampel="{{ b.ampel }}"
          data-neu="{{ 1 if z.neu else 0 }}" data-bereit="{{ 1 if z.bereit else 0 }}" data-status="{{ a.status or 'neu' }}"
+         data-verf="{{ a.verfuegbarkeit }}" data-ausblenden="{{ 1 if z.ausblenden else 0 }}"
          data-verh="{{ b.verhaeltnis or 99 }}" data-pot="{{ b.potenzial or -999999 }}" data-preis="{{ a.preis or 0 }}"
          data-zeit="{{ a.erstmals_gesehen }}" data-entf="{{ a.entfernung_km if a.entfernung_km is not none else 99999 }}"
          data-tage="{{ a.tage_online or 0 }}" data-nachfassen="{{ 1 if z.nachfassen else 0 }}" data-erst="{{ z.brief_betrag or 0 }}"
@@ -259,6 +263,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
           {% if z.neu %}<span class="tag neu">neu</span>{% endif %}
           {% if a.preis_vorher %}<span class="tag">Preis gesenkt</span>{% endif %}
           {% if a.neu_eingestellt %}<span class="tag">neu eingestellt</span>{% endif %}
+          {% if a.verfuegbarkeit_text %}<span class="tag verf {{ 'vermutlich' if a.vermutlich_offline else a.verfuegbarkeit }}" data-verfuegbarkeit>{{ a.verfuegbarkeit_text }}</span>{% endif %}
           {% if z.nachfassen %}<span class="tag nachfassen">nachfassen</span>{% endif %}
           <span class="tag status" hidden></span>
           {% if team %}<span class="tbbox" data-teambadge></span>{% endif %}
@@ -303,6 +308,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
         <h2>{{ a.fahrzeug }}</h2>
         <p class="meta">{{ b.art }} · EZ {{ a.ez_jahr or '?' }}{% if b.alter is not none %} ({{ b.alter }} J.){% endif %} · {{ (a.km | tsd ~ ' km') if a.km else 'km ?' }} · {{ a.ort }} · Wunschpreis {{ a.preis | euro }}{{ ' VB' if a.vb }}</p>
         <p class="meta">Anzeige: „{{ a.titel }}“{% if a.entfernung_km is not none %} · {{ a.entfernung_km | tsd }} km entfernt{% endif %} · {{ 'seit heute online' if not a.tage_online else 'seit ' ~ a.tage_online ~ (' Tag' if a.tage_online == 1 else ' Tagen') ~ ' online' }}{% if a.duplikat %} · <span class="warn">{{ a.duplikat }}</span>{% endif %}</p>
+        {% if a.verfuegbarkeit_text %}<p class="meta">Verfügbarkeit: <span class="tag verf {{ 'vermutlich' if a.vermutlich_offline else a.verfuegbarkeit }}">{{ a.verfuegbarkeit_text }}</span>{% if a.zuletzt_bestaetigt %} · zuletzt bestätigt {{ a.zuletzt_bestaetigt[:10] }}{% endif %}</p>{% endif %}
         {% if team %}<div class="teamzeile"><span class="tbbox" data-teambadge></span><span class="meta" data-teaminfo></span>
           <button class="btn" data-teamaktion="uebernehmen" hidden>Ich übernehme</button><button class="btn" data-teamaktion="abgeben" hidden>Abgeben</button>
           {% if team.ich.rolle == 'inhaber' %}<button class="btn" data-teamaktion="erzwingen" hidden>Übernahme erzwingen</button>
@@ -431,8 +437,9 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
   function zeigeStatus(id, status){
     var k = karte(id); if(!k) return;
     k.dataset.status = status;
+    if(status !== 'neu' && status !== 'gelöscht') k.dataset.ausblenden = '0';      // sobald daran gearbeitet wird, nie ausblenden (Regel serverseitig: z.ausblenden)
     var tag = k.querySelector('.tag.status');
-    tag.hidden = status === 'neu'; tag.textContent = STATUS_TEXT[status] || '';
+    tag.hidden = status === 'neu' || !STATUS_TEXT[status]; tag.textContent = STATUS_TEXT[status] || '';
     k.classList.toggle('erledigt', status !== 'neu');
     var d = abschnitt(id);
     if(d) d.querySelectorAll('[data-status]').forEach(function(b){ b.classList.toggle('an', b.dataset.status === status); });
@@ -792,6 +799,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
 {% endif %}
 
   // ---------- Filter & Sortierung ----------
+  var nurVerf = document.getElementById('nurverf');
   function zeige(){
     var q = document.getElementById('q').value.toLowerCase().trim(), sichtbar = 0;
     liste.dataset.filter = filter;
@@ -801,6 +809,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
             || (filter === 'nachfassen' && k.dataset.nachfassen === '1') || (filter === 'arbeit' && ARBEIT[s])
             || (filter === 'neu' && k.dataset.neu === '1') || ((filter === 'gruen' || filter === 'gelb') && k.dataset.ampel === filter);
       if(q && q.split(/\s+/).some(function(w){ return k.dataset.text.indexOf(w) < 0; })) ok = false;
+      if(nurVerf.checked && k.dataset.ausblenden === '1') ok = false;      // verkauft/offline ohne Ankaufsarbeit (P3-04)
       if(TEAM_AN && ((wer === 'meine' && k.dataset.mein !== '1') || (wer === 'frei' && k.dataset.frei !== '1'))) ok = false;
       k.hidden = !ok; if(ok) sichtbar++;
     });
@@ -824,6 +833,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     };
   });
   document.getElementById('q').oninput = zeige;
+  nurVerf.onchange = zeige;
   document.getElementById('sort').onchange = sortiere;
 
   // Status beim Laden: Datenbank (App) bzw. Browser-Speicher (Datei)

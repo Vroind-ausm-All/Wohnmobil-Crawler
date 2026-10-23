@@ -11,6 +11,8 @@ from ..domaene import STATUS, UNBEKANNT, import_art
 from ..dubletten import Wirkung, lade_wirkung, wende_an
 from ..normalisierung.fahrzeug import arten_im_text, ergaenze_fahrzeug
 from ..normalisierung.geo import entfernung_km
+from ..verfuegbarkeit import ergaenze as ergaenze_verfuegbarkeit
+from ..verfuegbarkeit import offline_nach_tagen
 from .anschreiben import Anschreiber, betrag_im_brief, euro, hinweise, sperrgrund
 from .rechner import Bewertung, Rechner
 
@@ -167,8 +169,13 @@ def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None =
     """Liest die Inserate und die geltenden Dublettenentscheidungen aus der Datenbank und bewertet sie (``bewerte_zeilen``)."""
     wirkung = lade_wirkung(db)
     mitglieder = {i for g in wirkung.gruppen for i in g}
-    return bewerte_zeilen(cfg, basis, [dict(r) for r in db.alle_mit_preis()], [dict(r) for r in db.aktive()], lauf_start,
-                          wirkung=wirkung, gruppenzeilen=[dict(r) for r in db.anzeigen_zu(mitglieder)])
+    roh = db.verfuegbarkeit_zu()                       # Verfügbarkeit aus „inserate“, eine Abfrage für alle Zeilen (P3-04)
+    arbeit = db.anzeigen_mit_arbeit()                  # Team-Arbeit, die nicht im Ankaufsstatus steht (Reservierung, Besichtigung, Ankauf)
+
+    def zeile(r) -> dict:
+        return {**dict(r), **roh.get(r["id"], {}), "hat_arbeit": r["id"] in arbeit}
+    return bewerte_zeilen(cfg, basis, [zeile(r) for r in db.alle_mit_preis()], [zeile(r) for r in db.aktive()], lauf_start,
+                          wirkung=wirkung, gruppenzeilen=[zeile(r) for r in db.anzeigen_zu(mitglieder)])
 
 
 def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[dict], lauf_start: str | None = None,
@@ -181,27 +188,29 @@ def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[d
     rechner, schreiber = Rechner(cfg), Anschreiber(cfg, basis)
     jetzt = jetzt or datetime.now()
     standort = str(cfg["anschreiben"].get("plz") or "") or None
-    alle = [ergaenze_fahrzeug(dict(r)) for r in mit_preis]
+    tage = offline_nach_tagen(cfg)
+
+    def angereichert(r) -> dict:                      # Fahrzeugmerkmale + Verfügbarkeit (wirksam, „vermutlich offline“ beim Lesen abgeleitet)
+        return ergaenze_verfuegbarkeit(ergaenze_fahrzeug(dict(r)), jetzt, tage)
+    alle = [angereichert(r) for r in mit_preis]
     nach_id = {a["id"]: a for a in alle}
     heuristisch = finde_duplikate(alle)
     vergleich = vergleichsbasis(alle, wende_an(heuristisch, wirkung, nach_id.get, lambda a: a["id"]))
     if wirkung is None or wirkung.leer:
         duplikate = heuristisch
     else:                                   # Mitglieder ohne Preis zählen für Sperren und Markierungen, nicht für die Vergleichsbasis
-        sonst = {z["id"]: ergaenze_fahrzeug(dict(z)) for z in [*aktive, *gruppenzeilen] if z["id"] not in nach_id}
+        sonst = {z["id"]: angereichert(z) for z in [*aktive, *gruppenzeilen] if z["id"] not in nach_id}
         duplikate = wende_an(heuristisch, wirkung, {**sonst, **nach_id}.get, lambda a: a["id"])
     zeilen = []
     for r in aktive:
-        a = ergaenze_fahrzeug(dict(r))
-        if a.get("status") == "gelöscht":
-            continue
+        a = angereichert(r)                  # Altbestand-Status „gelöscht“ bleibt in der Liste und gilt wie offline (gesperrt, Abzeichen)
         a["entfernung_km"] = entfernung_km(standort, a.get("plz"))
         andere = duplikate.get(a["id"], [])
         seit = min([a.get("erstmals_gesehen") or jetzt.isoformat()] + [b.get("erstmals_gesehen") or "9" for b in andere])
         a["tage_online"] = max(0, (jetzt - datetime.fromisoformat(seit)).days)
         a["neu_eingestellt"] = any((b.get("erstmals_gesehen") or "") < (a.get("erstmals_gesehen") or "") for b in andere)
         bearbeitet = [b for b in andere if b.get("status") in BEARBEITET]
-        live_aelter = [b for b in andere if b.get("status") in (None, "neu")
+        live_aelter = [b for b in andere if b.get("status") in (None, "neu") and not b.get("nicht_verfuegbar")
                        and (b.get("erstmals_gesehen") or "") < (a.get("erstmals_gesehen") or "")
                        and (b.get("zuletzt_gesehen") or "") >= (a.get("zuletzt_gesehen") or "")[:10]]
         if bearbeitet:
@@ -221,11 +230,15 @@ def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[d
             ust = (b.haendler_vk - b.max_ek) * 19 / 119
         else:
             ust = b.haendler_vk - b.haendler_vk / 1.19
+        # Verkaufte/nicht mehr online stehende Anzeigen ohne Ankaufsarbeit sind in den Standardlisten ausgeblendet (wie früher Status „gelöscht“)
+        # …es sei denn, es wird schon daran gearbeitet: Status, Team-Reservierung, Besichtigung/Ankauf oder eine Notiz (nichts Eigenes verstecken)
+        ausblenden = (bool(a.get("nicht_verfuegbar")) and a.get("status") in (None, "neu", "gelöscht")
+                      and not a.get("hat_arbeit") and not str(a.get("notiz") or "").strip())
         zeilen.append({
-            "a": a, "b": b, "sperre": sperre, "hinweise": hinweise(a, b), "brief": brief, "ust": round(ust / 10) * 10,
+            "a": a, "b": b, "sperre": sperre, "ausblenden": ausblenden, "hinweise": hinweise(a, b), "brief": brief, "ust": round(ust / 10) * 10,
             "brief_betrag": betrag_im_brief(a, b),
             "bereit": bool(brief) and schreiber.soll_schreiben(b.ampel),
-            "neu": bool(lauf_start and (a.get("erstmals_gesehen") or "") >= lauf_start),
+            "neu": bool(lauf_start and (a.get("erstmals_gesehen") or "") >= lauf_start) and not ausblenden,
             "nachfassen": grund, "nachfass_text": nachfass_text, "nachfass_betrag": nachfass_betrag,
             "dubletten_ids": sorted(b["id"] for b in andere),       # Fahrzeuggruppe: Team-Reservierungen wirken auf alle
         })

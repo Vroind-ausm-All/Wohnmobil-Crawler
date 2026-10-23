@@ -23,8 +23,8 @@ def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None =
     env.filters["prozent"] = lambda x: f"{x:+.1%}".replace(".", ",") if x is not None else "–"
     env.filters["anteil"] = lambda x: f"{x:.0%}" if x is not None else "–"
     zaehl = {
-        "gruen": sum(z["b"].ampel == "gruen" for z in zeilen),
-        "gelb": sum(z["b"].ampel == "gelb" for z in zeilen),
+        "gruen": sum(z["b"].ampel == "gruen" and not z.get("ausblenden") for z in zeilen),
+        "gelb": sum(z["b"].ampel == "gelb" and not z.get("ausblenden") for z in zeilen),
         "neu": sum(z["neu"] for z in zeilen),
         "anschreiben": sum(z["bereit"] for z in zeilen),
         "kontaktiert": sum(z["a"].get("status") == "kontaktiert" for z in zeilen),
@@ -47,6 +47,11 @@ def _team_spalten(t: dict | None) -> list[str]:
     return [(t["bearbeiter"] or {}).get("name", ""), t["seit"] or "", (t["kontaktiert_von"] or {}).get("name", "")]
 
 
+def _verfuegbarkeit_zelle(a: dict) -> str:
+    """CSV: aktiv, reserviert, offline, verkauft, unbekannt – oder „vermutlich offline“ (abgeleitet, nicht gespeichert)."""
+    return "vermutlich offline" if a.get("vermutlich_offline") else a.get("verfuegbarkeit") or "unbekannt"
+
+
 def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None = None, team=None) -> dict:
     """``team``: ``TeamSicht`` (bearbeitung.py) oder ``None`` – dann bleiben die Team-Spalten der CSV leer."""
     ordner = basis / cfg["ausgabe"]["ordner"]
@@ -61,7 +66,7 @@ def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | 
                     "Marktniveau", "Spanne von", "Spanne bis", "Sicherheit", "Anz. Vergleiche", "Marktwert privat",
                     "Händler-VK", "Kosten", "Ziel-Marge", "Max-EK", "Erstangebot", "Erstangebot % Marktwert",
                     "Gewinn bei Angebotspreis", "Wertfaktoren", "Sperrgrund", "Hinweise", "Status", "Nachfassen", "Kontaktiert am",
-                    "Erstmals gesehen", "URL", "Bearbeiter", "Übernommen am", "Kontaktiert von"])
+                    "Verfügbarkeit", "Zuletzt bestätigt", "Erstmals gesehen", "URL", "Bearbeiter", "Übernommen am", "Kontaktiert von"])
         for z in sorted(zeilen, key=lambda z: z["b"].verhaeltnis or 99):
             a, b = z["a"], z["b"]
             t = team.objekt(z) if team else None
@@ -73,7 +78,7 @@ def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | 
                         b.vergleich_anzahl, *betraege[:6], f"{b.fair_anteil:.0%}" if b.fair_anteil else "", betraege[6],
                         ", ".join(f"{n} {w:+.1%}" for n, w in b.wertfaktoren.items()), z["sperre"] or "",
                         " | ".join(z.get("hinweise") or []), a["status"], z["nachfassen"] or "", a.get("kontaktiert_am") or "",
-                        a["erstmals_gesehen"], a["url"],
+                        _verfuegbarkeit_zelle(a), a.get("zuletzt_bestaetigt") or "", a["erstmals_gesehen"], a["url"],
                         *_team_spalten(t)])
 
     # --- Anschreiben als Textdateien ---

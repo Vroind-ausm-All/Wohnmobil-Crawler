@@ -87,7 +87,9 @@ def test_netzwerkfehler_bricht_sauber_ab(cfg, db):
 def test_geloeschtes_inserat(cfg, db, ads):
     stat = Importer(cfg, db, abruf=FakeAbruf(ads, fehlend={ads[3]["id"]})).lauf(cfg["suchen"])
     assert stat["fehler"] is None and stat["details"] == 60
-    assert db.con.execute("SELECT status FROM anzeigen WHERE id=?", (ads[3]["id"],)).fetchone()["status"] == "gelöscht"
+    # P3-04: nicht mehr vorhanden = Verfügbarkeit „offline“ am Inserat; der Ankaufsstatus bleibt, wie er war (kein „gelöscht“ mehr)
+    assert db.con.execute("SELECT status FROM anzeigen WHERE id=?", (ads[3]["id"],)).fetchone()["status"] in (None, "neu")
+    assert db.con.execute("SELECT verfuegbarkeit FROM inserate WHERE anzeigen_id=?", (ads[3]["id"],)).fetchone()["verfuegbarkeit"] == "offline"
 
 
 # ---------- neue Quelle über das Interface ----------

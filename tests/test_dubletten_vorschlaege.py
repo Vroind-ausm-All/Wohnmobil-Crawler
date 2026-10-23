@@ -23,7 +23,7 @@ from wmscout.datenbank import IMPORT_SUCHE, Datenbank
 from wmscout.app import _kontext
 from wmscout.dubletten import MAX_LIMIT, dubletten_vorschlaege, pruefe_dubletten
 from wmscout.haendler import HaendlerSpeicher
-from wmscout.migrationen import AKTUELLE_VERSION, MigrationsFehler, lese_version, migriere
+from wmscout.migrationen import MigrationsFehler, lese_version, migriere
 from wmscout.normalisierung.fahrzeug import ergaenze_fahrzeug
 from wmscout.sicherung import sicherungen, wiederherstellen
 from wmscout.team import TeamSpeicher
@@ -41,6 +41,11 @@ def baue_v11(pfad, monkeypatch, ziel):
     assert lese_version(pfad) == 11
 
 
+def bis_12(monkeypatch):
+    """Schritt 12 ist hier der letzte bekannte Schritt: die Tests prüfen ihn so, wie er zu seiner Zeit lief (Schritt 13 prüft tests/test_verfuegbarkeit.py)."""
+    _alt_schritte(monkeypatch, 12)
+
+
 # ---------------------------------------------------------------- 1. Migration auf 12
 @pytest.mark.parametrize("art", ["v1", "v2", "v10", "v11"])
 def test_migration_auf_12_ohne_datenverlust(tmp_path, monkeypatch, art):
@@ -49,11 +54,12 @@ def test_migration_auf_12_ohne_datenverlust(tmp_path, monkeypatch, art):
         baue_v11(pfad, monkeypatch, tmp_path)
     else:
         baue(art, pfad, monkeypatch)
+    bis_12(monkeypatch)
     vorher_version, vorher = lese_version(pfad), _abbild(pfad)
     zaehlung = {t: len(z) for t, (_, z) in vorher.items()}
     erledigt = migriere(pfad, ziel)
     assert erledigt == list(range(vorher_version + 1, 13)) or art == "v1" and erledigt == list(range(2, 13))
-    assert lese_version(pfad) == AKTUELLE_VERSION == 12 and versionen(pfad)[-1] == 12
+    assert lese_version(pfad) == 12 and versionen(pfad)[-1] == 12
     assert set(NEU) <= tabellen(pfad)
     nachher = _abbild(pfad)
     assert {t: len(nachher[t][1]) for t in zaehlung if t != "fahrzeuge"} == {t: n for t, n in zaehlung.items() if t != "fahrzeuge"}
@@ -74,6 +80,7 @@ def test_migration_auf_12_ohne_datenverlust(tmp_path, monkeypatch, art):
 def test_sicherung_vor_v12_laesst_sich_zurueckspielen_und_erneut_migrieren(tmp_path, monkeypatch):
     pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
     baue_v11(pfad, monkeypatch, tmp_path)
+    bis_12(monkeypatch)
     vorher = _abbild(pfad)
     assert migriere(pfad, ziel) == [12]
     kopie = [k for k in sicherungen(ziel, "db") if "vor-v12" in k.name][0]
@@ -86,6 +93,7 @@ def test_sicherung_vor_v12_laesst_sich_zurueckspielen_und_erneut_migrieren(tmp_p
 def test_zweiter_lauf_aendert_nichts_und_schritt_ist_idempotent(tmp_path, monkeypatch):
     pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
     baue_v11(pfad, monkeypatch, tmp_path)
+    bis_12(monkeypatch)
     migriere(pfad, ziel)
     fest, anzahl = pruefsumme(pfad), len(sicherungen(ziel, "db"))
     assert migriere(pfad, ziel) == [] and pruefsumme(pfad) == fest and len(sicherungen(ziel, "db")) == anzahl
@@ -111,6 +119,7 @@ def test_verletzte_invariante_rollt_zurueck(tmp_path, monkeypatch):
     """Ein Nebeneffekt, der Zeilen bestehender Tabellen verändert, wird vom Schritt selbst bemerkt: alles zurück, Sicherung bleibt."""
     pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
     baue_v11(pfad, monkeypatch, tmp_path)
+    bis_12(monkeypatch)
     vorher = _abbild(pfad)
     echt, aufrufe = migrationen._zaehle_v11, []
 
@@ -126,13 +135,14 @@ def test_verletzte_invariante_rollt_zurueck(tmp_path, monkeypatch):
     assert "Zeilenzahlen" in str(fehler.value) and "bearbeitung" in str(fehler.value)
     _noch_11(pfad, vorher)
     assert any("vor-v12" in k.name for k in sicherungen(ziel, "db"))
-    monkeypatch.undo()
+    monkeypatch.setattr(migrationen, "_zaehle_v11", echt)
     assert migriere(pfad, ziel) == [12]
 
 
 def test_abweichende_vorhandene_tabelle_rollt_zurueck(tmp_path, monkeypatch):
     pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
     baue_v11(pfad, monkeypatch, tmp_path)
+    bis_12(monkeypatch)
     con = sqlite3.connect(pfad)
     con.execute("CREATE TABLE fahrzeug_zuordnungen (x INTEGER)")        # IF NOT EXISTS würde das übergehen
     con.commit()
@@ -146,6 +156,7 @@ def test_abweichende_vorhandene_tabelle_rollt_zurueck(tmp_path, monkeypatch):
 def test_fehler_im_schritt_rollt_zurueck(tmp_path, monkeypatch):
     pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
     baue_v11(pfad, monkeypatch, tmp_path)
+    bis_12(monkeypatch)
     vorher = _abbild(pfad)
     echt = migrationen._schritt_12
 
@@ -179,6 +190,7 @@ class _Abbruch:
 def test_abbruch_mitten_im_schritt_12_rollt_alles_zurueck(tmp_path, monkeypatch, n):
     pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
     baue_v11(pfad, monkeypatch, tmp_path)
+    bis_12(monkeypatch)
     vorher = _abbild(pfad)
     echt, aufrufe = migrationen._schritt_12, {}
 
@@ -205,6 +217,7 @@ def test_abbruch_tests_decken_alle_aufrufe_des_schritts_ab(tmp_path, monkeypatch
     """Die Spanne 1–32 der Abbruchstellen reicht bis hinter den letzten ``execute``-Aufruf des Schritts."""
     pfad = tmp_path / "db.sqlite"
     baue_v11(pfad, monkeypatch, tmp_path)
+    bis_12(monkeypatch)
     p = None
     con = sqlite3.connect(pfad, isolation_level=None)
     try:

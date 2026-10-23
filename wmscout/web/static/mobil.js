@@ -28,6 +28,11 @@
     el.textContent = t; el.classList.add("zeigen");
     clearTimeout(toastUhr); toastUhr = setTimeout(function () { el.classList.remove("zeigen"); }, 4000);
   }
+  // Verfügbarkeit des Inserats (P3-04): Abzeichen nur bei reserviert/verkauft/offline/„vermutlich offline“; Text nur über esc()
+  function verfTag(f) {
+    if (!f.verfuegbarkeit_text) return "";
+    return '<span class="tag verf ' + esc(f.vermutlich_offline ? "vermutlich" : f.verfuegbarkeit) + '" data-verfuegbarkeit="">' + esc(f.verfuegbarkeit_text) + "</span>";
+  }
   function ampelTag(a) { return '<span class="tag ' + esc(a) + '">' + esc({ gruen: "Grün", gelb: "Gelb", rot: "Rot" }[a] || "–") + "</span>"; }
 
   function api(pfad, daten, nochmal) {
@@ -188,7 +193,7 @@
           return '<button class="knopf klein' + (w === wer ? " primaer" : "") + '" data-aktion="wer" data-wer="' + w + '" aria-pressed="' + (w === wer) + '">' + WER[w] + "</button>";
         }).join("") + "</div>" : "") +
         (l.length ? l.map(function (f) {
-          return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + teamBadge(f.team) + ampelTag(f.ampel) + "</div>" +
+          return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + teamBadge(f.team) + verfTag(f) + ampelTag(f.ampel) + "</div>" +
             '<p class="leise">EZ ' + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") + (f.entfernung_km !== null ? " · " + tsd(f.entfernung_km) + " km entfernt" : "") + "</p>" +
             hinweisZeilen(f) +
             (f.nachfassen ? '<p class="leise" style="color:var(--gelb)">Nachfassen: ' + esc(f.nachfassen) + "</p>" : "") +
@@ -253,7 +258,7 @@
       var fremd = !!t && !t.mein && !teamFrei(t), sperr = fremd ? " disabled" : "";
       inhalt.innerHTML =
         "<h1>" + esc(f.fahrzeug) + "</h1>" +
-        '<p class="leise">' + ampelTag(f.ampel) + " EZ " + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") +
+        '<p class="leise">' + ampelTag(f.ampel) + verfTag(f) + " EZ " + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") +
         (f.entfernung_km !== null ? " · " + tsd(f.entfernung_km) + " km entfernt" : "") + "</p>" +
         '<div class="karte"><div class="zahlen"><div><span>Wunschpreis</span>' + eur(f.preis) + "</div><div><span>Erstangebot</span><b>" + eur(f.erstangebot) +
         "</b></div><div><span>Max-EK</span>" + eur(f.max_ek) + "</div></div>" +

@@ -5,13 +5,15 @@ Versionen: 1 = ZIP-Stand (Tabelle ``anzeigen`` im Ur-Schema), 2 = Stand vor Phas
 6 = Händlerportal (Standorte), 7 = Demo-Auktionen, 8 = gespeicherte Kalkulationen (Deal Intelligence),
 9 = Ankaufsvorgänge (Besichtigung bis Verkauf), 10 = Audit-Protokoll und Leerlauf-Zeit der Sitzungen (G0b),
 11 = Fahrzeuge getrennt von Inseraten (P3-01, ``fahrzeuge`` + ``inserate.fahrzeug_id``),
-12 = Dublettenentscheidungen und Zuordnungsprotokoll (P3-02a, nur Tabellen, noch ohne fachliche Wirkung).
+12 = Dublettenentscheidungen und Zuordnungsprotokoll (P3-02a, nur Tabellen, noch ohne fachliche Wirkung),
+13 = Verfügbarkeit mit Bestätigungszeitpunkt (P3-04, ``inserate.zuletzt_bestaetigt``) und Index für ``fahrzeug_zuordnungen(entscheidung_id)``.
 Jeder Schritt läuft in einer eigenen Transaktion, ist idempotent
 (``IF NOT EXISTS``, Spaltenprüfung) und wird erst nach erfolgreicher Sicherung der Datenbank ausgeführt.
 Die DDL der Schritte ist eingefroren: spätere Änderungen gehören in einen neuen Schritt, nicht in einen alten.
 """
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -19,7 +21,7 @@ from pathlib import Path
 
 from .sicherung import SicherungsFehler, oeffne_lesend, sichere
 
-AKTUELLE_VERSION = 12
+AKTUELLE_VERSION = 13
 
 
 class MigrationsFehler(RuntimeError):
@@ -368,9 +370,37 @@ def _schritt_12(con: sqlite3.Connection):
         raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 12 geändert: {vorher} -> {nachher}")
 
 
+def _schritt_13(con: sqlite3.Connection):
+    """Additive v13 (P3-04, ADR-042): ``inserate.zuletzt_bestaetigt`` = Zeitpunkt (UTC) der letzten Beobachtung, die die gespeicherte Verfügbarkeit
+    bestätigt hat – anders als ``zuletzt_gesehen`` (jede Beobachtung, bei Mails die Einlesezeit) und Grundlage der Altersregel (eine ältere
+    Beobachtung überschreibt keine neuere) und des abgeleiteten „vermutlich offline“. Altbestand: Für ``aktiv`` und ``offline`` war
+    ``zuletzt_gesehen`` genau der Zeitpunkt der Beobachtung, die den Wert setzte; er wird übernommen (nach UTC). ``unbekannt`` bleibt ohne Wert.
+    Außerdem der Index ``fahrzeug_zuordnungen(entscheidung_id)`` (Befund aus P3-02b). Kein Wert und keine Zeile wird verändert oder gelöscht."""
+    vorher = _zaehle_v11(con)
+    feste = "SELECT id, plattform, anzeigen_id, url, titel, preis, verfuegbarkeit, erstmals_gesehen, zuletzt_gesehen, fahrzeug_id FROM inserate ORDER BY id"
+    vorher_inhalt = hashlib.sha256(repr([tuple(r) for r in con.execute(feste)]).encode()).hexdigest()
+    _neue_spalte(con, "inserate", "zuletzt_bestaetigt", "TEXT")
+    umzusetzen = []
+    offen = con.execute("SELECT id, zuletzt_gesehen FROM inserate WHERE zuletzt_bestaetigt IS NULL AND verfuegbarkeit IN ('aktiv', 'offline')").fetchall()
+    for iid, gesehen in offen:
+        try:
+            zeit = datetime.fromisoformat(gesehen).astimezone(timezone.utc).isoformat(timespec="seconds") if gesehen else None
+        except (TypeError, ValueError):
+            zeit = None                       # nicht lesbar: bleibt leer, die Anzeige fällt auf zuletzt_gesehen zurück
+        if zeit:
+            umzusetzen.append((zeit, iid))
+    con.executemany("UPDATE inserate SET zuletzt_bestaetigt = ? WHERE id = ?", umzusetzen)
+    con.execute("CREATE INDEX IF NOT EXISTS idx_zuordnungen_entscheidung ON fahrzeug_zuordnungen(entscheidung_id)")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 13 geändert: {vorher} -> {nachher}")
+    if hashlib.sha256(repr([tuple(r) for r in con.execute(feste)]).encode()).hexdigest() != vorher_inhalt:
+        raise MigrationsFehler("Schritt 13: bestehende Inseratsspalten haben sich verändert")
+
+
 SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4, 5: _schritt_5,
                                                              6: _schritt_6, 7: _schritt_7, 8: _schritt_8, 9: _schritt_9,
-                                                             10: _schritt_10, 11: _schritt_11, 12: _schritt_12}
+                                                             10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13}
 
 _SCHEMA_VERSION = ("CREATE TABLE IF NOT EXISTS schema_version ("
                    "version INTEGER PRIMARY KEY, angewendet_am TEXT NOT NULL)")
