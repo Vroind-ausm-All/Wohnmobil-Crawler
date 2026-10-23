@@ -6,6 +6,27 @@ Wert „–“.
 
 ---
 
+## P3-06 – Kontakte als Ereignisse (23.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-data-engineer`, inkl. kleiner Oberflächenteile); QA
+  `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/kontakte.py` (neu), `wmscout/migrationen.py` (Schritt 15), `wmscout/datenbank.py` (Ereignisse in
+  `setze_status`/`nachgefasst`, `bestaetige_kontakt`, `kontakte_zu`), `wmscout/web/api.py` (`kanal`, `kontakte`, `GET /api/kontakte/<id>`,
+  `POST /api/kontakt/<id>/bestaetigen`), `wmscout/audit.py`, `wmscout/datenrechte.py` (Anonymisierung), `vorlagen/report.html`, `mobil.js`,
+  `mobil.css`, `sw.js` (wm-scout-12), Tests `test_kontakte.py` (neu), `test_anbieter.py` (Schritt-14-Tests bis 14); Doku ADR-044 (+ Verweis
+  in ADR-012), ROADMAP (P3-05 DONE, P3-06 REVIEW, F7), ARCHITECTURE.
+- **Implementierte Funktionen:** siehe ADR-044.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. B1 HOCH (bestätigtes Nachfassen an einem noch nicht kontaktierten
+  Inserat setzte weder Status noch Team-Kontakt) → läuft als erster Kontakt über den Status; B2 (älteres offenes Anschreiben blieb ewig
+  offen) und B3 (Rückgängig ließ den alten Text bestätigbar) → `verworfen_am`; B4 (neuer Brief überschrieb ein offenes Nachfassen) →
+  eigenes Anschreiben; B5 (Altbestand nach App-Bestätigung) → Herkunft „app“; B6 Desktop-Hinweis nach dem Nachfassen; B7 `.bat`-Zeilenenden
+  nicht gestaged; B8 Versionsprüfung wieder exakt. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** F7 – alte Kontakte bleiben im Status, im Verlauf als „Altbestand“ (Kanal unbekannt);
+  Nachfassen gilt erst nach „gesendet ✓“ als gesendet (die Erinnerung über `nachgefasst_am` bleibt wie bisher); Kanalwahl nur per API.
+- **Bekannte Risiken:** Ein irrtümlich bestätigter Kontakt lässt sich nicht stornieren; nachgebaute Daten.
+- **Nächster sinnvoller Schritt:** P3-07 (Indizes, Vorfilter der Vergleichsauswahl).
+
 ## P3-05 – Privat/Händler mit Herkunft der Einstufung (23.10.2026) · Status: REVIEW
 
 - **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-data-engineer`, inkl. kleiner Oberflächenteile und P2-05d aus dem

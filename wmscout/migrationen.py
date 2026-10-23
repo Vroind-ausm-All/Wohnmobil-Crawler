@@ -21,7 +21,7 @@ from pathlib import Path
 
 from .sicherung import SicherungsFehler, oeffne_lesend, sichere
 
-AKTUELLE_VERSION = 14
+AKTUELLE_VERSION = 15
 
 
 class MigrationsFehler(RuntimeError):
@@ -417,10 +417,58 @@ def _schritt_14(con: sqlite3.Connection):
         raise MigrationsFehler("Schritt 14: bestehende Spalten von „anzeigen“ haben sich verändert")
 
 
+def _schritt_15(con: sqlite3.Connection):
+    """Additive v15 (P3-06, ADR-044): Tabelle ``kontakte`` – jedes Anschreiben und Nachfassen als Ereignis (vorbereitet → bestätigt), nur anfügen.
+    Altbestand (Betreiberfrage F7, konservativ): ein gespeicherter Kontaktzeitpunkt (``kontaktiert_am``) wird eine bestätigte Zeile, ein offenes
+    „Text kopiert“ (Status ``vorbereitet``) eine vorbereitete, das letzte Nachfassen (``nachgefasst_am``) eine vorbereitete – alle mit Herkunft
+    ``altbestand``, ohne Text (der bleibt in ``anzeigen.anschreiben_text``). ``verworfen_am``: ein offenes Ereignis wurde nicht gesendet (Status „neu“,
+    durch ein späteres ersetzt). Bestehende Tabellen werden nicht verändert."""
+    vorher = _zaehle_v11(con)
+    feste = "SELECT * FROM anzeigen ORDER BY id"
+    vorher_inhalt = hashlib.sha256(repr([tuple(r) for r in con.execute(feste)]).encode()).hexdigest()
+    rueckfuellen = "kontakte" not in _tabellen(con)      # nur beim ersten Anlegen: eine zweite Ausführung ergänzt nichts
+    con.execute("""CREATE TABLE IF NOT EXISTS kontakte (
+        id INTEGER PRIMARY KEY,
+        anzeige_id TEXT NOT NULL,
+        art TEXT NOT NULL CHECK (art IN ('anschreiben', 'nachfassen')),
+        kanal TEXT NOT NULL DEFAULT 'plattform',
+        text TEXT,
+        betrag INTEGER,
+        nutzer_id INTEGER,
+        vorbereitet_am TEXT,
+        bestaetigt_am TEXT,
+        bestaetigt_von INTEGER,
+        verworfen_am TEXT,
+        herkunft TEXT NOT NULL DEFAULT 'app' CHECK (herkunft IN ('app', 'altbestand')),
+        CHECK (vorbereitet_am IS NOT NULL OR bestaetigt_am IS NOT NULL))""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_kontakte_anzeige ON kontakte(anzeige_id, id)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_kontakte_bestaetigt ON kontakte(bestaetigt_am)")
+    if rueckfuellen:
+        team = "bearbeitung" in _tabellen(con)
+        von = "(SELECT kontaktiert_von FROM bearbeitung b WHERE b.anzeige_id = a.id)" if team else "NULL"
+        halter = "(SELECT bearbeiter_id FROM bearbeitung b WHERE b.anzeige_id = a.id)" if team else "NULL"
+        con.execute(f"""INSERT INTO kontakte (anzeige_id, art, kanal, betrag, nutzer_id, bestaetigt_am, bestaetigt_von, herkunft)
+                        SELECT a.id, 'anschreiben', 'unbekannt', a.angebot_betrag, {von}, a.kontaktiert_am, {von}, 'altbestand'
+                        FROM anzeigen a WHERE COALESCE(a.kontaktiert_am, '') != '' ORDER BY a.id""")
+        con.execute(f"""INSERT INTO kontakte (anzeige_id, art, kanal, betrag, nutzer_id, vorbereitet_am, herkunft)
+                        SELECT a.id, 'anschreiben', 'plattform', a.angebot_betrag, {halter}, COALESCE(NULLIF(a.status_am, ''), a.zuletzt_gesehen),
+                               'altbestand'
+                        FROM anzeigen a WHERE a.status = 'vorbereitet' AND COALESCE(a.kontaktiert_am, '') = ''
+                          AND COALESCE(NULLIF(a.status_am, ''), a.zuletzt_gesehen) IS NOT NULL ORDER BY a.id""")
+        con.execute(f"""INSERT INTO kontakte (anzeige_id, art, kanal, nutzer_id, vorbereitet_am, herkunft)
+                        SELECT a.id, 'nachfassen', 'plattform', {halter}, a.nachgefasst_am, 'altbestand'
+                        FROM anzeigen a WHERE COALESCE(a.nachgefasst_am, '') != '' ORDER BY a.id""")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 15 geändert: {vorher} -> {nachher}")
+    if hashlib.sha256(repr([tuple(r) for r in con.execute(feste)]).encode()).hexdigest() != vorher_inhalt:
+        raise MigrationsFehler("Schritt 15: Zeilen von „anzeigen“ haben sich verändert")
+
+
 SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4, 5: _schritt_5,
                                                              6: _schritt_6, 7: _schritt_7, 8: _schritt_8, 9: _schritt_9,
                                                              10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
-                                                             14: _schritt_14}
+                                                             14: _schritt_14, 15: _schritt_15}
 
 _SCHEMA_VERSION = ("CREATE TABLE IF NOT EXISTS schema_version ("
                    "version INTEGER PRIMARY KEY, angewendet_am TEXT NOT NULL)")

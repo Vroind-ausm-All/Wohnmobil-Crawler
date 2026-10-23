@@ -4,6 +4,23 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P3-06 – Kontakte als Ereignisse (23.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 1964 bestanden (vorher 1937), neu `test_kontakte.py` (27) |
+| `ruff check .` | grün |
+| Ereignisse: Text kopiert (erneut: ersetzt) → gesendet; direkt kontaktiert mit/ohne Text und Kanal; erneutes „kontaktiert“ und andere Status ohne Ereignis; Rückgängig verwirft; nur das zuletzt Kopierte wird bestätigt, ältere verworfen; neuer Brief überschreibt kein Nachfassen; Altbestand nach Bestätigung „app“ | bestanden |
+| Nachfassen: vorbereitet, ersetzt, bestätigt (idempotent), verworfen nicht bestätigbar; erstes Nachfassen an nicht kontaktiertem Inserat → Status kontaktiert und Team-Kontakt | bestanden |
+| Transaktion: Fehler im Ereignis → Status und Nachfass-Zähler unverändert; Team-Konflikt → kein Ereignis | bestanden |
+| Verlauf über das ganze Fahrzeug (zwei Inserate, gleiches Fahrzeug) | bestanden |
+| API: Kanal 400 bei Unsinn, Verlauf in `/api/fahrzeug` und `/api/kontakte`, Bestätigen 200/404/409; Team: Vorbereiter oder Inhaber, sonst 403, ohne Token 403, Händler-Zugang 403, Audit-Einträge | bestanden |
+| Anonymisierung: Verkäufername aus allen Texten des Verlaufs entfernt, Zeitpunkte bleiben | bestanden |
+| Migration v1, v2, v10, v14 → v15: bisherige Tabellen unverändert, Altbestand (Kontaktzeitpunkt, „Text kopiert“, Nachfassen) als `altbestand`, Sicherung `vor-v15`, Idempotenz, Rollback; neue DB mit Tabelle und Index (Abfrageplan) | bestanden |
+| Browser (Orchestrator, Chromium über Playwright, nachgebaute Daten): Desktop 1280 – Verlauf, „gesendet ✓“ fürs Nachfassen; Handy 390 – Verlauf mit Kanal und Betrag; 0 JS-Fehler | bestanden (vor und nach der Korrekturrunde) |
+| QA (eine Runde, vor der Korrekturrunde: Teilsuite 102 bestanden, eigene Szenarien) | Freigabe mit Auflagen – B1 (HOCH), B2–B6, B8 behoben; Korrekturen **nicht** erneut von der QA geprüft |
+| Echte Abläufe mit mehreren Geräten, Windows-CI | nicht geprüft (CI folgt im PR) |
+
 ## P3-05 – Privat/Händler mit Herkunft der Einstufung (23.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

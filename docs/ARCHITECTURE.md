@@ -144,7 +144,7 @@ manuellem Import nur einen Datensatz. In Tabellen und Texten unten steht „quel
 | price_history | `preis_historie` | inserat_id, zeitpunkt, preis, vb, suchlauf_id, herkunft | `preis_vorher` + `preis` |
 | observations | `beobachtungen` | inserat_id, suchlauf_id, zeitpunkt, kanal (suche/api/email/manuell/detail), preis, inhalt_hash | neu |
 | valuations | `bewertungen` | inserat_id, zeitpunkt, modell_version, marktwert, spanne_von, spanne_bis, max_ek, erstangebot, sicherheit, n_vergleich, deal_score, komponenten_json | heute nur flüchtig |
-| contacts | `kontakte` | fahrzeug_id, inserat_id, nutzer_id, art (anschreiben/nachfassen/antwort), kanal, text, betrag, vorbereitet_am, bestaetigt_am | `kontaktiert_am`, `anschreiben_text` |
+| contacts | `kontakte` | **umgesetzt (v15, ADR-044):** anzeige_id (Fahrzeug beim Lesen über `inserate`), art (anschreiben/nachfassen), kanal, text, betrag, nutzer_id, vorbereitet_am, bestaetigt_am, bestaetigt_von, herkunft (app/altbestand) | `kontaktiert_am`, `anschreiben_text` (bleiben) |
 
 Grobschätzung `beobachtungen` (nicht gemessen): ~5.000 Zeilen/Tag bei heutiger Suchbreite, ~1,8 Mio./Jahr – mit
 Indizes für SQLite tragbar; alternativ nur Änderungen speichern (Entscheidung in Phase 3).

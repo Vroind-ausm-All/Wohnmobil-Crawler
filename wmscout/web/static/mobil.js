@@ -212,6 +212,17 @@
   }
 
   // Hinweise zum Fahrzeug (z. B. Fahrzeugart nicht bestätigt): gelbe Zeile, Text nur über esc()
+  // Kontaktverlauf (P3-06): vorbereitet/gesendet, Kanal, wer; andere Inserate desselben Fahrzeugs gekennzeichnet; Text nur über esc()
+  function kontaktZeilen(f) {
+    var k = f.kontakte || [];
+    if (!k.length) return "";
+    return '<h2>Kontaktverlauf</h2><div class="karte kontakte">' + k.map(function (x) {
+      return '<div class="zeile kontakt' + (x.bestaetigt || x.verworfen ? "" : " offen") + '"><span>' + esc(x.art_text) + (x.anzeige_id !== f.id ? " (anderes Inserat)" : "") +
+        " · " + esc(x.zustand) + '</span><span class="leise">' + esc(x.zeit_text || "") + (x.bestaetigt_von || x.vorbereitet_von ? " · " + esc(x.bestaetigt_von || x.vorbereitet_von) : "") +
+        " · " + esc(x.kanal_text) + (x.betrag ? " · " + eur(x.betrag) : "") + "</span>" +
+        (!x.bestaetigt && !x.verworfen && x.art === "nachfassen" ? '<button class="knopf klein" data-aktion="kontakt-gesendet" data-kontakt="' + esc(x.id) + '">gesendet ✓</button>' : "") + "</div>";
+    }).join("") + "</div>";
+  }
   function hinweisZeilen(f) {
     return (f.hinweise || []).map(function (h) { return '<p class="hinweis info">⚠ ' + esc(h) + "</p>"; }).join("");
   }
@@ -290,7 +301,7 @@
         "<h2>Status</h2><div class=\"reihe\">" + Object.keys(status).map(function (k) {
           return '<button class="knopf klein' + (k === f.status ? " primaer" : "") + '" data-status="' + esc(k) + '">' + esc(status[k]) + "</button>";
         }).join("") + "</div>" +
-        '<label>Notiz<textarea id="notiz" style="min-height:70px">' + esc(f.notiz || "") + "</textarea></label>" +
+        '<label>Notiz<textarea id="notiz" style="min-height:70px">' + esc(f.notiz || "") + "</textarea></label>" + kontaktZeilen(f) +
         "<h2>Besichtigung</h2>" + f.besichtigungen.map(terminKarte).join("") +
         '<div class="karte"><label>Termin<input type="datetime-local" id="b-termin"></label>' +
         '<label>Adresse beim Verkäufer<input id="b-adresse" placeholder="Straße, Ort" value="' + esc(f.ort || "") + '"></label>' +
@@ -615,6 +626,9 @@
         toast(ok ? "Text kopiert ✓ – in " + (inhalt.dataset.quelle === "mobile.de" ? "mobile.de im „E-Mail“/„Nachricht“-Formular" : inhalt.dataset.quelle === "kleinanzeigen" ? "Kleinanzeigen" : "der Anzeige") + " einfügen, senden, dann „gesendet ✓“" : "Bitte Text markieren und kopieren");
         fahrzeug(id);
       }, function (err) { if (fenster) fenster.close(); teamFehler(err, id); });
+    } else if (a === "kontakt-gesendet") {
+      api("/api/kontakt/" + encodeURIComponent(t.getAttribute("data-kontakt")) + "/bestaetigen", {})
+        .then(function () { toast("Nachfassen als gesendet gespeichert ✓"); fahrzeug(id); }, function (err) { toast(err.message); });
     } else if (a === "gesendet") {
       api("/api/status", { id: id, status: "kontaktiert" }).then(function () { toast("Als gesendet gespeichert ✓"); fahrzeug(id); }, function (err) { teamFehler(err, id); });
     } else if (a === "uebernehmen" || a === "erzwingen" || a === "abgeben") {

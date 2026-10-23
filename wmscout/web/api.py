@@ -49,6 +49,7 @@ from ..bewertung.anschreiben import euro, tsd
 from ..bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids
 from ..verfuegbarkeit import fahrzeug_von, offline_nach_tagen
 from ..anbieter import einstufung
+from .. import kontakte
 from ..bewertung import kalkulation as kalk
 from ..bewertung.besichtigung import berechne, lade_katalog
 from ..datenbank import STATUS, Datenbank
@@ -513,6 +514,10 @@ class Anfrage:
             return self.json(200, self.fahrzeuge())
         if m := re.fullmatch(r"/api/fahrzeug/([\w-]+)", p):
             return self.json(200, self.fahrzeug(m.group(1)))
+        if m := re.fullmatch(r"/api/kontakte/([\w-]+)", p):
+            if k.db.status_von(m.group(1)) is None:
+                raise Antwort(404, "Anzeige nicht gefunden")
+            return self.json(200, self.kontakte(m.group(1)))
         if m := re.fullmatch(r"/api/besichtigung/(\d+)", p):
             b = self.besichtigung(m.group(1))
             # abgeschlossene Besichtigungen braucht niemand offline – nicht im Speicher des Geräts ablegen (P1-14b)
@@ -894,7 +899,49 @@ class Anfrage:
                 "nachfass_betrag": z["nachfass_betrag"], "anschreiben_text": z["a"].get("anschreiben_text"),
                 "notiz": z["a"].get("notiz"), "besichtigungen": [self.besichtigung_kurz(b, sicht) for b in
                                                                  self.k.team.besichtigungen(offen=False, anzeige_id=anzeige_id)],
-                "verfuegbarkeit_fahrzeug": self.verfuegbarkeit_fahrzeug(anzeige_id)}
+                "verfuegbarkeit_fahrzeug": self.verfuegbarkeit_fahrzeug(anzeige_id), "kontakte": self.kontakte(anzeige_id)}
+
+    def kontakte(self, anzeige_id: str) -> list[dict]:
+        """Kontaktverlauf der Anzeige und ihres Fahrzeugs (P3-06): vorbereitete und bestätigte Anschreiben und Nachfassen, älteste zuerst."""
+        namen = {n["id"]: n["name"] for n in self.k.team.nutzer_liste(nur_aktive=False)} if self.team_aktiv else {}
+        return [kontakte.als_json(z, namen) for z in self.k.db.kontakte_zu(anzeige_id)]
+
+    @staticmethod
+    def kanal(daten: dict) -> str | None:
+        try:
+            return kontakte.pruefe_kanal(daten.get("kanal"))
+        except ValueError as e:
+            raise Antwort(400, str(e)) from e
+
+    def kontakt_bestaetigen(self, kontakt_id: int, kanal: str | None, daten: dict) -> dict:
+        """„gesendet ✓“ für ein vorbereitetes Nachfassen. Das Anschreiben bestätigt „gesendet ✓“ über den Status (Reservierung, ADR-012).
+        Im Team: wer es vorbereitet hat oder der Inhaber. War das Inserat noch nicht kontaktiert, ist es der erste Kontakt: dann über den Status
+        „kontaktiert“ (Kontaktzeitpunkt, Team-Zuordnung, Konfliktprüfung wie bei „gesendet ✓“)."""
+        k = self.k
+        z = k.db.kontakt(kontakt_id)
+        if z is None:
+            raise Antwort(404, "Kontakt nicht gefunden")
+        if z["art"] != kontakte.NACHFASSEN:
+            raise Antwort(409, "Ein Anschreiben wird mit „gesendet ✓“ am Fahrzeug bestätigt")
+        if self.team_aktiv and self.nutzer.get("rolle") != "inhaber" and z["nutzer_id"] not in (None, self.nutzer.get("id")):
+            raise Antwort(403, "Nur wer das Nachfassen vorbereitet hat (oder der Inhaber) bestätigt es", grund="recht")
+        if z["verworfen_am"]:
+            raise Antwort(409, "Dieses Nachfassen wurde verworfen (nicht gesendet) – bitte neu kopieren")
+        ad_id = z["anzeige_id"]
+        erster = not z["bestaetigt_am"] and not k.db.con.execute("SELECT kontaktiert_am FROM anzeigen WHERE id=?", (ad_id,)).fetchone()[0]
+        if erster:
+            team = self.team_parameter(daten, ad_id)
+            vorher = self.vorheriger_halter(ad_id, team)
+            try:
+                k.db.setze_status(ad_id, "kontaktiert", kanal=kanal, kontakt_id=kontakt_id, **team)
+            except BearbeitungsKonflikt:
+                raise self.konflikt(ad_id, team.get("dubletten", ()), gruppe=team.get("erzwingen")) from None
+            self.logge_erzwingen(ad_id, vorher)
+        else:
+            k.db.bestaetige_kontakt(kontakt_id, self.nutzer.get("id") if self.team_aktiv else None, kanal)
+        k.veraendert()
+        namen = {n["id"]: n["name"] for n in k.team.nutzer_liste(nur_aktive=False)} if self.team_aktiv else {}
+        return {"ok": True, "kontakt": kontakte.als_json(k.db.kontakt(kontakt_id), namen)}
 
     def verfuegbarkeit_fahrzeug(self, anzeige_id: str) -> dict | None:
         """Abgeleitete Verfügbarkeit des Fahrzeugs über alle seine Inserate (bestätigte Dubletten, P3-02b/P3-04); None ohne v4-Gegenstück."""
@@ -936,6 +983,7 @@ class Anfrage:
         if p == "/api/status":
             if daten.get("status") not in STATUS:
                 raise Antwort(400, "unbekannter Status")
+            kanal = self.kanal(daten)
             ad_id = str(daten.get("id"))
             if self.team_aktiv and self.nutzer["rolle"] != "inhaber" and "gekauft" in (daten["status"], k.db.status_von(ad_id)):
                 # P1-15: ein Kauf entsteht über den Abschluss der Besichtigung (mit Protokoll) – direkt nur durch den Inhaber;
@@ -949,18 +997,18 @@ class Anfrage:
             uebernimmt = daten["status"] in IN_ARBEIT
             vorher = self.vorheriger_halter(ad_id, team) if uebernimmt else None
             try:
-                ok = k.db.setze_status(ad_id, daten["status"], text=text, betrag=betrag, **team)
+                ok = k.db.setze_status(ad_id, daten["status"], text=text, betrag=betrag, kanal=kanal, **team)
             except BearbeitungsKonflikt:
                 raise self.konflikt(ad_id, team["dubletten"] if uebernimmt else (), gruppe=team["erzwingen"]) from None
             self.logge_erzwingen(ad_id, vorher)
             k.veraendert()
             return self.json(200 if ok else 404, {"ok": ok})
         if p == "/api/nachgefasst":
-            ad_id = str(daten.get("id"))
+            ad_id, kanal = str(daten.get("id")), self.kanal(daten)
             team = {k_: v for k_, v in self.team_parameter(daten, ad_id).items() if k_ != "inhaber"}
             vorher = self.vorheriger_halter(ad_id, team) if text else None
             try:
-                ok = bool(text) and k.db.nachgefasst(ad_id, text, betrag, **team)
+                ok = bool(text) and k.db.nachgefasst(ad_id, text, betrag, kanal=kanal, **team)
             except BearbeitungsKonflikt:
                 raise self.konflikt(ad_id, team["dubletten"], gruppe=team["erzwingen"]) from None
             if ok:
@@ -969,6 +1017,8 @@ class Anfrage:
             return self.json(200 if ok else 400, {"ok": ok})
         if m := re.fullmatch(r"/api/bearbeitung/([\w-]+)/(uebernehmen|abgeben|zuweisen)", p):
             return self.json(200, getattr(self, f"bearbeitung_{m.group(2)}")(m.group(1), daten))
+        if m := re.fullmatch(r"/api/kontakt/(\d+)/bestaetigen", p):
+            return self.json(200, self.kontakt_bestaetigen(int(m.group(1)), self.kanal(daten), daten))
         if p == "/api/notiz":
             ok = k.db.setze_notiz(str(daten.get("id")), str(daten.get("notiz") or "")[:2000])
             k.veraendert()
