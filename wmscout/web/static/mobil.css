@@ -98,3 +98,4 @@ body.login{display:grid;place-items:center;min-height:100vh;padding:16px}
 .tag.verf{background:var(--rot-bg);color:var(--rot)} .tag.verf.reserviert,.tag.verf.vermutlich{background:var(--gelb-bg);color:var(--gelb)}
 .kontakte .kontakt{flex-wrap:wrap;gap:4px 8px;padding:6px 0;border-bottom:1px solid var(--linie,#e5e5e5)} .kontakte .kontakt:last-child{border-bottom:0}
 .kontakte .kontakt.offen>span:first-child{color:var(--gelb)}
+.tag.dq,.tag.dq-schwach{background:var(--gelb-bg);color:var(--gelb)} .dq-m.dq-widerspruch,.dq-m.dq-unplausibel{color:var(--rot)}

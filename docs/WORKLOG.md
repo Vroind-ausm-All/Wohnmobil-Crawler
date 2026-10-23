@@ -6,6 +6,25 @@ Wert „–“.
 
 ---
 
+## P3-08 – Datenqualität: Markierungen und Wert je Fahrzeug (23.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-data-engineer`, kleine Oberflächenteile); QA `qa-security-reviewer`;
+  Doku Orchestrator. Schließt P2-10 (Datenqualität je Quelle) mit ab.
+- **Geänderte Dateien:** `wmscout/normalisierung/qualitaet.py` (neu), `wmscout/bewertung/auswertung.py`, `wmscout/web/api.py`
+  (`datenqualitaet`, `GET /api/datenqualitaet`), `wmscout/ausgabe.py` (CSV), `scout.py` (`qualitaet`), `vorlagen/report.html`, `mobil.js`,
+  `mobil.css`, `sw.js` (wm-scout-13), Tests `test_datenqualitaet.py` (neu), `test_kontakte.py` (Versionsprüfung); Doku ADR-046, ROADMAP
+  (P3-07 DONE, P3-08 REVIEW, P2-10 DONE), ARCHITECTURE, README.
+- **Implementierte Funktionen:** siehe ADR-046. Keine Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. B1 (km aus Beschreibung, z. B. „5.000 km seit Inspektion“) → nur
+  Titel; B2 (Baujahr = Modelljahr) → erst ab > 1 Jahr; B3 (beliebiges Wort zwischen „EZ“ und Jahr) → enges Muster, TT.MM.JJJJ ergänzt;
+  B4 (quadratischer Aufwand bei Gruppen) → je Inserat einmal; B5 (ohne Datum als älter gewertet) → nicht verglichen; B6 Preisgrenze 750.000 €;
+  B7 Zahlen als Text. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** keine Wirkung auf Ampel, Max-EK oder Sperre (nur Anzeige); Schwellen im Code, nicht in
+  `config.yaml`.
+- **Bekannte Risiken:** Regeln an nachgebauten Texten geprüft; echte Anzeigentexte können weitere Falschmarkierungen zeigen.
+- **Nächster sinnvoller Schritt:** Abschluss Phase 3 (Abnahme durch den Betreiber), danach Freigabe Phase 4.
+
 ## P3-07 – Indizes nach Abfrageplan, Vorfilter der Vergleichsauswahl (23.10.2026) · Status: REVIEW
 
 - **Verantwortlicher Agent:** Orchestrator (Messung und Umsetzung im Stil von `scout-data-engineer`); QA `qa-security-reviewer`; Doku Orchestrator.

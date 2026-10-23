@@ -8,6 +8,7 @@ Altbestände (Betreiberfrage F7). Alles offline.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 
 import pytest
@@ -315,7 +316,8 @@ def test_oberflaeche_statisch():
     js, html = (STATIC / "mobil.js").read_text(encoding="utf-8"), (BASIS / "vorlagen" / "report.html").read_text(encoding="utf-8")
     assert "function kontaktZeilen" in js and "esc(x.zustand)" in js and "esc(x.kanal_text)" in js and "/bestaetigen" in js
     assert "function ladeKontakte" in html and "p.textContent = x.art_text" in html and "innerHTML" not in html.split("function ladeKontakte")[1][:1500]
-    assert "wm-scout-12" in (STATIC / "sw.js").read_text(encoding="utf-8")
+    sw = (STATIC / "sw.js").read_text(encoding="utf-8")
+    assert int(re.search(r"var VERSION = 'wm-scout-(\d+)'", sw).group(1)) >= 12 and "12: Kontaktverlauf" in sw
 
 
 # ---------------------------------------------------------------- 7. Schema 15 (F7: Altbestand konservativ übernommen)

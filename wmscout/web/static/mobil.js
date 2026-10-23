@@ -39,6 +39,16 @@
     if (!a) return "";
     return '<span class="tag anb ' + esc(a.typ) + (a.belegt ? "" : " unbelegt") + '" data-anbieter="">' + esc(a.text) + "</span>";
   }
+  // Datenqualität (P3-08): Abzeichen nur bei schwacher Datenlage; Markierungen im Detail; Text nur über esc()
+  function dqTag(f) {
+    return f.datenqualitaet && f.datenqualitaet.stufe === "schwach" ? '<span class="tag dq" data-dq="">Daten lückenhaft</span>' : "";
+  }
+  function dqKarte(f) {
+    var q = f.datenqualitaet;
+    if (!q) return "";
+    return '<div class="karte dq"><div class="zeile"><span class="leise">Datenqualität</span><span class="tag dq-' + esc(q.stufe) + '">' + esc(q.wert) + "/100 (" +
+      esc(q.stufe) + ")</span></div>" + q.markierungen.map(function (m) { return '<p class="leise dq-m dq-' + esc(m.art) + '">' + esc(m.text) + "</p>"; }).join("") + "</div>";
+  }
   function ampelTag(a) { return '<span class="tag ' + esc(a) + '">' + esc({ gruen: "Grün", gelb: "Gelb", rot: "Rot" }[a] || "–") + "</span>"; }
 
   function api(pfad, daten, nochmal) {
@@ -199,7 +209,7 @@
           return '<button class="knopf klein' + (w === wer ? " primaer" : "") + '" data-aktion="wer" data-wer="' + w + '" aria-pressed="' + (w === wer) + '">' + WER[w] + "</button>";
         }).join("") + "</div>" : "") +
         (l.length ? l.map(function (f) {
-          return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + teamBadge(f.team) + verfTag(f) + ampelTag(f.ampel) + "</div>" +
+          return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + teamBadge(f.team) + verfTag(f) + dqTag(f) + ampelTag(f.ampel) + "</div>" +
             '<p class="leise">EZ ' + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") + (f.entfernung_km !== null ? " · " + tsd(f.entfernung_km) + " km entfernt" : "") + "</p>" +
             hinweisZeilen(f) +
             (f.nachfassen ? '<p class="leise" style="color:var(--gelb)">Nachfassen: ' + esc(f.nachfassen) + "</p>" : "") +
@@ -285,6 +295,7 @@
         (f.anbieter ? '<div class="karte"><div class="zeile"><span class="leise">Anbieter</span>' + anbTag(f) + "</div>" +
           '<label>Anbieter korrigieren<select id="anbieter"><option value="">–</option><option value="privat">privat</option>' +
           '<option value="gewerblich">gewerblich</option><option value="unbekannt">unbekannt</option></select></label></div>' : "") +
+        dqKarte(f) +
         (t ? '<div class="karte team"><div class="zeile">' + (teamBadge(t) || '<span class="tb tb-frei">frei</span>') + '<span class="leise">' + esc(teamText(t)) + "</span></div>" +
           '<div class="reihe">' + (darf.uebernehmen && !t.mein ? '<button class="knopf klein" data-aktion="uebernehmen">Ich übernehme</button>' : "") +
           (darf.abgeben ? '<button class="knopf klein" data-aktion="abgeben">Abgeben</button>' : "") +

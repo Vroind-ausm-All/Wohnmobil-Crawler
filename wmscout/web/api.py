@@ -50,6 +50,7 @@ from ..bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids
 from ..verfuegbarkeit import fahrzeug_von, offline_nach_tagen
 from ..anbieter import einstufung
 from .. import kontakte
+from ..normalisierung.qualitaet import je_quelle
 from ..bewertung import kalkulation as kalk
 from ..bewertung.besichtigung import berechne, lade_katalog
 from ..datenbank import STATUS, Datenbank
@@ -232,7 +233,9 @@ def fahrzeug_kurz(z: dict, team: dict | None = None) -> dict:
             "verfuegbarkeit": a.get("verfuegbarkeit") or "unbekannt", "zuletzt_bestaetigt": a.get("zuletzt_bestaetigt"),
             "vermutlich_offline": bool(a.get("vermutlich_offline")), "verfuegbarkeit_text": a.get("verfuegbarkeit_text"),
             # Anbieterart mit Herkunft der Einstufung (P3-05): {typ, herkunft, belegt, text}
-            "anbieter": a.get("anbieter") or einstufung(a.get("gewerblich"), a.get("anbieter_herkunft"))}
+            "anbieter": a.get("anbieter") or einstufung(a.get("gewerblich"), a.get("anbieter_herkunft")),
+            # Datenqualität des Fahrzeugs (P3-08): {wert 0–100, stufe, markierungen[{code, art, text}], widersprueche} – nur Anzeige
+            "datenqualitaet": a.get("datenqualitaet")}
 
 
 def ics(b: dict, cfg: dict, link: str | None) -> str:
@@ -514,6 +517,8 @@ class Anfrage:
             return self.json(200, self.fahrzeuge())
         if m := re.fullmatch(r"/api/fahrzeug/([\w-]+)", p):
             return self.json(200, self.fahrzeug(m.group(1)))
+        if p == "/api/datenqualitaet":
+            return self.json(200, {"quellen": je_quelle(k.zeilen())})
         if m := re.fullmatch(r"/api/kontakte/([\w-]+)", p):
             if k.db.status_von(m.group(1)) is None:
                 raise Antwort(404, "Anzeige nicht gefunden")

@@ -71,6 +71,7 @@ from wmscout.schalter import (EingangDeaktiviert, QuelleNichtSchaltbar, bewerte_
                               quelle_zeile, setze_quelle)
 from wmscout.migrationen import MigrationsFehler
 from wmscout.normalisierung.fahrzeug import ergaenze_fahrzeug
+from wmscout.normalisierung.qualitaet import je_quelle
 from wmscout.sicherung import SicherungsFehler, einstellungen, sichere, sicherung_ordner, wiederherstellen
 from wmscout.bearbeitung import BearbeitungsKonflikt, ablauf_grenze, reservierung_tage
 from wmscout.team import ROLLEN, TeamSpeicher, lade_team_sicht
@@ -260,6 +261,20 @@ def cmd_quellen(cfg, db, args):
     print("\nEingänge – schalten in config.yaml bzw. config.local.yaml → eingaenge → <name> → aktiv: true|false")
     for name, an in eingaenge(cfg).items():
         print(f"  {name:<10}{'an' if an else 'aus'}")
+
+
+def cmd_qualitaet(cfg, db, args):
+    """Datenqualität je Quelle (P3-08, P2-10) über die aktuell bewerteten Inserate – nur lesen."""
+    zeilen = bewerte_alle(cfg, db, BASIS)
+    if not zeilen:
+        print("Keine aktuellen Inserate.")
+        return
+    print(f"{'Quelle':<14}{'Anzahl':>7}{'Preis':>7}{'EZ':>6}{'km':>6}{'Ort':>6}{'Anbieter':>9}{'Ø Wert':>8}{'Widerspr.':>10}")
+    for q in je_quelle(zeilen):
+        print(f"{q['quelle']:<14}{q['anzahl']:>7}{q['preis']:>7.0%}{q['ez']:>6.0%}{q['km']:>6.0%}{q['ort']:>6.0%}{q['anbieter_bekannt']:>9.0%}"
+              f"{q['mittel']:>8.0f}{q['mit_widerspruch']:>10}")
+    schwach = [z for z in zeilen if z["a"]["datenqualitaet"]["stufe"] == "schwach"]
+    print(f"\n{len(schwach)} von {len(zeilen)} Fahrzeugen mit schwacher Datenlage (Wert unter 50).")
 
 
 def cmd_report(cfg, db, args):
@@ -659,6 +674,7 @@ def main():
     md.add_argument("--name")
     md.add_argument("--url", help="nur anlegen: eigene Adresse, z. B. https://firma-b.example.de")
     md.add_argument("--monat", help="nur nutzung: JJJJ-MM")
+    sub.add_parser("qualitaet", help="Datenqualität je Quelle: Anteil mit Preis/EZ/km/Ort/Anbieter, Ø-Wert, Widersprüche (nur lesen)")
     du = sub.add_parser("dubletten", help="offene Dublettenvorschläge auflisten (nur lesen) oder im Einzelplatz entscheiden: "
                                           "bestaetigen ID1 ID2 | ablehnen ID1 ID2 | aufheben NUMMER")
     du.add_argument("aktion", nargs="?", choices=["bestaetigen", "ablehnen", "aufheben"], help="ohne Angabe: Vorschläge auflisten")
@@ -710,7 +726,7 @@ def main():
     {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "quellen": cmd_quellen, "rechne": cmd_rechne,
      "nutzer": cmd_nutzer, "status": cmd_status, "standort": cmd_standort,
      "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage, "audit": cmd_audit, "nutzung": cmd_nutzung,
-     "inserat": cmd_inserat, "dubletten": cmd_dubletten}[args.cmd](cfg, db, args)
+     "inserat": cmd_inserat, "dubletten": cmd_dubletten, "qualitaet": cmd_qualitaet}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":

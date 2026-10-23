@@ -4,6 +4,22 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P3-08 – Datenqualität: Markierungen und Wert je Fahrzeug (23.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2039 bestanden (vorher 1985), neu `test_datenqualitaet.py` (54) |
+| `ruff check .` | grün |
+| Regeln je Inserat: fehlend (7), unplausibel (8 Fälle + 7 Grenzwerte ohne Markierung), Widerspruch (10 Fälle) und 11 typische Texte ohne Falschmarkierung (Wartungs-km, Reichweite, Modelljahr, „Erstzulassung Basisfahrzeug“, Basisfahrzeug im Titel) | bestanden |
+| Fahrzeugsicht: fehlende Angabe im anderen Inserat, km-Rückgang, abweichende EZ, Toleranz, ohne Datum kein Vergleich; Wert/Stufen, nie negativ | bestanden |
+| Keine Wirkung: Bewertung, Sperre, Brief, „bereit“ und Hinweise gleich bei beliebigen Markierungen | bestanden |
+| Je Inserat nur einmal geprüft (Gruppe aus 6 bestätigten Dubletten) | bestanden |
+| API (`datenqualitaet`, `/api/datenqualitaet`; Mitarbeiter 200, Händler-Zugang 403), CSV-Spalten, CLI `scout.py qualitaet`, Escaping in der Desktop-Ausgabe | bestanden |
+| Plausibilität auf den 60 nachgebauten Inseraten: keine Markierung (keine Falschmeldungen) | geprüft |
+| Browser (Orchestrator, Chromium über Playwright): Desktop 1280 – Abzeichen „Daten lückenhaft“, 30/100 mit 4 Markierungen, HTML im Titel nicht ausgeführt; Handy 390 – Karte und Listen-Abzeichen; 0 JS-Fehler | bestanden (vor der Korrekturrunde) |
+| QA (eine Runde, vor der Korrekturrunde: 68 bestanden, ~45 eigene Proben, 5.000 Inserate in 10er-Gruppen 10,5 s) | Freigabe mit Auflagen – B1–B7 behoben; Korrekturen **nicht** erneut von der QA geprüft |
+| Echte Anzeigentexte, Windows-CI | nicht geprüft (CI folgt im PR) |
+
 ## P3-07 – Indizes nach Abfrageplan, Vorfilter der Vergleichsauswahl (23.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |
