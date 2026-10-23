@@ -786,3 +786,33 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Folgen / offen:** Reservierungs-/Verkauft-Kennzeichen der Portale selbst (z. B. Badges auf der Detailseite) werden von den Parsern
   noch nicht gelesen (Quellenarbeit). Englisch „sold“ wird nicht erkannt. Reihenfolgeschutz für Preis/Titel bei `api`/`stream` weiter
   offen (ADR-041).
+
+## ADR-043 – Anbieterart mit Herkunft der Einstufung; unbekannte Anbieter nicht in der Vergleichsbasis (Schema v14) · gilt (23.10.2026)
+
+* **Kontext:** P3-05 und P2-05d. `anzeigen.gewerblich` (0/1/NULL) sagte nicht, worauf die Einstufung beruht: ein PRO-Kennzeichen, ein
+  Privatfilter der Suche, nur das Fehlen eines Kennzeichens oder die Angabe des Teams. Eine Trefferliste ohne PRO-Kennzeichen setzte einen
+  bekannten Händler wieder auf „privat“; Angebote mit unbekanntem Anbieter (Mails) zählten im Rechner wie Privatangebote.
+* **Entscheidung:**
+  1. Neue Spalte `anzeigen.anbieter_herkunft` (Schema v14), Werte stärkste zuerst: `korrektur` (Team in der App), `nutzer` (Auswahl beim Text-Import),
+     `anzeige` (PRO/Händlerprofil, Verkäuferkasten „Privater Nutzer“/„Gewerblicher Nutzer“, mobile.de-Anbieterkasten, „MwSt. ausweisbar“),
+     `suchfilter` (Kleinanzeigen-Suche mit `/anbieter:privat` ohne Händlerkennzeichen), `ohne_kennzeichen` (nur kein Kennzeichen gefunden),
+     `altbestand` (vor v14). `gewerblich` bleibt der Wert; Regeln in `wmscout/anbieter.py` (ohne Datenbank testbar).
+  2. Übernahme: „unbekannt“ ersetzt nie etwas; aus „gewerblich“ wird nie automatisch „privat“ (auch nicht durch „privat“ im Text-Import –
+     wie bisher); ein Händlerbeleg ersetzt jedes „privat“, auch die Auswahl beim Text-Import (QA B1: lieber zu vorsichtig); sonst ersetzt eine
+     Angabe mit mindestens gleich starker Herkunft. Die Korrektur in der App (`POST /api/anzeige/<id>/anbieter`, alle Team-Mitglieder, im
+     Team-Betrieb protokolliert) setzt jeden Wert und bleibt gegen jeden Import stehen; nur ein Händlerbeleg ändert ein vom Team gesetztes
+     „unbekannt“ (QA B2: der nächste Suchlauf setzt es nicht still zurück). Als Beleg „privat“ auf der Kleinanzeigen-Detailseite gelten nur die
+     Wendungen „Privater Nutzer“/„Privatanbieter“, nicht jedes „privat“ im Namen (QA B4).
+  3. Quellen ohne Herkunftsangabe: „gewerblich“ gilt als Angabe der Anzeige, „privat“ nur als `ohne_kennzeichen` (lieber zu schwach).
+  4. Rechner (P2-05d): Vergleichsbasis „Marktwert privat“ nur aus Privatangeboten; `gewerblich` ausdrücklich NULL zählt nicht mit
+     (`rechner.privatangebot`). Fehlt der Schlüssel ganz (gespeicherte Kalkulations-Eingaben lassen NULL weg), gilt wie bisher „privat“ –
+     alte Kalkulationen rechnen unverändert nach; daher keine neue Kalkulationsversion.
+  5. Altbestand (Betreiberfrage F6, konservativ vorentschieden): Werte bleiben, Herkunft `altbestand`; kein Hinweis am Fahrzeug.
+  6. Anzeige: Desktop, Handy (`anbieter` in der API: Typ, Herkunft, belegt, Text) und CSV („Anbieter“, „Anbieter-Herkunft“).
+     Rückweg: Sicherung `vor-v14`.
+* **Alternativen:** neue Spalte `anbieter_typ` statt `gewerblich` (größere Migration ohne fachlichen Gewinn); Altbestand als „unbekannt“
+  (hätte fast alle Vergleichsangebote entfernt und jede alte Anzeige mit Hinweis versehen); unbekannte Anbieter mit halbem Gewicht in
+  der Vergleichsbasis (falsche Genauigkeit).
+* **Folgen / offen:** Schwache Einstufungen (`ohne_kennzeichen`, `altbestand`) tragen keinen Hinweis; ob sie einen bekommen sollen, ist
+  Betreiberentscheidung. Eine gespeicherte Suchseite zeigt ihren Privatfilter nicht an – Treffer daraus gelten als `ohne_kennzeichen`.
+  Fahrzeugweite Anbieterart über mehrere Inserate wird nicht abgeleitet.

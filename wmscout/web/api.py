@@ -48,6 +48,7 @@ from ..benachrichtigung import WhatsAppCloud, whatsapp_link
 from ..bewertung.anschreiben import euro, tsd
 from ..bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids
 from ..verfuegbarkeit import fahrzeug_von, offline_nach_tagen
+from ..anbieter import einstufung
 from ..bewertung import kalkulation as kalk
 from ..bewertung.besichtigung import berechne, lade_katalog
 from ..datenbank import STATUS, Datenbank
@@ -228,7 +229,9 @@ def fahrzeug_kurz(z: dict, team: dict | None = None) -> dict:
             "sperre": z["sperre"], "hinweise": z["hinweise"], "neu": z["neu"], "team": team,
             # Verfügbarkeit des Inserats (Markt), getrennt vom Ankaufsstatus; „vermutlich offline“ ist abgeleitet, nicht gespeichert (P3-04)
             "verfuegbarkeit": a.get("verfuegbarkeit") or "unbekannt", "zuletzt_bestaetigt": a.get("zuletzt_bestaetigt"),
-            "vermutlich_offline": bool(a.get("vermutlich_offline")), "verfuegbarkeit_text": a.get("verfuegbarkeit_text")}
+            "vermutlich_offline": bool(a.get("vermutlich_offline")), "verfuegbarkeit_text": a.get("verfuegbarkeit_text"),
+            # Anbieterart mit Herkunft der Einstufung (P3-05): {typ, herkunft, belegt, text}
+            "anbieter": a.get("anbieter") or einstufung(a.get("gewerblich"), a.get("anbieter_herkunft"))}
 
 
 def ics(b: dict, cfg: dict, link: str | None) -> str:
@@ -970,6 +973,17 @@ class Anfrage:
             ok = k.db.setze_notiz(str(daten.get("id")), str(daten.get("notiz") or "")[:2000])
             k.veraendert()
             return self.json(200 if ok else 404, {"ok": ok})
+        if m := re.fullmatch(r"/api/anzeige/([\w-]+)/anbieter", p):
+            # Korrektur der Anbieterart durch das Team (P3-05): ersetzt jede Einstufung, Herkunft „vom Team angegeben“; protokolliert (Audit)
+            wert = daten.get("anbieter")
+            if wert not in (None, "", *ANBIETER):
+                raise Antwort(400, "anbieter muss „privat“, „gewerblich“ oder leer (unbekannt) sein")
+            gewerblich = ANBIETER.get(wert or "")
+            if not k.db.setze_anbieter(m.group(1), gewerblich):
+                raise Antwort(404, "Anzeige nicht gefunden")
+            k.veraendert()
+            log.info("Anbieter von Anzeige %s auf „%s“ gesetzt (%s)", m.group(1), wert or "unbekannt", self.nutzer.get("name"))
+            return self.json(200, {"ok": True, "anbieter": einstufung(gewerblich, "korrektur")})
         if p == "/api/suchlauf":
             if self.team_aktiv:
                 self.nur_inhaber()                     # P1-15: Suchläufe und Import steuert der Inhaber

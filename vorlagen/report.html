@@ -57,6 +57,7 @@ kbd{font:12px ui-monospace,monospace;padding:1px 5px;border:1px solid var(--line
 .tag.gruen{background:var(--gruen-bg);color:var(--gruen)} .tag.gelb{background:var(--gelb-bg);color:var(--gelb)}
 .tag.rot{background:var(--rot-bg);color:var(--rot)} .tag.neu{background:var(--akzent);color:var(--akzent-ink)}
 .tag.status{background:var(--ink);color:var(--card)}
+.tag.anb.gewerblich{background:var(--rot-bg);color:var(--rot)} .tag.anb.unbekannt,.tag.anb.unbelegt{background:var(--gelb-bg);color:var(--gelb)}
 .tag.verf{background:var(--rot-bg);color:var(--rot)} .tag.verf.reserviert,.tag.verf.vermutlich{background:var(--gelb-bg);color:var(--gelb)}
 .bar label.verfbox{font-size:14px;display:flex;align-items:center;gap:6px;cursor:pointer}
 .streif{height:4px;background:var(--line)}
@@ -309,6 +310,9 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
         <p class="meta">{{ b.art }} · EZ {{ a.ez_jahr or '?' }}{% if b.alter is not none %} ({{ b.alter }} J.){% endif %} · {{ (a.km | tsd ~ ' km') if a.km else 'km ?' }} · {{ a.ort }} · Wunschpreis {{ a.preis | euro }}{{ ' VB' if a.vb }}</p>
         <p class="meta">Anzeige: „{{ a.titel }}“{% if a.entfernung_km is not none %} · {{ a.entfernung_km | tsd }} km entfernt{% endif %} · {{ 'seit heute online' if not a.tage_online else 'seit ' ~ a.tage_online ~ (' Tag' if a.tage_online == 1 else ' Tagen') ~ ' online' }}{% if a.duplikat %} · <span class="warn">{{ a.duplikat }}</span>{% endif %}</p>
         {% if a.verfuegbarkeit_text %}<p class="meta">Verfügbarkeit: <span class="tag verf {{ 'vermutlich' if a.vermutlich_offline else a.verfuegbarkeit }}">{{ a.verfuegbarkeit_text }}</span>{% if a.zuletzt_bestaetigt %} · zuletzt bestätigt {{ a.zuletzt_bestaetigt[:10] }}{% endif %}</p>{% endif %}
+        {% if a.anbieter %}<p class="meta">Anbieter: <span class="tag anb {{ a.anbieter.typ }}{{ '' if a.anbieter.belegt else ' unbelegt' }}" data-anbieter>{{ a.anbieter.text }}</span>
+          <select data-anbieter-setzen aria-label="Anbieter korrigieren" hidden><option value="">korrigieren ▾</option><option value="privat">privat</option>
+            <option value="gewerblich">gewerblich</option><option value="unbekannt">unbekannt</option></select></p>{% endif %}
         {% if team %}<div class="teamzeile"><span class="tbbox" data-teambadge></span><span class="meta" data-teaminfo></span>
           <button class="btn" data-teamaktion="uebernehmen" hidden>Ich übernehme</button><button class="btn" data-teamaktion="abgeben" hidden>Abgeben</button>
           {% if team.ich.rolle == 'inhaber' %}<button class="btn" data-teamaktion="erzwingen" hidden>Übernahme erzwingen</button>
@@ -452,6 +456,17 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     if(TEAM_AN) zeichneKarteTeam(id);
   }
   // Fehler tragen status (HTTP), grund (csrf|recht|zugriff|konflikt|belegt) und daten (ganze Antwort, bei 409 mit „team“)
+  // Anbieterart korrigieren (P3-05): gilt sofort für Sperre, Hinweise und Vergleichsbasis – sichtbar nach dem Neuladen der Liste
+  function anbieterSetzen(sel){
+    var sec = sel.closest('section'), wert = sel.value === 'unbekannt' ? '' : sel.value;
+    if(!sel.value) return;
+    post('/api/anzeige/' + encodeURIComponent(sec.dataset.id) + '/anbieter', {anbieter: wert || null}).then(function(d){
+      var tag = sec.querySelector('[data-anbieter]');
+      if(tag && d.anbieter){ tag.textContent = d.anbieter.text; tag.className = 'tag anb ' + d.anbieter.typ; }
+      toast('Anbieter gespeichert – Bewertung und Sperre gelten nach dem Neuladen');
+    }, function(err){ toast(err.message || 'Anbieter konnte nicht gespeichert werden'); }).then(function(){ sel.value = ''; });
+  }
+  if(APP) document.querySelectorAll('[data-anbieter-setzen]').forEach(function(s){ s.hidden = false; });
   function post(url, daten){
     return fetch(url, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','X-Scout-Token':APP.token}, body:JSON.stringify(daten)})
       .then(function(r){
@@ -645,6 +660,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
   dlg.addEventListener('input', function(e){ if(e.target.matches('[data-gegen]')) bewerteGegen(e.target.closest('section')); });
   dlg.addEventListener('change', function(e){
     if(TEAM_AN && e.target.matches('[data-zuweisen]')){ zuweisen(e.target.closest('section').dataset.id, e.target); return; }
+    if(APP && e.target.matches('[data-anbieter-setzen]')){ anbieterSetzen(e.target); return; }
     if(!APP || !e.target.matches('[data-notiz]')) return;
     post('/api/notiz', {id:e.target.closest('section').dataset.id, notiz:e.target.value})
       .then(function(){ toast('Notiz gespeichert'); }, function(){ toast('Notiz konnte nicht gespeichert werden'); });

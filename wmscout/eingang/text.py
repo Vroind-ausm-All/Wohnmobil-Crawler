@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from typing import NamedTuple
 from urllib.parse import urlsplit
 
+from ..anbieter import NUTZER
 from ..domaene import KLEINANZEIGEN, MOBILEDE, VORLAEUFIG
 from ..normalisierung.fahrzeug import ist_basismarke, marke_aus_text, normalisiere_marke
 from ..quellen.basis import Inserat
@@ -493,7 +494,8 @@ def lese_text(url: str, text: str, anbieter: str | None, empfangen_am: datetime,
         status = "text" if wert is not None else "unsicher" if text_preis.betraege else "fehlt"
     inserat = Inserat(quelle=adresse.plattform, anzeigen_id=adresse.anzeigen_id, url=adresse.url,
                       titel=titel or f"Anzeige {adresse.anzeigen_id.removeprefix('md-')} (Titel fehlt)", preis=wert, vb=ist_vb, ort=ort, km=km,
-                      ez_jahr=ez, marke=marke, kurzbeschreibung=kurz or None, beschreibung=beschreibung or None, gewerblich=ANBIETER.get(anbieter or ""))
+                      ez_jahr=ez, marke=marke, kurzbeschreibung=kurz or None, beschreibung=beschreibung or None, gewerblich=ANBIETER.get(anbieter or ""),
+                      anbieter_herkunft=NUTZER if anbieter else None)
 
     hinweise = []
     fehlt = [name for name, wert in (("Preis", wert), ("Kilometerstand", km), ("Erstzulassung", ez), ("PLZ/Ort", ort), ("Titel", titel)) if wert is None]

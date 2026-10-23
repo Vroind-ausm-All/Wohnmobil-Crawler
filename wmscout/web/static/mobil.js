@@ -33,6 +33,12 @@
     if (!f.verfuegbarkeit_text) return "";
     return '<span class="tag verf ' + esc(f.vermutlich_offline ? "vermutlich" : f.verfuegbarkeit) + '" data-verfuegbarkeit="">' + esc(f.verfuegbarkeit_text) + "</span>";
   }
+  // Anbieterart mit Herkunft (P3-05): gewerblich rot, unbekannt/unbelegt gelb; Text nur über esc()
+  function anbTag(f) {
+    var a = f.anbieter;
+    if (!a) return "";
+    return '<span class="tag anb ' + esc(a.typ) + (a.belegt ? "" : " unbelegt") + '" data-anbieter="">' + esc(a.text) + "</span>";
+  }
   function ampelTag(a) { return '<span class="tag ' + esc(a) + '">' + esc({ gruen: "Grün", gelb: "Gelb", rot: "Rot" }[a] || "–") + "</span>"; }
 
   function api(pfad, daten, nochmal) {
@@ -265,6 +271,9 @@
         '<p class="leise">Marktniveau ' + eur(b.marktwert_angebote) + " · Sicherheit " + esc(b.sicherheit) + "</p>" +
         '<a class="knopf klein" href="' + link(f.url) + '" target="_blank" rel="noopener">Anzeige öffnen ↗</a></div>' +
         hinweisZeilen(f) +
+        (f.anbieter ? '<div class="karte"><div class="zeile"><span class="leise">Anbieter</span>' + anbTag(f) + "</div>" +
+          '<label>Anbieter korrigieren<select id="anbieter"><option value="">–</option><option value="privat">privat</option>' +
+          '<option value="gewerblich">gewerblich</option><option value="unbekannt">unbekannt</option></select></label></div>' : "") +
         (t ? '<div class="karte team"><div class="zeile">' + (teamBadge(t) || '<span class="tb tb-frei">frei</span>') + '<span class="leise">' + esc(teamText(t)) + "</span></div>" +
           '<div class="reihe">' + (darf.uebernehmen && !t.mein ? '<button class="knopf klein" data-aktion="uebernehmen">Ich übernehme</button>' : "") +
           (darf.abgeben ? '<button class="knopf klein" data-aktion="abgeben">Abgeben</button>' : "") +
@@ -291,6 +300,14 @@
         '<button class="knopf primaer voll" style="margin-top:12px" data-aktion="planen">Besichtigung planen</button></div>';
       inhalt.dataset.id = f.id; inhalt.dataset.url = f.url; inhalt.dataset.quelle = f.quelle || ""; inhalt.dataset.erst = f.brief_betrag || "";
       inhalt.dataset.nfbetrag = f.nachfass_betrag || "";
+      var anb = document.getElementById("anbieter");
+      if (anb) anb.onchange = function (e) {
+        var v = e.target.value;
+        if (!v) return;
+        api("/api/anzeige/" + encodeURIComponent(f.id) + "/anbieter", { anbieter: v === "unbekannt" ? null : v })
+          .then(function () { toast("Anbieter gespeichert"); return fahrzeug(f.id); })
+          .catch(function (err) { toast(err.message || "Anbieter konnte nicht gespeichert werden"); e.target.value = ""; });
+      };
       document.getElementById("notiz").onchange = function (e) { api("/api/notiz", { id: f.id, notiz: e.target.value }).then(function () { toast("Notiz gespeichert"); }); };
       dublettenAnzeigen(f.id);
     });

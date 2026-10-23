@@ -639,6 +639,11 @@ def test_oberflaeche_statisch():
 
 
 # ---------------------------------------------------------------- 9. Schema 13: Migration gegen Altbestände jeder Vorversion
+def bis_13(monkeypatch):
+    """Schritt 13 ist hier der letzte bekannte Schritt: die Tests prüfen ihn so, wie er zu seiner Zeit lief (Schritt 14 prüft tests/test_anbieter.py)."""
+    _alt_schritte(monkeypatch, 13)
+
+
 def baue_v12(pfad, monkeypatch, tmp_path):
     baue_v11(pfad, monkeypatch, tmp_path)
     with monkeypatch.context() as m:
@@ -666,6 +671,7 @@ def zustand13(pfad):
 
 @pytest.mark.parametrize("art", ["v1", "v2", "v10", "v11", "v12"])
 def test_migration_auf_13_ohne_datenverlust(tmp_path, monkeypatch, art):
+    bis_13(monkeypatch)
     pfad, ziel = tmp_path / "alt.sqlite", tmp_path / "sich"
     if art == "v11":
         baue_v11(pfad, monkeypatch, tmp_path)
@@ -699,6 +705,7 @@ def test_migration_auf_13_ohne_datenverlust(tmp_path, monkeypatch, art):
 
 
 def test_rueckfuellung_zuletzt_bestaetigt(tmp_path, monkeypatch):
+    bis_13(monkeypatch)
     pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
     baue_v12(pfad, monkeypatch, tmp_path)
     mit_zeitstempeln(pfad)
@@ -716,6 +723,7 @@ def test_rueckfuellung_zuletzt_bestaetigt(tmp_path, monkeypatch):
 
 
 def test_schritt_13_zweite_ausfuehrung_aendert_nichts(tmp_path, monkeypatch):
+    bis_13(monkeypatch)
     pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
     baue_v12(pfad, monkeypatch, tmp_path)
     mit_zeitstempeln(pfad)
@@ -740,6 +748,7 @@ def _noch_12(pfad, vorher):
 
 
 def test_fehler_im_schritt_13_rollt_zurueck_sicherung_bleibt_dann_gelingt_es(tmp_path, monkeypatch):
+    bis_13(monkeypatch)
     pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
     baue_v12(pfad, monkeypatch, tmp_path)
     mit_zeitstempeln(pfad)
@@ -760,6 +769,7 @@ def test_fehler_im_schritt_13_rollt_zurueck_sicherung_bleibt_dann_gelingt_es(tmp
 
 
 def test_verletzte_invariante_in_schritt_13_rollt_zurueck(tmp_path, monkeypatch):
+    bis_13(monkeypatch)
     pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
     baue_v12(pfad, monkeypatch, tmp_path)
     vorher, echt, aufrufe = _abbild(pfad), migrationen._zaehle_v11, []
@@ -779,6 +789,7 @@ def test_verletzte_invariante_in_schritt_13_rollt_zurueck(tmp_path, monkeypatch)
 
 def test_geaenderter_wert_in_schritt_13_wird_bemerkt(tmp_path, monkeypatch):
     """Die Inhaltsprüfung des Schritts bemerkt auch eine Änderung bestehender Inseratsspalten (nicht nur die Zeilenzahl)."""
+    bis_13(monkeypatch)
     pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
     baue_v12(pfad, monkeypatch, tmp_path)
     vorher, echt, aufrufe = _abbild(pfad), migrationen._zaehle_v11, []
@@ -796,6 +807,7 @@ def test_geaenderter_wert_in_schritt_13_wird_bemerkt(tmp_path, monkeypatch):
 
 
 def test_sicherung_vor_v13_laesst_sich_zurueckspielen_und_erneut_migrieren(tmp_path, monkeypatch):
+    bis_13(monkeypatch)
     pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
     baue_v12(pfad, monkeypatch, tmp_path)
     mit_zeitstempeln(pfad)
@@ -810,7 +822,7 @@ def test_sicherung_vor_v13_laesst_sich_zurueckspielen_und_erneut_migrieren(tmp_p
 
 def test_neue_datenbank_hat_die_spalte_und_den_index(tmp_path):
     d = Datenbank(str(tmp_path / "neu.sqlite"))
-    assert lese_version(tmp_path / "neu.sqlite") == 13
+    assert lese_version(tmp_path / "neu.sqlite") >= 13
     assert "zuletzt_bestaetigt" in [r[1] for r in d.con.execute("PRAGMA table_info(inserate)")]
     assert d.con.execute("SELECT name FROM sqlite_master WHERE name='idx_zuordnungen_entscheidung'").fetchone()
 
@@ -835,6 +847,7 @@ ABBRUCHSTELLEN = 24                  # ``con.execute``-Aufrufe in Schritt 13 (de
 
 @pytest.mark.parametrize("n", range(1, ABBRUCHSTELLEN + 2))
 def test_abbruch_mitten_im_schritt_13_rollt_alles_zurueck(tmp_path, monkeypatch, n):
+    bis_13(monkeypatch)
     pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
     baue_v12(pfad, monkeypatch, tmp_path)
     mit_zeitstempeln(pfad)
@@ -860,6 +873,7 @@ def test_abbruch_mitten_im_schritt_13_rollt_alles_zurueck(tmp_path, monkeypatch,
 
 
 def test_abbruchstellen_decken_alle_aufrufe_von_schritt_13_ab(tmp_path, monkeypatch):
+    bis_13(monkeypatch)
     pfad = tmp_path / "db.sqlite"
     baue_v12(pfad, monkeypatch, tmp_path)
     mit_zeitstempeln(pfad)

@@ -118,6 +118,14 @@ def gewichtetes_quantil(werte: list[tuple[float, float]], q: float) -> float:
     return werte[-1][0]
 
 
+
+def privatangebot(b: dict) -> bool:
+    """Gehört ``b`` in die Vergleichsbasis „Marktwert privat“? Gewerbliche und Angebote mit unbekanntem Anbieter (Schlüssel ``gewerblich`` mit
+    None) nicht. Fehlt der Schlüssel ganz (gespeicherte Kalkulations-Eingaben, die unbekannte Werte weglassen; ältere Aufrufer), gilt wie
+    bisher „privat“ – so rechnen alte Kalkulationen unverändert nach."""
+    return not b.get("gewerblich") and not ("gewerblich" in b and b["gewerblich"] is None)
+
+
 class Rechner:
     def __init__(self, cfg: dict, stichtag: datetime | None = None):
         """``stichtag`` (lokale Zeit): Alter und „alte Anzeige“ relativ zu diesem Zeitpunkt statt zu jetzt – damit eine gespeicherte
@@ -194,6 +202,7 @@ class Rechner:
         return erg
 
     # ---------- Vergleichsbasis ----------
+    # Nur Privatangebote; ein Angebot mit unbekanntem Anbieter (``gewerblich`` ausdrücklich None) zählt nicht als privat (P2-05d, ADR-043)
     def vergleiche(self, a: dict, alle: list[dict]) -> list[tuple[float, float, bool]]:
         """[(Preis ÷ Referenzwert, Gewicht, gleiche Marke)] für vergleichbare Angebote."""
         jt, kt = self.c["vergleich_jahre_toleranz"], self.c["vergleich_km_toleranz"]
@@ -201,7 +210,7 @@ class Rechner:
         alt_grenze = ((self.stichtag or datetime.now()) - timedelta(days=180)).isoformat(timespec="seconds")
         erg = []
         for b in alle:
-            if b.get("id") == a.get("id") or not b.get("preis") or b["preis"] < 1000 or b.get("gewerblich"):
+            if b.get("id") == a.get("id") or not b.get("preis") or b["preis"] < 1000 or not privatangebot(b):
                 continue
             if not b.get("ez_jahr") or abs(b["ez_jahr"] - a["ez_jahr"]) > jt or self.art(b) != art:
                 continue

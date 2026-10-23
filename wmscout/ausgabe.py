@@ -7,6 +7,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
+from .anbieter import HERKUNFT_TEXT, einstufung
 from .bewertung.anschreiben import euro, tsd
 from .bearbeitung import IN_ARBEIT
 from .domaene import STATUS
@@ -52,6 +53,12 @@ def _verfuegbarkeit_zelle(a: dict) -> str:
     return "vermutlich offline" if a.get("vermutlich_offline") else a.get("verfuegbarkeit") or "unbekannt"
 
 
+def _anbieter_zellen(a: dict) -> list[str]:
+    """CSV: privat / gewerblich / unbekannt und die Herkunft der Einstufung (P3-05)."""
+    e = a.get("anbieter") or einstufung(a.get("gewerblich"), a.get("anbieter_herkunft"))
+    return [e["typ"], HERKUNFT_TEXT.get(e["herkunft"], "")]
+
+
 def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None = None, team=None) -> dict:
     """``team``: ``TeamSicht`` (bearbeitung.py) oder ``None`` – dann bleiben die Team-Spalten der CSV leer."""
     ordner = basis / cfg["ausgabe"]["ordner"]
@@ -66,7 +73,8 @@ def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | 
                     "Marktniveau", "Spanne von", "Spanne bis", "Sicherheit", "Anz. Vergleiche", "Marktwert privat",
                     "Händler-VK", "Kosten", "Ziel-Marge", "Max-EK", "Erstangebot", "Erstangebot % Marktwert",
                     "Gewinn bei Angebotspreis", "Wertfaktoren", "Sperrgrund", "Hinweise", "Status", "Nachfassen", "Kontaktiert am",
-                    "Verfügbarkeit", "Zuletzt bestätigt", "Erstmals gesehen", "URL", "Bearbeiter", "Übernommen am", "Kontaktiert von"])
+                    "Verfügbarkeit", "Zuletzt bestätigt", "Anbieter", "Anbieter-Herkunft", "Erstmals gesehen", "URL", "Bearbeiter", "Übernommen am",
+                    "Kontaktiert von"])
         for z in sorted(zeilen, key=lambda z: z["b"].verhaeltnis or 99):
             a, b = z["a"], z["b"]
             t = team.objekt(z) if team else None
@@ -78,7 +86,7 @@ def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | 
                         b.vergleich_anzahl, *betraege[:6], f"{b.fair_anteil:.0%}" if b.fair_anteil else "", betraege[6],
                         ", ".join(f"{n} {w:+.1%}" for n, w in b.wertfaktoren.items()), z["sperre"] or "",
                         " | ".join(z.get("hinweise") or []), a["status"], z["nachfassen"] or "", a.get("kontaktiert_am") or "",
-                        _verfuegbarkeit_zelle(a), a.get("zuletzt_bestaetigt") or "", a["erstmals_gesehen"], a["url"],
+                        _verfuegbarkeit_zelle(a), a.get("zuletzt_bestaetigt") or "", *_anbieter_zellen(a), a["erstmals_gesehen"], a["url"],
                         *_team_spalten(t)])
 
     # --- Anschreiben als Textdateien ---

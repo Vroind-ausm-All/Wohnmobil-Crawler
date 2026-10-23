@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from ..domaene import STATUS, UNBEKANNT, import_art
 from ..dubletten import Wirkung, lade_wirkung, wende_an
+from ..anbieter import einstufung
 from ..normalisierung.fahrzeug import arten_im_text, ergaenze_fahrzeug
 from ..normalisierung.geo import entfernung_km
 from ..verfuegbarkeit import ergaenze as ergaenze_verfuegbarkeit
@@ -191,7 +192,9 @@ def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[d
     tage = offline_nach_tagen(cfg)
 
     def angereichert(r) -> dict:                      # Fahrzeugmerkmale + Verfügbarkeit (wirksam, „vermutlich offline“ beim Lesen abgeleitet)
-        return ergaenze_verfuegbarkeit(ergaenze_fahrzeug(dict(r)), jetzt, tage)
+        a = ergaenze_verfuegbarkeit(ergaenze_fahrzeug(dict(r)), jetzt, tage)
+        a["anbieter"] = einstufung(a.get("gewerblich"), a.get("anbieter_herkunft"))     # Anbieterart mit Herkunft (P3-05)
+        return a
     alle = [angereichert(r) for r in mit_preis]
     nach_id = {a["id"]: a for a in alle}
     heuristisch = finde_duplikate(alle)

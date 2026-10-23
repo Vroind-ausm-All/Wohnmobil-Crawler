@@ -112,7 +112,7 @@ def test_v4_altdaten_und_ankauf_werden_nicht_veraendert(tmp_path):
     alt = zeilen(db_pfad, "anzeigen")
     assert migriere(db_pfad, tmp_path / "backups") == list(range(3, AKTUELLE_VERSION + 1))
     assert lese_version(db_pfad) == AKTUELLE_VERSION
-    assert zeilen(db_pfad, "anzeigen") == alt
+    assert [z[:len(alt[0])] for z in zeilen(db_pfad, "anzeigen")] == alt      # spätere Schritte ergänzen nur Spalten (v14: anbieter_herkunft)
     assert len(zeilen(db_pfad, "inserate")) == len(alt)
     assert len(sicherungen(tmp_path / "backups", "alt")) == 1
     assert migriere(db_pfad, tmp_path / "backups") == []

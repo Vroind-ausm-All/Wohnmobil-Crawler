@@ -240,8 +240,8 @@ In der mobile.de-Suche den Filter **„Privatanbieter“** setzen (linke Spalte 
 Verkäufer; jede Suchseite enthält höchstens 20 Treffer, weitere Seiten einzeln speichern. Die Treffer tragen als Nummer `md-<mobile.de-ID>`.
 Gesponserte Plätze („Gesponsert“) werden mitgelesen, weil es normale Anzeigen sind. Gewerbliche Anbieter („Gewerbe“, Händler mit
 Namen) werden als gewerblich erkannt und – wie bei Kleinanzeigen – nicht zum Anschreiben vorgeschlagen. Fehlt bei einem Treffer der
-Anbieterkasten, ist der Anbieter **unbekannt** (nicht „privat“): das Fahrzeug trägt den Hinweis „Anbieter unbekannt“, und beim Einlesen
-wird die Zahl gemeldet (über die Hälfte der Treffer: Seitenlayout vermutlich geändert). Es werden nur **Wohnmobile und Wohnwagen**
+Anbieterkasten, ist der Anbieter **unbekannt** (nicht „privat“): das Fahrzeug trägt den Hinweis „Anbieter unbekannt“, zählt nicht zur
+Vergleichsbasis des Rechners, und beim Einlesen wird die Zahl gemeldet (über die Hälfte der Treffer: Seitenlayout vermutlich geändert). Es werden nur **Wohnmobile und Wohnwagen**
 eingelesen; Pkw-Treffer oder -Anzeigen (z. B. Kategorie „Limousine“) landen mit einer Meldung in `import/nicht_erkannt/` bzw. werden
 übersprungen und gemeldet. **Orte im Ausland** („SE-123 45 Ort“, „FR-75001 Paris“): keine Entfernung, Ampel höchstens gelb, Brief ohne Betrag
 und der Hinweis „Ausland – Abholung, Überführung und Zulassung prüfen“; mit `max_entfernung_km` > 0 werden sie nicht angeschrieben.

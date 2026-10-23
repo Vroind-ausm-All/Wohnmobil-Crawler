@@ -4,6 +4,22 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P3-05 – Privat/Händler mit Herkunft der Einstufung (23.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 1937 bestanden (vorher 1863), neu `test_anbieter.py` (74) |
+| `ruff check .` | grün |
+| Übernahmeregeln (33 Fälle): unbekannt ersetzt nie; gewerblich → privat nie automatisch; Händlerbeleg schlägt „privat“ aus dem Text-Import (QA B1); Korrektur bleibt gegen Importe, „unbekannt“ des Teams nur bis zum Händlerbeleg (QA B2) | bestanden |
+| Herkunft je Quelle: Kleinanzeigen-Liste mit PRO / ohne Kennzeichen / mit Privatfilter, Detailseite (Privater Nutzer, Gewerblicher Nutzer, leer, ohne Kasten, Name „Privat-Camper-Center“, Privatanbieter), mobile.de-Anbieterkasten, Text-Import mit und ohne Auswahl | bestanden |
+| Rechner (P2-05d): unbekannte Anbieter nicht in der Vergleichsbasis, Kalkulations-Auszug ohne sie, alte Eingaben ohne Schlüssel rechnen gleich nach; Ende-zu-Ende Vergleichsanzahl sinkt auf 0, wenn alle anderen unbekannt sind | bestanden |
+| Wirkung, API, CSV: Sperre „gewerblicher Anbieter“ und Hinweis „Anbieter unbekannt“ nach Korrektur; `POST /api/anzeige/<id>/anbieter` 200/400/404; Team-Betrieb: ohne Token 403, Mitarbeiter darf, Händler-Zugang 403, Audit-Eintrag; CSV-Spalten | bestanden |
+| Migration v1, v2, v10, v13 → v14: alle bisherigen Spalten und Zeilen gleich, Herkunft `altbestand` nur bei bekannter Anbieterart, Sicherung `vor-v14` = Stand davor, Idempotenz, Fehler im Schritt → Rollback, danach erfolgreich | bestanden |
+| Re-Import (P3-03): unverändert bis auf die stärkere Herkunft nach Text-Import mit „privat“ (bewusst, im Test benannt) | bestanden |
+| Browser (Orchestrator, Chromium über Playwright, nachgebaute Daten): Desktop 1280 – Einstufung „privat (laut Anzeige)“, Korrektur auf gewerblich; Handy 390 – „Anbieter unbekannt“ → „privat (vom Team korrigiert)“; 0 JS-Fehler | bestanden (nach der Korrekturrunde) |
+| QA (eine Runde, vor der Korrekturrunde: Teilsuite 281 bestanden, volle Suite Exit 0) | Freigabe mit Auflagen – B1 (HOCH), B2–B4 behoben, B5 Betreiberfrage; Korrekturen **nicht** erneut von der QA geprüft |
+| Echte Portalseiten, Windows-CI, Laufzeit der Invariante bei großer Datenbank | nicht geprüft (CI folgt im PR) |
+
 ## P3-04 – Verfügbarkeit und zuletzt_bestaetigt (23.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |
