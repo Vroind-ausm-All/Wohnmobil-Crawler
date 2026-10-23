@@ -210,8 +210,8 @@ erhalten (Re-Import-Test).
 | P3-02c | P3 | Index `fahrzeug_zuordnungen(entscheidung_id)` bei der nächsten Schemaänderung; Audit-Objekt mit Entscheidungs-ID (QA P3-02b N1/N3) | scout-data-engineer | Index DONE mit P3-04 (v13); Audit-Objekt offen |
 | P3-03 | P1 | Vollständiger Preisverlauf, `beobachtungen` mit Kanal und Zeitpunkt; **Re-Import-Test** (identische Inserate erneut importieren → kein Datensatz doppelt, Historie vollständig) | scout-data-engineer | ohne Schemaänderung; `GET /api/preisverlauf`; offen: Reihenfolgeschutz für api/stream-Ereignisse (vor Freigabe einer API-Quelle), kein Zurücksetzen auf „kein Preis“ – DONE (PR #30, gemergt) |
 | P3-04 | P2 | Verfügbarkeit (`aktiv`/`reserviert`/`offline`/`verkauft`/`unbekannt`) + `zuletzt_bestaetigt` | scout-data-engineer | DONE (PR #31 gemergt; Schema v13, ADR-042) |
-| P3-05 | P2 | Privat/Händler-Klassifizierung mit Herkunft der Einstufung | scout-data-engineer | REVIEW (Schema v14, ADR-043; mit P2-05d) |
-| P3-06 | P1 | `kontakte` als Ereignisse (vorbereitet/bestätigt, Kanal, Nutzer) | scout-data-engineer | TODO |
+| P3-05 | P2 | Privat/Händler-Klassifizierung mit Herkunft der Einstufung | scout-data-engineer | DONE (PR #32 gemergt; Schema v14, ADR-043; mit P2-05d) |
+| P3-06 | P1 | `kontakte` als Ereignisse (vorbereitet/bestätigt, Kanal, Nutzer) | scout-data-engineer | REVIEW (Schema v15, ADR-044) |
 | P3-07 | P2 | Indizes nach `EXPLAIN QUERY PLAN`, Vorfilter für Vergleichsauswahl (R12) | scout-data-engineer | TODO |
 | P3-08 | P2 | Markierungen für unvollständige/widersprüchliche Angaben, Datenqualitätswert je Fahrzeug | scout-data-engineer | TODO |
 
@@ -292,7 +292,7 @@ Optimiert wird auf **relevante, verfügbare Ankaufsgelegenheiten**, nicht auf ab
 | F4 | Bei mobile.de/AutoScout24 als Händler registriert? Anfrage für API-Zugang stellen? | P2-08/09 |
 | F5 | Größe/Ort der produktiven Datenbank; vorhandene Sicherungen; Ziel und Aufbewahrung der Backups? | P1-02 |
 | F6 | Altdaten `gewerblich = 0`: als privat übernehmen (Suchen filtern auf privat) oder „unbekannt“? **Vorentschieden 23.10.2026 (P3-05, bitte bestätigen):** bleibt privat bzw. gewerblich, Herkunft „Altbestand“ sichtbar; kein neuer Hinweis, weiter in der Vergleichsbasis | P2-02/P3-05 |
-| F7 | Alte „kontaktiert“-Einträge als bestätigte Kontakte übernehmen? | P1-06/P3-06 |
+| F7 | Alte „kontaktiert“-Einträge als bestätigte Kontakte übernehmen? **Vorentschieden 23.10.2026 (P3-06, bitte bestätigen):** Status bleibt; im Verlauf als Kontakt mit Herkunft „Altbestand“ (Kanal unbekannt, „vor der Bestätigungspflicht übernommen“), offenes „Text kopiert“ und letztes Nachfassen als nicht bestätigt | P1-06/P3-06 |
 | F8 | Läuft `lauf.bat` per Aufgabenplanung parallel zur App? | P1-04 |
 | F9 | Nur Python 3.13 unterstützen oder auch 3.12? | P1-10 |
 | F10 | Aufbewahrungsfristen für Verkäuferdaten, Fotos, Unterschriften (DSGVO); juristische Prüfung von Protokoll und E-Mail-Auswertung | P1-14 |

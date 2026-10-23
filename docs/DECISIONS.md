@@ -129,7 +129,8 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Entscheidung:** Kopieren/Öffnen setzt nur „vorbereitet“; „kontaktiert“ erst nach ausdrücklicher Bestätigung
   „gesendet“ durch den Nutzer. Nachfassen setzt einen abgesagten Vorgang nicht zurück auf „kontaktiert“.
 * **Folgen:** Ein zusätzlicher Klick je Kontakt; Kennzahl „kontaktierte Verkäufer“ wird verlässlich.
-  Offen: Gelten alte „kontaktiert“-Einträge als bestätigt? (Betreiberfrage) – bis zur Antwort bleiben sie unverändert.
+  Offen: Gelten alte „kontaktiert“-Einträge als bestätigt? (Betreiberfrage) – bis zur Antwort bleiben sie unverändert
+  (Status unverändert; im Kontaktverlauf als „Altbestand“ gekennzeichnet, ADR-044).
 * **Umsetzung:** Status `vorbereitet` („Text kopiert“) speichert Text und Angebot, aber weder `kontaktiert_am` noch im
   Team `kontaktiert_von`; im Team reserviert er das Inserat. Desktop und Handy öffnen die Anzeige erst nach der
   Server-Antwort 200 (bei 409 bleibt sie zu). „Text kopiert“ bleibt im Filter „Anschreiben bereit“, bis „gesendet ✓“
@@ -816,3 +817,36 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Folgen / offen:** Schwache Einstufungen (`ohne_kennzeichen`, `altbestand`) tragen keinen Hinweis; ob sie einen bekommen sollen, ist
   Betreiberentscheidung. Eine gespeicherte Suchseite zeigt ihren Privatfilter nicht an – Treffer daraus gelten als `ohne_kennzeichen`.
   Fahrzeugweite Anbieterart über mehrere Inserate wird nicht abgeleitet.
+
+## ADR-044 – Kontakte als Ereignisse (Schema v15) · gilt (23.10.2026)
+
+* **Kontext:** P3-06. Ein Kontakt stand nur als Zustand am Inserat (`kontaktiert_am`, `anschreiben_text` mit angehängten Nachfass-Texten,
+  im Team `bearbeitung.kontaktiert_von`). Wann was über welchen Kanal von wem vorbereitet und bestätigt wurde, war nicht nachvollziehbar;
+  ein Nachfassen galt beim Kopieren sofort als erledigt.
+* **Entscheidung:**
+  1. Tabelle `kontakte` (nur anfügen; eine Zeile wird höchstens bestätigt oder – solange offen – durch erneutes Kopieren ersetzt):
+     `anzeige_id`, `art` (anschreiben/nachfassen), `kanal` (plattform, telefon, email, whatsapp, persoenlich, unbekannt), `text`, `betrag`,
+     `nutzer_id` (vorbereitet von), `vorbereitet_am`, `bestaetigt_am`, `bestaetigt_von`, `verworfen_am`, `herkunft` (app/altbestand). Das Fahrzeug wird beim
+     Lesen über `inserate.fahrzeug_id` bestimmt (keine veraltete Kopie nach Dubletten-Entscheidungen); der Verlauf zeigt alle Inserate des
+     Fahrzeugs.
+  2. Ereignisse in derselben Transaktion wie der Status (Fehler oder Team-Konflikt → nichts geschrieben): „Text kopiert“ → vorbereitetes
+     Anschreiben (erneut kopiert: ersetzt); „gesendet ✓“ (Status kontaktiert) bestätigt das zuletzt vorbereitete Ereignis – mit neuem Text
+     nur ein Anschreiben, ein Nachfassen wird nie überschrieben – oder legt ein bestätigtes an (Kanal „unbekannt“, wenn der Status ohne
+     Text und ohne Kanal gesetzt wird); alle übrigen offenen Ereignisse der Anzeige gelten dann als verworfen (es wurde nur eines
+     gesendet). Status „neu“ (Rückgängig) verwirft offene Ereignisse. Nachfassen → vorbereitetes Nachfassen, bestätigt über
+     `POST /api/kontakt/<id>/bestaetigen` (wer es vorbereitet hat oder der Inhaber; protokolliert); war das Inserat noch nicht
+     kontaktiert, ist das der erste Kontakt und läuft über den Status „kontaktiert“ (Zeitpunkt, Team-Zuordnung, Konfliktprüfung).
+     Andere Status erzeugen kein Ereignis. Eine Bestätigung in der App macht eine offene Altbestand-Zeile zu „app“.
+  3. Bestehende Felder und Abläufe bleiben unverändert (Status, `kontaktiert_am`, `anschreiben_text`, Nachfass-Erinnerung über
+     `nachgefasst_am`, Team-Zuordnung) – `kontakte` ergänzt, ersetzt nichts.
+  4. Altbestand (Betreiberfrage F7, konservativ vorentschieden): `kontaktiert_am` → bestätigte Zeile mit Kanal „unbekannt“, Herkunft
+     `altbestand` („vor der Bestätigungspflicht übernommen“); Status „vorbereitet“ → offene Zeile; letztes Nachfassen → offene Zeile;
+     ohne Text (der bleibt in `anschreiben_text`). Kein Status wird geändert.
+  5. Kanal per API (`kanal` bei `/api/status`, `/api/nachgefasst`, Bestätigen); die Oberfläche setzt ihn nicht (der Ablauf „kopieren →
+     Anzeige öffnen → senden“ ist die Plattform). Verlauf in Handy und Desktop; Anonymisierung entfernt den Namen auch aus `kontakte.text`.
+  6. Rückweg: Sicherung `vor-v15`.
+* **Alternativen:** `fahrzeug_id`/`inserat_id` speichern (veraltet nach Dubletten-Entscheidungen); Nachfassen weiter sofort als erledigt
+  zählen (widerspricht ADR-012); alte Kontakte als „unbekannt“ weglassen (Verlauf wäre lückenhaft).
+* **Folgen / offen:** Ein irrtümlich bestätigter Kontakt lässt sich nicht stornieren (Status „neu“ setzt den Zustand zurück, das Ereignis
+  bleibt). Antworten von Verkäufern (`art` antwort) und Kennzahlen „bestätigte Kontakte je Zeitraum“ sind nicht umgesetzt. Kanalwahl in
+  der Oberfläche fehlt.

@@ -62,9 +62,9 @@ def _loeschen(pfade) -> int:
 
 def inserat_anonymisieren(db: Datenbank, ausgabe_ordner: Path, anzeige_id: str, foto_ordner: Path | None = None) -> dict:
     """Personendaten eines Inserats entfernen – im Umfang wie der Widerruf einer Verkaufsanfrage: Profilname des Verkäufers
-    (``details_json``), Name im gespeicherten Anschreibentext, Team-Notiz, in Besichtigungen Verkäuferangaben, Unterschriften,
-    Adresse, Eingaben vor Ort (FIN, Kennzeichen, Notizen) und Fotos sowie die Anschreiben-Datei in ``ausgabe/``. Fahrzeugdaten
-    des Inserats, Preise, Status und Kontaktzeitpunkt bleiben (Marktbeobachtung). Gekaufte Fahrzeuge: ``InseratGekauft``;
+    (``details_json``), Name im gespeicherten Anschreibentext und in den Texten des Kontaktverlaufs, Team-Notiz, in Besichtigungen
+    Verkäuferangaben, Unterschriften, Adresse, Eingaben vor Ort (FIN, Kennzeichen, Notizen) und Fotos sowie die Anschreiben-Datei in
+    ``ausgabe/``. Fahrzeugdaten des Inserats, Preise, Status und Kontaktzeitpunkte bleiben (Marktbeobachtung). Gekaufte Fahrzeuge: ``InseratGekauft``;
     unbekannte Inserate: ``LookupError``. Die Prüfung läuft in derselben Transaktion wie das Schreiben."""
     from .bewertung.anschreiben import anrede_name, verkaeufer_name
     con = db.con
@@ -84,12 +84,17 @@ def inserat_anonymisieren(db: Datenbank, ausgabe_ordner: Path, anzeige_id: str, 
             details = {}                                  # unlesbar: Inhalt verwerfen statt das Inserat dauerhaft auszulassen
         details.pop("verkaeufer_name", None)
         details["anonymisiert_am"] = datetime.now().isoformat(timespec="seconds")
-        text = a["anschreiben_text"]
-        if text and name:
-            for variante in {name, anrede_name(name) or name}:
-                text = text.replace(variante, ERSATZ)
+        varianten = {name, anrede_name(name) or name} if name else set()
+
+        def ohne_namen(text):
+            for variante in varianten:
+                text = text.replace(variante, ERSATZ) if text else text
+            return text
         con.execute("UPDATE anzeigen SET details_json=?, anschreiben_text=?, notiz=NULL WHERE id=?",
-                    (json.dumps(details, ensure_ascii=False), text, anzeige_id))
+                    (json.dumps(details, ensure_ascii=False), ohne_namen(a["anschreiben_text"]), anzeige_id))
+        if "kontakte" in tabellen and varianten:          # Texte im Kontaktverlauf (P3-06) wie das Anschreiben
+            for k in con.execute("SELECT id, text FROM kontakte WHERE anzeige_id=? AND text IS NOT NULL", (anzeige_id,)).fetchall():
+                con.execute("UPDATE kontakte SET text=? WHERE id=?", (ohne_namen(k["text"]), k["id"]))
         for b in con.execute("SELECT id, basis_json, protokoll_json FROM besichtigungen WHERE anzeige_id=?", (anzeige_id,)).fetchall():
             basis = json.loads(b["basis_json"] or "{}")
             basis.pop("verkaeufer", None)
@@ -126,6 +131,7 @@ def inserate_nach_frist(db: Datenbank, ausgabe_ordner: Path, monate: int, jetzt:
         "SELECT id FROM anzeigen WHERE COALESCE(status, 'neu') != 'gekauft' "
         "AND MAX(COALESCE(zuletzt_gesehen, ''), COALESCE(status_am, ''), COALESCE(kontaktiert_am, '')) < ? "
         "AND (details_json LIKE '%verkaeufer_name%' OR anschreiben_text IS NOT NULL OR notiz IS NOT NULL "
+        "     OR id IN (SELECT anzeige_id FROM kontakte WHERE text IS NOT NULL) "
         "     OR id IN (SELECT anzeige_id FROM besichtigungen WHERE anzeige_id IS NOT NULL)) "
         "AND id NOT IN (SELECT anzeige_id FROM besichtigungen WHERE anzeige_id IS NOT NULL AND status IN ('geplant', 'laeuft')) "
         "AND COALESCE(details_json, '') NOT LIKE '%anonymisiert_am%'", (grenze,))]

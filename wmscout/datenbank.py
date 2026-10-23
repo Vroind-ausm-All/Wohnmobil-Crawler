@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import anbieter
+from . import anbieter, kontakte
 from .bearbeitung import IN_ARBEIT, VORBEREITET, BearbeitungsKonflikt
 from .domaene import (  # noqa: F401 – Kompatibilität: bisher hier definiert
     _MARKE, BESTAETIGT, IMPORT_ARTEN, IMPORT_SUCHE, STATUS, UNBEKANNT, VORLAEUFIG, import_art, import_suche)
@@ -500,7 +500,7 @@ class Datenbank:
 
     def setze_status(self, ad_id: str, status: str, notiz: str | None = None, text: str | None = None,
                      betrag: int | None = None, *, nutzer_id: int | None = None, grenze: str = "", erzwingen: bool = False,
-                     inhaber: bool = False, dubletten=()) -> bool:
+                     inhaber: bool = False, dubletten=(), kanal: str | None = None, kontakt_id: int | None = None) -> bool:
         """Mit Text (= Anschreiben) werden Text und Angebot gespeichert, bei 'kontaktiert' auch der Zeitpunkt; 'neu' setzt zurück.
 
         'vorbereitet' (Text kopiert, Versand noch nicht bestätigt) speichert Text und Angebot, setzt aber weder ``kontaktiert_am`` noch
@@ -512,7 +512,10 @@ class Datenbank:
         erneut kontaktieren. Ausnahme: ``inhaber`` (Inhaber oder zugewiesener Besichtiger) ändert 'verhandlung'/'besichtigung'
         eines von einem Kollegen gehaltenen Inserats, ohne es zu übernehmen – außer mit ``erzwingen``, das übernimmt wirklich.
         'neu' leert den Kontakt (Bearbeiter bleibt); alle anderen Status verlangen: frei, eigene Reservierung oder ``inhaber``.
-        Sonst ``BearbeitungsKonflikt`` – dann ist nichts geändert."""
+        Sonst ``BearbeitungsKonflikt`` – dann ist nichts geändert.
+
+        In derselben Transaktion entsteht das Kontakt-Ereignis (P3-06, ``_kontakt_ereignis``); ``kanal`` (``kontakte.KANAELE``) und ``kontakt_id``
+        (welches vorbereitete Ereignis „kontaktiert“ bestätigt) nur dafür."""
         jetzt = datetime.now().isoformat(timespec="seconds")
         sets, werte = ["status=?", "status_am=?", "notiz=COALESCE(?, notiz)"], [status, jetzt, notiz]
         if status == "kontaktiert" and text:
@@ -532,11 +535,15 @@ class Datenbank:
             werte.append(betrag)
         sql = f"UPDATE anzeigen SET {', '.join(sets)} WHERE id=?"
         if nutzer_id is None:
-            with self._schreiben():
+            with self._exklusiv():
+                vorher = self.con.execute("SELECT kontaktiert_am FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
                 cur = self.con.execute(sql, [*werte, ad_id])
+                if vorher:
+                    self._kontakt_ereignis(ad_id, status, vorher["kontaktiert_am"], text, betrag, None, kanal, jetzt, kontakt_id)
             return cur.rowcount > 0
         with self._exklusiv():
-            if not self.con.execute("SELECT 1 FROM anzeigen WHERE id=?", (ad_id,)).fetchone():
+            vorher = self.con.execute("SELECT kontaktiert_am FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+            if not vorher:
                 return False
             uebernehmen = status in IN_ARBEIT
             if uebernehmen and status not in ("kontaktiert", VORBEREITET) and inhaber and not erzwingen \
@@ -548,6 +555,7 @@ class Datenbank:
             elif status not in IN_ARBEIT and not inhaber and self._fremde_halter([ad_id], nutzer_id, grenze):
                 raise BearbeitungsKonflikt(ad_id)
             cur = self.con.execute(sql, [*werte, ad_id])
+            self._kontakt_ereignis(ad_id, status, vorher["kontaktiert_am"], text, betrag, nutzer_id, kanal, jetzt, kontakt_id)
             if uebernehmen and status != VORBEREITET:
                 self._trage_kontakt_ein(ad_id, nutzer_id, jetzt)
             elif status == "neu":
@@ -555,7 +563,7 @@ class Datenbank:
             return cur.rowcount > 0
 
     def nachgefasst(self, ad_id: str, text: str, betrag: int | None = None, *, nutzer_id: int | None = None,
-                    grenze: str = "", erzwingen: bool = False, dubletten=()) -> bool:
+                    grenze: str = "", erzwingen: bool = False, dubletten=(), kanal: str | None = None) -> bool:
         """Nachfass-Nachricht: Zeitpunkt merken, Text an den Verlauf anhängen.
 
         Ein noch offenes Inserat wird nur 'vorbereitet' (Text kopiert, kein bestätigter Kontakt, ADR-012); ein abgesagter Vorgang
@@ -570,8 +578,10 @@ class Datenbank:
                "ELSE COALESCE(kontaktiert_am, ?) END WHERE id=?")
         werte = (jetzt, f"--- nachgefasst am {jetzt[:10]} ---", text, betrag, jetzt, ad_id)
         if nutzer_id is None:
-            with self._schreiben():
+            with self._exklusiv():
                 cur = self.con.execute(sql, werte)
+                if cur.rowcount:
+                    self._kontakt_vorbereiten(ad_id, kontakte.NACHFASSEN, text, betrag, None, kanal, jetzt)
             return cur.rowcount > 0
         with self._exklusiv():
             vorher = self.con.execute("SELECT status FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
@@ -580,9 +590,85 @@ class Datenbank:
             if not self._uebernimm(ad_id, nutzer_id, jetzt, grenze, erzwingen, dubletten):
                 raise BearbeitungsKonflikt(ad_id)
             cur = self.con.execute(sql, werte)
+            self._kontakt_vorbereiten(ad_id, kontakte.NACHFASSEN, text, betrag, nutzer_id, kanal, jetzt)
             if (vorher["status"] or "neu") not in ("neu", VORBEREITET):
                 self._trage_kontakt_ein(ad_id, nutzer_id, jetzt)
             return cur.rowcount > 0
+
+    # ---------- Kontakte als Ereignisse (P3-06, ADR-044) ----------
+    def _kontakt_ereignis(self, ad_id: str, status: str, kontaktiert_vorher: str | None, text: str | None, betrag: int | None,
+                          nutzer_id: int | None, kanal: str | None, jetzt: str, kontakt_id: int | None = None):
+        """Ereignis zum Statuswechsel (ohne eigenes Commit): „Text kopiert“ (``vorbereitet`` mit Text) legt ein vorbereitetes Anschreiben an;
+        „kontaktiert“ bestätigt beim ersten bestätigten Kontakt und bei jedem neu gesendeten Text (siehe ``_kontakt_bestaetigen``); „neu“
+        verwirft offene Ereignisse (Rückgängig). Andere Status (auch ein erneutes „kontaktiert“ ohne Text) erzeugen kein Ereignis."""
+        if status == VORBEREITET and text:
+            self._kontakt_vorbereiten(ad_id, kontakte.ANSCHREIBEN, text, betrag, nutzer_id, kanal, jetzt)
+        elif status == "kontaktiert" and (text or not kontaktiert_vorher):
+            self._kontakt_bestaetigen(ad_id, text, betrag, nutzer_id, kanal, jetzt, kontakt_id)
+        elif status == "neu":
+            self._kontakte_verwerfen(ad_id, jetzt)
+
+    def _kontakte_verwerfen(self, ad_id: str, jetzt: str, ausser: int | None = None):
+        self.con.execute("UPDATE kontakte SET verworfen_am=? WHERE anzeige_id=? AND bestaetigt_am IS NULL AND verworfen_am IS NULL AND id IS NOT ?",
+                         (jetzt, ad_id, ausser))
+
+    def _kontakt_vorbereiten(self, ad_id: str, art: str, text: str | None, betrag: int | None, nutzer_id: int | None, kanal: str | None,
+                             jetzt: str):
+        """Ein noch nicht bestätigtes Ereignis derselben Art wird ersetzt (erneut kopiert), sonst ein neues angefügt."""
+        offen = self.con.execute("SELECT id FROM kontakte WHERE anzeige_id=? AND art=? AND bestaetigt_am IS NULL AND verworfen_am IS NULL "
+                                 "ORDER BY id DESC LIMIT 1", (ad_id, art)).fetchone()
+        if offen:
+            self.con.execute("UPDATE kontakte SET text=?, betrag=?, nutzer_id=?, kanal=?, vorbereitet_am=?, herkunft='app' WHERE id=?",
+                             (text, betrag, nutzer_id, kanal or kontakte.PLATTFORM, jetzt, offen["id"]))
+        else:
+            self.con.execute("INSERT INTO kontakte (anzeige_id, art, kanal, text, betrag, nutzer_id, vorbereitet_am) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                             (ad_id, art, kanal or kontakte.PLATTFORM, text, betrag, nutzer_id, jetzt))
+
+    def _kontakt_bestaetigen(self, ad_id: str, text: str | None, betrag: int | None, nutzer_id: int | None, kanal: str | None, jetzt: str,
+                             kontakt_id: int | None = None):
+        """„gesendet ✓“: bestätigt ``kontakt_id`` bzw. das zuletzt vorbereitete offene Ereignis – mit neuem Text nur ein offenes Anschreiben (ein
+        Nachfassen wird nie mit einem Brief überschrieben). Gibt es keines, entsteht ein bestätigtes Anschreiben. Alle anderen offenen Ereignisse
+        der Anzeige gelten danach als verworfen (es wurde nur eines gesendet)."""
+        bedingung, werte = "anzeige_id=? AND bestaetigt_am IS NULL AND verworfen_am IS NULL", [ad_id]
+        if kontakt_id is not None:
+            bedingung, werte = bedingung + " AND id=?", [ad_id, kontakt_id]
+        offen = self.con.execute(f"SELECT id, art FROM kontakte WHERE {bedingung} ORDER BY id DESC LIMIT 1", werte).fetchone()
+        if offen and not (text and offen["art"] != kontakte.ANSCHREIBEN):
+            self.con.execute("UPDATE kontakte SET bestaetigt_am=?, bestaetigt_von=?, kanal=COALESCE(?, kanal), text=COALESCE(?, text), "
+                             "betrag=COALESCE(?, betrag), herkunft='app' WHERE id=?", (jetzt, nutzer_id, kanal, text, betrag, offen["id"]))
+            neu_id = offen["id"]
+        else:                                     # ohne „Text kopiert“ bestätigt (z. B. Status direkt gesetzt): Kanal nur bekannt, wenn angegeben
+            neu_id = self.con.execute("INSERT INTO kontakte (anzeige_id, art, kanal, text, betrag, nutzer_id, bestaetigt_am, bestaetigt_von) "
+                                      "VALUES (?, 'anschreiben', ?, ?, ?, ?, ?, ?)",
+                                      (ad_id, kanal or (kontakte.PLATTFORM if text else kontakte.UNBEKANNT), text, betrag, nutzer_id, jetzt,
+                                       nutzer_id)).lastrowid
+        self._kontakte_verwerfen(ad_id, jetzt, ausser=neu_id)
+
+    def kontakt(self, kontakt_id: int):
+        return self.con.execute("SELECT * FROM kontakte WHERE id=?", (kontakt_id,)).fetchone()
+
+    def bestaetige_kontakt(self, kontakt_id: int, nutzer_id: int | None, kanal: str | None = None) -> bool:
+        """„gesendet ✓“ für ein vorbereitetes Nachfassen an einem schon kontaktierten Inserat (sonst über ``setze_status`` mit ``kontakt_id``,
+        damit Status, Kontaktzeitpunkt und Team-Zuordnung mitgehen). Schon bestätigt: unverändert (True). False: unbekannt oder verworfen."""
+        jetzt = datetime.now().isoformat(timespec="seconds")
+        with self._exklusiv():
+            z = self.con.execute("SELECT anzeige_id FROM kontakte WHERE id=? AND verworfen_am IS NULL", (kontakt_id,)).fetchone()
+            if z is None:
+                return False
+            cur = self.con.execute("UPDATE kontakte SET bestaetigt_am=?, bestaetigt_von=?, kanal=COALESCE(?, kanal), herkunft='app' "
+                                   "WHERE id=? AND bestaetigt_am IS NULL", (jetzt, nutzer_id, kanal, kontakt_id))
+            if cur.rowcount:
+                self._kontakte_verwerfen(z["anzeige_id"], jetzt, ausser=kontakt_id)
+        return True
+
+    def kontakte_zu(self, ad_id: str) -> list:
+        """Kontakt-Ereignisse der Anzeige und aller Inserate desselben Fahrzeugs (bestätigte Dubletten), älteste zuerst. Nur lesend."""
+        ids = {ad_id}
+        fid = self.fahrzeug_id_zu(ad_id)
+        if fid is not None:
+            ids |= {r[0] for r in self.con.execute("SELECT anzeigen_id FROM inserate WHERE fahrzeug_id=?", (fid,))}
+        return self.con.execute(f"SELECT * FROM kontakte WHERE anzeige_id IN ({','.join('?' * len(ids))}) "
+                                "ORDER BY COALESCE(bestaetigt_am, vorbereitet_am), id", sorted(ids)).fetchall()
 
     def setze_notiz(self, ad_id: str, notiz: str) -> bool:
         with self._schreiben():

@@ -401,6 +401,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
         {% endif %}
         {% if app %}
           <label class="notiz">Notiz (wird gespeichert)<textarea data-notiz rows="2">{{ a.notiz or '' }}</textarea></label>
+          <div class="kontaktverlauf" data-kontakte hidden></div>
         {% else %}
           <p class="hinweis">Status wird nur in diesem Browser gemerkt. Dauerhaft: <code>python scout.py app</code> verwenden oder <code>python scout.py status {{ a.id }} kontaktiert</code>.</p>
         {% endif %}
@@ -572,7 +573,8 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     }, function(ok){
       k.dataset.nachfassen = '0';
       var tag = k.querySelector('.tag.nachfassen'); if(tag) tag.remove();
-      toast(ok ? 'Nachfass-Text kopiert ✓' + hinweisFuer(k) : 'Kopieren ging nicht – bitte Text markieren und kopieren.');
+      toast(ok ? 'Nachfass-Text kopiert ✓' + hinweisFuer(k) + (APP ? ' Danach im Kontaktverlauf „gesendet ✓“ klicken.' : '')
+               : 'Kopieren ging nicht – bitte Text markieren und kopieren.');
     });
   }
 
@@ -639,6 +641,28 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     dlg.appendChild(d); zeigeStatus(id, karte(id).dataset.status);
     dlg.showModal(); dlg.scrollTop = 0;
     if(window.dubGruppe) window.dubGruppe(d);
+    ladeKontakte(d);
+  }
+  // Kontaktverlauf (P3-06) nur mit laufender App; aufgebaut mit textContent (Texte stammen aus Eingaben)
+  function ladeKontakte(d){
+    var box = d.querySelector('[data-kontakte]'); if(!APP || !box) return;
+    fetch('/api/kontakte/' + encodeURIComponent(d.dataset.id), {credentials:'same-origin'}).then(function(r){ return r.ok ? r.json() : []; }).then(function(liste){
+      box.textContent = ''; box.hidden = !liste.length;
+      if(!liste.length) return;
+      var h = document.createElement('h3'); h.textContent = 'Kontaktverlauf'; box.appendChild(h);
+      liste.forEach(function(x){
+        var p = document.createElement('p'); p.className = 'meta' + (x.bestaetigt || x.verworfen ? '' : ' warn');
+        p.textContent = x.art_text + (x.anzeige_id !== d.dataset.id ? ' (anderes Inserat)' : '') + ' · ' + x.zustand + ' · ' + (x.zeit_text || '') +
+          ((x.bestaetigt_von || x.vorbereitet_von) ? ' · ' + (x.bestaetigt_von || x.vorbereitet_von) : '') + ' · ' + x.kanal_text;
+        if(!x.bestaetigt && !x.verworfen && x.art === 'nachfassen'){
+          var b = document.createElement('button'); b.className = 'btn'; b.textContent = 'gesendet ✓'; b.style.marginLeft = '8px';
+          b.onclick = function(){ post('/api/kontakt/' + x.id + '/bestaetigen', {}).then(function(){ toast('Nachfassen als gesendet gespeichert ✓'); ladeKontakte(d); },
+                                                                                         function(err){ toast(err.message); }); };
+          p.appendChild(b);
+        }
+        box.appendChild(p);
+      });
+    }).catch(function(){ box.hidden = true; });
   }
   dlg.addEventListener('close', function(){ if(dlg.firstElementChild) ablage.appendChild(dlg.firstElementChild); });
   dlg.addEventListener('click', function(e){

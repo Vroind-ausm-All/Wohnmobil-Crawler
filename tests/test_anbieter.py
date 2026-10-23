@@ -8,6 +8,7 @@ Schema 14 gegen Altbestände. Alles offline; Seiten sind nachgebaut.
 from __future__ import annotations
 
 import csv
+import re
 import sqlite3
 from pathlib import Path
 
@@ -338,10 +339,16 @@ def test_oberflaeche_statisch():
     js, html = (STATIC / "mobil.js").read_text(encoding="utf-8"), (BASIS / "vorlagen" / "report.html").read_text(encoding="utf-8")
     assert "esc(a.text)" in js and "/anbieter" in js and 'id="anbieter"' in js
     assert "data-anbieter-setzen" in html and "/anbieter'" in html and "tag.textContent = d.anbieter.text" in html
-    assert "wm-scout-11" in (STATIC / "sw.js").read_text(encoding="utf-8")
+    sw = (STATIC / "sw.js").read_text(encoding="utf-8")
+    assert int(re.search(r"var VERSION = 'wm-scout-(\d+)'", sw).group(1)) >= 11 and "11: Anbieter mit Herkunft" in sw
 
 
 # ---------------------------------------------------------------- 6. Schema 14
+def bis_14(monkeypatch):
+    """Schritt 14 ist hier der letzte bekannte Schritt: die Tests prüfen ihn so, wie er zu seiner Zeit lief (Schritt 15 prüft tests/test_kontakte.py)."""
+    _alt_schritte(monkeypatch, 14)
+
+
 def baue_v13(pfad, monkeypatch, tmp_path):
     baue_v12(pfad, monkeypatch, tmp_path)
     with monkeypatch.context() as m:
@@ -361,6 +368,7 @@ def mit_anbietern(pfad):
 
 @pytest.mark.parametrize("art", ["v1", "v2", "v10", "v13"])
 def test_migration_auf_14_ohne_datenverlust(tmp_path, monkeypatch, art):
+    bis_14(monkeypatch)
     pfad, ziel = tmp_path / "alt.sqlite", tmp_path / "sich"
     if art == "v13":
         baue_v13(pfad, monkeypatch, tmp_path)
@@ -381,6 +389,7 @@ def test_migration_auf_14_ohne_datenverlust(tmp_path, monkeypatch, art):
 
 
 def test_schritt_14_zweite_ausfuehrung_aendert_nichts(tmp_path, monkeypatch):
+    bis_14(monkeypatch)
     pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
     baue_v13(pfad, monkeypatch, tmp_path)
     mit_anbietern(pfad)
@@ -399,6 +408,7 @@ def test_schritt_14_zweite_ausfuehrung_aendert_nichts(tmp_path, monkeypatch):
 
 
 def test_fehler_im_schritt_14_rollt_zurueck_dann_gelingt_es(tmp_path, monkeypatch):
+    bis_14(monkeypatch)
     pfad, ziel = tmp_path / "db.sqlite", tmp_path / "sich"
     baue_v13(pfad, monkeypatch, tmp_path)
     mit_anbietern(pfad)
@@ -419,4 +429,4 @@ def test_fehler_im_schritt_14_rollt_zurueck_dann_gelingt_es(tmp_path, monkeypatc
 
 def test_neue_datenbank_hat_die_spalte(db):
     assert "anbieter_herkunft" in [r[1] for r in db.con.execute("PRAGMA table_info(anzeigen)")]
-    assert lese_version(db.con.execute("PRAGMA database_list").fetchone()[2]) == 14
+    assert lese_version(db.con.execute("PRAGMA database_list").fetchone()[2]) >= 14
