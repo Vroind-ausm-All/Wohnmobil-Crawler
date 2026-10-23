@@ -15,7 +15,7 @@ from ..normalisierung.geo import entfernung_km
 from ..verfuegbarkeit import ergaenze as ergaenze_verfuegbarkeit
 from ..verfuegbarkeit import offline_nach_tagen
 from .anschreiben import Anschreiber, betrag_im_brief, euro, hinweise, sperrgrund
-from .rechner import Bewertung, Rechner
+from .rechner import Bewertung, Rechner, Vergleichsliste
 
 if TYPE_CHECKING:                      # nur für Typangaben – die Bewertung selbst braucht keine Datenbank (P1-08)
     from ..datenbank import Datenbank
@@ -134,10 +134,10 @@ def _bewerte_nach_art(rechner: Rechner, a: dict, vergleich: list[dict], marktwer
 def vergleichsbasis(alle: list[dict], duplikate: dict[str, list[dict]] | None = None) -> list[dict]:
     """Vergleichsangebote für den Rechner – für `bewerte_alle` und `scout.py rechne` gleich: von mehrfach eingestellten
     Fahrzeugen nur die aktuellste Anzeige, jede in Rechner-Sicht (`fuer_rechner`), damit Art und Rechner-Cache (je id)
-    zur bewerteten Anzeige passen (M6-1/M6-2)."""
+    zur bewerteten Anzeige passen (M6-1/M6-2). Als ``Vergleichsliste`` mit Vorfilter für ``Rechner.vergleiche`` (P3-07)."""
     duplikate = finde_duplikate(alle) if duplikate is None else duplikate
-    return [fuer_rechner(a) for a in alle if not any((b.get("zuletzt_gesehen") or "", b["id"]) > (a.get("zuletzt_gesehen") or "", a["id"])
-                                                     for b in duplikate.get(a["id"], []))]
+    return Vergleichsliste(fuer_rechner(a) for a in alle if not any((b.get("zuletzt_gesehen") or "", b["id"]) > (a.get("zuletzt_gesehen") or "", a["id"])
+                                                     for b in duplikate.get(a["id"], [])))
 
 
 def vergleichsbasis_aus(db: Datenbank) -> list[dict]:

@@ -850,3 +850,27 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Folgen / offen:** Ein irrtümlich bestätigter Kontakt lässt sich nicht stornieren (Status „neu“ setzt den Zustand zurück, das Ereignis
   bleibt). Antworten von Verkäufern (`art` antwort) und Kennzahlen „bestätigte Kontakte je Zeitraum“ sind nicht umgesetzt. Kanalwahl in
   der Oberfläche fehlt.
+
+## ADR-045 – Vorfilter der Vergleichsauswahl im Speicher; Indizes nur nach Abfrageplan (Schema v16) · gilt (23.10.2026)
+
+* **Kontext:** P3-07, R12. Messung (nachgebauter Bestand, Linux): 90 % der Bewertungszeit lagen in `Rechner.vergleiche`, das für jede aktive
+  Anzeige alle Inserate durchlief (O(aktive × alle)); 6.000 Inserate ≈ 14 s. Abfragepläne aller in den Tests ausgeführten Anweisungen (370
+  verschiedene, `EXPLAIN QUERY PLAN` auf 3.000 Inseraten): Tabellendurchläufe im Betrieb nur bei der Warteschlange des Detailabrufs (Durchlauf
+  plus Sortierung je Suchlauf) und der Suche nach Besichtigungen einer Verkaufsanfrage; alle übrigen Durchläufe lesen ohnehin (fast) die ganze
+  Tabelle oder stammen nur aus Tests.
+* **Entscheidung:**
+  1. Vorfilter im Speicher statt in SQL: `vergleichsbasis` liefert eine `Vergleichsliste`, die die Angebote einmal nach (Fahrzeugart, EZ-Jahr)
+     einsortiert – nur solche, die die datenabhängigen Bedingungen überhaupt erfüllen (Preis ≥ 1.000 €, Privatangebot, EZ bekannt).
+     `vergleiche` holt nur das Jahresfenster der eigenen Art (in ursprünglicher Reihenfolge) und prüft es danach vollständig wie bisher –
+     das Ergebnis ist identisch (geprüft gegen den Lauf ohne Vorfilter, auch mit Toleranz 0, negativ und als Kommazahl). Ein Jahr, das keine
+     ganze Zahl ist, steht in einer Restliste, die immer mitgeprüft wird; jede Änderung der Liste verwirft den Index (QA B1/B2). Einfache
+     Listen (Kalkulation, Nachrechnen) laufen unverändert.
+  2. Ein SQL-Vorfilter (`alle_mit_preis`) wurde verworfen: dieselben Zeilen dienen der Dublettenerkennung und den Markierungen.
+  3. Schema v16, nur Indizes: `idx_anzeigen_detail_offen` (Teilindex `WHERE detail_geladen = 0` auf `erstmals_gesehen`, wirkt, weil die
+     Abfrage `detail_geladen=0` als festen Wert enthält) und `idx_besichtigung_anfrage`. Weitere Indizes nicht ohne gemessenen Abfrageplan.
+     Rückweg: Sicherung `vor-v16`.
+  4. Die Fachlogik bleibt unverändert: alte Anzeigen zählen weiter mit halbem Gewicht, offline/verkaufte weiter als Marktpreise.
+* **Folgen / offen:** Messung 1.000 / 3.000 / 6.000 Inserate: 0,61 → 0,45 s, 3,4 → 1,3 s, 13,8 → 3,6 s. Gespeicherte Bewertungen
+  (`bewertungen`) und die fachliche Frage, ob offline/verkaufte oder sehr alte Inserate in die Vergleichsbasis gehören, bleiben für Phase 5
+  (acquisition-analyst). Änderungen an den Einträgen selbst (nicht an der Liste) bemerkt der Index nicht – kein Aufrufer tut das.
+  `kalkulation.vergleich_auszug` nutzt den Vorfilter noch nicht (Backlog).
