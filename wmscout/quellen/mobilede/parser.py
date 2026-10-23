@@ -28,6 +28,7 @@ import re
 
 from bs4 import BeautifulSoup
 
+from ...anbieter import ANZEIGE
 from ...normalisierung.fahrzeug import ist_basismarke, marke_aus_text, normalisiere_marke
 from ..basis import ART_QUELLE_KATEGORIE
 
@@ -222,6 +223,7 @@ def _parse_treffer(block, ohne_id: list, fremd: dict, ohne_anbieter: list, seite
         "leistung": felder.get("leistung"),
         "bild": _bild(block),
         "gewerblich": gewerblich,
+        "anbieter_herkunft": None if gewerblich is None else ANZEIGE,     # Anbieterkasten bzw. „MwSt. ausweisbar“
         "details": details,
     }
 

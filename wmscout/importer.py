@@ -420,8 +420,6 @@ class Importer:
             if kanal == "email":
                 d, gesehen_am, aelter = self._mail_ergaenzt_nur(d, zeitpunkt)
                 stat["aeltere"] = stat.get("aeltere", 0) + (aelter and inserat.preis is not None)
-            if art == "detail" and not d.get("gewerblich") and self.db.gewerblich_zu(d["id"]):
-                d["gewerblich"] = None            # kein Hinweis auf der Detailseite ≠ „privat“: gewerblicher Listenwert bleibt
             if kanal == "email" and zeitpunkt is not None:
                 verfuegbar_am = zeitpunkt                      # Datum der Mail, auch wenn es als Beobachtungszeitpunkt unplausibel alt ist
             verfuegbar = utc_text(min(verfuegbar_am, datetime.now(timezone.utc))) if verfuegbar_am else None

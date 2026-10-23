@@ -20,7 +20,7 @@ import json
 from datetime import datetime
 
 from .auswertung import _sicht_als, bewerte_anzeige, fuer_rechner, kandidaten_arten
-from .rechner import STANDARD_MARKTMODELL, Rechner, _runde
+from .rechner import STANDARD_MARKTMODELL, Rechner, _runde, privatangebot
 
 VERSION = "E1"          # bei jeder Änderung an Formeln erhöhen – ältere Kalkulationen gelten dann als „andere Version“
 SZENARIEN = {"vorsichtig": "unteres Ende der Marktspanne", "erwartet": "Schätzung des Marktniveaus",
@@ -72,7 +72,7 @@ def vergleich_auszug(rechner: Rechner, fahrzeug: dict, vergleich: list[dict]) ->
     arten = {rechner.art(s) for s in _sichten(fahrzeug)}
     aus = []
     for b in vergleich:
-        if not b.get("preis") or b["preis"] < 1000 or b.get("gewerblich") or not b.get("ez_jahr"):
+        if not b.get("preis") or b["preis"] < 1000 or not privatangebot(b) or not b.get("ez_jahr"):
             continue
         if abs(b["ez_jahr"] - fahrzeug["ez_jahr"]) > jt or rechner.art(b) not in arten:
             continue

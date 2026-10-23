@@ -21,7 +21,7 @@ from pathlib import Path
 
 from .sicherung import SicherungsFehler, oeffne_lesend, sichere
 
-AKTUELLE_VERSION = 13
+AKTUELLE_VERSION = 14
 
 
 class MigrationsFehler(RuntimeError):
@@ -398,9 +398,29 @@ def _schritt_13(con: sqlite3.Connection):
         raise MigrationsFehler("Schritt 13: bestehende Inseratsspalten haben sich verändert")
 
 
+def _schritt_14(con: sqlite3.Connection):
+    """Additive v14 (P3-05, ADR-043): ``anzeigen.anbieter_herkunft`` = worauf die Anbieterart (``gewerblich`` 0/1) beruht, siehe ``anbieter.py``.
+    Altbestand mit bekannter Anbieterart erhält ``altbestand`` (Herkunft nicht mehr feststellbar; Betreiberfrage F6: die Art selbst bleibt),
+    unbekannte (NULL) bleiben ohne Herkunft. Kein bestehender Wert und keine Zeile wird verändert oder gelöscht."""
+    vorher = _zaehle_v11(con)
+    spalten = ", ".join(r[1] for r in con.execute("PRAGMA table_info(anzeigen)") if r[1] != "anbieter_herkunft")
+
+    def inhalt() -> str:
+        return hashlib.sha256(repr([tuple(r) for r in con.execute(f"SELECT {spalten} FROM anzeigen ORDER BY id")]).encode()).hexdigest()
+    vorher_inhalt = inhalt()
+    _neue_spalte(con, "anzeigen", "anbieter_herkunft", "TEXT")
+    con.execute("UPDATE anzeigen SET anbieter_herkunft = 'altbestand' WHERE anbieter_herkunft IS NULL AND gewerblich IS NOT NULL")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 14 geändert: {vorher} -> {nachher}")
+    if inhalt() != vorher_inhalt:
+        raise MigrationsFehler("Schritt 14: bestehende Spalten von „anzeigen“ haben sich verändert")
+
+
 SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4, 5: _schritt_5,
                                                              6: _schritt_6, 7: _schritt_7, 8: _schritt_8, 9: _schritt_9,
-                                                             10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13}
+                                                             10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
+                                                             14: _schritt_14}
 
 _SCHEMA_VERSION = ("CREATE TABLE IF NOT EXISTS schema_version ("
                    "version INTEGER PRIMARY KEY, angewendet_am TEXT NOT NULL)")

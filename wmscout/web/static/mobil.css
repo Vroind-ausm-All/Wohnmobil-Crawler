@@ -94,4 +94,5 @@ body.login{display:grid;place-items:center;min-height:100vh;padding:16px}
 .karte.team .zeile{gap:8px;flex-wrap:wrap}
 .knopf:disabled{opacity:.5;cursor:not-allowed}
 /* Verfügbarkeit (P3-04): rot = verkauft/offline, gelb = reserviert bzw. vermutlich offline */
+.tag.anb.gewerblich{background:var(--rot-bg);color:var(--rot)} .tag.anb.unbekannt,.tag.anb.unbelegt{background:var(--gelb-bg);color:var(--gelb)}
 .tag.verf{background:var(--rot-bg);color:var(--rot)} .tag.verf.reserviert,.tag.verf.vermutlich{background:var(--gelb-bg);color:var(--gelb)}

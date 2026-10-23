@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 
+from ...anbieter import PRIVAT_FILTER, SUCHFILTER
 from ...netz import HoeflicherAbruf
 from ..basis import (Abruf, HttpFehler, Inserat, InseratNichtGefunden, Quelle, QuelleGesperrt, Suchauftrag,
                      Suchseite)
@@ -53,6 +54,10 @@ class KleinanzeigenQuelle(Quelle):
         for nummer in range(1, self.max_seiten + 1):
             html = self._hole(seiten_url(auftrag.url, nummer))
             treffer = [Inserat(quelle=self.kennung, anzeigen_id=t.pop("id"), **t) for t in parse_suchseite(html)]
+            if PRIVAT_FILTER in (auftrag.url or ""):       # Suche liefert nur Privatanbieter: Beleg für „privat“ (P3-05)
+                for t in treffer:
+                    if t.gewerblich is False:
+                        t.anbieter_herkunft = SUCHFILTER
             verdacht = not treffer and nummer == 1 and len(html) > 20000   # volle Seite, aber nichts erkannt
             yield Suchseite(nummer, treffer, layout_verdacht=verdacht, rohdaten=html if verdacht else None)
             if not treffer:

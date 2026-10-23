@@ -46,13 +46,13 @@ def tabellen(db: Datenbank) -> list[str]:
     return sorted(r[0] for r in db.con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"))
 
 
-def dump(db: Datenbank) -> dict[str, list]:
-    """Alle Zeilen aller Tabellen (nur ohne die Zeitspalten, die beim erneuten Sehen vorrücken), sortiert."""
+def dump(db: Datenbank, ohne: dict[str, set] | None = None) -> dict[str, list]:
+    """Alle Zeilen aller Tabellen (nur ohne die Zeitspalten, die beim erneuten Sehen vorrücken, und ``ohne``), sortiert."""
     db.con.commit()
     erg = {}
     for t in tabellen(db):
         zeilen = db.con.execute(f"SELECT * FROM {t}").fetchall()
-        aus = ZEITSPALTEN.get(t, set())
+        aus = ZEITSPALTEN.get(t, set()) | (ohne or {}).get(t, set())
         erg[t] = sorted((tuple(v for k, v in zip(z.keys(), z, strict=True) if k not in aus) for z in zeilen), key=repr)
     return erg
 
@@ -210,7 +210,9 @@ def test_gleiche_daten_erneut_ueber_denselben_kanal(alt, kanal):
 def test_gleiche_daten_ueber_einen_anderen_kanal(alt, kanal):
     """Dieselben Anzeigen, die ein anderer Kanal schon geliefert hat: kein Phantominserat, Historie unverändert."""
     db, ads = alt.db, alt.ads
-    vorher, n = dump(db), zaehler(db)
+    # Text-Import mit der Angabe „privat“: ein neuer Beleg – nur die Herkunft der Anbieterart wird stärker (P3-05), sonst bleibt alles
+    ohne = {"anzeigen": {"anbieter_herkunft"}} if kanal == "seiten" else None
+    vorher, n = dump(db, ohne), zaehler(db)
     if kanal == "suche":
         erg = alt.seitenimport(mit_testseiten=False)
     elif kanal == "seiten":
@@ -222,7 +224,9 @@ def test_gleiche_daten_ueber_einen_anderen_kanal(alt, kanal):
     else:
         erg = alt.api(ereignis_id="E2-anderes-ereignis")                 # neue Ereignis-ID, gleicher Inhalt
         assert erg == "bekannt"
-    assert dump(db) == vorher and zaehler(db) == n
+    assert dump(db, ohne) == vorher and zaehler(db) == n
+    if kanal == "seiten":
+        assert db.con.execute("SELECT gewerblich, anbieter_herkunft FROM anzeigen WHERE id=?", (ads[7]["id"],)).fetchone()[:] == (0, "nutzer")
     if kanal != "api":
         assert erg[0] == 0 and erg[1] == 0
 

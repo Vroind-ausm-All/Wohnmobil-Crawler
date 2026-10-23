@@ -6,6 +6,30 @@ Wert „–“.
 
 ---
 
+## P3-05 – Privat/Händler mit Herkunft der Einstufung (23.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-data-engineer`, inkl. kleiner Oberflächenteile und P2-05d aus dem
+  Bereich `acquisition-analyst`); QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/anbieter.py` (neu), `wmscout/migrationen.py` (Schritt 14), `wmscout/datenbank.py` (Übernahmeregel,
+  `setze_anbieter`, `gewerblich_zu` entfällt), `wmscout/importer.py` (Sonderregel Detailseite entfällt, steckt in der Regel),
+  `wmscout/quellen/basis.py` (`Inserat.anbieter_herkunft`), Parser Kleinanzeigen/mobile.de, Kleinanzeigen-Adapter (Privatfilter),
+  `wmscout/eingang/text.py`, `wmscout/bewertung/rechner.py` + `kalkulation.py` (P2-05d), `auswertung.py`, `ausgabe.py` (CSV),
+  `wmscout/web/api.py` (`anbieter`, `POST /api/anzeige/<id>/anbieter`), `vorlagen/report.html`, `mobil.js`, `mobil.css`, `sw.js`
+  (wm-scout-11), Tests `test_anbieter.py` (neu), `test_reimport.py`, `test_fahrzeuge.py`; Doku ADR-043, ROADMAP, ARCHITECTURE (R13),
+  QUELLEN, README.
+- **Implementierte Funktionen:** siehe ADR-043.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. B1 HOCH (Auswahl „privat“ beim Text-Import hielt ein späteres
+  PRO-Kennzeichen auf) → Händlerbeleg schlägt jedes „privat“ außer der App-Korrektur; B2 (Korrektur „unbekannt“ hielt nur bis zum nächsten
+  Suchlauf) → eigene Herkunft `korrektur`; B3 (Testbericht fehlte) → nachgetragen; B4 („privat“ im Namen galt als Beleg) → nur feste
+  Wendungen; B5 (Rechte) → Betreiberfrage; B6 (`.venv`-Verweis) → nicht gestaged. Fehlende Tests (Team-Betrieb: Token, Mitarbeiter, Händler,
+  Audit) ergänzt. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** F6 – Altbestand bleibt privat/gewerblich mit Herkunft „Altbestand“, kein Hinweis;
+  Korrektur dürfen alle Team-Mitglieder (protokolliert) und sie bleibt gegen spätere Importe stehen; „privat“ im Text-Import hebt
+  „gewerblich“ weiter nicht auf, nur die Korrektur.
+- **Bekannte Risiken:** nachgebaute Seiten; schwache Einstufungen ohne Hinweis; gespeicherte Suchseiten zeigen ihren Privatfilter nicht.
+- **Nächster sinnvoller Schritt:** P3-06 (`kontakte` als Ereignisse).
+
 ## P3-04 – Verfügbarkeit und zuletzt_bestaetigt (23.10.2026) · Status: REVIEW
 
 - **Verantwortlicher Agent:** `scout-data-engineer` (inkl. kleiner Oberflächenteile); QA `qa-security-reviewer` mit Browser-Check;

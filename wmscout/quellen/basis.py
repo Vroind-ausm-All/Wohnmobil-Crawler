@@ -82,6 +82,7 @@ class Inserat:
     beschreibung: str | None = None
     bild: str | None = None
     gewerblich: bool | None = None       # None = unbekannt
+    anbieter_herkunft: str | None = None  # worauf ``gewerblich`` beruht (``anbieter.py``: anzeige, suchfilter, ohne_kennzeichen, nutzer)
     ist_gesuch: bool = False             # Gesuche („Suche Wohnmobil …“) werden nicht gespeichert
     details: dict = field(default_factory=dict)   # weitere Felder der Quelle (Rohwerte)
     datum: str | None = None             # Einstelldatum laut Quelle (Rohtext)

@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from . import anbieter
 from .bearbeitung import IN_ARBEIT, VORBEREITET, BearbeitungsKonflikt
 from .domaene import (  # noqa: F401 – Kompatibilität: bisher hier definiert
     _MARKE, BESTAETIGT, IMPORT_ARTEN, IMPORT_SUCHE, STATUS, UNBEKANNT, VORLAEUFIG, import_art, import_suche)
@@ -143,14 +144,15 @@ class Datenbank:
         """Nur Tabelle ``anzeigen``, ohne eigenes Commit (Teil einer Transaktion des Aufrufers). ``text_eigen``: Aufruf aus dem Text-Import –
         neue Zeilen erhalten ``TEXT_MARKE``; bei jedem anderen Aufruf verliert eine bestehende Zeile die Markierung."""
         jetzt = datetime.now().isoformat(timespec="seconds")
-        alt = self.con.execute("SELECT preis, zuletzt_gesehen FROM anzeigen WHERE id=?", (a["id"],)).fetchone()
+        alt = self.con.execute("SELECT preis, zuletzt_gesehen, gewerblich, anbieter_herkunft FROM anzeigen WHERE id=?", (a["id"],)).fetchone()
         werte = {k: a.get(k) for k in FELDER_UPDATE}
         werte["suche"] = suche
         werte["vb"] = int(bool(a.get("vb")))
         # Ausdrücklich None (`Inserat.gewerblich`: Anbieter unbekannt, z. B. Anbieterkasten der Trefferliste fehlt) wird NULL, nicht
         # „privat“ (0) – sonst würde ein Händler ungeprüft wie ein Privatverkäufer behandelt; `anschreiben.hinweise` weist darauf hin.
-        # Fehlt der Schlüssel ganz (Aufrufer ohne Anbieterangabe), bleibt es wie bisher 0.
+        # Fehlt der Schlüssel ganz (Aufrufer ohne Anbieterangabe), bleibt es wie bisher 0 – mit der schwächsten Herkunft (P3-05).
         werte["gewerblich"] = None if "gewerblich" in a and a["gewerblich"] is None else int(bool(a.get("gewerblich")))
+        werte["anbieter_herkunft"] = anbieter.herkunft_fuer(werte["gewerblich"], a.get("anbieter_herkunft"))
         if alt is None:
             neu = {**werte, "details_json": TEXT_MARKE} if text_eigen else werte
             spalten = ["id", *neu, "erstmals_gesehen", "zuletzt_gesehen"]
@@ -161,8 +163,9 @@ class Datenbank:
         else:
             # Werte aus der Detailseite nicht mit leeren Listenwerten überschreiben
             werte = {k: v for k, v in werte.items() if v not in (None, "")}
-            if a.get("gewerblich") is None:          # „unbekannt“ (z. B. Detailseite ohne Hinweis) überschreibt nichts
-                werte.pop("gewerblich", None)
+            if not anbieter.uebernehmen(alt["gewerblich"], alt["anbieter_herkunft"], werte.get("gewerblich"), werte.get("anbieter_herkunft")):
+                werte.pop("gewerblich", None)        # „unbekannt“, schwächere Herkunft oder gewerblich → privat: Gespeichertes bleibt (P3-05)
+                werte.pop("anbieter_herkunft", None)
             if "vb" in a and a["vb"] is None:        # ausdrücklich „unbekannt“ (Mail ohne Preiszeile) überschreibt nichts; fehlt der Schlüssel: wie früher 0
                 werte.pop("vb", None)
             ergebnis = "bekannt"
@@ -332,16 +335,20 @@ class Datenbank:
         felder = {k: d.get(k) for k in ("titel", "preis", "km", "ez_jahr", "marke", "art", "leistung",
                                          "getriebe", "beschreibung")}
         felder = {k: v for k, v in felder.items() if v not in (None, "")}
-        if d.get("gewerblich"):
-            felder["gewerblich"] = 1
         if nur_leere:
             # grob gelesene Werte (eingefügter Text): vorhandene Felder bleiben, Merkmalsliste und „Details geladen“ ebenso
             alt = self.con.execute("SELECT * FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
             if alt is not None and alt["details_json"] != TEXT_MARKE:
-                felder = {k: v for k, v in felder.items() if k in ("preis", "gewerblich") or _leer(k, alt[k])}
+                felder = {k: v for k, v in felder.items() if k == "preis" or _leer(k, alt[k])}
         else:
             felder["details_json"] = json.dumps(self._ohne_personendaten(ad_id, d.get("details", {})), ensure_ascii=False)
             felder["detail_geladen"] = 1
+        if d.get("gewerblich") is not None:      # Anbieterart nach denselben Regeln wie beim Treffer (P3-05)
+            gewerblich = int(bool(d["gewerblich"]))
+            herkunft = anbieter.herkunft_fuer(gewerblich, d.get("anbieter_herkunft"))
+            alt = self.con.execute("SELECT gewerblich, anbieter_herkunft FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+            if alt is not None and anbieter.uebernehmen(alt["gewerblich"], alt["anbieter_herkunft"], gewerblich, herkunft):
+                felder.update(gewerblich=gewerblich, anbieter_herkunft=herkunft)
         if "preis" in felder:
             self._preis_aus_details(ad_id, felder["preis"])
         if felder:
@@ -393,10 +400,14 @@ class Datenbank:
         zeile = self.con.execute("SELECT art, detail_geladen FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
         return zeile["art"] if zeile and zeile["detail_geladen"] and zeile["art"] else None
 
-    def gewerblich_zu(self, ad_id: str) -> int | None:
-        """Gespeicherter Anbietertyp (1 gewerblich, 0 privat); None, wenn die Anzeige neu oder der Anbieter unbekannt ist."""
-        zeile = self.con.execute("SELECT gewerblich FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
-        return zeile["gewerblich"] if zeile else None
+    def setze_anbieter(self, ad_id: str, gewerblich: bool | None) -> bool:
+        """Korrektur der Anbieterart durch das Team (P3-05): privat, gewerblich oder unbekannt (None) – ersetzt jede gespeicherte
+        Einstufung, Herkunft ``korrektur`` (auch bei „unbekannt“, damit der nächste Suchlauf sie nicht still zurücksetzt). False, wenn es die
+        Anzeige nicht gibt."""
+        wert = None if gewerblich is None else int(bool(gewerblich))
+        with self._exklusiv():
+            cur = self.con.execute("UPDATE anzeigen SET gewerblich=?, anbieter_herkunft=? WHERE id=?", (wert, anbieter.KORREKTUR, ad_id))
+        return cur.rowcount > 0
 
     def suche_zu(self, ad_id: str) -> str | None:
         zeile = self.con.execute("SELECT suche FROM anzeigen WHERE id=?", (ad_id,)).fetchone()

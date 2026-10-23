@@ -85,8 +85,10 @@ suchen:
 
 `quelle`, `anzeigen_id`, `url` sind Pflicht. Alle anderen Felder sind optional und in einheitlichen Einheiten:
 Preis in ganzen Euro, `km` als Zahl, `ez_jahr` als Jahreszahl, `ort` als „PLZ Ort“ (für die Entfernung),
-`gewerblich` als `True`/`False`/`None` (unbekannt). Marke und Modell müssen nicht normalisiert sein, das
-erledigt `wmscout/normalisierung/fahrzeug.py`.
+`gewerblich` als `True`/`False`/`None` (unbekannt), dazu möglichst `anbieter_herkunft` (worauf die Einstufung beruht:
+`anzeige` – ausdrückliche Angabe wie PRO-Kennzeichen oder Verkäuferkasten; `suchfilter` – Suche liefert nur Privatanbieter;
+`ohne_kennzeichen` – nur kein Händlerkennzeichen gefunden; ADR-043). Ohne Angabe gilt `True` als `anzeige`, `False` als `ohne_kennzeichen`.
+Marke und Modell müssen nicht normalisiert sein, das erledigt `wmscout/normalisierung/fahrzeug.py`.
 
 ## 3. Netzwerk: `Abruf`
 
