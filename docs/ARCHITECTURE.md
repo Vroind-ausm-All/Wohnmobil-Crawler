@@ -140,7 +140,7 @@ manuellem Import nur einen Datensatz. In Tabellen und Texten unten steht „quel
 | search_profiles | `suchprofile` | id, name, quelle →, parameter_json, plz, radius_km, intervall_min, aktiv | `config.yaml → suchen` |
 | crawl_runs | `suchlaeufe` | id, quelle, suchprofil_id, start, ende, art, seiten, treffer, neu, fehler_art, fehler_text, parser_ok | neu |
 | vehicles | `fahrzeuge` | id, fingerabdruck, fin NULL, marke, serie, modell, art, ez_jahr, km_letzter, plz, ankauf_status, status_am, notiz, zusammengefuehrt_in | Normalisierung, Status aus `anzeigen` |
-| listings | `inserate` | id INTEGER PK, quelle, anzeigen_id, UNIQUE(quelle, anzeigen_id), fahrzeug_id →, oeffentliche_id, url, titel, Texte, preis, vb, anbieter_typ, verfuegbarkeit, zuletzt_bestaetigt, erstmals/zuletzt_gesehen, detail_geladen, details_json, qualitaet_json | `anzeigen` |
+| listings | `inserate` | id INTEGER PK, quelle, anzeigen_id, UNIQUE(quelle, anzeigen_id), fahrzeug_id →, oeffentliche_id, url, titel, Texte, preis, vb, anbieter_typ, verfuegbarkeit, zuletzt_bestaetigt, erstmals/zuletzt_gesehen, detail_geladen, details_json, qualitaet_json (**nicht umgesetzt**: Datenqualität wird beim Lesen berechnet, ADR-046) | `anzeigen` |
 | price_history | `preis_historie` | inserat_id, zeitpunkt, preis, vb, suchlauf_id, herkunft | `preis_vorher` + `preis` |
 | observations | `beobachtungen` | inserat_id, suchlauf_id, zeitpunkt, kanal (suche/api/email/manuell/detail), preis, inhalt_hash | neu |
 | valuations | `bewertungen` | inserat_id, zeitpunkt, modell_version, marktwert, spanne_von, spanne_bis, max_ek, erstangebot, sicherheit, n_vergleich, deal_score, komponenten_json | heute nur flüchtig |

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from ..domaene import STATUS, UNBEKANNT, import_art
 from ..dubletten import Wirkung, lade_wirkung, wende_an
 from ..anbieter import einstufung
+from ..normalisierung.qualitaet import pruefe_fahrzeug, pruefe_inserat
 from ..normalisierung.fahrzeug import arten_im_text, ergaenze_fahrzeug
 from ..normalisierung.geo import entfernung_km
 from ..verfuegbarkeit import ergaenze as ergaenze_verfuegbarkeit
@@ -204,11 +205,20 @@ def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[d
     else:                                   # Mitglieder ohne Preis zählen für Sperren und Markierungen, nicht für die Vergleichsbasis
         sonst = {z["id"]: angereichert(z) for z in [*aktive, *gruppenzeilen] if z["id"] not in nach_id}
         duplikate = wende_an(heuristisch, wirkung, {**sonst, **nach_id}.get, lambda a: a["id"])
+    qcache: dict[str, list] = {}
+
+    def markierungen(b: dict) -> list[dict]:          # Datenqualität je Inserat nur einmal je Bewertungslauf (P3-08, Gruppen)
+        if b["id"] not in qcache:
+            qcache[b["id"]] = pruefe_inserat(b, jetzt)
+        return qcache[b["id"]]
     zeilen = []
     for r in aktive:
         a = angereichert(r)                  # Altbestand-Status „gelöscht“ bleibt in der Liste und gilt wie offline (gesperrt, Abzeichen)
         a["entfernung_km"] = entfernung_km(standort, a.get("plz"))
         andere = duplikate.get(a["id"], [])
+        # Datenqualität (P3-08): Markierungen des Inserats und Wert des Fahrzeugs über alle seine Inserate – nur Anzeige, keine Wirkung
+        a["datenqualitaet_inserat"] = markierungen(a)
+        a["datenqualitaet"] = pruefe_fahrzeug(a, andere, jetzt, a["datenqualitaet_inserat"], vorab=markierungen)
         seit = min([a.get("erstmals_gesehen") or jetzt.isoformat()] + [b.get("erstmals_gesehen") or "9" for b in andere])
         a["tage_online"] = max(0, (jetzt - datetime.fromisoformat(seit)).days)
         a["neu_eingestellt"] = any((b.get("erstmals_gesehen") or "") < (a.get("erstmals_gesehen") or "") for b in andere)

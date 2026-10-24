@@ -59,6 +59,12 @@ def _anbieter_zellen(a: dict) -> list[str]:
     return [e["typ"], HERKUNFT_TEXT.get(e["herkunft"], "")]
 
 
+def _qualitaet_zellen(a: dict) -> list:
+    """CSV: Qualitätswert 0–100 und die Markierungen als Text (P3-08)."""
+    q = a.get("datenqualitaet")
+    return [q["wert"], " | ".join(m["text"] for m in q["markierungen"])] if q else ["", ""]
+
+
 def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None = None, team=None) -> dict:
     """``team``: ``TeamSicht`` (bearbeitung.py) oder ``None`` – dann bleiben die Team-Spalten der CSV leer."""
     ordner = basis / cfg["ausgabe"]["ordner"]
@@ -73,8 +79,8 @@ def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | 
                     "Marktniveau", "Spanne von", "Spanne bis", "Sicherheit", "Anz. Vergleiche", "Marktwert privat",
                     "Händler-VK", "Kosten", "Ziel-Marge", "Max-EK", "Erstangebot", "Erstangebot % Marktwert",
                     "Gewinn bei Angebotspreis", "Wertfaktoren", "Sperrgrund", "Hinweise", "Status", "Nachfassen", "Kontaktiert am",
-                    "Verfügbarkeit", "Zuletzt bestätigt", "Anbieter", "Anbieter-Herkunft", "Erstmals gesehen", "URL", "Bearbeiter", "Übernommen am",
-                    "Kontaktiert von"])
+                    "Verfügbarkeit", "Zuletzt bestätigt", "Anbieter", "Anbieter-Herkunft", "Datenqualität", "Datenmarkierungen", "Erstmals gesehen",
+                    "URL", "Bearbeiter", "Übernommen am", "Kontaktiert von"])
         for z in sorted(zeilen, key=lambda z: z["b"].verhaeltnis or 99):
             a, b = z["a"], z["b"]
             t = team.objekt(z) if team else None
@@ -86,7 +92,8 @@ def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | 
                         b.vergleich_anzahl, *betraege[:6], f"{b.fair_anteil:.0%}" if b.fair_anteil else "", betraege[6],
                         ", ".join(f"{n} {w:+.1%}" for n, w in b.wertfaktoren.items()), z["sperre"] or "",
                         " | ".join(z.get("hinweise") or []), a["status"], z["nachfassen"] or "", a.get("kontaktiert_am") or "",
-                        _verfuegbarkeit_zelle(a), a.get("zuletzt_bestaetigt") or "", *_anbieter_zellen(a), a["erstmals_gesehen"], a["url"],
+                        _verfuegbarkeit_zelle(a), a.get("zuletzt_bestaetigt") or "", *_anbieter_zellen(a), *_qualitaet_zellen(a),
+                        a["erstmals_gesehen"], a["url"],
                         *_team_spalten(t)])
 
     # --- Anschreiben als Textdateien ---

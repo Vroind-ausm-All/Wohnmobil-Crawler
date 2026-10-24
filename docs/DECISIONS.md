@@ -874,3 +874,29 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   (`bewertungen`) und die fachliche Frage, ob offline/verkaufte oder sehr alte Inserate in die Vergleichsbasis gehören, bleiben für Phase 5
   (acquisition-analyst). Änderungen an den Einträgen selbst (nicht an der Liste) bemerkt der Index nicht – kein Aufrufer tut das.
   `kalkulation.vergleich_auszug` nutzt den Vorfilter noch nicht (Backlog).
+
+## ADR-046 – Datenqualität: Markierungen und Wert je Fahrzeug, beim Lesen berechnet, ohne Wirkung · gilt (23.10.2026)
+
+* **Kontext:** P3-08 (und P2-10). Fehlende, unplausible oder widersprüchliche Angaben (Preis 1 €, EZ nach Baujahr, km-Rückgang, falsche
+  Marke im Titel) waren nirgends sichtbar; je Quelle gab es nur die Mail-Messfunktion.
+* **Entscheidung:**
+  1. Reines Modul `normalisierung/qualitaet.py`, beim Lesen berechnet (kein Schema, keine `qualitaet_json`-Spalte: geänderte Regeln wirken
+     sofort, nichts veraltet).
+  2. Markierungen je Inserat in drei Arten: **fehlt** (Preis, EZ, km, Ort, Marke, Fahrzeugart unbekannt/vorläufig, Anbieter unbekannt),
+     **unplausibel** (Preis < 1.000 € oder > 750.000 €, EZ in der Zukunft oder vor 1960, km > 1 Mio., > 60.000 km je Jahr oder < 1.000 km
+     ab 3 Jahren) und **Widerspruch** (genanntes Baujahr mehr als ein Jahr nach der EZ – ein Jahr ist oft das Modelljahr; im Text mit „EZ“/
+     „Erstzulassung“ genannte EZ ≠ Angabe, nur direkt mit Monat, „ca.“ oder Datum davor; km im **Titel** ≠ Angabe – Beschreibungen nennen
+     oft andere Strecken; Marke im Titel ≠ Marke; Basisfahrzeuge zählen nicht).
+  3. Je Fahrzeug: eine Angabe fehlt nur, wenn sie in keinem Inserat des Fahrzeugs steht; dazu km-Rückgang gegenüber einem älteren Inserat
+     (> 1.000 km; nur mit bekanntem Datum beider Inserate) und abweichende Erstzulassungen. Je Bewertungslauf wird jedes Inserat nur einmal
+     geprüft (kein quadratischer Aufwand bei großen Gruppen). Wert = 100 − Abzüge (Kernangaben Preis/EZ 25, km 15, Ort/Marke/Art 10, Art vorläufig und
+     Anbieter 5, jede unplausible oder widersprüchliche Angabe 20), mindestens 0; Stufen gut ≥ 80, mittel ≥ 50, schwach.
+  4. Nur Anzeige: Bewertung, Ampel, Sperre und Brief bleiben unverändert (Test vergleicht beide Läufe). Desktop/Handy: Abzeichen „Daten
+     lückenhaft“ bei schwach, Markierungen im Detail; CSV „Datenqualität“, „Datenmarkierungen“; API `datenqualitaet`.
+  5. Je Quelle (P2-10): `scout.py qualitaet` und `GET /api/datenqualitaet` (Team, nicht Händler-Zugang): Anteile je Inserat, Ø-Wert,
+     Fahrzeuge mit Widerspruch – ohne Personendaten.
+* **Alternativen:** Speichern in `inserate.qualitaet_json` (veraltet bei Regeländerung, Migration nötig); Wirkung auf Ampel/Max-EK
+  (fachliche Entscheidung, Betreiberfrage); km-Verlauf je Inserat (bräuchte km in `beobachtungen` – Schemaänderung, offen).
+* **Folgen / offen:** Ob eine schwache Datenlage die Ampel dämpfen oder das Anschreiben sperren soll, entscheidet der Betreiber. Ein
+  km-Rückgang innerhalb desselben Inserats wird nicht erkannt (kein km-Verlauf gespeichert). Schwellen sind Annahmen und im Code
+  (Konstanten) anpassbar, nicht in `config.yaml`.

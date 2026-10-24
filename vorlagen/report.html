@@ -58,6 +58,7 @@ kbd{font:12px ui-monospace,monospace;padding:1px 5px;border:1px solid var(--line
 .tag.rot{background:var(--rot-bg);color:var(--rot)} .tag.neu{background:var(--akzent);color:var(--akzent-ink)}
 .tag.status{background:var(--ink);color:var(--card)}
 .tag.anb.gewerblich{background:var(--rot-bg);color:var(--rot)} .tag.anb.unbekannt,.tag.anb.unbelegt{background:var(--gelb-bg);color:var(--gelb)}
+.tag.dq,.tag.dq-schwach{background:var(--gelb-bg);color:var(--gelb)} .dq-m.dq-widerspruch,.dq-m.dq-unplausibel{color:var(--rot)}
 .tag.verf{background:var(--rot-bg);color:var(--rot)} .tag.verf.reserviert,.tag.verf.vermutlich{background:var(--gelb-bg);color:var(--gelb)}
 .bar label.verfbox{font-size:14px;display:flex;align-items:center;gap:6px;cursor:pointer}
 .streif{height:4px;background:var(--line)}
@@ -265,6 +266,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
           {% if a.preis_vorher %}<span class="tag">Preis gesenkt</span>{% endif %}
           {% if a.neu_eingestellt %}<span class="tag">neu eingestellt</span>{% endif %}
           {% if a.verfuegbarkeit_text %}<span class="tag verf {{ 'vermutlich' if a.vermutlich_offline else a.verfuegbarkeit }}" data-verfuegbarkeit>{{ a.verfuegbarkeit_text }}</span>{% endif %}
+          {% if a.datenqualitaet and a.datenqualitaet.stufe == 'schwach' %}<span class="tag dq" title="Datenqualität {{ a.datenqualitaet.wert }}/100" data-dq>Daten lückenhaft</span>{% endif %}
           {% if z.nachfassen %}<span class="tag nachfassen">nachfassen</span>{% endif %}
           <span class="tag status" hidden></span>
           {% if team %}<span class="tbbox" data-teambadge></span>{% endif %}
@@ -313,6 +315,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
         {% if a.anbieter %}<p class="meta">Anbieter: <span class="tag anb {{ a.anbieter.typ }}{{ '' if a.anbieter.belegt else ' unbelegt' }}" data-anbieter>{{ a.anbieter.text }}</span>
           <select data-anbieter-setzen aria-label="Anbieter korrigieren" hidden><option value="">korrigieren ▾</option><option value="privat">privat</option>
             <option value="gewerblich">gewerblich</option><option value="unbekannt">unbekannt</option></select></p>{% endif %}
+        {% if a.datenqualitaet %}<p class="meta">Datenqualität: <span class="tag dq-{{ a.datenqualitaet.stufe }}" data-dq-wert>{{ a.datenqualitaet.wert }}/100 ({{ a.datenqualitaet.stufe }})</span>{% if a.datenqualitaet.markierungen %} – {% for m in a.datenqualitaet.markierungen %}<span class="dq-m dq-{{ m.art }}">{{ m.text }}</span>{{ ' · ' if not loop.last }}{% endfor %}{% endif %}</p>{% endif %}
         {% if team %}<div class="teamzeile"><span class="tbbox" data-teambadge></span><span class="meta" data-teaminfo></span>
           <button class="btn" data-teamaktion="uebernehmen" hidden>Ich übernehme</button><button class="btn" data-teamaktion="abgeben" hidden>Abgeben</button>
           {% if team.ich.rolle == 'inhaber' %}<button class="btn" data-teamaktion="erzwingen" hidden>Übernahme erzwingen</button>

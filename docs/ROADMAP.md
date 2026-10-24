@@ -133,7 +133,7 @@ Beispiel-Mails vorliegen.
 | P2-07 | P2 | Optional: IMAP-Abruf eines eigenen Postfachs (Zugangsdaten aus Umgebungsvariablen) | source-integrations | P2-06, Betreiber-Postfach | ZURÜCKGESTELLT (18.10.2026) – optional, `.eml`-Ablage reicht; erst nach Abnahme mit echten Mails (F3) |
 | P2-08 | P2 | mobile.de-API: Adapter-Stub (`zugriffsart = api`, `freigegeben = False`) + Anfrageschreiben an mobile.de vorbereiten | source-integrations, source-researcher | Vertrag | **BLOCKED** bis Zusage |
 | P2-09 | P3 | Stubs/Anfragen AutoScout24, Caraworld, Quoka; Volumenprüfung regionaler Portale | source-researcher | – | ZURÜCKGESTELLT (18.10.2026) – Anfragen erst nach Betreiberentscheidung F4 (Händlerregistrierung/API-Zugang) |
-| P2-10 | P2 | Datenqualität je Quelle messen (Anteil Preis/EZ/km/PLZ/Anbieterart) | source-integrations | P2-03 | ZURÜCKGESTELLT (18.10.2026) – Messfunktion für Mails vorhanden (`datenqualitaet`); Auswertung je Quelle erst mit echten Daten bzw. mit P3-08 |
+| P2-10 | P2 | Datenqualität je Quelle messen (Anteil Preis/EZ/km/PLZ/Anbieterart) | source-integrations | P2-03 | DONE mit P3-08 (23.10.2026): `scout.py qualitaet`, `GET /api/datenqualitaet`; Bewertung echter Quellen erst mit echten Daten |
 
 ## Phase B (3.0) – Verkäuferportal
 
@@ -212,8 +212,8 @@ erhalten (Re-Import-Test).
 | P3-04 | P2 | Verfügbarkeit (`aktiv`/`reserviert`/`offline`/`verkauft`/`unbekannt`) + `zuletzt_bestaetigt` | scout-data-engineer | DONE (PR #31 gemergt; Schema v13, ADR-042) |
 | P3-05 | P2 | Privat/Händler-Klassifizierung mit Herkunft der Einstufung | scout-data-engineer | DONE (PR #32 gemergt; Schema v14, ADR-043; mit P2-05d) |
 | P3-06 | P1 | `kontakte` als Ereignisse (vorbereitet/bestätigt, Kanal, Nutzer) | scout-data-engineer | DONE (PR #33 gemergt; Schema v15, ADR-044) |
-| P3-07 | P2 | Indizes nach `EXPLAIN QUERY PLAN`, Vorfilter für Vergleichsauswahl (R12) | scout-data-engineer | REVIEW (Schema v16, ADR-045) |
-| P3-08 | P2 | Markierungen für unvollständige/widersprüchliche Angaben, Datenqualitätswert je Fahrzeug | scout-data-engineer | TODO |
+| P3-07 | P2 | Indizes nach `EXPLAIN QUERY PLAN`, Vorfilter für Vergleichsauswahl (R12) | scout-data-engineer | DONE (PR #34 gemergt; Schema v16, ADR-045) |
+| P3-08 | P2 | Markierungen für unvollständige/widersprüchliche Angaben, Datenqualitätswert je Fahrzeug | scout-data-engineer | REVIEW (ADR-046; ohne Schemaänderung; mit P2-10) |
 
 ## Phase 4 – Deutschlandweite Suchstrategie
 
