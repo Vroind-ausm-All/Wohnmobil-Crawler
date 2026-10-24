@@ -232,6 +232,8 @@ def fahrzeug_kurz(z: dict, team: dict | None = None) -> dict:
             "brief_betrag": z.get("brief_betrag"),
             "max_ek": b.max_ek if b.sicherheit != "keine" else None, "bereit": z["bereit"], "nachfassen": z["nachfassen"],
             "sperre": z["sperre"], "hinweise": z["hinweise"], "neu": z["neu"], "team": team,
+            # frisch / Preis deutlich gesenkt / jetzt im Rahmen (P4-03): {stufe, text, frisch, senkung, im_rahmen} oder None
+            "neuigkeit": z.get("neuigkeit"),
             # Verfügbarkeit des Inserats (Markt), getrennt vom Ankaufsstatus; „vermutlich offline“ ist abgeleitet, nicht gespeichert (P3-04)
             "verfuegbarkeit": a.get("verfuegbarkeit") or "unbekannt", "zuletzt_bestaetigt": a.get("zuletzt_bestaetigt"),
             "vermutlich_offline": bool(a.get("vermutlich_offline")), "verfuegbarkeit_text": a.get("verfuegbarkeit_text"),
@@ -873,6 +875,7 @@ class Anfrage:
             "bereit": sum(1 for z in zeilen if z["bereit"] and (z["a"].get("status") or "neu") == "neu"),
             "nachfassen": sum(1 for z in zeilen if z["nachfassen"]),
             "arbeit": sum(1 for z in zeilen if z["a"].get("status") in IN_ARBEIT),
+            "neuigkeiten": sum(1 for z in zeilen if z.get("neuigkeit")),
             "suchlauf": k.suchlauf.stand,
         }
 
@@ -960,11 +963,13 @@ class Anfrage:
                 continue
             # „Text kopiert“ bleibt unter „Anschreiben bereit“, bis „gesendet ✓“ bestätigt ist (ADR-012)
             ok = {"bereit": (z["bereit"] and s == "neu") or s == VORBEREITET, "nachfassen": bool(z["nachfassen"]),
-                  "arbeit": s in IN_ARBEIT, "offen": s in OFFEN, "alle": True}.get(f, False)
+                  "arbeit": s in IN_ARBEIT, "offen": s in OFFEN, "alle": True, "neuigkeiten": bool(z.get("neuigkeit"))}.get(f, False)
             text = f"{z['a']['fahrzeug']} {z['a']['titel']} {z['a'].get('ort') or ''}".lower()
             if ok and all(w in text for w in q):
                 auswahl.append((z, t))
         auswahl.sort(key=lambda zt: zt[0]["b"].verhaeltnis or 99)
+        if f == "neuigkeiten":                              # wichtigste zuerst: jetzt im Rahmen, neu und bereit, gesenkt, neu (P4-03)
+            auswahl.sort(key=lambda zt: zt[0]["neuigkeit"]["stufe"])
         if profil_treffer is not None:
             return [{**fahrzeug_kurz(z, t), "profil_treffer": profil_treffer[z["a"]["id"]]} for z, t in auswahl[:200]]
         return [fahrzeug_kurz(z, t) for z, t in auswahl[:200]]

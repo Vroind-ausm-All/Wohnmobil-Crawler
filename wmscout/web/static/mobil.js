@@ -43,6 +43,11 @@
   function dqTag(f) {
     return f.datenqualitaet && f.datenqualitaet.stufe === "schwach" ? '<span class="tag dq" data-dq="">Daten lückenhaft</span>' : "";
   }
+  // Neuigkeit (P4-03): frisch eingegangen / Preis deutlich gesenkt / jetzt im Rahmen – Text nur über esc()
+  function neuTag(f) {
+    var n = f.neuigkeit;
+    return n ? '<span class="tag ' + (n.im_rahmen ? "gruen" : "neu") + '" data-neuigkeit="">' + esc(n.im_rahmen ? "jetzt im Rahmen" : n.senkung ? "Preis gesenkt" : "neu") + "</span>" : "";
+  }
   function dqKarte(f) {
     var q = f.datenqualitaet;
     if (!q) return "";
@@ -150,7 +155,8 @@
         '<div class="kacheln">' +
         '<a class="kachel" href="#/liste/bereit"><b>' + d.bereit + "</b><span>Anschreiben bereit</span></a>" +
         '<a class="kachel" href="#/liste/nachfassen"><b>' + d.nachfassen + "</b><span>Nachfassen</span></a>" +
-        '<a class="kachel" href="#/liste/arbeit"><b>' + d.arbeit + "</b><span>In Arbeit</span></a></div>" +
+        '<a class="kachel" href="#/liste/arbeit"><b>' + d.arbeit + "</b><span>In Arbeit</span></a>" +
+        '<a class="kachel" href="#/liste/neuigkeiten"><b>' + (d.neuigkeiten || 0) + "</b><span>Neu &amp; gesenkt</span></a></div>" +
         (textDarf() ? '<div class="reihe"><a class="knopf primaer" href="#/einlesen">＋ Inserat einlesen (Link + Text)</a></div>' : "") +
         '<p><a class="knopf klein" href="/anfragen">Verkaufsanfragen</a> <a class="knopf klein" href="/verkaufen">+ Anfrage erfassen</a></p>' +
         "<h2>Besichtigungen heute</h2>" + (heutige.length ? heutige.map(terminKarte).join("") : '<p class="leise">Keine Termine für heute.</p>') +
@@ -195,7 +201,7 @@
     });
   }
 
-  var LISTEN = { bereit: "Anschreiben bereit", nachfassen: "Nachfassen", arbeit: "In Arbeit", alle: "Alle Fahrzeuge" };
+  var LISTEN = { bereit: "Anschreiben bereit", nachfassen: "Nachfassen", neuigkeiten: "Neu & gesenkt", arbeit: "In Arbeit", alle: "Alle Fahrzeuge" };
   var WER = { alle: "Alle", meine: "Meine", frei: "Frei" };
   // Suchprofile (P4-01): aktive Profile als Filter über die eingegangenen Inserate; einmal je Sitzung geladen
   function profile() {
@@ -225,10 +231,11 @@
           return '<button class="knopf klein' + (w === wer ? " primaer" : "") + '" data-aktion="wer" data-wer="' + w + '" aria-pressed="' + (w === wer) + '">' + WER[w] + "</button>";
         }).join("") + "</div>" : "") + profilAuswahl() +
         (l.length ? l.map(function (f) {
-          return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + teamBadge(f.team) + verfTag(f) + dqTag(f) +
+          return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + teamBadge(f.team) + neuTag(f) + verfTag(f) + dqTag(f) +
             (f.profil_treffer === "unklar" ? '<span class="tag dq" data-profil-unklar="">Profil unklar</span>' : "") + ampelTag(f.ampel) + "</div>" +
             '<p class="leise">EZ ' + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") + (f.entfernung_km !== null ? " · " + tsd(f.entfernung_km) + " km entfernt" : "") + "</p>" +
             hinweisZeilen(f) +
+            (f.neuigkeit && f.neuigkeit.senkung ? '<p class="leise" data-senkung="">' + esc(f.neuigkeit.text) + "</p>" : "") +
             (f.nachfassen ? '<p class="leise" style="color:var(--gelb)">Nachfassen: ' + esc(f.nachfassen) + "</p>" : "") +
             '<div class="zahlen"><div><span>Wunschpreis</span>' + eur(f.preis) + "</div><div><span>Erstangebot</span><b>" + eur(f.erstangebot) +
             "</b></div><div><span>Max-EK</span>" + eur(f.max_ek) + "</div></div></a>";

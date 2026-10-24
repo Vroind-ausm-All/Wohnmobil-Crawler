@@ -27,6 +27,7 @@ def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None =
         "gruen": sum(z["b"].ampel == "gruen" and not z.get("ausblenden") for z in zeilen),
         "gelb": sum(z["b"].ampel == "gelb" and not z.get("ausblenden") for z in zeilen),
         "neu": sum(z["neu"] for z in zeilen),
+        "neuigkeiten": sum(bool(z.get("neuigkeit")) for z in zeilen),
         "anschreiben": sum(z["bereit"] for z in zeilen),
         "kontaktiert": sum(z["a"].get("status") == "kontaktiert" for z in zeilen),
         "arbeit": sum(z["a"].get("status") in IN_ARBEIT for z in zeilen),
@@ -79,8 +80,8 @@ def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | 
                     "Marktniveau", "Spanne von", "Spanne bis", "Sicherheit", "Anz. Vergleiche", "Marktwert privat",
                     "Händler-VK", "Kosten", "Ziel-Marge", "Max-EK", "Erstangebot", "Erstangebot % Marktwert",
                     "Gewinn bei Angebotspreis", "Wertfaktoren", "Sperrgrund", "Hinweise", "Status", "Nachfassen", "Kontaktiert am",
-                    "Verfügbarkeit", "Zuletzt bestätigt", "Anbieter", "Anbieter-Herkunft", "Datenqualität", "Datenmarkierungen", "Erstmals gesehen",
-                    "URL", "Bearbeiter", "Übernommen am", "Kontaktiert von"])
+                    "Verfügbarkeit", "Zuletzt bestätigt", "Anbieter", "Anbieter-Herkunft", "Datenqualität", "Datenmarkierungen",
+                    "Neuigkeit", "Erstmals gesehen", "URL", "Bearbeiter", "Übernommen am", "Kontaktiert von"])
         for z in sorted(zeilen, key=lambda z: z["b"].verhaeltnis or 99):
             a, b = z["a"], z["b"]
             t = team.objekt(z) if team else None
@@ -93,7 +94,7 @@ def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | 
                         ", ".join(f"{n} {w:+.1%}" for n, w in b.wertfaktoren.items()), z["sperre"] or "",
                         " | ".join(z.get("hinweise") or []), a["status"], z["nachfassen"] or "", a.get("kontaktiert_am") or "",
                         _verfuegbarkeit_zelle(a), a.get("zuletzt_bestaetigt") or "", *_anbieter_zellen(a), *_qualitaet_zellen(a),
-                        a["erstmals_gesehen"], a["url"],
+                        (z.get("neuigkeit") or {}).get("text", ""), a["erstmals_gesehen"], a["url"],
                         *_team_spalten(t)])
 
     # --- Anschreiben als Textdateien ---

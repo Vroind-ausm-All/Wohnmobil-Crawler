@@ -195,6 +195,15 @@ nachfassen:
 verfuegbarkeit:
   offline_nach_tagen: 14           # ganze Zahl 1 bis 3650; ungültige Werte gelten als 14
 
+# Neuigkeiten (P4-03): frisch eingegangene Inserate und deutliche Preissenkungen werden hervorgehoben (Filter „Neu & gesenkt“, Sortierung
+# „Neuigkeiten zuerst“), nach dem Suchlauf im Browser-Hinweis und in der Mail gemeldet. Ganz oben steht, was durch eine Senkung jetzt unter
+# dem Max-EK liegt. Die Bewertung ändert sich dadurch nicht. Ungültige Werte gelten als Standard.
+neuigkeiten:
+  frisch_stunden: 48               # so lange gilt ein Inserat nach dem ersten Eingang als neu (1–1440)
+  senkung_tage: 14                 # so lange wird eine Preissenkung hervorgehoben (1–365)
+  senkung_min_prozent: 3           # deutlich ist eine Senkung ab so viel Prozent …
+  senkung_min_euro: 500            # … oder ab so viel Euro
+
 # --- 7. App -----------------------------------------------------
 app:
   port: 8765
@@ -285,6 +294,7 @@ email:
   passwort_env: SCOUT_SMTP_PASSWORT     # Passwort als Umgebungsvariable, nicht hier
   empfaenger: "dein.name@example.de"
   nur_bei_neuen_treffern: true
+  preissenkungen_melden: true      # deutliche Preissenkungen seit dem Suchlauf mitmelden (P4-03)
 
 # Verkäuferportal (Phase B): Verkäufer bieten ihr Fahrzeug selbst an (/verkaufen), das Team bearbeitet es unter /anfragen.
 # Version 1 läuft nur in der App (lokal/Tailscale) – öffentlich erst nach eigener Sicherheitsprüfung (ADR-025).

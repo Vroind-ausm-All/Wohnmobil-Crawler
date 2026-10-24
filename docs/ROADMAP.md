@@ -222,8 +222,8 @@ erhalten (Re-Import-Test).
 | ID | Prio | Paket | Agent | Status |
 |---|---|---|---|---|
 | P4-01 | P1 | Suchprofile in der Datenbank, verwaltbar in der App (Art, Marke, Modell, Preis, EZ, km) – solange keine freigegebene Pull-Quelle existiert, als **Filter über eingegangene Daten** plus **Abdeckungscheckliste** der vom Nutzer angelegten Suchaufträge je Plattform | source-integrations, scout-ui-engineer | DONE (PR #36 gemergt; Schema v17, ADR-047) |
-| P4-02 | P1 | Suchgebiete und PLZ-Regionen (bundesweit, Umkreis, Regionenliste) | source-integrations | REVIEW (Schema v18, ADR-048; Suchgebiet je Suchprofil, Filter über eingegangene Daten; Branch `claude/phase4-suchgebiete`) |
-| P4-03 | P1 | Neue Angebote priorisieren; Preissenkungen erkennen und melden | source-integrations | TODO |
+| P4-02 | P1 | Suchgebiete und PLZ-Regionen (bundesweit, Umkreis, Regionenliste) | source-integrations | DONE (PR #37 gemergt; Schema v18, ADR-048) |
+| P4-03 | P1 | Neue Angebote priorisieren; Preissenkungen erkennen und melden | source-integrations | REVIEW (ADR-049, ohne Schemaänderung; Branch `claude/phase4-neu-preissenkung`) |
 | P4-04 | P2 | Intervalle je Quelle; Suchläufe und Fehler überwachen (Statusseite) | source-integrations | TODO |
 | P4-05 | P2 | Suchlücken und Abdeckung messen | scout-data-engineer | TODO |
 | P4-06 | P3 | Vollständige und inkrementelle Bestandssuche für berechtigte API-Zugänge | source-integrations | BLOCKED bis API-Zugang |

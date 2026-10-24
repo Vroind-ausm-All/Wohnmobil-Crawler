@@ -6,6 +6,27 @@ Wert „–“.
 
 ---
 
+## P4-03 – Neuigkeiten: frisch eingegangen und Preissenkungen hervorheben, priorisieren, melden (24.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `source-integrations`/`scout-ui-engineer`); QA `qa-security-reviewer`;
+  Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/bewertung/neuigkeit.py` (neu), `bewertung/auswertung.py`, `datenbank.py` (Erhöhung setzt Senkung zurück),
+  `web/api.py`, `app.py`, `benachrichtigung.py`, `scout.py`, `ausgabe.py`, `vorlagen/report.html`, `web/static/mobil.js`, `mobil.css`,
+  `sw.js` (wm-scout-15), `config.yaml` (`neuigkeiten`, `email.preissenkungen_melden`), Tests `test_neuigkeiten.py` (neu); Doku ADR-049,
+  ROADMAP (P4-02 DONE, P4-03 REVIEW), README.
+- **Implementierte Funktionen:** siehe ADR-049. Keine Schemaänderung, keine Wirkung auf die Bewertung, kein Netzabruf.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. B1 (gesperrte Inserate, z. B. gewerblich, als „jetzt im Rahmen“
+  ganz oben und in der Mail) → keine Neuigkeit bei Sperre; B2 (Dubletten doppelt gemeldet) → je Fahrzeug einmal in Hinweis und Mail;
+  B3 (kleine Senkung über die Max-EK-Grenze ging verloren) → „im Rahmen“ ohne Deutlichkeitsschwelle; B4 (nach Erhöhung weiter „gesenkt“,
+  auch im Nachfassen) → Import setzt die gemerkte Senkung zurück; B5 („Max-EK 0 €“, „None“ in der Mail) → „–“, „Ort ?“; B6 Einzahl/Mehrzahl,
+  Doku zum Mailverhalten; B7 CSV-Spalte dokumentiert; B8 nur Hinweis (Zeitumstellung). Eigener Fund im Browser: Tooltip mit Dezimalpunkt →
+  Komma. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Schwellen 48 h / 14 Tage / 3 % oder 500 € in `config.yaml`; Preissenkungen per Mail
+  standardmäßig an; keine WhatsApp-Meldung für Senkungen (Vorlage bei Meta nötig); Bewertung unverändert.
+- **Bekannte Risiken:** Nur Eingänge mit Preis lassen eine Senkung erkennen; der Hinweis nach Mail-/Seiten-Importen fehlt (nur Kachel/Filter).
+- **Nächster sinnvoller Schritt:** P4-04 Intervalle je Quelle, Suchläufe und Fehler überwachen (Statusseite).
+
 ## P4-02 – Suchgebiete: bundesweit, Umkreis, PLZ-Bereiche (24.10.2026) · Status: REVIEW
 
 - **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `source-integrations`/`scout-ui-engineer`, Migration wie `scout-data-engineer`);
