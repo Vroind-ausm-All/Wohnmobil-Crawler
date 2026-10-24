@@ -143,7 +143,7 @@ def _lauf(cfg, db):
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
     erg = schreibe_ausgaben(cfg, zeilen, BASIS, fehler=stat["fehler"], team=_team(cfg, db))
     logging.info("Report: %s  (%s)", erg["html"], erg["zaehl"])
-    sende_mail(cfg, zeilen, erg)
+    sende_mail(cfg, zeilen, erg, seit=start)
 
 
 def _anzahl(n: int, einzahl: str, mehrzahl: str) -> str:

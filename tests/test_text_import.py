@@ -248,7 +248,8 @@ def test_niedrigerer_preis_ist_preissenkung(cfg, db):
         "SELECT p.preis FROM preis_historie p JOIN inserate i ON i.id=p.inserat_id WHERE i.anzeigen_id='2987654321' ORDER BY p.id")]
     assert preise == [24900, 22500]
     _, teurer = speichere(cfg, db, text=KA_TEXT.replace("24.900 €", "26.000 €"))
-    assert teurer["preis"] == 0 and zeile(db, "2987654321")["preis_vorher"] == 24900
+    # Erhöhung ist keine Senkung; seit P4-03 (ADR-049) setzt sie die gemerkte Senkung zurück (sonst „Preis gesenkt“ trotz Erhöhung)
+    assert teurer["preis"] == 0 and zeile(db, "2987654321")["preis_vorher"] is None
 
 
 def test_kein_netzaufruf_beim_lesen_und_speichern(cfg, db, monkeypatch):

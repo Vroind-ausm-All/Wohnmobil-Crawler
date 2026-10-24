@@ -32,7 +32,7 @@ a.karte:active{border-color:var(--akzent)}
 .titel{font-weight:600}
 .zahlen{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;font-variant-numeric:tabular-nums}
 .zahlen span{display:block;color:var(--mute);font-size:12px}
-.kacheln{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.kacheln{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0}
 .kachel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center;color:inherit;text-decoration:none}
 .kachel b{display:block;font-size:24px}
 .kachel span{font-size:12px;color:var(--mute)}
@@ -99,3 +99,6 @@ body.login{display:grid;place-items:center;min-height:100vh;padding:16px}
 .kontakte .kontakt{flex-wrap:wrap;gap:4px 8px;padding:6px 0;border-bottom:1px solid var(--linie,#e5e5e5)} .kontakte .kontakt:last-child{border-bottom:0}
 .kontakte .kontakt.offen>span:first-child{color:var(--gelb)}
 .tag.dq,.tag.dq-schwach{background:var(--gelb-bg);color:var(--gelb)} .dq-m.dq-widerspruch,.dq-m.dq-unplausibel{color:var(--rot)}
+
+/* Neuigkeit (P4-03) */
+.tag.neu{background:var(--akzent);color:var(--akzent-ink)}

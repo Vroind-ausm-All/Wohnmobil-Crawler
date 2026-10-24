@@ -4,6 +4,22 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P4-03 – Neuigkeiten: frisch eingegangen und Preissenkungen hervorheben, priorisieren, melden (24.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2193 bestanden, 1 fehlgeschlagen: `test_text_import.py::test_niedrigerer_preis_ist_preissenkung` erwartete, dass `preis_vorher` nach einer Erhöhung stehen bleibt – genau das ändert QA B4 bewusst. Erwartung angepasst (Erhöhung bleibt keine Senkung), danach `test_text_import.py` + `test_neuigkeiten.py`: 139 bestanden. Neu `test_neuigkeiten.py` (42) |
+| `ruff check .` | grün |
+| Senkung (14 Fälle: Schwellen 3 % / 500 €, Zeitfenster genau 14 Tage, Zukunft, wieder erhöht, ungültige Werte), Einstellungen mit Fehleingaben | bestanden |
+| Stufen (13 Fälle): im Rahmen vor frisch, ohne belastbaren Max-EK kein „im Rahmen“, kleine Senkung über die Max-EK-Grenze ist „im Rahmen“; nur offene, sichtbare, nicht gesperrte Inserate (gewerblich, doppelt, Ausschlussbegriff, zu weit) | bestanden |
+| Keine Wirkung: Bewertung, bereit, Sperre, Brief, Hinweise, Nachfassen, „neu“ gleich mit und ohne Neuigkeiten | bestanden |
+| Import Ende zu Ende: zweiter Eingang mit niedrigerem Preis → Senkung; danach Erhöhung → `preis_vorher`/`preis_geaendert_am` leer, Preisverlauf mit 3 Einträgen vollständig | bestanden |
+| API (`filter=neuigkeiten` nach Stufe sortiert, „im Rahmen“ zuerst, `/api/heute`, Einzelfahrzeug), Report (Kachel, Filter, Sortierung, Abzeichen), CSV-Spalte „Neuigkeit“ | bestanden |
+| Melden: Mail nur mit Preissenkungen (Betreff, Text, Einzahl), vor dem Lauf gesenkt bzw. abgeschaltet → keine Mail, Max-EK „–“ ohne belastbare Bewertung; Dubletten einmal; Suchlauf zählt nur deutliche Senkungen („2 Preissenkungen, davon 1 deutlich“) | bestanden |
+| Browser (Orchestrator, Chromium über Playwright, nach der Korrekturrunde): Desktop 1280 – Kachel/Filter 2, „jetzt im Rahmen“ zuerst, Abzeichen „Preis −9.700 € (24.10.)“, Tooltip „48,3 %“, gesperrtes Inserat nicht dabei, HTML im Titel nicht ausgeführt; Handy 390 – Kachel und Liste „Neu & gesenkt“ (2); 0 JS-Fehler | bestanden |
+| QA (eine Runde, vor der Korrekturrunde: 45 bestanden, eigene Proben) | Freigabe mit Auflagen – B1–B7 behoben bzw. dokumentiert, B8 Hinweis; Korrekturen **nicht** erneut von der QA geprüft |
+| Echte Mails/SMTP, Browser-Benachrichtigung, Windows-CI | nicht geprüft (SMTP nur mit Ersatz; CI folgt im PR) |
+
 ## P4-02 – Suchgebiete: bundesweit, Umkreis, PLZ-Bereiche (24.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

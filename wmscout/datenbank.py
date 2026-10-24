@@ -173,6 +173,9 @@ class Datenbank:
                 werte["preis_vorher"] = alt["preis"]
                 werte["preis_geaendert_am"] = jetzt
                 ergebnis = "preis"
+            elif a.get("preis") and alt["preis"] and a["preis"] > alt["preis"]:
+                # wieder erhöht: die gemerkte Senkung gilt nicht mehr (sonst „Preis gesenkt“ bzw. Nachfassen trotz Erhöhung, P4-03)
+                werte["preis_vorher"] = werte["preis_geaendert_am"] = None
             sets = ", ".join(f"{k}=?" for k in werte) + ", zuletzt_gesehen=?"
             gesehen = max(alt["zuletzt_gesehen"] or "", gesehen_am) if gesehen_am else jetzt
             self.con.execute(f"UPDATE anzeigen SET {sets} WHERE id=?", [*werte.values(), gesehen, a["id"]])
@@ -378,6 +381,8 @@ class Datenbank:
         self.con.execute("UPDATE anzeigen SET zuletzt_gesehen=MAX(COALESCE(zuletzt_gesehen, ''), ?) WHERE id=?", (jetzt, ad_id))
         if preis and z["preis"] and preis < z["preis"]:
             self.con.execute("UPDATE anzeigen SET preis_vorher=?, preis_geaendert_am=? WHERE id=?", (z["preis"], jetzt, ad_id))
+        elif preis and z["preis"] and preis > z["preis"]:            # wieder erhöht: gemerkte Senkung zurücksetzen (wie schreibe_anzeige)
+            self.con.execute("UPDATE anzeigen SET preis_vorher=NULL, preis_geaendert_am=NULL WHERE id=?", (ad_id,))
         self.spiegle_inserat({"id": ad_id, "quelle": z["quelle"], "url": z["url"], "titel": z["titel"], "preis": preis}, "detail")
 
     def ohne_details(self, limit: int, kennungen: Collection[str] | None = None) -> list[sqlite3.Row]:

@@ -56,6 +56,7 @@ kbd{font:12px ui-monospace,monospace;padding:1px 5px;border:1px solid var(--line
 .tag{font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px;background:var(--line);color:var(--ink)}
 .tag.gruen{background:var(--gruen-bg);color:var(--gruen)} .tag.gelb{background:var(--gelb-bg);color:var(--gelb)}
 .tag.rot{background:var(--rot-bg);color:var(--rot)} .tag.neu{background:var(--akzent);color:var(--akzent-ink)}
+.tag.senkung{background:var(--gruen-bg);color:var(--gruen)}
 .tag.status{background:var(--ink);color:var(--card)}
 .tag.anb.gewerblich{background:var(--rot-bg);color:var(--rot)} .tag.anb.unbekannt,.tag.anb.unbelegt{background:var(--gelb-bg);color:var(--gelb)}
 .tag.dq,.tag.dq-schwach{background:var(--gelb-bg);color:var(--gelb)} .dq-m.dq-widerspruch,.dq-m.dq-unplausibel{color:var(--rot)}
@@ -217,6 +218,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <div class="kpi"><b>{{ zaehl.gruen }}</b><span>Grün – Wunschpreis nah am Max-EK</span></div>
     <div class="kpi"><b>{{ zaehl.gelb }}</b><span>Gelb – mit Verhandlung möglich</span></div>
     <div class="kpi"><b>{{ zaehl.neu }}</b><span>Neu seit letztem Lauf</span></div>
+    <div class="kpi"><b>{{ zaehl.neuigkeiten }}</b><span>Neu &amp; Preis gesenkt (Neuigkeiten)</span></div>
     <div class="kpi"><b>{{ zaehl.nachfassen }}</b><span>Nachfassen fällig</span></div>
     <div class="kpi"><b>{{ zaehl.arbeit }}</b><span>In Arbeit (Text kopiert, kontaktiert, Verhandlung, Besichtigung)</span></div>
   </div>
@@ -235,6 +237,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <button data-f="gruen">Grün</button>
     <button data-f="gelb">Gelb</button>
     <button data-f="neu">Neu</button>
+    <button data-f="neuigkeiten" title="Frisch eingegangen oder Preis deutlich gesenkt – wichtigste zuerst">Neu &amp; gesenkt{% if zaehl.neuigkeiten %} ({{ zaehl.neuigkeiten }}){% endif %}</button>
     <button data-f="nachfassen">Nachfassen{% if zaehl.nachfassen %} ({{ zaehl.nachfassen }}){% endif %}</button>
     <button data-f="arbeit">In Arbeit</button>
     <button data-f="alle">Alle</button>
@@ -247,6 +250,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <select id="sort" aria-label="Sortierung">
       <option value="verh">Sortierung: beste Chance</option>
       <option value="pot">Gewinnpotenzial</option>
+      <option value="prio">Neuigkeiten zuerst (im Rahmen, neu, gesenkt)</option>
       <option value="neu">Neueste zuerst</option>
       <option value="preis">Preis aufsteigend</option>
       <option value="entf">Entfernung</option>
@@ -258,7 +262,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
   <div class="raster" id="liste">
   {% for z in zeilen %}{% set a = z.a %}{% set b = z.b %}
     <article class="karte {{ b.ampel }}" tabindex="0" data-id="{{ a.id }}" data-url="{{ a.url }}" data-quelle="{{ a.quelle or 'kleinanzeigen' }}" data-ampel="{{ b.ampel }}"
-         data-neu="{{ 1 if z.neu else 0 }}" data-bereit="{{ 1 if z.bereit else 0 }}" data-status="{{ a.status or 'neu' }}"
+         data-neu="{{ 1 if z.neu else 0 }}" data-prio="{{ z.neuigkeit.stufe if z.neuigkeit else 9 }}" data-bereit="{{ 1 if z.bereit else 0 }}" data-status="{{ a.status or 'neu' }}"
          data-verf="{{ a.verfuegbarkeit }}" data-ausblenden="{{ 1 if z.ausblenden else 0 }}"
          data-verh="{{ b.verhaeltnis or 99 }}" data-pot="{{ b.potenzial or -999999 }}" data-preis="{{ a.preis or 0 }}"
          data-zeit="{{ a.erstmals_gesehen }}" data-entf="{{ a.entfernung_km if a.entfernung_km is not none else 99999 }}"
@@ -272,7 +276,9 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
         <div class="tags">
           <span class="tag {{ b.ampel }}">{{ AMPEL[b.ampel] }}</span>
           {% if z.neu %}<span class="tag neu">neu</span>{% endif %}
-          {% if a.preis_vorher %}<span class="tag">Preis gesenkt</span>{% endif %}
+          {% set n = z.neuigkeit %}{% if n and n.im_rahmen %}<span class="tag gruen" data-im-rahmen title="Die Preissenkung hat den Preis unter den Max-EK gebracht">jetzt im Rahmen</span>{% endif %}
+          {% if n and n.senkung %}<span class="tag senkung" data-senkung title="{{ n.senkung.von | euro }} → {{ n.senkung.auf | euro }} ({{ ('%.1f' % n.senkung.prozent).replace('.', ',') }} %)">Preis −{{ n.senkung.euro | euro }} ({{ n.senkung.am[8:10] }}.{{ n.senkung.am[5:7] }}.)</span>
+          {% elif a.preis_vorher and a.preis and a.preis < a.preis_vorher %}<span class="tag">Preis gesenkt</span>{% endif %}
           {% if a.neu_eingestellt %}<span class="tag">neu eingestellt</span>{% endif %}
           {% if a.verfuegbarkeit_text %}<span class="tag verf {{ 'vermutlich' if a.vermutlich_offline else a.verfuegbarkeit }}" data-verfuegbarkeit>{{ a.verfuegbarkeit_text }}</span>{% endif %}
           {% if a.datenqualitaet and a.datenqualitaet.stufe == 'schwach' %}<span class="tag dq" title="Datenqualität {{ a.datenqualitaet.wert }}/100" data-dq>Daten lückenhaft</span>{% endif %}
@@ -860,7 +866,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
       var s = k.dataset.status;
       var ok = filter === 'alle' || (filter === 'anschreiben' && ((k.dataset.bereit === '1' && s === 'neu') || s === 'vorbereitet'))
             || (filter === 'nachfassen' && k.dataset.nachfassen === '1') || (filter === 'arbeit' && ARBEIT[s])
-            || (filter === 'neu' && k.dataset.neu === '1') || ((filter === 'gruen' || filter === 'gelb') && k.dataset.ampel === filter);
+            || (filter === 'neu' && k.dataset.neu === '1') || (filter === 'neuigkeiten' && k.dataset.prio !== '9') || ((filter === 'gruen' || filter === 'gelb') && k.dataset.ampel === filter);
       if(q && q.split(/\s+/).some(function(w){ return k.dataset.text.indexOf(w) < 0; })) ok = false;
       if(nurVerf.checked && k.dataset.ausblenden === '1') ok = false;      // verkauft/offline ohne Ankaufsarbeit (P3-04)
       if(PROFIL_IDS && !PROFIL_IDS[k.dataset.id]) ok = false;              // Suchprofil als Filter (P4-01, suchprofile.js)
@@ -873,6 +879,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     var s = document.getElementById('sort').value;
     karten.sort(function(a, b){
       if(s === 'verh') return a.dataset.verh - b.dataset.verh;
+      if(s === 'prio') return (a.dataset.prio - b.dataset.prio) || (a.dataset.verh - b.dataset.verh);     // P4-03
       if(s === 'pot') return b.dataset.pot - a.dataset.pot;
       if(s === 'preis') return a.dataset.preis - b.dataset.preis;
       if(s === 'entf') return a.dataset.entf - b.dataset.entf;
@@ -991,8 +998,9 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     var manuell = false, bekanntesEnde, timer;   // undefined = noch nicht abgefragt
     var plane = function(ms){ clearTimeout(timer); timer = setTimeout(pruefe, ms); };
     var melde = function(s){
-      if(!('Notification' in window) || Notification.permission !== 'granted' || !(s.neue_treffer || s.nachfassen)) return;
+      if(!('Notification' in window) || Notification.permission !== 'granted' || !(s.neue_treffer || s.nachfassen || s.preissenkungen)) return;
       try{ new Notification('Wohnmobil-Scout', {body: s.neue_treffer + ' neue Wohnmobile mit fertigem Anschreiben'
+                                                + (s.preissenkungen ? ' · ' + s.preissenkungen + '× Preis deutlich gesenkt' : '')
                                                 + (s.nachfassen ? ' · ' + s.nachfassen + '× nachfassen' : '')}); }catch(e){}
     };
     var pruefe = function(){

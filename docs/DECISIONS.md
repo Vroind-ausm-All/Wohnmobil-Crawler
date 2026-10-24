@@ -955,3 +955,33 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Folgen / offen:** Die Entfernung ist eine Schätzung (± einige km, bei genäherter PLZ mehr); Treffer knapp an der Grenze können
   abweichen (genäherte PLZ: siehe 3.). Mehrere Umkreise je Profil sind nicht vorgesehen (dafür zwei Profile). Betreiberfrage: ob „bundesweit“ Orte im Ausland
   ausschließen soll.
+
+## ADR-049 – Neuigkeiten: frisch eingegangen und deutliche Preissenkungen hervorheben, priorisieren und melden · gilt (24.10.2026)
+
+* **Kontext:** P4-03. Preissenkungen erkannte der Import schon (`anzeigen.preis_vorher`, `preis_geaendert_am`, Ergebnis „preis“), sichtbar
+  waren sie nur als dauerhaftes Abzeichen „Preis gesenkt“ (auch Jahre später oder nach erneuter Erhöhung). „Neu“ hieß nur „seit dem letzten
+  Suchlauf“ – Eingänge über Mails, gespeicherte Seiten oder Text blieben dabei unbemerkt. Gemeldet wurden nur neue Treffer.
+* **Entscheidung:**
+  1. Reines Modul `bewertung/neuigkeit.py`, beim Lesen berechnet, **ohne Schemaänderung** und **ohne Wirkung** auf Bewertung, Ampel, Sperre und
+     Anschreiben (Test vergleicht beide Läufe). Je offenem, sichtbarem, **nicht gesperrtem** Inserat (Status neu/vorbereitet; an kontaktierten
+     meldet sich eine Senkung wie bisher über „Nachfassen“; gewerblich, doppelt eingestellt, Ausschlussbegriff, außerhalb des Filters ist
+     keine Ankaufsgelegenheit) eine Stufe: **1 Preis gesenkt – jetzt im Rahmen** (eine Senkung – auch eine kleine – brachte den Preis von
+     über auf höchstens den Max-EK, nur bei belastbarer Bewertung), **2 neu und Anschreiben bereit**, **3 Preis deutlich gesenkt**,
+     **4 neu eingegangen**.
+  2. **Frisch** = erster Eingang (`erstmals_gesehen`, egal über welchen Kanal) innerhalb von 48 Stunden. **Deutliche Senkung** = letzte Senkung
+     innerhalb von 14 Tagen, Preis noch darunter, mindestens 3 % **oder** 500 €. Werte in `config.yaml → neuigkeiten`, ungültige gelten als Standard.
+  3. Priorisieren: Filter „Neu & gesenkt“ und Sortierung „Neuigkeiten zuerst“ (Stufe, dann beste Chance) am Desktop, Liste und Kachel am Handy,
+     `GET /api/fahrzeuge?filter=neuigkeiten` (nach Stufe sortiert), Zähler in `/api/heute`, Kachel im Report, CSV-Spalte „Neuigkeit“.
+     Das alte Abzeichen „Preis gesenkt“ erscheint nur noch, solange der Preis unter dem früheren liegt.
+  4. Melden: nach einem Suchlauf nennt der Browser-Hinweis die deutlichen Senkungen dieses Laufs; die Mail listet sie mit (Betreff
+     „… neue Treffer, n Preissenkungen“) und geht bei `nur_bei_neuen_treffern` auch ohne neue Treffer raus (`email.preissenkungen_melden`,
+     Standard an; bestehende Nutzer mit `nur_bei_neuen_treffern` bekommen damit auch Mails nur mit Preissenkungen). Mehrere Inserate
+     desselben Fahrzeugs werden dabei einmal gemeldet. WhatsApp bleibt bei neuen Treffern (eine weitere Vorlage bräuchte die Freigabe bei Meta).
+  5. Wird ein Preis nach einer Senkung wieder **erhöht**, setzt der Import `preis_vorher`/`preis_geaendert_am` zurück (sonst „Preis
+     gesenkt“ und ein Nachfass-Grund trotz Erhöhung). Der vollständige Verlauf bleibt in `preis_historie`.
+* **Alternativen:** Senkungen aus `preis_historie` statt aus `anzeigen` (gleicher Inhalt, aber eine Abfrage je Inserat); Stufe speichern
+  (veraltet mit der Zeit, Migration); Wirkung auf die Ampel (fachliche Entscheidung, die Ampel folgt dem neuen Preis ohnehin).
+* **Folgen / offen:** Die CSV hat die neue Spalte „Neuigkeit“ vor „Erstmals gesehen“ (Auswertungen nach Spaltennummer anpassen).
+  Eingänge über Mails, Seiten und Text lösen keinen eigenen Hinweis aus (nur sichtbar in Kachel, Filter und Liste) –
+  Hinweise nach jedem Import wären eine Erweiterung. Betreiberfragen: Schwellen (48 h, 14 Tage, 3 % / 500 €) und ob Preissenkungen per Mail
+  gemeldet werden sollen (Standard: ja).

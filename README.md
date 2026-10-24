@@ -168,6 +168,11 @@ Du bekommst dann nur eine Mail, wenn neue Treffer mit Anschreiben dabei sind.
 4. In der Anzeige den Kontakt öffnen – bei Kleinanzeigen **„Nachricht schreiben“**, bei mobile.de das **„E-Mail“/„Nachricht“-Formular** des Anbieters → `Strg`+`V` → Senden.
 5. **gesendet ✓** klicken – erst jetzt gilt der Verkäufer als „kontaktiert“ (ADR-012).
 
+**Neuigkeiten (P4-03):** Was in den letzten 48 Stunden eingegangen ist oder deutlich günstiger wurde (mindestens 3 % oder 500 €
+in den letzten 14 Tagen), zeigt der Filter **„Neu & gesenkt“** – ganz oben, was durch die Senkung jetzt unter euren Max-EK fällt
+(„jetzt im Rahmen“). Am Handy gibt es dafür eine eigene Kachel und Liste. Nach einem Suchlauf nennen Browser-Hinweis und Mail auch die
+Preissenkungen. Einstellungen: `config.yaml → neuigkeiten`; die Bewertung ändert sich dadurch nicht.
+
 **Suchprofile (P4-01):** Über **Suchprofile** in der Filterleiste legt ihr fest, welche Fahrzeuge ihr sucht (Art, Marke, Modell,
 Preis, EZ, km). Ein Profil ruft nichts ab – es filtert die eingegangenen Inserate (Suchlauf, gespeicherte Seiten, Text, Mails);
 die Auswahl „Suchprofil“ zeigt nur passende Fahrzeuge, solche mit fehlenden Angaben als „unklar“ (auch am Handy). Je Profil
@@ -417,4 +422,5 @@ Die Zeilen „Phase 1“ unten beziehen sich auf den früheren Phasenplan; die n
 | WhatsApp automatisch (Cloud API von Meta) | umgesetzt, **nicht live getestet** (braucht Meta-Konto und freigegebene Vorlagen) | `test_handy.py` mit nachgebautem Server |
 | Suchprofile als Filter über eingegangene Inserate, Abdeckungscheckliste je Plattform (P4-01, Schema v17) | umgesetzt | `test_suchprofile.py`, Klicktest Desktop und Handy |
 | Suchgebiet je Suchprofil: bundesweit, Umkreis, PLZ-Bereiche (P4-02, Schema v18) | umgesetzt | `test_suchgebiete.py`, Klicktest Desktop |
-| Preissenkungen melden, Deal-Score, Ankaufs-Dashboard | **geplant** – Phasen 4–6 in `docs/ROADMAP.md` | – |
+| Neuigkeiten: frisch eingegangen und deutliche Preissenkungen hervorheben, priorisieren, melden (P4-03) | umgesetzt | `test_neuigkeiten.py`, Klicktest Desktop und Handy |
+| Deal-Score, Ankaufs-Dashboard | **geplant** – Phasen 4–6 in `docs/ROADMAP.md` | – |

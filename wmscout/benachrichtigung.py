@@ -12,16 +12,24 @@ from urllib.parse import quote
 import requests
 
 from .bewertung.anschreiben import euro
+from .bewertung.neuigkeit import gesenkt_seit
 
 log = logging.getLogger("scout")
 
 
-def sende_mail(cfg: dict, zeilen: list[dict], ergebnis: dict):
+def _anzahl(n: int, einzahl: str, mehrzahl: str) -> str:
+    return f"{n} {einzahl if n == 1 else mehrzahl}"
+
+
+def sende_mail(cfg: dict, zeilen: list[dict], ergebnis: dict, seit: str | None = None):
+    """``seit`` (Start des Suchlaufs): deutliche Preissenkungen ab diesem Zeitpunkt werden mitgemeldet (P4-03; abschaltbar mit
+    ``email.preissenkungen_melden: false``) und lösen die Mail auch ohne neue Treffer aus."""
     m = cfg["email"]
     if not m.get("aktiv"):
         return
     treffer = [z for z in zeilen if z["bereit"] and (z["neu"] or not m.get("nur_bei_neuen_treffern"))]
-    if m.get("nur_bei_neuen_treffern") and not treffer:
+    gesenkt = gesenkt_seit(zeilen, seit) if m.get("preissenkungen_melden", True) else []
+    if m.get("nur_bei_neuen_treffern") and not treffer and not gesenkt:
         log.info("Keine neuen Treffer – keine Mail.")
         return
     passwort = os.environ.get(m["passwort_env"])
@@ -34,11 +42,18 @@ def sende_mail(cfg: dict, zeilen: list[dict], ergebnis: dict):
         f"        Angebot {euro(z['a']['preis'])} · Max-EK {euro(z['b'].max_ek)} · Erstangebot {euro(z['b'].erstangebot)}\n"
         + "".join(f"        Hinweis: {h}\n" for h in z.get("hinweise") or [])
         + f"        {z['a']['url']}" for z in treffer[:25])
+    gesenkt.sort(key=lambda z: (z["neuigkeit"]["stufe"], z["b"].verhaeltnis or 99))
+    senkungen_txt = "\n".join(
+        f"[{z['b'].ampel.upper():5}] {z['a']['fahrzeug']} – {z['a'].get('ort') or 'Ort ?'}\n"
+        f"        {z['neuigkeit']['text']}: {euro(z['neuigkeit']['senkung']['von'])} → {euro(z['a']['preis'])} · Max-EK "
+        f"{euro(z['b'].max_ek) if z['b'].sicherheit != 'keine' else '–'}\n"
+        f"        {z['a']['url']}" for z in gesenkt[:25])
     msg = EmailMessage()
-    msg["Subject"] = f"Wohnmobil-Scout: {len(treffer)} neue Treffer"
+    msg["Subject"] = f"Wohnmobil-Scout: {len(treffer)} neue Treffer" + (f", {_anzahl(len(gesenkt), 'Preissenkung', 'Preissenkungen')}" if gesenkt else "")
     msg["From"], msg["To"] = m["benutzer"], m["empfaenger"]
-    msg.set_content(f"{len(treffer)} Anzeigen mit fertigem Anschreiben:\n\n{zeilen_txt}\n\n"
-                    f"Report im Anhang (im Browser öffnen) – oder „python scout.py app“ starten.")
+    msg.set_content((f"{len(treffer)} Anzeigen mit fertigem Anschreiben:\n\n{zeilen_txt}\n\n" if treffer or not gesenkt else "")
+                    + (f"{_anzahl(len(gesenkt), 'Preissenkung', 'Preissenkungen')}:\n\n{senkungen_txt}\n\n" if gesenkt else "")
+                    + "Report im Anhang (im Browser öffnen) – oder „python scout.py app“ starten.")
     msg.add_attachment(ergebnis["html"].read_bytes(), maintype="text", subtype="html", filename="report.html")
     with smtplib.SMTP(m["smtp_server"], m["smtp_port"], timeout=30) as s:
         s.starttls()

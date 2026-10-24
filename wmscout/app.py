@@ -19,6 +19,7 @@ from pathlib import Path
 
 from .ausgabe import schreibe_ausgaben
 from .benachrichtigung import sende_mail
+from .bewertung.neuigkeit import gesenkt_seit
 from .bearbeitung import reservierung_tage
 from .bewertung.auswertung import bewerte_alle
 from .datenbank import Datenbank, wal_aktiv
@@ -42,7 +43,7 @@ class Suchlauf:
         self.thread: threading.Thread | None = None
         self.letzter_start: str | None = None
         self.bei_ende: list = []           # Rückrufe mit den bewerteten Zeilen (Cache leeren, WhatsApp …)
-        self.stand = {"laeuft": False, "meldung": "", "fehler": None, "ende": None, "neue_treffer": 0,
+        self.stand = {"laeuft": False, "meldung": "", "fehler": None, "ende": None, "neue_treffer": 0, "preissenkungen": 0,
                       "nachfassen": 0, "naechste_auto": None}
         stand = self.stand
 
@@ -83,17 +84,19 @@ class Suchlauf:
             # wie „python scout.py lauf“: Report/CSV/Anschreiben-Dateien aktualisieren, ggf. Mail
             zeilen = bewerte_alle(self.cfg, db, self.basis, lauf_start=self.letzter_start)
             sende_mail(self.cfg, zeilen, schreibe_ausgaben(self.cfg, zeilen, self.basis, fehler=stat["fehler"],
-                                                team=lade_team_sicht(db, reservierung_tage(self.cfg))))
+                                                team=lade_team_sicht(db, reservierung_tage(self.cfg))), seit=self.letzter_start)
             for rueckruf in self.bei_ende:
                 try:
                     rueckruf(zeilen)
                 except Exception:  # noqa: BLE001 – Benachrichtigungen dürfen den Lauf nicht stören
                     log.exception("Nachbearbeitung nach Suchlauf fehlgeschlagen")
             neue = sum(1 for z in zeilen if z["neu"] and z["bereit"])
+            gesenkt = len(gesenkt_seit(zeilen, self.letzter_start))        # deutliche Preissenkungen in diesem Lauf (P4-03)
             uebersprungen = "".join(f" · übersprungen: {u['quelle']} ({u['grund']})" for u in stat.get("uebersprungen", []))
-            self.stand.update(fehler=stat["fehler"], neue_treffer=neue,
+            self.stand.update(fehler=stat["fehler"], neue_treffer=neue, preissenkungen=gesenkt,
                               nachfassen=sum(1 for z in zeilen if z["nachfassen"]), meldung=(
-                f"Fertig: {stat['neu']} neue Anzeigen, davon {neue} mit Anschreiben · {stat['preis']} Preissenkungen{uebersprungen}"))
+                f"Fertig: {stat['neu']} neue Anzeigen, davon {neue} mit Anschreiben · {stat['preis']} Preissenkungen"
+                f"{f', davon {gesenkt} deutlich' if gesenkt else ''}{uebersprungen}"))
         except Exception as e:  # noqa: BLE001 – Fehler in der Oberfläche anzeigen statt Thread sterben lassen
             log.exception("Suchlauf fehlgeschlagen")
             self.stand.update(fehler=str(e), meldung="Suchlauf fehlgeschlagen")

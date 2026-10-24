@@ -16,6 +16,8 @@ from ..normalisierung.geo import entfernung_km
 from ..verfuegbarkeit import ergaenze as ergaenze_verfuegbarkeit
 from ..verfuegbarkeit import offline_nach_tagen
 from .anschreiben import Anschreiber, betrag_im_brief, euro, hinweise, sperrgrund
+from .neuigkeit import einstellungen as neuigkeit_einstellungen
+from .neuigkeit import neuigkeit
 from .rechner import Bewertung, Rechner, Vergleichsliste
 
 if TYPE_CHECKING:                      # nur für Typangaben – die Bewertung selbst braucht keine Datenbank (P1-08)
@@ -191,6 +193,7 @@ def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[d
     jetzt = jetzt or datetime.now()
     standort = str(cfg["anschreiben"].get("plz") or "") or None
     tage = offline_nach_tagen(cfg)
+    neu_e = neuigkeit_einstellungen(cfg)
 
     def angereichert(r) -> dict:                      # Fahrzeugmerkmale + Verfügbarkeit (wirksam, „vermutlich offline“ beim Lesen abgeleitet)
         a = ergaenze_verfuegbarkeit(ergaenze_fahrzeug(dict(r)), jetzt, tage)
@@ -247,10 +250,13 @@ def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[d
         # …es sei denn, es wird schon daran gearbeitet: Status, Team-Reservierung, Besichtigung/Ankauf oder eine Notiz (nichts Eigenes verstecken)
         ausblenden = (bool(a.get("nicht_verfuegbar")) and a.get("status") in (None, "neu", "gelöscht")
                       and not a.get("hat_arbeit") and not str(a.get("notiz") or "").strip())
+        bereit = bool(brief) and schreiber.soll_schreiben(b.ampel)
         zeilen.append({
             "a": a, "b": b, "sperre": sperre, "ausblenden": ausblenden, "hinweise": hinweise(a, b), "brief": brief, "ust": round(ust / 10) * 10,
             "brief_betrag": betrag_im_brief(a, b),
-            "bereit": bool(brief) and schreiber.soll_schreiben(b.ampel),
+            "bereit": bereit,
+            # frisch eingegangen / Preis deutlich gesenkt / dadurch jetzt im Rahmen: Rang für „Neuigkeiten zuerst“, ohne Wirkung (P4-03)
+            "neuigkeit": neuigkeit(a, b, bereit, ausblenden, jetzt, neu_e, sperre),
             "neu": bool(lauf_start and (a.get("erstmals_gesehen") or "") >= lauf_start) and not ausblenden,
             "nachfassen": grund, "nachfass_text": nachfass_text, "nachfass_betrag": nachfass_betrag,
             "dubletten_ids": sorted(b["id"] for b in andere),       # Fahrzeuggruppe: Team-Reservierungen wirken auf alle
