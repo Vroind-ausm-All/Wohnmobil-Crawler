@@ -50,6 +50,8 @@ from ..bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids
 from ..verfuegbarkeit import fahrzeug_von, offline_nach_tagen
 from ..anbieter import einstufung
 from .. import kontakte
+from .. import suchprofile as sp
+from ..domaene import PLATTFORMEN
 from ..normalisierung.qualitaet import je_quelle
 from ..bewertung import kalkulation as kalk
 from ..bewertung.besichtigung import berechne, lade_katalog
@@ -134,6 +136,7 @@ class Kontext:
         self.live_lebensdauer, self.live_ping = 300.0, 15.0      # Sekunden; Tests verkürzen
         self.verkauf = VerkaufSpeicher(db, foto_ordner / "anfragen")     # im Fotoordner: mit gesichert
         self.haendler = HaendlerSpeicher(db)
+        self.suchprofile = sp.SuchprofilSpeicher(db)
         self.auktion = AuktionSpeicher(db, cfg)             # ValueError bei falscher Konfiguration (Abschnitt auktion)
         self.bremse = LoginBremse(int(app.get("login_max_fehlversuche", 5)), int(app.get("login_max_fehlversuche_je_ip", 20)),
                                   int(app.get("login_sperre_minuten", 15)) * 60)
@@ -517,6 +520,13 @@ class Anfrage:
             return self.json(200, self.fahrzeuge())
         if m := re.fullmatch(r"/api/fahrzeug/([\w-]+)", p):
             return self.json(200, self.fahrzeug(m.group(1)))
+        if p == "/api/suchprofile":
+            return self.json(200, self.suchprofile())
+        if m := re.fullmatch(r"/api/suchprofil/([0-9]{1,9})/treffer", p):
+            # Desktop-Filter: alle Treffer ohne die 200er-Grenze von /api/fahrzeuge (die Desktop-Liste zeigt alle Zeilen)
+            if (profil := k.suchprofile.profil(int(m.group(1)))) is None:
+                raise Antwort(404, "Suchprofil nicht gefunden")
+            return self.json(200, {"treffer": self._profil_treffer(profil, k.zeilen())})
         if p == "/api/datenqualitaet":
             return self.json(200, {"quellen": je_quelle(k.zeilen())})
         if m := re.fullmatch(r"/api/kontakte/([\w-]+)", p):
@@ -866,6 +876,55 @@ class Anfrage:
             "suchlauf": k.suchlauf.stand,
         }
 
+    # ---------------------------------------------------------------- Suchprofile (P4-01)
+    def _profil_treffer(self, profil: dict, zeilen: list[dict]) -> dict[str, str]:
+        """Anzeigen-ID → „passt“/„unklar“ für alle eingegangenen Inserate, die zum Profil passen (könnten)."""
+        erg = {}
+        for z in zeilen:
+            urteil, _ = sp.pruefe_inserat(profil, z["a"], z["b"].art)
+            if urteil != sp.NEIN:
+                erg[z["a"]["id"]] = urteil
+        return erg
+
+    def suchprofile(self) -> dict:
+        """Alle Profile mit Trefferzahlen (ohne ausgeblendete Inserate) und Abdeckungscheckliste je Plattform."""
+        k, jetzt = self.k, datetime.now()
+        zeilen = [z for z in k.zeilen() if not z["ausblenden"]]
+        nach_id = {z["a"]["id"]: z for z in zeilen}
+        profile = []
+        for p in k.suchprofile.liste():
+            treffer = self._profil_treffer(p, zeilen)
+            letzte: dict[str, str | None] = {}
+            for ad_id in (i for i, u in treffer.items() if u == sp.PASST):       # „letzter passender Treffer“: nur sicher passende
+                a = nach_id[ad_id]["a"]
+                quelle = a.get("quelle") or "kleinanzeigen"
+                letzte[quelle] = max(letzte.get(quelle) or "", a.get("erstmals_gesehen") or "") or None
+            profile.append({**p, "treffer": {"passt": sum(v == sp.PASST for v in treffer.values()), "unklar": sum(v == sp.UNKLAR for v in treffer.values())},
+                            "abdeckung": sp.abdeckung(p, k.suchprofile.auftraege(p["id"]), letzte, jetzt)})
+        return {"profile": profile, "arten": list(sp.ARTEN), "plattformen": list(PLATTFORMEN), "mit_eingang": list(sp.MIT_EINGANG),
+                "darf_aendern": not self.team_aktiv or self.nutzer.get("rolle") == "inhaber"}
+
+    def suchprofil_aendern(self, pfad: str, daten: dict) -> dict:
+        """Anlegen, Ändern, Löschen, Checkliste – im Team nur der Inhaber (wie Suchläufe, P1-15); protokolliert (Audit)."""
+        k = self.k
+        if self.team_aktiv:
+            self.nur_inhaber()
+        try:
+            if pfad == "/api/suchprofile":
+                return {"ok": True, "id": k.suchprofile.anlegen(sp.pruefe_profil(daten, datetime.now()))}
+            profil_id = int(pfad.split("/")[3])
+            if k.suchprofile.profil(profil_id) is None:
+                raise Antwort(404, "Suchprofil nicht gefunden")
+            if pfad.endswith("/loeschen"):
+                k.suchprofile.loeschen(profil_id)
+            elif pfad.endswith("/auftrag"):
+                k.suchprofile.setze_auftrag(profil_id, sp.pruefe_auftrag(daten))
+            else:
+                k.suchprofile.aendern(profil_id, sp.pruefe_profil(daten, datetime.now()))
+        except sp.Eingabefehler as e:
+            raise Antwort(400, str(e)) from e
+        return {"ok": True, "id": profil_id}
+
     def fahrzeuge(self) -> list[dict]:
         f = (self.query.get("filter") or ["bereit"])[0]
         q = (self.query.get("q") or [""])[0].lower().split()
@@ -878,8 +937,18 @@ class Anfrage:
         sicht = self.team_sicht()
         if wer != "alle" and not sicht:
             raise Antwort(400, "Team nicht aktiv (keine Nutzer angelegt) – „wer“ gibt es nur im Team")
+        profil_treffer = None
+        if (profil_param := (self.query.get("profil") or [""])[0]):          # Suchprofil als Filter über eingegangene Daten (P4-01)
+            profil = self.k.suchprofile.profil(int(profil_param)) if re.fullmatch(r"[0-9]{1,9}", profil_param) else None
+            if profil is None:
+                raise Antwort(400, "profil: unbekanntes Suchprofil")
+            profil_treffer = self._profil_treffer(profil, self.k.zeilen())
+            if (self.query.get("unklar") or ["ja"])[0] == "nein":
+                profil_treffer = {i: u for i, u in profil_treffer.items() if u == sp.PASST}
         auswahl = []
         for z in self.k.zeilen():
+            if profil_treffer is not None and z["a"]["id"] not in profil_treffer:
+                continue
             # standard: verkaufte/offline Anzeigen ohne Ankaufsarbeit ausgeblendet; nur: alle nicht verfügbaren; alle: nichts ausgeblendet
             if (verfuegbar == "standard" and z["ausblenden"]) or (verfuegbar == "nur" and z["a"].get("nicht_verfuegbar")):
                 continue
@@ -894,6 +963,8 @@ class Anfrage:
             if ok and all(w in text for w in q):
                 auswahl.append((z, t))
         auswahl.sort(key=lambda zt: zt[0]["b"].verhaeltnis or 99)
+        if profil_treffer is not None:
+            return [{**fahrzeug_kurz(z, t), "profil_treffer": profil_treffer[z["a"]["id"]]} for z, t in auswahl[:200]]
         return [fahrzeug_kurz(z, t) for z, t in auswahl[:200]]
 
     def fahrzeug(self, anzeige_id: str) -> dict:
@@ -1022,6 +1093,8 @@ class Anfrage:
             return self.json(200 if ok else 400, {"ok": ok})
         if m := re.fullmatch(r"/api/bearbeitung/([\w-]+)/(uebernehmen|abgeben|zuweisen)", p):
             return self.json(200, getattr(self, f"bearbeitung_{m.group(2)}")(m.group(1), daten))
+        if p == "/api/suchprofile" or re.fullmatch(r"/api/suchprofil/\d+(?:/loeschen|/auftrag)?", p):
+            return self.json(200, self.suchprofil_aendern(p, daten))
         if m := re.fullmatch(r"/api/kontakt/(\d+)/bestaetigen", p):
             return self.json(200, self.kontakt_bestaetigen(int(m.group(1)), self.kanal(daten), daten))
         if p == "/api/notiz":

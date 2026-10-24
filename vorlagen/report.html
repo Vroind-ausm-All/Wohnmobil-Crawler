@@ -59,6 +59,9 @@ kbd{font:12px ui-monospace,monospace;padding:1px 5px;border:1px solid var(--line
 .tag.status{background:var(--ink);color:var(--card)}
 .tag.anb.gewerblich{background:var(--rot-bg);color:var(--rot)} .tag.anb.unbekannt,.tag.anb.unbelegt{background:var(--gelb-bg);color:var(--gelb)}
 .tag.dq,.tag.dq-schwach{background:var(--gelb-bg);color:var(--gelb)} .dq-m.dq-widerspruch,.dq-m.dq-unplausibel{color:var(--rot)}
+.sp-profil{margin:6px 0} .sp-form{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:end;margin:8px 0} .sp-feld{display:flex;flex-direction:column;font-size:13px}
+.sp-arten{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:13px} .sp-abdeckung{border-collapse:collapse;font-size:13px;margin:6px 0}
+.sp-abdeckung th,.sp-abdeckung td{border-bottom:1px solid var(--linie,#ddd);padding:4px 8px;text-align:left} .sp-pruefen td,.sp-fehlt td{color:var(--gelb)}
 .tag.verf{background:var(--rot-bg);color:var(--rot)} .tag.verf.reserviert,.tag.verf.vermutlich{background:var(--gelb-bg);color:var(--gelb)}
 .bar label.verfbox{font-size:14px;display:flex;align-items:center;gap:6px;cursor:pointer}
 .streif{height:4px;background:var(--line)}
@@ -196,6 +199,11 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
   </section>
   {% endif %}
 
+  {% if app %}<section class="kasten" id="suchprofile" aria-labelledby="sp-titel" hidden>
+    <h3 id="sp-titel">Suchprofile</h3>
+    <div id="suchprofile-box"></div>
+  </section>{% endif %}
+
   <ol class="anleitung">
     <li><b>Wohnmobil anklicken</b> – faire Bewertung und fertiges Anschreiben ansehen (Text änderbar)</li>
     <li><b>✉ Anschreiben</b> – Text ist kopiert, die Anzeige öffnet sich{% if app %}, Status „Text kopiert“ wird gespeichert{% endif %}{% if team %}; ist das Fahrzeug von einem Kollegen belegt, wird nichts geöffnet{% endif %}</li>
@@ -230,6 +238,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <button data-f="nachfassen">Nachfassen{% if zaehl.nachfassen %} ({{ zaehl.nachfassen }}){% endif %}</button>
     <button data-f="arbeit">In Arbeit</button>
     <button data-f="alle">Alle</button>
+    {% if app %}<select id="profil-filter" aria-label="Suchprofil" hidden></select><button type="button" id="profil-knopf" aria-expanded="false" aria-controls="suchprofile" title="Gesuchte Fahrzeuge als Filter über die eingegangenen Inserate, mit Abdeckungscheckliste je Plattform">Suchprofile</button>{% endif %}
     {% if text_darf %}<button type="button" id="dub-knopf" aria-expanded="false" aria-controls="dubletten" title="Inserate, die dasselbe Fahrzeug sein könnten – der Mensch entscheidet">Dublettenvorschläge<span id="dub-n"></span></button>{% endif %}
     {% if team %}<div class="wer" role="group" aria-label="Wer"><span>Wer:</span>
       <button type="button" data-wer="alle" class="an" aria-pressed="true">Alle</button><button type="button" data-wer="meine" aria-pressed="false">Meine</button><button type="button" data-wer="frei" aria-pressed="false">Frei</button>
@@ -842,7 +851,8 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
 {% endif %}
 
   // ---------- Filter & Sortierung ----------
-  var nurVerf = document.getElementById('nurverf');
+  var nurVerf = document.getElementById('nurverf'), PROFIL_IDS = null;
+  window.scoutProfilFilter = function(ids){ PROFIL_IDS = ids; zeige(); };
   function zeige(){
     var q = document.getElementById('q').value.toLowerCase().trim(), sichtbar = 0;
     liste.dataset.filter = filter;
@@ -853,6 +863,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
             || (filter === 'neu' && k.dataset.neu === '1') || ((filter === 'gruen' || filter === 'gelb') && k.dataset.ampel === filter);
       if(q && q.split(/\s+/).some(function(w){ return k.dataset.text.indexOf(w) < 0; })) ok = false;
       if(nurVerf.checked && k.dataset.ausblenden === '1') ok = false;      // verkauft/offline ohne Ankaufsarbeit (P3-04)
+      if(PROFIL_IDS && !PROFIL_IDS[k.dataset.id]) ok = false;              // Suchprofil als Filter (P4-01, suchprofile.js)
       if(TEAM_AN && ((wer === 'meine' && k.dataset.mein !== '1') || (wer === 'frei' && k.dataset.frei !== '1'))) ok = false;
       k.hidden = !ok; if(ok) sichtbar++;
     });
@@ -1079,5 +1090,6 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
   }
 })();
 </script>
+{% if app %}<script src="/static/suchprofile.js"></script>{% endif %}
 </body>
 </html>
