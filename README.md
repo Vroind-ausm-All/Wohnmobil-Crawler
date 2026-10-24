@@ -168,6 +168,13 @@ Du bekommst dann nur eine Mail, wenn neue Treffer mit Anschreiben dabei sind.
 4. In der Anzeige den Kontakt öffnen – bei Kleinanzeigen **„Nachricht schreiben“**, bei mobile.de das **„E-Mail“/„Nachricht“-Formular** des Anbieters → `Strg`+`V` → Senden.
 5. **gesendet ✓** klicken – erst jetzt gilt der Verkäufer als „kontaktiert“ (ADR-012).
 
+**Suchprofile (P4-01):** Über **Suchprofile** in der Filterleiste legt ihr fest, welche Fahrzeuge ihr sucht (Art, Marke, Modell,
+Preis, EZ, km). Ein Profil ruft nichts ab – es filtert die eingegangenen Inserate (Suchlauf, gespeicherte Seiten, Text, Mails);
+die Auswahl „Suchprofil“ zeigt nur passende Fahrzeuge, solche mit fehlenden Angaben als „unklar“ (auch am Handy). Die
+**Checkliste** je Profil hält fest, auf welcher Plattform ihr einen passenden Suchauftrag bzw. eine E-Mail-Benachrichtigung
+angelegt habt (Haken und Adresse); „prüfen“ heißt: angelegt, aber seit 14 Tagen kein passender Treffer von dort. Anlegen und
+ändern darf im Team nur der Inhaber.
+
 **Verkaufsanfragen (Phase B, erst intern):** Unter **`/verkaufen`** erfasst ihr ein Fahrzeug, das ein Verkäufer euch selbst
 anbietet (Telefon, vor Ort oder Formular am Tablet): Fahrzeug, Mängel, bis zu 12 Fotos, freiwillige Preisvorstellung,
 Kontakt und Einwilligung. Danach erscheinen Referenz und – nur bei sicherer Datenlage – eine grobe Spanne für den
@@ -406,4 +413,5 @@ Die Zeilen „Phase 1“ unten beziehen sich auf den früheren Phasenplan; die n
 | Besichtigungsmodus: Pflicht-Checkliste, Messwerte, Mängelkatalog, Fotos, Live-Abzug, offline | umgesetzt | `test_besichtigung.py`, Paritätstest Python↔JavaScript (600 Fälle), Klicktest inkl. Offline |
 | Ankaufprotokoll mit Unterschriften, Termine/Zuständigkeit, Kalender (.ics), WhatsApp-Links | umgesetzt | `test_handy.py`, Klicktest |
 | WhatsApp automatisch (Cloud API von Meta) | umgesetzt, **nicht live getestet** (braucht Meta-Konto und freigegebene Vorlagen) | `test_handy.py` mit nachgebautem Server |
-| Mehrere Quellen, Datenmodell/Historie, Suchprofile, Deal-Score, Ankaufs-Dashboard | **geplant** – Phasen 2–6 in `docs/ROADMAP.md` | – |
+| Suchprofile als Filter über eingegangene Inserate, Abdeckungscheckliste je Plattform (P4-01, Schema v17) | umgesetzt | `test_suchprofile.py`, Klicktest Desktop und Handy |
+| Suchgebiete, Preissenkungen melden, Deal-Score, Ankaufs-Dashboard | **geplant** – Phasen 4–6 in `docs/ROADMAP.md` | – |

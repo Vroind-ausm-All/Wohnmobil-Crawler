@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import csv
+import re
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -232,7 +233,8 @@ def test_oberflaeche_statisch():
     js, html = (STATIC / "mobil.js").read_text(encoding="utf-8"), (BASIS / "vorlagen" / "report.html").read_text(encoding="utf-8")
     assert "function dqKarte" in js and "esc(m.text)" in js and "dqTag(f)" in js
     assert "data-dq-wert" in html and "Daten lückenhaft" in html and "|safe" not in html.split("data-dq-wert")[1][:600]
-    assert "wm-scout-13" in (STATIC / "sw.js").read_text(encoding="utf-8")
+    sw = (STATIC / "sw.js").read_text(encoding="utf-8")
+    assert int(re.search(r"var VERSION = 'wm-scout-(\d+)'", sw).group(1)) >= 13 and "13: " in sw
 
 
 def test_leere_eingaben():

@@ -137,7 +137,7 @@ manuellem Import nur einen Datensatz. In Tabellen und Texten unten steht „quel
 | Entität | Tabelle | Kernfelder | Herkunft |
 |---|---|---|---|
 | sources | `quellen` | kennung PK, name, zugriffsart, freigegeben, aktiv, intervall_min, zuletzt_ok, fehler_in_folge, gesperrt_bis | Adapter-Metadaten + Konfiguration |
-| search_profiles | `suchprofile` | id, name, quelle →, parameter_json, plz, radius_km, intervall_min, aktiv | `config.yaml → suchen` |
+| search_profiles | `suchprofile` | **umgesetzt mit v17 (ADR-047) als gesuchtes Fahrzeug:** id, name, aktiv, arten, marken, modell, preis_min/max, ez_min/max, km_max, notiz; Checkliste je Plattform in `suchauftraege` (angelegt, url). Geplant waren quelle →, parameter_json, plz, radius_km, intervall_min (erst mit Pull-Quelle bzw. P4-02) | App (Inhaber) |
 | crawl_runs | `suchlaeufe` | id, quelle, suchprofil_id, start, ende, art, seiten, treffer, neu, fehler_art, fehler_text, parser_ok | neu |
 | vehicles | `fahrzeuge` | id, fingerabdruck, fin NULL, marke, serie, modell, art, ez_jahr, km_letzter, plz, ankauf_status, status_am, notiz, zusammengefuehrt_in | Normalisierung, Status aus `anzeigen` |
 | listings | `inserate` | id INTEGER PK, quelle, anzeigen_id, UNIQUE(quelle, anzeigen_id), fahrzeug_id →, oeffentliche_id, url, titel, Texte, preis, vb, anbieter_typ, verfuegbarkeit, zuletzt_bestaetigt, erstmals/zuletzt_gesehen, detail_geladen, details_json, qualitaet_json (**nicht umgesetzt**: Datenqualität wird beim Lesen berechnet, ADR-046) | `anzeigen` |

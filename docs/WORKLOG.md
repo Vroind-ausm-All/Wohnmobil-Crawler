@@ -6,6 +6,27 @@ Wert „–“.
 
 ---
 
+## P4-01 – Suchprofile als Filter, Abdeckungscheckliste je Plattform (24.10.2026) · Status: REVIEW
+
+- **Freigabe:** Betreiber am 24.10.2026: „Phase 4 starten mit P4-01“ (zugleich Abnahme von Phase 3, ROADMAP aktualisiert).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `source-integrations`/`scout-ui-engineer`, Migration wie `scout-data-engineer`);
+  QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/migrationen.py` (v17), `wmscout/suchprofile.py` (neu), `wmscout/web/api.py`, `wmscout/audit.py`,
+  `vorlagen/report.html`, `wmscout/web/static/suchprofile.js` (neu), `mobil.js`, `sw.js` (wm-scout-14), Tests `test_suchprofile.py` (neu),
+  `test_datenqualitaet.py` (Versionsprüfung ≥ 13); Doku ADR-047, ROADMAP, ARCHITECTURE, README.
+- **Implementierte Funktionen:** siehe ADR-047. Profile filtern nur, kein Netzabruf, keine Wirkung auf die Bewertung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. B1 (Desktop-Filter endete bei 200 Treffern) → eigener Endpunkt
+  `/api/suchprofil/<id>/treffer` ohne Grenze, Test mit 260 Inseraten; B2 (`profil=²` → 500) → nur ASCII-Ziffern; B3 (Notiz der Checkliste
+  beim Speichern gelöscht) → bleibt ohne Schlüssel erhalten; B4 (Modell als Teiltext) → ganze Wörter; B5 (Leerzeichen in Adressen) → abgelehnt;
+  B6 („letzter Treffer“ zählte „unklar“) → nur „passt“; B7 (Zahlen im Formular) → `valueAsNumber`, ganze Zahlen; B8 Doku; B9 (AutoScout24
+  per API als angelegt) → abgelehnt. Eigener Fund im Browser: geöffnetes Profil klappte nach dem Speichern zu → bleibt offen.
+  Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Pflege nur durch den Inhaber (Mitarbeiter lesen und filtern); „unklar“ wird standardmäßig
+  angezeigt; Profile wirken nur als Filter, nicht auf Ampel, Max-EK oder Sperre; `config.yaml → suchen` bleibt für den Suchlauf unverändert.
+- **Bekannte Risiken:** Zuordnung nutzt die erkannte Fahrzeugart und Marke – Fehler der Erkennung wirken auf den Filter („Sonstige“ → unklar).
+- **Nächster sinnvoller Schritt:** P4-02 Suchgebiete und PLZ-Regionen (bauen auf den Profilen auf).
+
 ## P3-08 – Datenqualität: Markierungen und Wert je Fahrzeug (23.10.2026) · Status: REVIEW
 
 - **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-data-engineer`, kleine Oberflächenteile); QA `qa-security-reviewer`;

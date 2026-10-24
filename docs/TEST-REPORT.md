@@ -4,6 +4,21 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P4-01 – Suchprofile als Filter, Abdeckungscheckliste je Plattform (24.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2095 bestanden (vorher 2039), neu `test_suchprofile.py` (56) |
+| `ruff check .` | grün |
+| Eingaben: Normalisierung (Name, Arten, Marken, Modell), 19 ungültige Profile, Checkliste (Plattform, angelegt, Adresse nur http(s) ohne Leerzeichen, AutoScout24 nicht „angelegt“), Notiz bleibt beim Speichern ohne Notiz erhalten | bestanden |
+| Zuordnung passt/unklar/nein (21 Fälle: Art, Marke, Modell als ganzes Wort, Preis/EZ/km mit Grenzen und fehlenden Werten, „nein“ schlägt „unklar“); Abdeckung fehlt/angelegt/prüfen/nicht lesbar, Quote | bestanden |
+| API: anlegen, Name doppelt, filtern (`profil=`, `unklar=nein`, `profil=²` → 400), Treffer-Endpunkt ohne 200er-Grenze (260 Inserate), Checkliste, löschen, 404; Rechte Inhaber/Mitarbeiter/Händler-Zugang, Token, Audit | bestanden |
+| Keine Wirkung auf Bewertung, Ampel, Sperre, Brief (Vergleich mit und ohne Profile) | bestanden |
+| Migration v1, v2, v10, v16 → v17: Daten unverändert, Sicherung `vor-v17`, Idempotenz, Rollback, neue Datenbank | bestanden |
+| Browser (Orchestrator, Chromium über Playwright, nach der Korrekturrunde): Desktop 1280 – Panel, Profil anlegen, Filter 60 → 10 Fahrzeuge, Checkliste (angelegt/fehlt/nicht lesbar, Abdeckung 50 %), Profil bleibt nach dem Speichern offen, Kommazahl vom Browser abgewiesen, Preisgrenze → 8; HTML im Profilnamen nicht ausgeführt. Handy 390 – Profilauswahl 60 → 8; 0 JS-Fehler | bestanden |
+| QA (eine Runde, vor der Korrekturrunde: 53 bestanden, eigene Proben) | Freigabe mit Auflagen – B1–B9 behoben; Korrekturen **nicht** erneut von der QA geprüft |
+| Echte Datenbank des Betreibers, Service Worker offline, Windows-CI | nicht geprüft (CI folgt im PR) |
+
 ## P3-08 – Datenqualität: Markierungen und Wert je Fahrzeug (23.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

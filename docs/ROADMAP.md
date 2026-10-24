@@ -10,8 +10,8 @@ besten Ankaufsgelegenheiten zuverlässig identifizieren.
 | 0 | Bestandsaufnahme | **REVIEW** (PR #3) | freigegeben (13.10.2026) |
 | 1 | Stabile Grundlage | **REVIEW** (`claude/phase1-abschluss`, alle Pakete umgesetzt außer P1-01b BLOCKED) | **offen** – Abnahme durch den Betreiber |
 | 2 | Multi-Quellen-System | **IN_PROGRESS** | freigegeben (17.10.2026) |
-| 3 | Datenbank und Marktbeobachtung | TODO | offen |
-| 4 | Deutschlandweite Suchstrategie | TODO | offen |
+| 3 | Datenbank und Marktbeobachtung | **DONE** (P3-01 … P3-08, PRs #27–#35 gemergt) | freigegeben; Abnahme durch den Betreiber mit der Freigabe von Phase 4 (24.10.2026) |
+| 4 | Deutschlandweite Suchstrategie | **IN_PROGRESS** | freigegeben (24.10.2026, „Phase 4 starten mit P4-01“) |
 | 5 | Intelligente Ankaufsbewertung | TODO | offen |
 | 6 | Ankaufs-Dashboard | TODO (Teile bereits DONE durch die Handy-App) | offen |
 
@@ -213,7 +213,7 @@ erhalten (Re-Import-Test).
 | P3-05 | P2 | Privat/Händler-Klassifizierung mit Herkunft der Einstufung | scout-data-engineer | DONE (PR #32 gemergt; Schema v14, ADR-043; mit P2-05d) |
 | P3-06 | P1 | `kontakte` als Ereignisse (vorbereitet/bestätigt, Kanal, Nutzer) | scout-data-engineer | DONE (PR #33 gemergt; Schema v15, ADR-044) |
 | P3-07 | P2 | Indizes nach `EXPLAIN QUERY PLAN`, Vorfilter für Vergleichsauswahl (R12) | scout-data-engineer | DONE (PR #34 gemergt; Schema v16, ADR-045) |
-| P3-08 | P2 | Markierungen für unvollständige/widersprüchliche Angaben, Datenqualitätswert je Fahrzeug | scout-data-engineer | REVIEW (ADR-046; ohne Schemaänderung; mit P2-10) |
+| P3-08 | P2 | Markierungen für unvollständige/widersprüchliche Angaben, Datenqualitätswert je Fahrzeug | scout-data-engineer | DONE (PR #35 gemergt; ADR-046; ohne Schemaänderung; mit P2-10) |
 
 ## Phase 4 – Deutschlandweite Suchstrategie
 
@@ -221,7 +221,7 @@ erhalten (Re-Import-Test).
 
 | ID | Prio | Paket | Agent | Status |
 |---|---|---|---|---|
-| P4-01 | P1 | Suchprofile in der Datenbank, verwaltbar in der App (Art, Marke, Modell, Preis, EZ, km) – solange keine freigegebene Pull-Quelle existiert, als **Filter über eingegangene Daten** plus **Abdeckungscheckliste** der vom Nutzer angelegten Suchaufträge je Plattform | source-integrations, scout-ui-engineer | TODO |
+| P4-01 | P1 | Suchprofile in der Datenbank, verwaltbar in der App (Art, Marke, Modell, Preis, EZ, km) – solange keine freigegebene Pull-Quelle existiert, als **Filter über eingegangene Daten** plus **Abdeckungscheckliste** der vom Nutzer angelegten Suchaufträge je Plattform | source-integrations, scout-ui-engineer | REVIEW (Schema v17, ADR-047; Branch `claude/phase4-suchprofile`) |
 | P4-02 | P1 | Suchgebiete und PLZ-Regionen (bundesweit, Umkreis, Regionenliste) | source-integrations | TODO |
 | P4-03 | P1 | Neue Angebote priorisieren; Preissenkungen erkennen und melden | source-integrations | TODO |
 | P4-04 | P2 | Intervalle je Quelle; Suchläufe und Fehler überwachen (Statusseite) | source-integrations | TODO |
