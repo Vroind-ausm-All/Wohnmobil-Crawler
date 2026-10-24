@@ -21,7 +21,7 @@ from pathlib import Path
 
 from .sicherung import SicherungsFehler, oeffne_lesend, sichere
 
-AKTUELLE_VERSION = 17
+AKTUELLE_VERSION = 18
 
 
 class MigrationsFehler(RuntimeError):
@@ -510,11 +510,26 @@ def _schritt_17(con: sqlite3.Connection):
         raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 17 geändert: {vorher} -> {nachher}")
 
 
+def _schritt_18(con: sqlite3.Connection):
+    """Additive v18 (P4-02, ADR-048): Suchgebiet je Suchprofil – ``gebiet`` (bundesweit/umkreis/regionen), ``gebiet_plz`` und
+    ``gebiet_radius_km`` (Umkreis), ``gebiet_regionen`` (JSON-Liste von PLZ-Bereichen). Bestehende Profile werden „bundesweit“ – sie filtern
+    unverändert. Keine Zeile wird verändert oder gelöscht."""
+    vorher = _zaehle_v11(con)
+    vorhanden = _spalten(con, "suchprofile")
+    for spalte, typ in (("gebiet", "TEXT NOT NULL DEFAULT 'bundesweit'"), ("gebiet_plz", "TEXT"), ("gebiet_radius_km", "INTEGER"),
+                        ("gebiet_regionen", "TEXT NOT NULL DEFAULT '[]'")):
+        if spalte not in vorhanden:
+            con.execute(f"ALTER TABLE suchprofile ADD COLUMN {spalte} {typ}")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 18 geändert: {vorher} -> {nachher}")
+
+
 SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4, 5: _schritt_5,
                                                              6: _schritt_6, 7: _schritt_7, 8: _schritt_8, 9: _schritt_9,
                                                              10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
                                                              14: _schritt_14, 15: _schritt_15,
-                                                             16: _schritt_16, 17: _schritt_17}
+                                                             16: _schritt_16, 17: _schritt_17, 18: _schritt_18}
 
 _SCHEMA_VERSION = ("CREATE TABLE IF NOT EXISTS schema_version ("
                    "version INTEGER PRIMARY KEY, angewendet_am TEXT NOT NULL)")

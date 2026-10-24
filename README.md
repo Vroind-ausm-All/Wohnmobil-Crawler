@@ -170,7 +170,9 @@ Du bekommst dann nur eine Mail, wenn neue Treffer mit Anschreiben dabei sind.
 
 **Suchprofile (P4-01):** Über **Suchprofile** in der Filterleiste legt ihr fest, welche Fahrzeuge ihr sucht (Art, Marke, Modell,
 Preis, EZ, km). Ein Profil ruft nichts ab – es filtert die eingegangenen Inserate (Suchlauf, gespeicherte Seiten, Text, Mails);
-die Auswahl „Suchprofil“ zeigt nur passende Fahrzeuge, solche mit fehlenden Angaben als „unklar“ (auch am Handy). Die
+die Auswahl „Suchprofil“ zeigt nur passende Fahrzeuge, solche mit fehlenden Angaben als „unklar“ (auch am Handy). Je Profil
+wählt ihr ein **Suchgebiet**: bundesweit, Umkreis um eine PLZ (km Fahrstrecke wie die angezeigte Entfernung) oder PLZ-Bereiche (erste
+ein oder zwei Ziffern, z. B. „7, 80“); Fahrzeuge ohne erkennbaren Ort gelten dann als „unklar“, Orte im Ausland passen nicht. Die
 **Checkliste** je Profil hält fest, auf welcher Plattform ihr einen passenden Suchauftrag bzw. eine E-Mail-Benachrichtigung
 angelegt habt (Haken und Adresse); „prüfen“ heißt: angelegt, aber seit 14 Tagen kein passender Treffer von dort. Anlegen und
 ändern darf im Team nur der Inhaber.
@@ -414,4 +416,5 @@ Die Zeilen „Phase 1“ unten beziehen sich auf den früheren Phasenplan; die n
 | Ankaufprotokoll mit Unterschriften, Termine/Zuständigkeit, Kalender (.ics), WhatsApp-Links | umgesetzt | `test_handy.py`, Klicktest |
 | WhatsApp automatisch (Cloud API von Meta) | umgesetzt, **nicht live getestet** (braucht Meta-Konto und freigegebene Vorlagen) | `test_handy.py` mit nachgebautem Server |
 | Suchprofile als Filter über eingegangene Inserate, Abdeckungscheckliste je Plattform (P4-01, Schema v17) | umgesetzt | `test_suchprofile.py`, Klicktest Desktop und Handy |
-| Suchgebiete, Preissenkungen melden, Deal-Score, Ankaufs-Dashboard | **geplant** – Phasen 4–6 in `docs/ROADMAP.md` | – |
+| Suchgebiet je Suchprofil: bundesweit, Umkreis, PLZ-Bereiche (P4-02, Schema v18) | umgesetzt | `test_suchgebiete.py`, Klicktest Desktop |
+| Preissenkungen melden, Deal-Score, Ankaufs-Dashboard | **geplant** – Phasen 4–6 in `docs/ROADMAP.md` | – |

@@ -1,6 +1,7 @@
 """Suchprofile und Abdeckungscheckliste (P4-01, ADR-047).
 
-Ein Suchprofil beschreibt gesuchte Fahrzeuge (Art, Marke, Modell, Preis, EZ, km). Solange keine freigegebene Pull-Quelle existiert, ruft es
+Ein Suchprofil beschreibt gesuchte Fahrzeuge (Art, Marke, Modell, Preis, EZ, km) und ein Suchgebiet (bundesweit, Umkreis um eine PLZ oder
+eine Liste von PLZ-Bereichen, P4-02, ADR-048). Solange keine freigegebene Pull-Quelle existiert, ruft es
 nichts ab: Es filtert die eingegangenen Inserate (Suchlauf, gespeicherte Seiten, Text, Mails). Die Abdeckungscheckliste hält je Profil und
 Plattform fest, ob der Nutzer dort einen Suchauftrag bzw. eine E-Mail-Benachrichtigung angelegt hat, und zeigt, wann zuletzt ein passendes
 Inserat dieser Plattform einging.
@@ -16,6 +17,7 @@ from datetime import datetime, timedelta
 
 from .domaene import KLEINANZEIGEN, MOBILEDE, PLATTFORMEN
 from .normalisierung.fahrzeug import normalisiere_marke
+from .normalisierung.geo import entfernung_km, plz_bekannt, plz_bereich_bekannt
 
 ARTEN = ("Teilintegrierter", "Integrierter", "Alkoven", "Kastenwagen", "Wohnwagen", "Sonstige")
 # Plattformen, deren Eingänge der Scout lesen kann (gespeicherte Seiten, Mails); autoscout24 ist nur vorgemerkt
@@ -24,6 +26,11 @@ PASST, UNKLAR, NEIN = "passt", "unklar", "nein"
 STILL_NACH_TAGEN = 14                     # angelegter Suchauftrag, aber so lange kein passendes Inserat: „prüfen“
 MAX_NAME, MAX_MODELL, MAX_NOTIZ, MAX_URL, MAX_MARKEN = 80, 60, 500, 500, 30
 GRENZEN = {"preis": (1, 2_000_000), "km": (0, 2_000_000)}
+# Suchgebiet (P4-02): bundesweit = kein Gebietsfilter; umkreis = Fahrstrecke (wie die angezeigte Entfernung) um eine PLZ; regionen = PLZ-Bereiche
+BUNDESWEIT, UMKREIS, REGIONEN = "bundesweit", "umkreis", "regionen"
+GEBIETE = (BUNDESWEIT, UMKREIS, REGIONEN)
+RADIUS_MAX, MAX_REGIONEN = 1000, 50
+NAEHERUNG_KM = 20                         # PLZ des Inserats nur über ihren Bereich genähert: so weit über dem Umkreis noch „unklar“ statt „nein“
 
 
 class Eingabefehler(ValueError):
@@ -73,10 +80,75 @@ def pruefe_profil(daten: dict, jetzt: datetime) -> dict:
          "km_max": _zahl(daten, "km_max", *GRENZEN["km"], "km bis"), "notiz": _text(daten, "notiz", MAX_NOTIZ, "Notiz")}
     if not isinstance(p["aktiv"], bool):
         raise Eingabefehler("aktiv muss wahr oder falsch sein")
+    p.update(_pruefe_gebiet(daten))
     for unten, oben, name_ in (("preis_min", "preis_max", "Preis"), ("ez_min", "ez_max", "EZ")):
         if p[unten] is not None and p[oben] is not None and p[unten] > p[oben]:
             raise Eingabefehler(f"{name_}: „von“ ist größer als „bis“")
     return p
+
+
+def _pruefe_gebiet(daten: dict) -> dict:
+    """Suchgebiet: nur die Angaben der gewählten Art werden gespeichert, die übrigen geleert."""
+    gebiet = daten.get("gebiet")
+    gebiet = BUNDESWEIT if gebiet is None or gebiet == "" else gebiet
+    if not isinstance(gebiet, str) or gebiet not in GEBIETE:
+        raise Eingabefehler(f"gebiet: eines von {', '.join(GEBIETE)}")
+    erg = {"gebiet": gebiet, "gebiet_plz": None, "gebiet_radius_km": None, "gebiet_regionen": []}
+    if gebiet == UMKREIS:
+        plz = daten.get("gebiet_plz")
+        if not isinstance(plz, str) or not plz_bekannt(plz.strip()):          # exakt bekannt: fängt Tippfehler ab
+            raise Eingabefehler("Umkreis: bekannte fünfstellige deutsche PLZ als Mittelpunkt angeben")
+        radius = _zahl(daten, "gebiet_radius_km", 1, RADIUS_MAX, "Umkreis in km")
+        if radius is None:
+            raise Eingabefehler("Umkreis: Entfernung in km angeben")
+        erg.update(gebiet_plz=plz.strip(), gebiet_radius_km=radius)
+    elif gebiet == REGIONEN:
+        regionen = daten.get("gebiet_regionen") or []
+        if not isinstance(regionen, list) or not regionen or len(regionen) > MAX_REGIONEN or any(not isinstance(r, str) for r in regionen):
+            raise Eingabefehler(f"PLZ-Bereiche: Liste mit 1 bis {MAX_REGIONEN} Einträgen, z. B. „7“ oder „80“")
+        regionen = sorted({r.strip() for r in regionen})
+        if "" in regionen:
+            raise Eingabefehler("PLZ-Bereiche: leerer Eintrag")
+        falsch = [r for r in regionen if not plz_bereich_bekannt(r)]
+        if falsch:
+            liste = ", ".join(r[:5] for r in falsch[:5]) + (" …" if len(falsch) > 5 else "")      # Meldung bleibt kurz
+            raise Eingabefehler(f"Unbekannter PLZ-Bereich: {liste} (erste ein oder zwei Ziffern einer deutschen PLZ)")
+        # „7“ deckt „70“ schon ab: überflüssige Einträge entfallen
+        erg["gebiet_regionen"] = [r for r in regionen if not any(r != k and r.startswith(k) for k in regionen)]
+    return erg
+
+
+def gebiet_text(profil: dict) -> str:
+    """Kurzbeschreibung für Oberfläche und Gründe."""
+    if profil.get("gebiet") == UMKREIS:
+        if not (profil.get("gebiet_plz") and profil.get("gebiet_radius_km")):
+            return "Umkreis (unvollständig)"
+        return f"{profil['gebiet_radius_km']} km um {profil['gebiet_plz']}"
+    if profil.get("gebiet") == REGIONEN:
+        return "PLZ " + ", ".join(f"{r}…" for r in profil["gebiet_regionen"]) if profil.get("gebiet_regionen") else "PLZ-Bereiche (unvollständig)"
+    return "bundesweit"
+
+
+def _pruefe_ort(profil: dict, a: dict) -> tuple[str | None, str | None]:
+    """(„nein“-Grund, „unklar“-Grund) zum Suchgebiet. Bundesweit schränkt nichts ein (auch Orte im Ausland bleiben wie bisher sichtbar)."""
+    gebiet = profil.get("gebiet") or BUNDESWEIT
+    if gebiet == BUNDESWEIT:
+        return None, None
+    if a.get("ausland"):
+        return f"Ort im Ausland ({a['ausland']})", None
+    plz = a.get("plz")
+    if not plz:
+        return None, "Ort unbekannt"
+    if gebiet == REGIONEN:
+        return (None, None) if any(plz.startswith(r) for r in profil["gebiet_regionen"]) else (f"PLZ {plz} außerhalb", None)
+    km = entfernung_km(profil.get("gebiet_plz"), plz) if profil.get("gebiet_radius_km") else None
+    if km is None:
+        return None, "Entfernung unbekannt"
+    if km <= profil["gebiet_radius_km"]:
+        return None, None
+    if not plz_bekannt(plz) and km <= profil["gebiet_radius_km"] + NAEHERUNG_KM:
+        return None, f"ca. {km} km entfernt (PLZ nur genähert)"
+    return f"{km} km entfernt", None
 
 
 def pruefe_auftrag(daten: dict) -> dict:
@@ -101,7 +173,8 @@ def pruefe_auftrag(daten: dict) -> dict:
 
 
 def pruefe_inserat(profil: dict, a: dict, art: str | None) -> tuple[str, list[str]]:
-    """Passt das Inserat (``a``: bewertete Zeile mit ``marke``, ``modell``, ``fahrzeug``) zum Profil? ``art``: Fahrzeugart der Bewertung.
+    """Passt das Inserat (``a``: bewertete Zeile mit ``marke``, ``modell``, ``fahrzeug``, ``plz``, ``ausland``) zum Profil? ``art``: Fahrzeugart
+    der Bewertung.
     „unklar“, wenn eine geforderte Angabe fehlt (lieber zeigen als still verschweigen), „nein“, sobald eine Angabe nicht passt."""
     nein, unklar = [], []
     if profil["arten"] and art not in profil["arten"]:
@@ -116,6 +189,11 @@ def pruefe_inserat(profil: dict, a: dict, art: str | None) -> tuple[str, list[st
         text = " ".join(str(a.get(k) or "") for k in ("modell", "fahrzeug", "titel", "kurzbeschreibung")).lower()
         if not re.search(r"(?<!\w)" + re.escape(profil["modell"].lower()) + r"(?!\w)", text):     # ganze Wörter: „TI“ passt nicht zu „Automatik“
             nein.append(f"Modell nicht „{profil['modell']}“")
+    ort_nein, ort_unklar = _pruefe_ort(profil, a)
+    if ort_nein:
+        nein.append(ort_nein)
+    elif ort_unklar:
+        unklar.append(ort_unklar)
     for feld, unten, oben, name in (("preis", "preis_min", "preis_max", "Preis"), ("ez_jahr", "ez_min", "ez_max", "EZ"), ("km", None, "km_max", "km")):
         grenze_u, grenze_o = (profil[unten] if unten else None), profil[oben]
         if grenze_u is None and grenze_o is None:
@@ -150,7 +228,7 @@ def abdeckung(profil: dict, auftraege: dict[str, dict], letzte_treffer: dict[str
 
 # ---------------------------------------------------------------- Speicher
 class SuchprofilSpeicher:
-    """Tabellen ``suchprofile`` und ``suchauftraege`` (Schema v17). Schreibt über die gemeinsame Verbindung in kurzen Transaktionen."""
+    """Tabellen ``suchprofile`` und ``suchauftraege`` (Schema v17, Suchgebiet v18). Schreibt über die gemeinsame Verbindung in kurzen Transaktionen."""
 
     def __init__(self, db):
         self.db = db
@@ -160,6 +238,8 @@ class SuchprofilSpeicher:
         p = dict(z)
         p["aktiv"] = bool(p["aktiv"])
         p["arten"], p["marken"] = json.loads(p["arten"] or "[]"), json.loads(p["marken"] or "[]")
+        p["gebiet_regionen"] = json.loads(p.get("gebiet_regionen") or "[]")
+        p["gebiet"] = p.get("gebiet") or BUNDESWEIT
         return p
 
     def liste(self, nur_aktive: bool = False) -> list[dict]:
@@ -175,9 +255,11 @@ class SuchprofilSpeicher:
 
     def _werte(self, p: dict) -> list:
         return [p["name"], int(p["aktiv"]), json.dumps(p["arten"], ensure_ascii=False), json.dumps(p["marken"], ensure_ascii=False), p["modell"],
-                p["preis_min"], p["preis_max"], p["ez_min"], p["ez_max"], p["km_max"], p["notiz"]]
+                p["preis_min"], p["preis_max"], p["ez_min"], p["ez_max"], p["km_max"], p["notiz"],
+                p["gebiet"], p["gebiet_plz"], p["gebiet_radius_km"], json.dumps(p["gebiet_regionen"])]
 
-    _SPALTEN = ("name", "aktiv", "arten", "marken", "modell", "preis_min", "preis_max", "ez_min", "ez_max", "km_max", "notiz")
+    _SPALTEN = ("name", "aktiv", "arten", "marken", "modell", "preis_min", "preis_max", "ez_min", "ez_max", "km_max", "notiz",
+                "gebiet", "gebiet_plz", "gebiet_radius_km", "gebiet_regionen")
 
     def anlegen(self, p: dict) -> int:
         """``p`` aus ``pruefe_profil``. ``Eingabefehler``, wenn der Name schon vergeben ist."""

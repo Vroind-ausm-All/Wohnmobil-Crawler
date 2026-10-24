@@ -4,6 +4,20 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P4-02 – Suchgebiete: bundesweit, Umkreis, PLZ-Bereiche (24.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2152 bestanden (vorher 2095), neu `test_suchgebiete.py` (57); die letzte JS-Korrektur (versteckte Felder deaktiviert) und ihre statische Prüfung kamen danach – `test_suchgebiete.py` erneut: 57 bestanden |
+| `ruff check .` | grün |
+| Eingaben: Standard „bundesweit“, nur Angaben der gewählten Art gespeichert, PLZ-Bereiche normalisiert („70“ in „7“ entfällt); 28 ungültige Fälle (Gebietsart falsch/False/0, Mittelpunkt unbekannt/genähert/Vollbreiten-Ziffern/Zahl, Radius fehlt/0/1001/Text, Bereiche leer/zu viele/unbekannt/dreistellig/leerer Eintrag); lange Fehleingaben → kurze Meldung | bestanden |
+| Zuordnung (18 Fälle): bundesweit wie bisher (auch Ausland), Umkreis inkl. Grenze genau auf km, Ausland → nein, Ort fehlt → unklar, genäherte PLZ bis 20 km über dem Umkreis → unklar, exakt bekannte PLZ ohne Toleranz; PLZ-Bereiche; „nein“ schlägt „unklar“; unvollständige Zeile → unklar | bestanden |
+| Speicher und API: Umkreis-Treffer = Fahrzeuge mit angezeigter Entfernung ≤ 100 km (Mittelpunkt = Standort), PLZ-Bereich „8“ = Testinserate mit 8…; `gebiete`, `standort_plz`, `gebiet_text`; Fehleingabe → 400; keine Wirkung auf die Bewertung | bestanden |
+| Migration v1, v16, v17 (mit Profil und Checkliste) → v18: Daten unverändert, Altprofil „bundesweit“, Sicherung `vor-v18`, Idempotenz, Rollback, neue Datenbank | bestanden |
+| Browser (Orchestrator, Chromium über Playwright, nach der Korrekturrunde): Desktop 1280 – Felder je Gebietsart ein-/ausgeblendet, PLZ-Vorschlag aus dem Standort, Umkreis 100 km → 15 Fahrzeuge (max. 12 km), PLZ-Bereiche „8, 81, 1“ → 32, ungültiger Radius im versteckten Feld blockiert nicht, „00“ → Meldung; Handy 390 – Profilauswahl 32; 0 JS-Fehler | bestanden |
+| QA (eine Runde, vor der Korrekturrunde: 105 bestanden, eigene Proben mit Unicode-Ziffern/-Leerraum) | Freigabe mit Auflagen – B1–B6 behoben; Korrekturen **nicht** erneut von der QA geprüft |
+| Echte Datenbank des Betreibers, Windows-CI | nicht geprüft (CI folgt im PR) |
+
 ## P4-01 – Suchprofile als Filter, Abdeckungscheckliste je Plattform (24.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

@@ -930,3 +930,28 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Folgen / offen:** `config.yaml → suchen` bleibt für den bestehenden Suchlauf unverändert; eine Verknüpfung (Suchlauf je Profil) erst mit
   einer freigegebenen Pull-Quelle (P4-06). Suchgebiete/PLZ (P4-02) und die Messung von Suchlücken (P4-05) bauen auf den Profilen auf.
   Betreiberfragen: ob auch Mitarbeiter Profile pflegen dürfen und ob „unklar“ standardmäßig ausgeblendet werden soll.
+
+## ADR-048 – Suchgebiet je Suchprofil: bundesweit, Umkreis um eine PLZ oder PLZ-Bereiche (Schema v18) · gilt (24.10.2026)
+
+* **Kontext:** P4-02. Suchprofile (ADR-047) kannten kein Gebiet; die Entfernung wurde nur zum eigenen Standort angezeigt
+  (`config.yaml → anschreiben.plz`). Für eine deutschlandweite Suche sollen Profile auf ein Gebiet begrenzt werden können – weiterhin als
+  Filter über eingegangene Daten, ohne zusätzlichen Abruf.
+* **Entscheidung:**
+  1. Additive Migration v18: Spalten `gebiet` (`bundesweit`/`umkreis`/`regionen`, Standard `bundesweit`), `gebiet_plz`, `gebiet_radius_km`,
+     `gebiet_regionen` (JSON-Liste) an `suchprofile`. Bestehende Profile werden „bundesweit“ und filtern unverändert.
+  2. **bundesweit** = kein Gebietsfilter (auch Orte im Ausland bleiben wie bisher sichtbar). **Umkreis**: geschätzte Fahrstrecke wie die
+     angezeigte Entfernung (`geo.entfernung_km`, Luftlinie × 1,25) um eine **exakt bekannte** PLZ (fängt Tippfehler ab; Vorschlag: eigener
+     Standort), 1–1.000 km; die PLZ eines Inserats darf genähert sein (Mittel des PLZ-Bereichs). **PLZ-Bereiche**: erste ein oder zwei
+     Ziffern deutscher PLZ (z. B. „7“, „80“), 1–50 Einträge; ein Bereich, der in einem anderen steckt („70“ bei „7“), entfällt.
+  3. Zuordnung: Ort im Ausland → **nein**, PLZ bzw. Entfernung unbekannt → **unklar**, sonst passt/nein nach Gebiet; „nein“ schlägt
+     „unklar“ wie bei den übrigen Kriterien. Gründe nennen Entfernung bzw. PLZ. Ist die PLZ des Inserats nur über ihren Bereich genähert und
+     liegt die Schätzung höchstens 20 km über dem Umkreis, wird es „unklar“ statt „nein“ (lieber zeigen als still ausblenden).
+  4. Nur die Angaben der gewählten Gebietsart werden gespeichert (die übrigen geleert). API: `gebiete`, `standort_plz` und je Profil
+     `gebiet_text` in `GET /api/suchprofile`; Eingaben über die bestehenden Profil-Endpunkte (Rechte unverändert: Pflege durch den Inhaber).
+  5. Keine Wirkung auf Bewertung, Abholkosten, `max_entfernung_km` oder den Suchlauf.
+* **Alternativen:** Bundesländer/Landkreise (PLZ-Bereiche schneiden Ländergrenzen, eine amtliche Zuordnung fehlt im Projekt – erst mit
+  geprüfter Datenquelle); Umkreis in Luftlinie (wiche von der angezeigten Entfernung ab); Gebiet als Parameter des Kleinanzeigen-Suchlaufs
+  (zusätzlicher Abruf – erst mit freigegebener Pull-Quelle, P4-06).
+* **Folgen / offen:** Die Entfernung ist eine Schätzung (± einige km, bei genäherter PLZ mehr); Treffer knapp an der Grenze können
+  abweichen (genäherte PLZ: siehe 3.). Mehrere Umkreise je Profil sind nicht vorgesehen (dafür zwei Profile). Betreiberfrage: ob „bundesweit“ Orte im Ausland
+  ausschließen soll.
