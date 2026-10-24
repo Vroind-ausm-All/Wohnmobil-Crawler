@@ -6,6 +6,27 @@ Wert „–“.
 
 ---
 
+## P4-04 – Laufprotokoll, Intervalle je Quelle, Pause nach Sperre, Statusseite (24.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `source-integrations`, Migration wie `scout-data-engineer`); QA
+  `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/migrationen.py` (v19), `wmscout/laufprotokoll.py` (neu), `wmscout/importer.py`, `wmscout/app.py`,
+  `scout.py` (`lauf --sofort`, `quellen liste`), `wmscout/web/api.py` (`/status`, `/api/status`), `vorlagen/status.html` (neu),
+  `vorlagen/report.html`, `wmscout/web/static/mobil.js`, `sw.js` (wm-scout-16), `config.yaml`, Tests `test_statusseite.py` (neu),
+  `test_app_threads.py` (Ersatz-Suchlauf nimmt den Auslöser), `test_reimport.py` (Laufprotokoll nicht im Bestandsvergleich),
+  `test_neuigkeiten.py` (Versionsprüfung ≥ 15); Doku ADR-050, ROADMAP (P4-03 DONE, P4-04 REVIEW), ARCHITECTURE, README.
+- **Implementierte Funktionen:** siehe ADR-050.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“. B1 (hoch: Pause/Intervall werteten nur die letzten 200 Zeilen aus – nach vielen
+  übersprungenen Läufen endete die Pause zu früh) → Auswertung über das Zeitfenster ohne Anzahlgrenze, Test mit 250 Läufen; B2 (geändertes
+  Layout zählte nicht als Fehler der Quelle) → Fehler je Quelle; B3 (beschädigte JSON-Zeile ließ Läufe scheitern) → überspringen und
+  melden; B5 (letzter Import nur aus 200 Zeilen) → eigene Abfrage je Eingang; B4, B7 dokumentiert; B6 (Symlink/.bat nicht stagen)
+  beachtet. Eigene Funde im Browser: Datum der Warnung im ISO-Format, rechtsbündige Spalte. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Pause nach Sperre 24 h; keine Intervalle je Quelle voreingestellt; Läufe von Hand warten
+  nicht; die Statusseite sehen alle Team-Mitglieder (ohne Personendaten), nicht der Händler-Zugang.
+- **Bekannte Risiken:** Ohne freigegebene Pull-Quelle zeigt die Seite vor allem Importe; die Intervalle wirken erst mit einer Freigabe.
+- **Nächster sinnvoller Schritt:** P4-05 Suchlücken und Abdeckung messen.
+
 ## P4-03 – Neuigkeiten: frisch eingegangen und Preissenkungen hervorheben, priorisieren, melden (24.10.2026) · Status: REVIEW
 
 - **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `source-integrations`/`scout-ui-engineer`); QA `qa-security-reviewer`;

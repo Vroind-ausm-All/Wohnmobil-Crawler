@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#24524a">
+<link rel="icon" href="/static/icon-192.png">
+<title>Status – {{ firma }}</title>
+<link rel="stylesheet" href="/static/mobil.css">
+<style>
+main{max-width:1100px;margin:0 auto;padding:16px}
+nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px;flex-wrap:wrap}
+.tabelle{overflow-x:auto} table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top} td:last-child{text-align:left}
+td.z{text-align:right;white-space:nowrap}
+.e-ok{color:var(--gruen)} .e-fehler,.e-abgebrochen{color:var(--gelb)} .e-gesperrt{color:var(--rot)}
+.warnung{background:var(--gelb-bg);color:var(--gelb);border-radius:8px;padding:8px 12px;margin:6px 0}
+</style>
+</head>
+<body>
+<main>
+  <nav class="oben"><a href="/">Ankaufsliste</a><a href="/m">Handy-App</a><a href="/status">Neu laden</a></nav>
+  <h1>Status: Quellen, Eingänge, Suchläufe</h1>
+  <p class="leise">Stand {{ s.jetzt[8:10] }}.{{ s.jetzt[5:7] }}. {{ s.jetzt[11:16] }} Uhr ·
+    {% if suchlauf.laeuft %}<b>Suchlauf läuft:</b> {{ suchlauf.meldung }}{% else %}{{ suchlauf.meldung or 'kein Suchlauf aktiv' }}{% endif %} ·
+    automatische Suche {% if s.auto_suche_stunden > 0 %}alle {{ s.auto_suche_stunden | round(1) }} h{% if suchlauf.naechste_auto %}, nächste {{ suchlauf.naechste_auto[11:16] }} Uhr{% endif %}{% else %}aus{% endif %}</p>
+
+  {% for w in s.warnungen %}<p class="warnung" data-warnung>⚠ {{ w }}</p>{% endfor %}
+
+  <h2>Pull-Quellen (Suchlauf)</h2>
+  <p class="leise">Intervalle je Quelle und die Pause nach einer Sperre ({{ s.pause_nach_sperre_stunden }} h) gelten für die automatische Suche und
+    geplante Aufgaben, nicht für „Neue Anzeigen suchen“ von Hand. Einstellen: <code>config.yaml → app</code>. Blockt eine Quelle (403/429/Captcha),
+    wird der Lauf beendet und nichts umgangen.</p>
+  <div class="tabelle"><table id="quellen">
+    <tr><th>Quelle</th><th>Freigabe / Schalter</th><th>Suchen</th><th>Letzter Lauf</th><th>Letzter Erfolg</th><th>Fehler in Folge</th>
+      <th>Intervall</th><th>Nächster automatischer Abruf</th></tr>
+    {% for q in s.quellen %}
+    <tr data-quelle="{{ q.kennung }}">
+      <td><b>{{ q.name }}</b><br><span class="leise">{{ q.kennung }} · {{ q.zugriffsart }}</span></td>
+      <td>{% if q.laeuft %}läuft{% else %}übersprungen ({{ q.grund }}){% endif %}</td>
+      <td class="z">{{ q.suchen }}</td>
+      <td>{% if q.letzter_lauf %}{{ q.letzter_lauf[8:10] }}.{{ q.letzter_lauf[5:7] }}. {{ q.letzter_lauf[11:16] }}
+        <span class="e-{{ q.letztes_ergebnis }}">{{ ergebnisse.get(q.letztes_ergebnis, q.letztes_ergebnis) }}</span>{% else %}–{% endif %}
+        {% if q.letzter_fehler %}<br><span class="leise">{{ q.letzter_fehler }}</span>{% endif %}</td>
+      <td>{% if q.letzter_erfolg %}{{ q.letzter_erfolg[8:10] }}.{{ q.letzter_erfolg[5:7] }}. {{ q.letzter_erfolg[11:16] }}{% else %}–{% endif %}</td>
+      <td class="z">{{ q.fehler_in_folge }}</td>
+      <td>{{ (q.intervall_stunden ~ ' h') if q.intervall_stunden else '–' }}</td>
+      <td>{{ q.sperrgrund or 'sofort möglich' }}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+
+  <h2>Eingänge</h2>
+  <div class="tabelle"><table id="eingaenge">
+    <tr><th>Eingang</th><th>Schalter</th><th>Letzter Import</th></tr>
+    {% for e in s.eingaenge %}
+    <tr data-eingang="{{ e.name }}"><td>{{ e.name }}</td><td>{{ 'an' if e.aktiv else 'aus' }}</td>
+      <td>{% if not e.protokolliert %}<span class="leise">einzeln über „Inserat einlesen“ – nicht protokolliert</span>
+        {% elif e.letzter_import %}{{ e.letzter_import[8:10] }}.{{ e.letzter_import[5:7] }}. {{ e.letzter_import[11:16] }}
+        <span class="e-{{ e.letztes_ergebnis }}">{{ ergebnisse.get(e.letztes_ergebnis, e.letztes_ergebnis) }}</span>{% else %}–{% endif %}</td></tr>
+    {% endfor %}
+  </table></div>
+
+  <h2>Letzte Läufe</h2>
+  {% if s.laeufe %}
+  <div class="tabelle"><table id="laeufe">
+    <tr><th>Beginn</th><th>Art</th><th>Auslöser</th><th>Ergebnis</th><th>Neu</th><th>Preis gesenkt</th><th>Bekannt</th><th>Details / Dateien</th><th>Hinweis</th></tr>
+    {% for lf in s.laeufe %}
+    <tr data-lauf="{{ lf.id }}">
+      <td>{{ lf.start[8:10] }}.{{ lf.start[5:7] }}. {{ lf.start[11:16] }}{% if lf.ende %}–{{ lf.ende[11:16] }}{% endif %}</td>
+      <td>{{ arten.get(lf.art, lf.art) }}</td><td>{{ ausloeser.get(lf.ausloeser, lf.ausloeser) }}</td>
+      <td class="e-{{ lf.ergebnis }}">{{ ergebnisse.get(lf.ergebnis, lf.ergebnis) }}</td>
+      <td class="z">{{ lf.neu }}</td><td class="z">{{ lf.preis }}</td><td class="z">{{ lf.bekannt }}</td>
+      <td class="z">{{ lf.dateien if lf.dateien is not none else lf.details }}</td>
+      <td>{% if lf.fehler %}{{ lf.fehler }}{% endif %}
+        {% for u in lf.uebersprungen %}<br><span class="leise">{{ u.quelle }} übersprungen: {{ u.grund }}</span>{% endfor %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<p class="leise">Noch kein Lauf protokolliert. Protokolliert werden Suchläufe sowie Importe gespeicherter Seiten und Mails.</p>{% endif %}
+</main>
+</body>
+</html>

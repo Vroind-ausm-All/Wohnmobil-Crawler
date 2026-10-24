@@ -111,7 +111,8 @@ class FakeLauf:
         self.starts = 0
         self.oeffnungen = 0
 
-    def starte(self):
+    def starte(self, ausloeser="manuell"):
+        assert ausloeser == "auto"                      # die Auto-Suche beachtet Intervalle und Pause nach Sperre (P4-04)
         self.starts += 1
         return True
 

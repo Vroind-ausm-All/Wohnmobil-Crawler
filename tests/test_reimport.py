@@ -41,9 +41,15 @@ def jetzt() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# Laufprotokoll (P4-04, ADR-050): ein Betriebsprotokoll, das mit jedem Lauf und Import wächst – kein Datenbestand (eigene Tests in test_statusseite)
+BETRIEBSPROTOKOLLE = {"suchlaeufe"}
+
+
 def tabellen(db: Datenbank) -> list[str]:
-    """Alle Tabellen der Datenbank (aus sqlite_master) – ohne Ausnahme: auch Sitzungen, Audit, Kalkulationen usw. dürfen sich nicht ändern."""
-    return sorted(r[0] for r in db.con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"))
+    """Alle Tabellen der Datenbank (aus sqlite_master) außer dem Laufprotokoll: auch Sitzungen, Audit, Kalkulationen usw. dürfen sich nicht
+    ändern."""
+    return sorted(r[0] for r in db.con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+                  if r[0] not in BETRIEBSPROTOKOLLE)
 
 
 def dump(db: Datenbank, ohne: dict[str, set] | None = None) -> dict[str, list]:

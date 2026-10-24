@@ -58,7 +58,8 @@ class Suchlauf:
         """Eigene Verbindung; Sicherungsordner aus config.yaml (sicherung -> ordner), nicht der Standard neben der Datenbank."""
         return Datenbank(self.db_pfad, sicherung_ordner(self.cfg, self.basis), wal=wal_aktiv(self.cfg))
 
-    def starte(self) -> bool:
+    def starte(self, ausloeser: str = "manuell") -> bool:
+        """``ausloeser``: „manuell“ (Knopf) oder „auto“ (Auto-Suche: beachtet Intervalle je Quelle und die Pause nach einer Sperre, P4-04)."""
         if self.thread and self.thread.is_alive():
             return False
         sperre = Laufsperre(self.db_pfad)          # auch gegen „scout.py lauf“ aus der Aufgabenplanung (anderer Prozess)
@@ -67,7 +68,7 @@ class Suchlauf:
             return False
         self.letzter_start = datetime.now().isoformat(timespec="seconds")
         self.stand.update(laeuft=True, meldung="Suche startet …", fehler=None, ende=None)
-        self.thread = threading.Thread(target=self._lauf, args=(sperre,), daemon=True)
+        self.thread = threading.Thread(target=self._lauf, args=(sperre, ausloeser), daemon=True)
         try:
             self.thread.start()
         except BaseException:
@@ -76,10 +77,12 @@ class Suchlauf:
             raise
         return True
 
-    def _lauf(self, sperre: Laufsperre | None = None):
+    def _lauf(self, sperre: Laufsperre | None = None, ausloeser: str = "manuell"):
         try:
             db = self.oeffne_datenbank()
-            stat = Importer(self.cfg, db).lauf(self.cfg["suchen"])
+            importer = Importer(self.cfg, db)
+            importer.ausloeser, importer.intervall_beachten = ausloeser, ausloeser == "auto"
+            stat = importer.lauf(self.cfg["suchen"])
             datenrechte.frist_anwenden(db, self.cfg, self.basis, (self.basis / self.db_pfad).parent / "fotos")
             # wie „python scout.py lauf“: Report/CSV/Anschreiben-Dateien aktualisieren, ggf. Mail
             zeilen = bewerte_alle(self.cfg, db, self.basis, lauf_start=self.letzter_start)
@@ -136,7 +139,7 @@ class AutoSuche:
         jetzt = datetime.now()
         faellig = self.naechste(letzter, jetzt)
         self.suchlauf.stand["naechste_auto"] = faellig.isoformat(timespec="minutes")
-        if faellig <= jetzt and not self.suchlauf.stand["laeuft"] and self.suchlauf.starte():
+        if faellig <= jetzt and not self.suchlauf.stand["laeuft"] and self.suchlauf.starte("auto"):
             log.info("Automatische Suche startet")
             return True
         return False

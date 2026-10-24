@@ -26,6 +26,7 @@ from .eingang.email import MAX_BYTES as MAX_MAIL_BYTES
 from .eingang.email import MailEingang, MailFehler, eml_dateien, mail_zeitpunkt, verschiebe_mail
 from .ereignisse import InseratEreignis
 from .ereignis_speicher import EreignisSpeicher
+from . import laufprotokoll as lp
 from .normalisierung.fahrzeug import art_schluessel
 from .quellen import (QUELLEN, STANDARD_QUELLE, Abruf, InseratNichtGefunden, NetzwerkFehler, Quelle, QuelleGesperrt,
                       QuellenFehler, Suchauftrag, erstelle_quelle)
@@ -95,6 +96,11 @@ class Importer:
         ordner = Path(cfg.get("ausgabe", {}).get("ordner", "ausgabe"))
         self.diagnose_ordner = ordner if ordner.is_absolute() else Path(__file__).resolve().parent.parent / ordner
         self.layout_warnung: str | None = None
+        # Laufprotokoll (P4-04): Auslöser; Intervalle und Pause nach Sperre gelten nur, wenn ``intervall_beachten`` (Automatik, geplante Aufgabe)
+        self.ausloeser = "manuell"
+        self.intervall_beachten = False
+        self._aktuelle_quelle: str | None = None
+        self._layout_quellen: set[str] = set()
 
     def quelle(self, kennung: str) -> Quelle:
         if kennung not in self._quellen:
@@ -147,6 +153,7 @@ class Importer:
         except OSError:
             pass
         self.layout_warnung = LAYOUT_HINWEIS.format(quelle=quelle.name, datei=datei, kennung=quelle.kennung)
+        self._layout_quellen.add(quelle.kennung)
         log.warning(self.layout_warnung)
 
     # ---------- Details ----------
@@ -157,6 +164,7 @@ class Importer:
         leer = 0
         for i, zeile in enumerate(offen, 1):
             kennung = zeile["quelle"] if "quelle" in zeile.keys() and zeile["quelle"] else STANDARD_QUELLE
+            self._aktuelle_quelle = kennung
             quelle = self.quelle(kennung)
             if not quelle.unterstuetzt_details:
                 self.db.speichere_details(zeile["id"], {})       # nichts nachzuladen – Platz freigeben
@@ -181,7 +189,25 @@ class Importer:
         return len(offen)
 
     # ---------- Gespeicherte Seiten (ohne Netz) ----------
+    def _protokolliert(self, art: str, ausfuehren) -> dict:
+        """Import gespeicherter Seiten bzw. Mails im Laufprotokoll festhalten – nur, wenn Dateien gelesen wurden (P4-04)."""
+        start = datetime.now().isoformat(timespec="seconds")
+        protokoll = lp.Laufprotokoll(self.db)
+        try:
+            stat = ausfuehren()
+        except BaseException as e:
+            protokoll.eintrag(art, self.ausloeser, start, lp.ABGEBROCHEN, {}, f"{type(e).__name__}: {e}")
+            raise
+        if stat.get("dateien"):
+            protokoll.eintrag(art, self.ausloeser, start, lp.FEHLER if stat.get("fehlerhaft") else lp.OK, stat,
+                              "; ".join(stat.get("fehler") or []) or None)
+        return stat
+
     def importiere_seiten(self, ordner: Path, max_dateien: int | None = None, max_sekunden: float | None = None) -> dict:
+        eingang_pruefen(self.cfg, "seiten")                 # abgeschaltet: nichts lesen, nichts protokollieren
+        return self._protokolliert("seiten", lambda: self._importiere_seiten(ordner, max_dateien, max_sekunden))
+
+    def _importiere_seiten(self, ordner: Path, max_dateien: int | None = None, max_sekunden: float | None = None) -> dict:
         """Liest Such- und Detailseiten von Kleinanzeigen und mobile.de, die der Nutzer im Browser gespeichert hat, aus
         `ordner` (nicht rekursiv; beide Plattformen im selben Ordner).
 
@@ -247,6 +273,10 @@ class Importer:
 
     # ---------- E-Mail-Suchbenachrichtigungen (ohne Netz) ----------
     def importiere_mails(self, ordner: Path, max_dateien: int | None = None, max_sekunden: float | None = None) -> dict:
+        eingang_pruefen(self.cfg, "email")                  # abgeschaltet (Standard): nichts lesen, nichts protokollieren
+        return self._protokolliert("mails", lambda: self._importiere_mails(ordner, max_dateien, max_sekunden))
+
+    def _importiere_mails(self, ordner: Path, max_dateien: int | None = None, max_sekunden: float | None = None) -> dict:
         """Liest Benachrichtigungs-Mails (`.eml`) von Kleinanzeigen und mobile.de aus `ordner` (nicht rekursiv; Standard `import/email/`).
 
         Wie `importiere_seiten`: kein Netzabruf, verlinkte Anzeigen werden nicht nachgeladen; gespeichert wird nur über
@@ -429,27 +459,79 @@ class Importer:
                 stat["details"] += 1
 
     # ---------- Lauf ----------
+    def _darf_laufen(self, kennung: str, zeitsperren: dict[str, str]) -> tuple[bool, str | None]:
+        laeuft, grund = self.laeuft(kennung)
+        if laeuft and kennung in zeitsperren:
+            return False, zeitsperren[kennung]
+        return laeuft, grund
+
+    def _zeitsperren(self) -> dict[str, str]:
+        """Nur für automatische/geplante Läufe: Quellen im Intervall oder in der Pause nach einer Sperre → Grund (P4-04)."""
+        if not self.intervall_beachten:
+            return {}
+        jetzt = datetime.now()
+        e = lp.einstellungen(self.cfg, QUELLEN)
+        fenster = max([e["pause_nach_sperre_stunden"], *e["intervalle"].values()])
+        if not fenster:
+            return {}
+        # alle Läufe im längsten Fenster, ohne Anzahlgrenze: sonst endete eine Pause nach vielen übersprungenen Läufen zu früh (QA B1)
+        laeufe = lp.Laufprotokoll(self.db).letzte(None, art="suchlauf", seit=jetzt - timedelta(hours=fenster), nur_mit_quelle=True)
+        status = lp.quellen_status(laeufe, QUELLEN, e, jetzt)
+        return {k: g for k, s in status.items() if (g := lp.sperrgrund(s, jetzt))}
+
     def lauf(self, suchen: list[dict]) -> dict:
+        """Ein Suchlauf über alle eingetragenen Suchen; wird im Laufprotokoll festgehalten (je Quelle Zahlen und Fehler, P4-04)."""
         gesamt = {"neu": 0, "preis": 0, "bekannt": 0, "details": 0, "fehler": None, "uebersprungen": []}
         self.layout_warnung = None
+        self._layout_quellen = set()
+        protokoll = lp.Laufprotokoll(self.db)
+        lauf_id = protokoll.beginne("suchlauf", self.ausloeser)
+        je_quelle: dict[str, dict] = {}
+        ergebnis, unerwartet, zeitsperren = lp.OK, None, {}
+
+        def fehler_an_quelle(text: str, art: str):
+            q = je_quelle.setdefault(self._aktuelle_quelle or "?", {"neu": 0, "preis": 0, "bekannt": 0})
+            q.update(ergebnis=art, fehler=lp.kurz(text))
         try:
+            zeitsperren = self._zeitsperren()
             for eintrag in suchen:
                 auftrag = Suchauftrag.aus_config(eintrag)
-                laeuft, grund = self.laeuft(auftrag.quelle)
+                laeuft, grund = self._darf_laufen(auftrag.quelle, zeitsperren)
                 if not laeuft:
                     if all(u["quelle"] != auftrag.quelle for u in gesamt["uebersprungen"]):
                         gesamt["uebersprungen"].append({"quelle": auftrag.quelle, "grund": grund})
                         log.info("Quelle %s übersprungen: %s", auftrag.quelle, grund)
                     continue
                 log.info("Suche: %s", auftrag.name)
+                self._aktuelle_quelle = auftrag.quelle
+                q = je_quelle.setdefault(auftrag.quelle, {"neu": 0, "preis": 0, "bekannt": 0})
                 for k, v in self.suche(auftrag).items():
                     gesamt[k] += v
-            gesamt["details"] = self.details({k for k in QUELLEN if self.laeuft(k)[0]})     # nur Quellen, die laufen dürfen
+                    q[k] += v
+            # nur Quellen, die laufen dürfen
+            gesamt["details"] = self.details({k for k in QUELLEN if self._darf_laufen(k, zeitsperren)[0]})
             gesamt["fehler"] = self.layout_warnung
         except QuelleGesperrt as e:
             log.error(str(e))
             gesamt["fehler"] = str(e)
+            ergebnis = lp.GESPERRT
+            fehler_an_quelle(str(e), lp.GESPERRT)
         except QuellenFehler as e:
             log.error("%s", e)
             gesamt["fehler"] = str(e)
+            ergebnis = lp.FEHLER
+            fehler_an_quelle(str(e), lp.FEHLER)
+        except BaseException as e:
+            ergebnis, unerwartet = lp.ABGEBROCHEN, f"{type(e).__name__}: {e}"
+            fehler_an_quelle(unerwartet, lp.ABGEBROCHEN)
+            raise
+        finally:
+            for kennung, q in je_quelle.items():
+                if kennung in self._layout_quellen and q.get("ergebnis", lp.OK) == lp.OK:
+                    q.update(ergebnis=lp.FEHLER, fehler=lp.kurz(self.layout_warnung))    # Quelle liefert vermutlich nichts mehr (QA B2)
+                q.setdefault("ergebnis", lp.OK)
+            if self.layout_warnung and ergebnis == lp.OK:
+                ergebnis = lp.FEHLER                            # Layout geändert: Lauf lief, aber die Quelle liefert vermutlich nichts mehr
+            protokoll.beende(lauf_id, ergebnis, gesamt, je_quelle, gesamt["uebersprungen"], gesamt["fehler"] or unerwartet)
+            self._aktuelle_quelle = None
         return gesamt

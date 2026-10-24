@@ -59,7 +59,7 @@ from wmscout.eingang import import_ordner
 from wmscout.eingang.email import mail_ordner
 from wmscout.auktion import STATUS as AUKTION_STATUS
 from wmscout.auktion import AuktionSpeicher
-from wmscout import datenrechte, mandanten
+from wmscout import datenrechte, laufprotokoll, mandanten
 from wmscout.audit import AuditSpeicher
 from wmscout.nutzung import nutzung
 from wmscout.deal import DealSpeicher
@@ -127,14 +127,17 @@ def cmd_lauf(cfg, db, args):
         logging.warning("Suchlauf übersprungen: Es läuft bereits ein Suchlauf (App oder geplante Aufgabe).")
         return
     try:
-        _lauf(cfg, db)
+        _lauf(cfg, db, sofort=args.sofort)
     finally:
         sperre.freigeben()
 
 
-def _lauf(cfg, db):
+def _lauf(cfg, db, sofort: bool = False):
     start = datetime.now().isoformat(timespec="seconds")
-    stat = Importer(cfg, db).lauf(cfg["suchen"])
+    importer = Importer(cfg, db)
+    # geplante Aufgabe/Kommandozeile: Intervalle je Quelle und Pause nach Sperre gelten, außer mit --sofort (P4-04)
+    importer.ausloeser, importer.intervall_beachten = "cli", not sofort
+    stat = importer.lauf(cfg["suchen"])
     datenrechte.frist_anwenden(db, cfg, BASIS, foto_ordner(cfg))
     logging.info("Crawl fertig: %d neu, %d Preissenkungen, %d bekannt, %d Detailseiten",
                  stat["neu"], stat["preis"], stat["bekannt"], stat["details"])
@@ -163,7 +166,9 @@ def cmd_import_mails(cfg, db, args):
         print(f"Ordner für Mails angelegt: {ordner}")
     print(f"E-Mail-Suchbenachrichtigungen einlesen aus: {ordner}")
     start = datetime.now().isoformat(timespec="seconds")
-    stat = Importer(cfg, db).importiere_mails(ordner)
+    importer = Importer(cfg, db)
+    importer.ausloeser = "cli"
+    stat = importer.importiere_mails(ordner)
     if not stat["dateien"]:
         print("Keine Mails gefunden (.eml).\n"
               "So geht's: Benachrichtigung des Suchagenten in Thunderbird (Datei → Speichern unter → .eml) bzw. im Webmail als .eml speichern "
@@ -211,7 +216,9 @@ def cmd_import(cfg, db, args):
         print(f"Import-Ordner angelegt: {ordner}")
     print(f"Gespeicherte Seiten einlesen aus: {ordner}")
     start = datetime.now().isoformat(timespec="seconds")
-    stat = Importer(cfg, db).importiere_seiten(ordner)
+    importer = Importer(cfg, db)
+    importer.ausloeser = "cli"
+    stat = importer.importiere_seiten(ordner)
     if not stat["dateien"]:
         print("Keine gespeicherten Seiten gefunden (.html/.htm).\n"
               "So geht's: Suchergebnis- oder Anzeigenseite in Kleinanzeigen oder mobile.de öffnen, Strg+S drücken und in diesen Ordner "
@@ -251,6 +258,7 @@ def cmd_quellen(cfg, db, args):
         sys.exit("„quellen liste“ nimmt keine Kennung – zum Schalten: python scout.py quellen an|aus KENNUNG")
     print("Pull-Quellen (Suchlauf) – schalten: python scout.py quellen an|aus KENNUNG")
     print(f"  {'Kennung':<16}{'Zugriff':<9}{'Code-Freigabe':<15}{'Schalter':<16}Suchlauf")
+    status = {q["kennung"]: q for q in laufprotokoll.uebersicht(db, cfg)["quellen"]}
     for kennung in sorted(QUELLEN):
         klasse = QUELLEN[kennung]
         zeile = quelle_zeile(db, kennung)
@@ -258,6 +266,12 @@ def cmd_quellen(cfg, db, args):
         schalter = "nicht entschieden" if zeile is None or (not zeile["freigegeben"] and not zeile["aktiv"]) else ("an" if zeile["aktiv"] else "aus")
         print(f"  {kennung:<16}{klasse.zugriffsart:<9}{'ja' if klasse.freigegeben else 'nein':<15}{schalter:<16}"
               f"{'läuft' if laeuft else 'übersprungen (' + grund + ')'}")
+        q = status[kennung]                                  # Laufprotokoll (P4-04); ausführlich in der App unter /status
+        if q["letzter_lauf"] or q["intervall_stunden"]:
+            print(f"  {'':<16}letzter Lauf {(q['letzter_lauf'] or '–').replace('T', ' ')} ({q['letztes_ergebnis'] or '–'}), "
+                  f"Fehler in Folge {q['fehler_in_folge']}, automatisch: {q['sperrgrund'] or 'sofort möglich'}")
+            if q["letzter_fehler"]:
+                print(f"  {'':<16}letzter Fehler: {q['letzter_fehler']}")
     print("\nEingänge – schalten in config.yaml bzw. config.local.yaml → eingaenge → <name> → aktiv: true|false")
     for name, an in eingaenge(cfg).items():
         print(f"  {name:<10}{'an' if an else 'aus'}")
@@ -618,7 +632,9 @@ def main():
     a.add_argument("--kein-browser", action="store_true", help="Browser nicht automatisch öffnen")
     a.add_argument("--mandanten", action="store_true", help="alle Mandanten aus mandanten/ bedienen (Hostname wählt den Mandanten)")
     a.add_argument("--lokal", help="mit --mandanten: dieser Mandant ist zusätzlich über 127.0.0.1 erreichbar")
-    sub.add_parser("lauf", help="crawlen, bewerten, Report erzeugen")
+    la = sub.add_parser("lauf", help="crawlen, bewerten, Report erzeugen")
+    la.add_argument("--sofort", action="store_true",
+                    help="Intervalle je Quelle und die Pause nach einer Sperre nicht abwarten (config.yaml → app)")
     sub.add_parser("report", help="Report aus vorhandenen Daten neu erzeugen")
     im = sub.add_parser("import", help="im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten einlesen (ohne Internet)")
     im.add_argument("--ordner", help="Ordner mit den gespeicherten Seiten bzw. (mit --mails) den .eml-Dateien "
