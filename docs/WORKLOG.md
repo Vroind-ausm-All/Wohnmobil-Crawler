@@ -6,6 +6,26 @@ Wert „–“.
 
 ---
 
+## P4-02 – Suchgebiete: bundesweit, Umkreis, PLZ-Bereiche (24.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `source-integrations`/`scout-ui-engineer`, Migration wie `scout-data-engineer`);
+  QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/migrationen.py` (v18), `wmscout/normalisierung/geo.py` (`plz_bereich_bekannt`), `wmscout/suchprofile.py`,
+  `wmscout/web/api.py`, `wmscout/web/static/suchprofile.js`, `vorlagen/report.html` (CSS), Tests `test_suchgebiete.py` (neu),
+  `test_suchprofile.py` (erwartete Felder); Doku ADR-048, ROADMAP (P4-01 DONE, P4-02 REVIEW), ARCHITECTURE, README.
+- **Implementierte Funktionen:** siehe ADR-048. Suchgebiet je Suchprofil, Filter über eingegangene Daten, kein Abruf, keine Wirkung auf die
+  Bewertung. Handy ohne Änderung (Filter wirkt über die Profilauswahl).
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, keine kritischen oder hohen Befunde. B1 (`gebiet=False` still „bundesweit“) → nur
+  leer/fehlend; B2 (sehr lange Fehlermeldung, leerer Eintrag) → Meldung gekürzt, „leerer Eintrag“; B3 (verstecktes Radiusfeld geprüft) →
+  nur beim Umkreis; B4 („None km um None“ bei unvollständiger Zeile) → Ersatztext; B5 (genäherte PLZ knapp außerhalb hart „nein“) → bis
+  20 km „unklar“; B6 Doku. Eigener Fund im Browser: ein ungültiger Wert im versteckten Radiusfeld blockierte über die Formularprüfung des
+  Browsers das Speichern → versteckte Felder werden deaktiviert. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** „bundesweit“ schließt Orte im Ausland nicht aus (wie bisher); Umkreis in km Fahrstrecke
+  wie die angezeigte Entfernung; keine Bundesländer (fehlende amtliche Zuordnung).
+- **Bekannte Risiken:** Entfernungen sind Schätzungen über PLZ-Mittelpunkte.
+- **Nächster sinnvoller Schritt:** P4-03 neue Angebote priorisieren, Preissenkungen erkennen und melden.
+
 ## P4-01 – Suchprofile als Filter, Abdeckungscheckliste je Plattform (24.10.2026) · Status: REVIEW
 
 - **Freigabe:** Betreiber am 24.10.2026: „Phase 4 starten mit P4-01“ (zugleich Abnahme von Phase 3, ROADMAP aktualisiert).

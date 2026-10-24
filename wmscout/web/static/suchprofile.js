@@ -6,6 +6,7 @@
   var SCOUT = window.SCOUT || {};
   if (!SCOUT.token) return;
   var PLATTFORM = { kleinanzeigen: "Kleinanzeigen", "mobile.de": "mobile.de", autoscout24: "AutoScout24" };
+  var GEBIET = { bundesweit: "bundesweit (kein Gebietsfilter)", umkreis: "Umkreis um eine PLZ", regionen: "PLZ-Bereiche" };
   var ZUSTAND = { fehlt: "kein Suchauftrag angelegt", angelegt: "angelegt, Treffer kommen an", pruefen: "angelegt, aber seit 14 Tagen kein passender Treffer – prüfen",
                   nicht_lesbar: "Eingang im Scout noch nicht lesbar" };
   var box = document.getElementById("suchprofile-box"), knopf = document.getElementById("profil-knopf"), auswahl = document.getElementById("profil-filter");
@@ -78,6 +79,20 @@
     feld(f, "preis_min", "Preis von €", p.preis_min, "number"); feld(f, "preis_max", "bis €", p.preis_max, "number");
     feld(f, "ez_min", "EZ von", p.ez_min, "number"); feld(f, "ez_max", "bis", p.ez_max, "number");
     feld(f, "km_max", "km bis", p.km_max, "number");
+    // Suchgebiet (P4-02): Umkreis in km Fahrstrecke wie die angezeigte Entfernung, PLZ-Bereiche als erste ein oder zwei Ziffern
+    var gl = el("label", { "class": "sp-feld" }, "Suchgebiet"), gs = el("select", { name: "gebiet" });
+    stand.gebiete.forEach(function (g) { gs.appendChild(el("option", { value: g }, GEBIET[g] || g)); });
+    gs.value = p.gebiet || "bundesweit"; gs.disabled = !stand.darf_aendern; gl.appendChild(gs); f.appendChild(gl);
+    var gp = feld(f, "gebiet_plz", "Mittelpunkt PLZ", p.gebiet_plz || stand.standort_plz);
+    gp.setAttribute("inputmode", "numeric"); gp.setAttribute("maxlength", "5");
+    var gr = feld(f, "gebiet_radius_km", "Umkreis km (Fahrstrecke)", p.gebiet_radius_km, "number");
+    var gg = feld(f, "gebiet_regionen", "PLZ-Bereiche (Komma, z. B. 7, 80)", (p.gebiet_regionen || []).join(", "));
+    var gebietZeigen = function () {
+      gp.parentNode.hidden = gr.parentNode.hidden = gs.value !== "umkreis"; gg.parentNode.hidden = gs.value !== "regionen";
+      // versteckte Felder deaktivieren: sonst blockiert die Formularprüfung des Browsers an einem unsichtbaren Feld
+      gp.disabled = gr.disabled = !stand.darf_aendern || gs.value !== "umkreis"; gg.disabled = !stand.darf_aendern || gs.value !== "regionen";
+    };
+    gs.onchange = gebietZeigen; gebietZeigen();
     var aktiv = el("label", { "class": "sp-feld" }), ak = el("input", { type: "checkbox", name: "aktiv" });
     ak.checked = p.aktiv !== false; ak.disabled = !stand.darf_aendern;
     aktiv.appendChild(ak); aktiv.appendChild(document.createTextNode(" aktiv")); f.appendChild(aktiv);
@@ -99,7 +114,11 @@
       var d = { name: f.elements.name.value, aktiv: f.elements.aktiv.checked, modell: f.elements.modell.value || null, notiz: f.elements.notiz.value || null,
                 marken: f.elements.marken.value.split(",").map(function (m) { return m.trim(); }).filter(Boolean),
                 arten: Array.prototype.filter.call(arten.querySelectorAll("input"), function (c) { return c.checked; }).map(function (c) { return c.value; }) };
-      var falsch = ["preis_min", "preis_max", "ez_min", "ez_max", "km_max"].filter(function (n) {
+      d.gebiet = gs.value; d.gebiet_plz = gp.value.trim() || null;
+      d.gebiet_regionen = gg.value.split(",").map(function (r) { return r.trim(); }).filter(Boolean);
+      if (gs.value !== "umkreis") { gr.value = ""; d.gebiet_plz = null; }        // versteckte Felder werden nicht geprüft
+      if (gs.value !== "regionen") d.gebiet_regionen = [];
+      var falsch = ["preis_min", "preis_max", "ez_min", "ez_max", "km_max", "gebiet_radius_km"].filter(function (n) {
         var i = f.elements[n];
         if (i.value === "" && !i.validity.badInput) { d[n] = null; return false; }
         d[n] = i.valueAsNumber;
@@ -143,7 +162,7 @@
     box.appendChild(el("p", { "data-sp-meldung": "", "class": "meta" }, ""));
     stand.profile.forEach(function (p) {
       var d = el("details", { "class": "sp-profil", "data-sp-id": String(p.id) });
-      d.appendChild(el("summary", null, p.name + (p.aktiv ? "" : " (inaktiv)") + " – " + p.treffer.passt + " passend, " + p.treffer.unklar + " unklar · Abdeckung " +
+      d.appendChild(el("summary", null, p.name + (p.aktiv ? "" : " (inaktiv)") + " · " + p.gebiet_text + " – " + p.treffer.passt + " passend, " + p.treffer.unklar + " unklar · Abdeckung " +
                        Math.round(p.abdeckung.quote * 100) + " %"));
       d.appendChild(profilFormular(p));
       d.appendChild(checkliste(p));

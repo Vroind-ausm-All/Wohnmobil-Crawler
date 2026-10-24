@@ -61,6 +61,11 @@ def plz_bekannt(plz: str | None) -> bool:
     return bool(plz) and plz in _lade()
 
 
+def plz_bereich_bekannt(praefix: str) -> bool:
+    """Gibt es deutsche PLZ, die mit ``praefix`` (1 oder 2 Ziffern, z. B. „7“ oder „80“) beginnen?"""
+    return bool(re.fullmatch(r"[0-9]{1,2}", praefix or "")) and any(p.startswith(praefix) for p in _lade_mittel())
+
+
 def koordinaten(plz: str | None) -> tuple[float, float] | None:
     """Exakte PLZ, sonst Mittel der PLZ mit gleichen ersten drei bzw. zwei Ziffern (``plz_bekannt`` sagt, ob die PLZ exakt vorliegt).
     Ab zwei Stellen ergebnisgleich zur früheren Suche über die ganze Tabelle; eine einstellige PLZ liefert None (zu ungenau)."""

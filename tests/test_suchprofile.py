@@ -44,7 +44,8 @@ def test_profil_wird_normalisiert():
     p = profil(name="  Knaus   TI ", arten=["Alkoven", "Teilintegrierter", "Alkoven"], marken=["knaus", " Knaus", "Hymer"], modell="  Sky  TI ",
                preis_min=10000, preis_max=50000, ez_min=2010, ez_max=2020, km_max=150000, notiz="x")
     assert p == {"name": "Knaus TI", "aktiv": True, "arten": ["Teilintegrierter", "Alkoven"], "marken": ["Hymer", "Knaus"], "modell": "Sky TI",
-                 "preis_min": 10000, "preis_max": 50000, "ez_min": 2010, "ez_max": 2020, "km_max": 150000, "notiz": "x"}
+                 "preis_min": 10000, "preis_max": 50000, "ez_min": 2010, "ez_max": 2020, "km_max": 150000, "notiz": "x",
+                 "gebiet": "bundesweit", "gebiet_plz": None, "gebiet_radius_km": None, "gebiet_regionen": []}      # Suchgebiet: P4-02
     assert profil(preis_min="", modell="")["preis_min"] is None and profil()["arten"] == [] and profil(aktiv=False)["aktiv"] is False
 
 

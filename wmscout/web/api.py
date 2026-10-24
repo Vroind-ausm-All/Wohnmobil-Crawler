@@ -899,9 +899,11 @@ class Anfrage:
                 a = nach_id[ad_id]["a"]
                 quelle = a.get("quelle") or "kleinanzeigen"
                 letzte[quelle] = max(letzte.get(quelle) or "", a.get("erstmals_gesehen") or "") or None
-            profile.append({**p, "treffer": {"passt": sum(v == sp.PASST for v in treffer.values()), "unklar": sum(v == sp.UNKLAR for v in treffer.values())},
+            profile.append({**p, "gebiet_text": sp.gebiet_text(p),
+                            "treffer": {"passt": sum(v == sp.PASST for v in treffer.values()), "unklar": sum(v == sp.UNKLAR for v in treffer.values())},
                             "abdeckung": sp.abdeckung(p, k.suchprofile.auftraege(p["id"]), letzte, jetzt)})
         return {"profile": profile, "arten": list(sp.ARTEN), "plattformen": list(PLATTFORMEN), "mit_eingang": list(sp.MIT_EINGANG),
+                "gebiete": list(sp.GEBIETE), "standort_plz": str(k.cfg["anschreiben"].get("plz") or "") or None,
                 "darf_aendern": not self.team_aktiv or self.nutzer.get("rolle") == "inhaber"}
 
     def suchprofil_aendern(self, pfad: str, daten: dict) -> dict:
