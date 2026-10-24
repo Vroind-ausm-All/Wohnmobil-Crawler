@@ -197,9 +197,25 @@
 
   var LISTEN = { bereit: "Anschreiben bereit", nachfassen: "Nachfassen", arbeit: "In Arbeit", alle: "Alle Fahrzeuge" };
   var WER = { alle: "Alle", meine: "Meine", frei: "Frei" };
+  // Suchprofile (P4-01): aktive Profile als Filter über die eingegangenen Inserate; einmal je Sitzung geladen
+  function profile() {
+    return S.profile ? Promise.resolve(S.profile) : api("/api/suchprofile").then(function (d) {
+      S.profile = d.profile.filter(function (p) { return p.aktiv; }); return S.profile;
+    }, function () { S.profile = []; return S.profile; });
+  }
+  function profilAuswahl() {
+    if (!S.profile || !S.profile.length) return "";
+    return '<label class="leise">Suchprofil <select id="profil"><option value="">alle Fahrzeuge</option>' + S.profile.map(function (p) {
+      return '<option value="' + esc(p.id) + '"' + (String(p.id) === String(S.profil || "") ? " selected" : "") + ">" + esc(p.name) + "</option>";
+    }).join("") + "</select></label>";
+  }
   function liste(filter, suche) {
     var wer = S.ich.team ? (S.wer || "alle") : "alle";
-    return api("/api/fahrzeuge?filter=" + encodeURIComponent(filter) + "&q=" + encodeURIComponent(suche || "") + (wer !== "alle" ? "&wer=" + wer : "")).then(function (l) {
+    return profile().then(function () {
+      if (S.profil && !S.profile.some(function (p) { return String(p.id) === String(S.profil); })) S.profil = "";
+      return api("/api/fahrzeuge?filter=" + encodeURIComponent(filter) + "&q=" + encodeURIComponent(suche || "") + (wer !== "alle" ? "&wer=" + wer : "") +
+                 (S.profil ? "&profil=" + encodeURIComponent(S.profil) : ""));
+    }).then(function (l) {
       inhalt.innerHTML = "<h1>" + esc(LISTEN[filter] || "Fahrzeuge") + " (" + l.length + ")</h1>" +
         '<input type="search" id="suche" placeholder="Marke, Modell, Ort …" value="' + esc(suche || "") + '">' +
         '<div class="reihe">' + Object.keys(LISTEN).map(function (f) {
@@ -207,15 +223,18 @@
         }).join("") + "</div>" +
         (S.ich.team ? '<div class="reihe" role="group" aria-label="Wer">' + Object.keys(WER).map(function (w) {
           return '<button class="knopf klein' + (w === wer ? " primaer" : "") + '" data-aktion="wer" data-wer="' + w + '" aria-pressed="' + (w === wer) + '">' + WER[w] + "</button>";
-        }).join("") + "</div>" : "") +
+        }).join("") + "</div>" : "") + profilAuswahl() +
         (l.length ? l.map(function (f) {
-          return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + teamBadge(f.team) + verfTag(f) + dqTag(f) + ampelTag(f.ampel) + "</div>" +
+          return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + teamBadge(f.team) + verfTag(f) + dqTag(f) +
+            (f.profil_treffer === "unklar" ? '<span class="tag dq" data-profil-unklar="">Profil unklar</span>' : "") + ampelTag(f.ampel) + "</div>" +
             '<p class="leise">EZ ' + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") + (f.entfernung_km !== null ? " · " + tsd(f.entfernung_km) + " km entfernt" : "") + "</p>" +
             hinweisZeilen(f) +
             (f.nachfassen ? '<p class="leise" style="color:var(--gelb)">Nachfassen: ' + esc(f.nachfassen) + "</p>" : "") +
             '<div class="zahlen"><div><span>Wunschpreis</span>' + eur(f.preis) + "</div><div><span>Erstangebot</span><b>" + eur(f.erstangebot) +
             "</b></div><div><span>Max-EK</span>" + eur(f.max_ek) + "</div></div></a>";
         }).join("") : '<p class="leise">Nichts gefunden.</p>');
+      var pw = document.getElementById("profil");
+      if (pw) pw.onchange = function () { S.profil = pw.value; liste(filter, document.getElementById("suche").value); };
       var feld = document.getElementById("suche"), uhr;
       feld.oninput = function () { clearTimeout(uhr); uhr = setTimeout(function () { liste(filter, feld.value).then(function () { var f = document.getElementById("suche"); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }); }, 400); };
     });

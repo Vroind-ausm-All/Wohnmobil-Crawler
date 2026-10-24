@@ -900,3 +900,33 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Folgen / offen:** Ob eine schwache Datenlage die Ampel dämpfen oder das Anschreiben sperren soll, entscheidet der Betreiber. Ein
   km-Rückgang innerhalb desselben Inserats wird nicht erkannt (kein km-Verlauf gespeichert). Schwellen sind Annahmen und im Code
   (Konstanten) anpassbar, nicht in `config.yaml`.
+
+## ADR-047 – Suchprofile als Filter über eingegangene Daten, Abdeckungscheckliste je Plattform (Schema v17) · gilt (24.10.2026)
+
+* **Kontext:** P4-01. Eine freigegebene Pull-Quelle gibt es nicht (Kleinanzeigen-Suche nur höflich und vom Nutzer gestartet, mobile.de nur
+  über Mails und gespeicherte Seiten, AutoScout24 BLOCKED). Gesuchte Fahrzeuge standen bisher nur in `config.yaml → suchen`; ob auf jeder
+  Plattform ein passender Suchauftrag bzw. eine E-Mail-Benachrichtigung angelegt ist, war nirgends festgehalten.
+* **Entscheidung:**
+  1. Additive Migration v17: `suchprofile` (Name eindeutig, aktiv, Arten und Marken als JSON-Liste, Modell-Teiltext, Preis von/bis, EZ von/bis,
+     km bis, Notiz) und `suchauftraege` (je Profil und Plattform: angelegt ja/nein, Adresse, Notiz; `UNIQUE(profil_id, plattform)`). Keine
+     bestehende Tabelle verändert; Sicherung, Transaktion, Zählinvariante wie bei v11–v16. Die geplante `suchprofile`-Spalte `parameter_json`
+     (ARCHITECTURE §7) entfällt: Profile beschreiben das gesuchte Fahrzeug, nicht die Abfrage einer Quelle.
+  2. **Profile rufen nichts ab.** Sie filtern die eingegangenen Inserate (Suchlauf, gespeicherte Seiten, Text, Mails). Zuordnung je Inserat:
+     **passt**, **unklar** (eine geprüfte Angabe fehlt, Art „Sonstige“/unbekannt) oder **nein** (eine Angabe widerspricht; „nein“ schlägt
+     „unklar“). „Unklar“ wird angezeigt und gekennzeichnet, nicht versteckt – sonst fielen gerade schlecht beschriebene Privatangebote heraus.
+     Das Modell wird als ganzes Wort bzw. ganze Wortfolge gesucht („TI“ passt nicht zu „Automatik“), Marken normalisiert („vw“ = Volkswagen).
+  3. **Abdeckungscheckliste** je Profil und Plattform: Zustand *fehlt* (kein Auftrag), *angelegt*, *prüfen* (angelegt, aber seit 14 Tagen kein
+     sicher passender Treffer dieser Plattform; „unklar“ zählt hier nicht) oder *nicht lesbar* (Plattform ohne Eingang im Scout, derzeit
+     AutoScout24 – dort lässt sich „angelegt“ nicht setzen). Adressen nur http(s) ohne Leerzeichen. Abdeckung = angelegte
+     unter den lesbaren Plattformen. Der Nutzer pflegt die Liste selbst; der Scout legt keine Aufträge an und meldet sich nirgends an.
+  4. Pflege (anlegen, ändern, löschen, Checkliste) nur durch den Inhaber, sobald das Team aktiv ist; Lesen und Filtern für alle Team-Mitglieder,
+     Händler-Zugang gesperrt. Schreibende Aufrufe mit Token und im Audit-Protokoll (Objekt `suchprofil`).
+  5. Keine Wirkung auf Bewertung, Ampel, Max-EK, Sperre oder Anschreiben (Test vergleicht die Läufe). API: `GET/POST /api/suchprofile`,
+     `POST /api/suchprofil/<id>[/loeschen|/auftrag]`, `GET /api/fahrzeuge?profil=<id>[&unklar=nein]` (Feld `profil_treffer`, wie bisher
+     höchstens 200 Einträge), `GET /api/suchprofil/<id>/treffer` (alle Treffer-IDs ohne Grenze, für den Desktop-Filter). Desktop:
+     Auswahl „Suchprofil“ in der Leiste und Panel „Suchprofile“; Handy: Auswahl über der Liste, Abzeichen „Profil unklar“.
+* **Alternativen:** Profile als Suchparameter für die Kleinanzeigen-Suche (wäre zusätzlicher Netzabruf je Profil – nicht ohne Freigabe);
+  „unklar“ ausblenden (verliert Treffer); Profile in `config.yaml` (nicht in der App pflegbar, kein Team-Recht).
+* **Folgen / offen:** `config.yaml → suchen` bleibt für den bestehenden Suchlauf unverändert; eine Verknüpfung (Suchlauf je Profil) erst mit
+  einer freigegebenen Pull-Quelle (P4-06). Suchgebiete/PLZ (P4-02) und die Messung von Suchlücken (P4-05) bauen auf den Profilen auf.
+  Betreiberfragen: ob auch Mitarbeiter Profile pflegen dürfen und ob „unklar“ standardmäßig ausgeblendet werden soll.
