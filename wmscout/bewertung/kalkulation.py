@@ -22,7 +22,7 @@ from datetime import datetime
 from .auswertung import _sicht_als, bewerte_anzeige, fuer_rechner, kandidaten_arten
 from .rechner import STANDARD_AEHNLICHKEIT, STANDARD_MARKTMODELL, Rechner, _runde, haendlerangebot, privatangebot
 
-VERSION = "E4"          # bei jeder Änderung an Formeln erhöhen – ältere Kalkulationen gelten dann als „andere Version“ (E2–E4: P5-02 bis P5-04)
+VERSION = "E5"          # bei jeder Änderung an Formeln erhöhen – ältere Kalkulationen gelten dann als „andere Version“ (E2–E5: P5-02 bis P5-05)
 SZENARIEN = {"vorsichtig": "unteres Ende der Marktspanne", "erwartet": "Schätzung des Marktniveaus",
              "guenstig": "oberes Ende der Marktspanne"}
 FAHRZEUG_FELDER = ("id", "suche", "art", "titel", "marke", "modell", "serie", "ez_jahr", "km", "preis", "kurzbeschreibung",
@@ -58,6 +58,9 @@ def _rechner_cfg(cfg: dict) -> dict:
     r.setdefault("haendler_vergleich_min", 3)
     r.setdefault("abschlag_haendler_angebot", 0.05)
     r.setdefault("haendler_vk_deckel", True)
+    r.setdefault("maengelrisiko_max", 0.0)
+    r["kosten"] = {"standzeit_saison_zuschlag": {}, "gewaehrleistung_staffel": [], "kapitalzins_jahr": 0.0, "kapital_anteil_vk": 0.8,
+                   **r["kosten"]}
     return r
 
 
@@ -138,6 +141,8 @@ def rechne(e: dict) -> dict:
     if betrag:
         ampel = "gruen" if betrag <= sicher else "gelb" if betrag <= ober else "rot"
     return {"version": VERSION, "moeglich": True, "betrag": betrag, "szenarien": szenarien, "abschlag_marke": b.abschlag_marke,
+            "standzeit_monate": b.standzeit_monate,
+            "kosten_kapital": sum(v for n, v in b.kosten_posten.items() if n.startswith("Kapitalbindung")),
             "korridor": {"sicher_bis": sicher, "obergrenze": ober}, "ampel": ampel,
             "sicherheit": b.sicherheit, "spanne": [b.spanne_von, b.spanne_bis] if b.spanne_von else None,
             "risiko": _risiko(b, a, betrag, sicher, ober), "annahmen": _annahmen(e, b), "vergleich_basis": b.vergleich_basis}

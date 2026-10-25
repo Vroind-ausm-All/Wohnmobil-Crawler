@@ -64,7 +64,7 @@ def test_spannen_umschliessen_den_punktwert(r):
     for n in (0, 2, 9):
         b = r.bewerte({**FZ, "id": f"s{n}"}, _vgl(n))
         assert b.max_ek_von <= b.max_ek <= b.max_ek_bis and b.privat_von <= b.marktwert_privat <= b.privat_bis
-        assert all(x % 500 == 0 for x in (b.max_ek_von, b.max_ek_bis, b.privat_von, b.privat_bis))
+        assert all(x % 100 == 0 for x in (b.max_ek_von, b.max_ek_bis, b.privat_von, b.privat_bis))          # 100-€-Schritte (Betreiber)
     duenn, dicht = r.bewerte({**FZ, "id": "d0"}, []), r.bewerte({**FZ, "id": "d9"}, _vgl(9))
     assert dicht.max_ek_bis - dicht.max_ek_von < duenn.max_ek_bis - duenn.max_ek_von          # mehr Daten → engere Spanne
 
@@ -102,7 +102,7 @@ def test_kalkulation_rechenstand_und_eingefrorener_abschlag():
     cfg = lade_cfg()
     del cfg["rechner"]["abschlag_marke_unbekannt"]
     e = kalk.eingabe(cfg, {**FZ, "marke": None, "entfernung_km": 50}, _vgl(5), betrag=None, stichtag=STICHTAG, abholung="Firmensitz")
-    assert e["version"] == kalk.VERSION and kalk.VERSION >= "E3" and e["rechner"]["abschlag_marke_unbekannt"] == 0.05
+    assert e["version"] == kalk.VERSION and int(kalk.VERSION[1:]) >= 3 and e["rechner"]["abschlag_marke_unbekannt"] == 0.05
     mit = kalk.rechne(e)
     ohne = kalk.rechne(kalk.eingabe(lade_cfg(), {**FZ, "entfernung_km": 50}, _vgl(5), betrag=None, stichtag=STICHTAG, abholung="Firmensitz"))
     assert mit["szenarien"]["erwartet"]["haendler_vk"] < ohne["szenarien"]["erwartet"]["haendler_vk"]
@@ -137,7 +137,7 @@ def test_desktop_und_handy(server, db):
     assert karte and re.search(r"<b>\d{1,3}(\.\d{3})*–\d{1,3}(\.\d{3})* €</b>", karte.group(0))
     liste = c("GET", "/api/fahrzeuge?filter=alle&verfuegbar=alle")[1]
     w1 = next(f for f in liste if f["id"] == "w1")
-    assert w1["max_ek_von"] and w1["maengel"] == [{"name": "Wasserschaden", "wert": w1["maengel"][0]["wert"]}]
+    assert w1["max_ek_von"] and [m["name"] for m in w1["maengel"]] == ["Wasserschaden"] and w1["maengel"][0]["wert"] < 0
     d = c("GET", "/api/fahrzeug/w1")[1]
     assert d["bewertung"]["max_ek_von"] == w1["max_ek_von"] and d["bewertung"]["privat_von"] and d["maengel"] == w1["maengel"]
     js = (BASIS / "wmscout" / "web" / "static" / "mobil.js").read_text(encoding="utf-8")
@@ -170,14 +170,15 @@ def test_spanne_umschliesst_den_punktwert_auch_bei_dichten_daten(r):
         vgl = [{"id": f"d{i}", "art": "Teilintegrierter", "marke": "Knaus", "ez_jahr": 2018, "km": 80000, "preis": 45000 + (i % 3) * streuung,
                 "zuletzt_gesehen": "2026-10-20T10:00:00"} for i in range(n)]
         b = r.bewerte({**FZ, "id": f"dicht{n}"}, vgl)
-        assert b.max_ek_von <= b.max_ek <= b.max_ek_bis and b.max_ek_bis - b.max_ek_von >= 500
-        assert b.privat_von <= b.marktwert_privat <= b.privat_bis and b.privat_bis - b.privat_von >= 500
+        assert b.max_ek_von <= b.max_ek <= b.max_ek_bis and b.max_ek_bis - b.max_ek_von >= 100
+        assert b.privat_von <= b.marktwert_privat <= b.privat_bis and b.privat_bis - b.privat_von >= 100
 
 
 def test_nach_aussen():
     from wmscout.bewertung.rechner import _nach_aussen
-    assert _nach_aussen(10520, 10580) == (10500, 11000) and _nach_aussen(10500, 10500) == (10500, 11000)
-    assert _nach_aussen(0, 0) == (0, 0) and _nach_aussen(0, 1900) == (0, 2000)
+    assert _nach_aussen(10520, 10580) == (10500, 10600) and _nach_aussen(10500, 10500) == (10500, 10600)
+    assert _nach_aussen(10520, 10580, 500) == (10500, 11000)
+    assert _nach_aussen(0, 0) == (0, 0) and _nach_aussen(0, 1900) == (0, 1900) and _nach_aussen(0, 1950) == (0, 2000)
 
 
 def test_max_ek_null_ohne_spanne_einheitlich(server, db):

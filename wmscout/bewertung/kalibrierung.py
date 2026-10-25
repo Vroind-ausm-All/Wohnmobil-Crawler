@@ -24,6 +24,7 @@ from datetime import date, datetime
 
 from ..normalisierung.fahrzeug import normalisiere_marke
 from ..normalisierung.geo import entfernung_km, plz_bekannt
+from .ergebnis import kosten_kapital
 from .ergebnis import vergleich as plan_ist_vergleich
 from .rechner import Rechner
 
@@ -122,7 +123,9 @@ def fall_aus_ankauf(ankauf: dict, kosten: list[dict]) -> dict | None:
     plan, ist, verkauft = v["plan"], v["ist"], ankauf["status"] == "verkauft"
     return {"quelle": "ankauf", "ref": ankauf.get("referenz") or f"#{ankauf['id']}", "datum": (ankauf.get("erstellt_am") or "")[:10],
             "ek": ankauf["kaufpreis"], "max_ek": plan.get("max_ek"), "vk_plan": plan.get("haendler_vk"), "vk": ist["vk"],
-            "kosten_plan": plan.get("kosten"), "kosten": ist["kosten"] if verkauft and kosten else None,     # ohne Erfassung: unbekannt, nicht 0
+            # Plankosten ohne rechnerische Kapitalbindung (P5-05, QA B3) – sie wird nie als Ist-Kosten erfasst
+            "kosten_plan": None if plan.get("kosten") is None else plan["kosten"] - (plan.get("kosten_kapital") or 0),
+            "kosten": ist["kosten"] if verkauft and kosten else None,     # ohne Erfassung: unbekannt, nicht 0
             "standzeit_plan": plan.get("standzeit_tage"), "standzeit": ist["standzeit_tage"] if verkauft else None,
             "sicherheit": None, "nachgerechnet": False, "parameter": plan.get("parameter"), "abschlag_marke": plan.get("abschlag_marke") or 0.0}
 
@@ -139,8 +142,9 @@ def fall_aus_manuell(f: dict, cfg: dict) -> dict:
     gerechnet = bool(b.haendler_vk)                  # Max-EK 0 bleibt 0 (Rechner rät vom Kauf ab), nur ohne Marktwert None
     return {"quelle": "manuell", "ref": f"M-{f.get('id')}", "datum": f["ankauf_am"], "ek": f["ankauf_preis"],
             "max_ek": b.max_ek if gerechnet else None, "vk_plan": b.haendler_vk if gerechnet else None, "vk": f["verkauf_preis"],
-            "kosten_plan": b.kosten if gerechnet else None, "kosten": f["kosten"] if f["verkauf_preis"] else None,
-            "standzeit_plan": int(cfg["rechner"]["kosten"].get("standzeit_monate", 3)) * 30, "standzeit": standzeit,
+            "kosten_plan": b.kosten - kosten_kapital(b.kosten_posten) if gerechnet else None,
+            "kosten": f["kosten"] if f["verkauf_preis"] else None,
+            "standzeit_plan": Rechner(cfg, stichtag).standzeit_monate() * 30, "standzeit": standzeit,
             "sicherheit": b.sicherheit, "nachgerechnet": True, "parameter": parameter(cfg), "abschlag_marke": b.abschlag_marke}
 
 

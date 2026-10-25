@@ -6,6 +6,28 @@ Wert „–“.
 
 ---
 
+## P5-05 – Ausstattung, Mängel und Kostenrisiken; Spannen auf 100 € (25.10.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 25.10.2026 nach dem Merge von PR #44: „1. Spannen sollen nur auf 100er gerundet werden. 2. Was ist mit der
+  Händlerobergrenze gemeint? … Arbeite im Anschluss den nächsten Punkt p5-05 komplett aus.“ Zu 2 erklärt: Die Obergrenze betrifft nur den
+  eigenen geplanten Wiederverkaufspreis in der Bewertung; Gebote im Händlerportal und in Auktionen sind dadurch nicht begrenzt (geprüft:
+  `auktion.gebot_abgeben` kennt nur Mindestgebot und Höchstbetrag).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `acquisition-analyst`); QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/bewertung/rechner.py`, `bewertung/anschreiben.py`, `bewertung/kalkulation.py` (E5), `bewertung/kalibrierung.py`, `bewertung/ergebnis.py`,
+  `wmscout/ankauf.py`, `config.yaml`, `vorlagen/report.html`; Tests `test_risiko.py` (neu), `test_spannen.py`, `test_preisarten.py`,
+  `test_kalibrierung.py`, `test_vergleichsauswahl.py`; Doku ADR-056 (+ Hinweis in ADR-054), `docs/RECHNER-ANALYSE.md`, ROADMAP (P5-04 DONE, P5-05 REVIEW), README.
+- **Implementierte Funktionen:** siehe ADR-056. Keine Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“ (nein bis B1). B1 (hoch: „Zylinderkopfdichtung neu“ galt als Motorschaden −15 %) →
+  nur bei defekt/kaputt/durch; B2 (Schwere und Mängelrisiko erst nach der Deckelung – mehrere schwere Mängel zählten nicht) → nach vollem
+  Wert, zwei schwere = Sicherheit niedrig, Deckel 25 %; B3 (rechnerische Kapitalbindung in den Plankosten verzerrte die Kalibrierung) →
+  getrennt gespeichert und herausgerechnet; B4 (Webasto-Dachluke als Heizung) → Muster enger; B5 dokumentiert; B6 (Plan-Standzeit nach
+  heutigem Monat) → aus Bewertung/Kalkulation; B7 (Tippfehler in der Saison ließ jede Bewertung abstürzen) → verständliche Meldung;
+  B8 Versionsvergleich numerisch; B9 .bat-Artefakte nicht committet. Regressionstests ergänzt; Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Staffel 2,0/2,5/3,5/4,5 %, Saison Sep +1, Okt/Nov +2, Dez/Jan +1, Zins 5 % auf 80 % des VK,
+  Mängelrisiko höchstens 15 %.
+- **Nächster sinnvoller Schritt:** Rückmeldung des Betreibers, danach P5-06 (Transportkosten ab konfigurierbarer Standort-PLZ).
+
 ## P5-04 – Angebots- gegen Abschlusspreise, Händler- gegen Privatpreise (25.10.2026) · Status: REVIEW
 
 - **Auftrag:** „Arbeite p5-04 komplett aus“ (Betreiber, 25.10.2026, nach dem Merge von PR #43).
