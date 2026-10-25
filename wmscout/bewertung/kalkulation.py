@@ -20,14 +20,14 @@ import json
 from datetime import datetime
 
 from .auswertung import _sicht_als, bewerte_anzeige, fuer_rechner, kandidaten_arten
-from .rechner import STANDARD_MARKTMODELL, Rechner, _runde, privatangebot
+from .rechner import STANDARD_AEHNLICHKEIT, STANDARD_MARKTMODELL, Rechner, _runde, privatangebot
 
-VERSION = "E1"          # bei jeder Änderung an Formeln erhöhen – ältere Kalkulationen gelten dann als „andere Version“
+VERSION = "E2"          # bei jeder Änderung an Formeln erhöhen – ältere Kalkulationen gelten dann als „andere Version“ (E2: P5-02)
 SZENARIEN = {"vorsichtig": "unteres Ende der Marktspanne", "erwartet": "Schätzung des Marktniveaus",
              "guenstig": "oberes Ende der Marktspanne"}
 FAHRZEUG_FELDER = ("id", "suche", "art", "titel", "marke", "modell", "serie", "ez_jahr", "km", "preis", "kurzbeschreibung",
                    "beschreibung", "getriebe", "gewerblich", "ausland", "entfernung_km")
-VERGLEICH_FELDER = ("id", "suche", "art", "titel", "marke", "serie", "ez_jahr", "km", "preis", "kurzbeschreibung",
+VERGLEICH_FELDER = ("id", "suche", "art", "titel", "marke", "modell", "serie", "ez_jahr", "km", "preis", "kurzbeschreibung",
                     "beschreibung", "getriebe", "gewerblich", "zuletzt_gesehen")
 SICHERHEIT_PUNKTE = {"hoch": 5, "mittel": 15, "niedrig": 30, "manuell": 20, "keine": 60}
 
@@ -53,6 +53,7 @@ def _rechner_cfg(cfg: dict) -> dict:
     """Wirksame Rechner-Parameter inkl. eingebauter Standardwerte – sonst hinge das Nachrechnen an späteren Code-Standards."""
     r = dict(cfg["rechner"])
     r["marktmodell"] = {**STANDARD_MARKTMODELL, **(r.get("marktmodell") or {})}
+    r["vergleich_aehnlichkeit"] = {**STANDARD_AEHNLICHKEIT, **(r.get("vergleich_aehnlichkeit") or {})}
     return r
 
 

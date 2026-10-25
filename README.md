@@ -429,4 +429,5 @@ Die Zeilen „Phase 1“ unten beziehen sich auf den früheren Phasenplan; die n
 | Statusseite `/status`: Quellen, Eingänge, letzte Suchläufe und Fehler; Intervalle je Quelle, Pause nach Sperre (P4-04, Schema v19) | umgesetzt | `test_statusseite.py`, Klicktest |
 | Abdeckung und Suchlücken messen: Kennzahlen, Zeit-, Gebiets- und Profillücken (P4-05) | umgesetzt | `test_abdeckung.py`, Klicktest |
 | Rechner-Analyse (`docs/RECHNER-ANALYSE.md`) und Kalibrierung mit tatsächlichen Ankäufen: Bericht und Vorschläge, frühere Ankäufe nachtragen (P5-01, Schema v20) | umgesetzt | `test_kalibrierung.py`, Klicktest |
+| Vergleichsauswahl nach Ähnlichkeit: gleiches Modell, Modellreihe, Marke, Markenklasse, Länge und Basisfahrzeug (P5-02) | umgesetzt | `test_vergleichsauswahl.py` |
 | Deal-Score, Ankaufs-Dashboard | **geplant** – Phasen 4–6 in `docs/ROADMAP.md` | – |

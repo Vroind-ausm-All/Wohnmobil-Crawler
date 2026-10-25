@@ -61,13 +61,25 @@ filter:
 rechner:
   # Vergleichsangebote: gleiche Art, EZ ± jahre_toleranz, km ± km_toleranz.
   # Jeder Vergleich wird auf Alter, km und Ausstattung DIESES Fahrzeugs umgerechnet;
-  # gleiche Marke zählt doppelt, nähere Baujahre/km-Stände mehr.
+  # ähnlichere Fahrzeuge zählen mehr (siehe vergleich_aehnlichkeit), nähere Baujahre/km-Stände ebenso.
   vergleich_min_anzahl: 5          # ab so vielen Vergleichen gilt die Schätzung als "mittel" sicher
   vergleich_jahre_toleranz: 3
   vergleich_km_toleranz: 50000
   # Wenige Vergleiche werden zum Referenzmodell hin gemittelt:
   # Gewicht Markt = n / (n + k)  → bei k = 4: 4 Vergleiche 50 %, 12 Vergleiche 75 %, 36 Vergleiche 90 %
   vergleich_gewicht_k: 4
+  # Ähnlichkeit der Vergleiche (P5-02): Gewicht je Stufe, dazu Fahrzeugklasse aus dem Text (Länge, Basisfahrzeug).
+  # Fehlt der Abschnitt, gelten genau diese Werte. Ausgeschlossen wird dadurch kein Angebot – es zählt nur mehr oder weniger.
+  vergleich_aehnlichkeit:
+    modell: 2.5                    # gleiche Marke und gleiches Modell samt Grundriss („Sky TI 650 MEG“)
+    reihe: 1.8                     # gleiche Marke und Modellreihe („Sky TI“)
+    marke: 1.0                     # gleiche Marke
+    klasse: 0.7                    # andere Marke derselben Markenklasse (Premium/Gehoben/Mittel = bekannte ohne Eintrag/Einstieg)
+    andere: 0.5                    # andere Marke, Marke unbekannt oder nur Basisfahrzeug (Fiat, Mercedes …)
+    laenge_pro_meter: 0.4          # je Meter Längenunterschied −40 % (nur wenn beide Längen genannt sind) …
+    laenge_min: 0.4                # … höchstens bis auf 40 %
+    basis_anders: 0.8              # anderes Basisfahrzeug (Ducato, Sprinter, Transit …; nur wenn beide genannt)
+    anteil_max: 0.25               # kein einzelnes Angebot trägt mehr als 25 % des Gesamtgewichts (unter 4 Vergleichen: alle gleich)
 
   # Referenzmodell: Neupreis heute × Restwert nach Alter × km-Faktor × Wertfaktoren.
   # Es ist der Startwert, solange die Datenbank noch wenige Vergleiche hat –

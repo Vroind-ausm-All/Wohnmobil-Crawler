@@ -10,7 +10,7 @@ Ankäufen, siehe ADR-052.
 | Schritt | Formel | Parameter |
 |---|---|---|
 | Referenzwert | Neupreis(Art) × Markenklasse × Restwert(Alter) × (1 + km-Korrektur) × (1 + Σ Wertfaktoren) | `marktmodell.*`, `wertfaktoren` |
-| Marktfaktor | gewichteter Median (Preis ÷ Referenzwert) vergleichbarer **Privat**angebote (gleiche Art, EZ ± 3 J., km ± 50.000; gleiche Marke ×2, gleiche Modellreihe ×1,5, alte Anzeigen ×0,5; Ausreißer nach Tukey) | `vergleich_*` |
+| Marktfaktor | gewichteter Median (Preis ÷ Referenzwert) vergleichbarer **Privat**angebote (gleiche Art, EZ ± 3 J., km ± 50.000; seit P5-02 nach Ähnlichkeit: gleiches Modell 2,5, Modellreihe 1,8, Marke 1,0, Markenklasse 0,7, andere 0,5, Länge und Basisfahrzeug, Einzelangebot höchstens 25 %; alte Anzeigen ×0,5; Ausreißer nach Tukey) | `vergleich_*` |
 | Marktniveau | Referenzwert × (g × Marktfaktor + (1 − g)), g = n ÷ (n + 4) | `vergleich_gewicht_k` |
 | Marktwert privat | Marktniveau × (1 − 7 %) – Angebot → Abschluss | `abschlag_angebot_auf_privatwert` |
 | Händler-VK | Marktwert privat × (1 + 10 %) | `aufschlag_haendler_vk` |
@@ -47,7 +47,7 @@ Kalibrierung lohnt deshalb zuerst beim **Verkaufspreis** (Ist-VK gegen geplanten
 | Nr. | Schwäche | Folge | Paket |
 |---|---|---|---|
 | S1 | Keine Rückkopplung mit echten Ankäufen/Verkäufen; Parameter sind Schätzwerte | systematische Über-/Unterbewertung bleibt unbemerkt | **P5-01** (Kalibrierungsbericht) |
-| S2 | Vergleich nur nach Art + Jahr + km; Marke gewichtet, Modellreihe nur als Zuschlag; keine Fahrzeugklasse (Länge, Basisfahrzeug) | Teilintegrierte von 6 m und 7,5 m gelten als gleich | P5-02 |
+| S2 | Vergleich nur nach Art + Jahr + km; Marke gewichtet, Modellreihe nur als Zuschlag; keine Fahrzeugklasse (Länge, Basisfahrzeug) | Teilintegrierte von 6 m und 7,5 m gelten als gleich | P5-02 – **angegangen** (ADR-053: Ähnlichkeitsstufen, Länge/Basisfahrzeug aus dem Text) |
 | S3 | Spanne nur aus Vergleichsstreuung, Punktwert in der Oberfläche dominiert; bei 1–4 Vergleichen Mischwert mit dem Modell | falsche Genauigkeit bei dünner Datenlage | P5-03 |
 | S4 | Angebotspreise statt Abschlusspreisen; fester Abschlag 7 %; Händlerangebote fließen gar nicht ein | Marktwert privat systematisch verschoben | P5-04 (+ Kalibrierung) |
 | S5 | Wertfaktoren nur aus Stichworten im Text, Deckel ±; Mängel aus der Besichtigung fließen nicht zurück | Zustand schlecht abgebildet | P5-05 |

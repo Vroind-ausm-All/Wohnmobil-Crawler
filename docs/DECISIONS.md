@@ -1074,3 +1074,37 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   gemeinsam im Bericht (Spalte Fall). Die Kostenabweichung wird ganz der Aufbereitung zugeschlagen; die Alternative im Vorschlag nennt
   die Verteilung auf die verursachenden Posten. §25a bleibt eine fachliche Annahme, keine Steuerberatung. Betreiberfragen: Mindestfallzahl
   (5) und Toleranzen; ob Mitarbeiter den Bericht sehen dürfen (derzeit nein).
+
+## ADR-053 – Vergleichsauswahl nach Ähnlichkeit: Marke, Modellreihe, Modell, Markenklasse und Fahrzeugklasse · gilt (25.10.2026)
+
+* **Kontext:** P5-02, Schwäche S2 der Rechner-Analyse. Bisher zählten alle Vergleichsangebote gleicher Art und EZ ± 3 Jahre fast gleich:
+  gleiche Marke ×1,0, andere ×0,5, gleiche Modellreihe ×1,5. Ein 6-m-Teilintegrierter und ein 7,5-m-Teilintegrierter galten als gleich;
+  ein exakt gleiches Modell wog kaum mehr als irgendein Knaus.
+* **Entscheidung:**
+  1. **Gewichten statt ausschließen.** Die Vorauswahl (Art, EZ-, km-Toleranz, Privatangebot) bleibt; innerhalb davon zählt jedes
+     Angebot nach **Ähnlichkeitsstufe**: gleiches Modell samt Grundriss 2,5 · gleiche Modellreihe 1,8 · gleiche Marke 1,0 · andere Marke
+     derselben Markenklasse 0,7 (Premium/Gehoben/Einstieg; bekannte Aufbauhersteller ohne Eintrag bilden „Mittel“) · andere oder
+     unbekannte Marke 0,5. Ist die Marke nur das Basisfahrzeug (Fiat, Mercedes …), gibt es keine Markenstufe; „gleiches Modell“ nur mit
+     Grundriss (Modell ≠ Modellreihe). **Deckel:** kein einzelnes Angebot trägt mehr als 25 % des Gesamtgewichts (bei weniger als
+     4 Vergleichen zählen alle gleich) – so kann ein einzelnes sehr ähnliches Angebot mit Wunschpreis den Markt nicht überstimmen
+     (QA B1). Die Streuung für Spanne und Sicherheit ist mindestens die ungewichtete – Gewichte heben die Sicherheit nicht. Harte Stufen (nur das gleiche Modell, sobald
+     5 da sind) hätten die Zahl der Vergleiche und damit das Marktgewicht n ÷ (n + 4) gesenkt und wären bei 4 gegen 5 Treffern gesprungen.
+  2. **Fahrzeugklasse** aus Titel und Beschreibung (`normalisierung/fahrzeug.py`): Länge („Länge 7,40 m“, „Gesamtlänge 699 cm“,
+     „7,4 m lang“; nur 4–12 m, nicht direkt nach Zubehör wie Markise, Kabel, Stellplatz, Anhänger, Bett) und Basisfahrzeug (Plattformen, baugleiche zusammengefasst: Ducato/Jumper/
+     Boxer, Sprinter, Transit, Daily, Master/Movano/NV400, Crafter/TGE, VW Transporter; die erste Nennung im Text zählt). Je Meter Längenunterschied −40 % (höchstens bis
+     40 %), anderes Basisfahrzeug ×0,8 – **nur wenn beide Angaben bekannt sind**, sonst neutral.
+  3. Baujahr-, km-Abstand und Alter der Anzeige wirken wie bisher; Ausreißer nach Tukey ebenso. Alle Werte in `config.yaml →
+     rechner.vergleich_aehnlichkeit` (fehlt der Abschnitt, gelten dieselben Standardwerte).
+  4. **Erklärung:** Die Vergleichsbasis nennt die Zusammensetzung („3 gleiches Modell, 2 gleiche Modellreihe, 7 andere Marken; ähnlichere
+     zählen mehr“) und die erkannte Fahrzeugklasse; `Bewertung.vergleich_stufen`, `Bewertung.fahrzeugklasse`.
+  5. **Nachrechenbarkeit:** Kalkulationen (Phase E) frieren die wirksamen Gewichte und das Feld `modell` der Vergleiche ein;
+     Rechenstand **E2**. Gespeicherte E1-Kalkulationen gelten beim Nachrechnen als „andere Version“ (vorgesehenes Verhalten), ihr
+     gespeichertes Ergebnis bleibt unverändert.
+* **Alternativen:** harte Stufen (siehe oben); Länge und Basisfahrzeug als Datenbankspalten (erst sinnvoll, wenn Quellen sie strukturiert
+  liefern – dann ohne Textsuche); effektive Fallzahl nach Gewichten für das Marktgewicht (gehört zu P5-03 Unsicherheit).
+* **Folgen / offen:** Wirkung auf synthetischen Testdaten (300 Inserate, 120 bewertet, gegen die alten Gewichte): Marktniveau im
+  Median unverändert, −6,8 % bis +5,3 %; Sicherheit in 117 von 120 Fällen gleich, 2× mittel → hoch, 1× hoch → mittel. Mehrere gleiche
+  Modelle können eine Mehrheit anderer Marken überstimmen (3 × 2,5 gegen 7 × 0,5) – gewollt; ein einzelnes nicht. Erkennungsmuster
+  für Länge/Basisfahrzeug: jede Änderung verlangt eine neue Rechenversion (gespeicherte Kalkulationen frieren den Text ein). Länge und Basisfahrzeug stehen in Kleinanzeigen-Texten oft nicht; dann wirkt nur
+  die Markenstufe. Betreiberfragen: Gewichte und Deckel bestätigen; ob Marken ohne Eintrag (Knaus, Dethleffs, Bürstner …) als „Mittel“
+  richtig eingeordnet sind.
