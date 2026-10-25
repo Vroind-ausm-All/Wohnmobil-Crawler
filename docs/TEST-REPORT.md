@@ -4,6 +4,23 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P5-01 – Rechner analysieren, Kalibrierung mit tatsächlichen Ankaufspreisen (25.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2283 bestanden (vorher 2239), neu `test_kalibrierung.py` (44). Ein erster Lauf vor der Korrekturrunde wurde bei 72 % ohne Fehler abgebrochen (veralteter Stand) |
+| `ruff check .` | grün |
+| Empfindlichkeit in `docs/RECHNER-ANALYSE.md` (Max-EK 36.300 € bei 7 Parameteränderungen) | mit `config.yaml` gerechnet (Orchestrator), nicht als Test hinterlegt |
+| Eingabeprüfung (gültig; 21 Fehlfälle: Art, EZ, Typen, Datum, Kauf vor EZ, PLZ, km, Verkauf nur zusammen/nicht vor Kauf, Längen) | bestanden |
+| Fälle: Ankauf der App (storniert nicht, Kosten/Standzeit erst nach Verkauf, verkauft ohne Kosten = unbekannt, Parameterstand); nachgetragen zum Kaufdatum nur mit dem Marktmodell (heutige Vergleichsangebote ohne Wirkung), älteres Kaufdatum → höherer Plan | bestanden |
+| Bericht: Kennzahlen (Median/Quartile interpoliert, gerade Anzahl), Belastbarkeit, keine Vorschläge unter 5 Fällen bzw. innerhalb der Toleranz, Vorschläge mit Warnung außerhalb des üblichen Bereichs, kaufmännisch gerundete Standzeit, Max-EK 0 gesondert, **nach Übernahme eines Vorschlags kein erneuter Vorschlag**, Fälle ohne Parameterstand nicht in den Vorschlägen, Konfiguration unverändert, Bewertung der Inserate unverändert | bestanden |
+| Ankauf Ende zu Ende (Besichtigung → gekauft): Plan speichert den Parameterstand, Fall erscheint im Bericht | bestanden |
+| Speicher (Anlegen, Reihenfolge, Löschen, CHECK der Tabelle), API (Einzelplatz, CSRF 403, 400 bei Fehleingabe, 404 beim Löschen, HTML in der Notiz), Rechte (Mitarbeiter und Händler-Zugang 403 für Lesen und Schreiben, Inhaber 200, Link nur für den Inhaber), Audit, CLI `scout.py kalibrierung` | bestanden |
+| Migration v1, v19 → v20: Daten unverändert, Sicherung `vor-v20`, Rollback, Idempotenz, neue Datenbank | bestanden |
+| Browser (Orchestrator, Chromium über Playwright, nach der Korrekturrunde): Desktop 1280 – von `/ankaeufe` über „Kalibrierung“, Bericht mit Vorschlägen und Warnung, App-Ankauf ohne Kosten „4.000 € / –“, Fall nachtragen, Fehlermeldung bei unvollständigem Verkauf, Löschen, HTML im Fahrzeugnamen als Text; Handy 390 ohne Querscrollen; 0 JS-Fehler | bestanden |
+| QA (eine Runde, vor der Korrekturrunde: 39 bestanden, eigene Proben) | Freigabe mit Auflagen – B1 (hoch), B2–B8 behoben bzw. dokumentiert; Korrekturen **nicht** erneut von der QA geprüft |
+| Echte Ankaufsdaten, Windows-CI | nicht geprüft (CI folgt im PR) |
+
 ## P4-05 – Abdeckung und Suchlücken messen (25.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

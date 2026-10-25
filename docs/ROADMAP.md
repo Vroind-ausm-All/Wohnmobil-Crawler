@@ -11,8 +11,8 @@ besten Ankaufsgelegenheiten zuverlässig identifizieren.
 | 1 | Stabile Grundlage | **REVIEW** (`claude/phase1-abschluss`, alle Pakete umgesetzt außer P1-01b BLOCKED) | **offen** – Abnahme durch den Betreiber |
 | 2 | Multi-Quellen-System | **IN_PROGRESS** | freigegeben (17.10.2026) |
 | 3 | Datenbank und Marktbeobachtung | **DONE** (P3-01 … P3-08, PRs #27–#35 gemergt) | freigegeben; Abnahme durch den Betreiber mit der Freigabe von Phase 4 (24.10.2026) |
-| 4 | Deutschlandweite Suchstrategie | **IN_PROGRESS** | freigegeben (24.10.2026, „Phase 4 starten mit P4-01“) |
-| 5 | Intelligente Ankaufsbewertung | TODO | offen |
+| 4 | Deutschlandweite Suchstrategie | **DONE** (P4-01 … P4-05, PRs #36–#40 gemergt; P4-06 BLOCKED bis API-Zugang) | freigegeben (24.10.2026); Abnahme durch den Betreiber mit der Freigabe von Phase 5 (25.10.2026) |
+| 5 | Intelligente Ankaufsbewertung | **IN_PROGRESS** | freigegeben (25.10.2026, „Phase 5 beginnen Schritt für Schritt“ – je Paket Bericht und Rückmeldung) |
 | 6 | Ankaufs-Dashboard | TODO (Teile bereits DONE durch die Handy-App) | offen |
 
 Status je Paket: `TODO` / `IN_PROGRESS` / `REVIEW` / `DONE` / `BLOCKED`. Priorität: **P1** (zuerst, blockiert
@@ -225,7 +225,7 @@ erhalten (Re-Import-Test).
 | P4-02 | P1 | Suchgebiete und PLZ-Regionen (bundesweit, Umkreis, Regionenliste) | source-integrations | DONE (PR #37 gemergt; Schema v18, ADR-048) |
 | P4-03 | P1 | Neue Angebote priorisieren; Preissenkungen erkennen und melden | source-integrations | DONE (PR #38 gemergt; ADR-049, ohne Schemaänderung) |
 | P4-04 | P2 | Intervalle je Quelle; Suchläufe und Fehler überwachen (Statusseite) | source-integrations | DONE (PR #39 gemergt; Schema v19, ADR-050) |
-| P4-05 | P2 | Suchlücken und Abdeckung messen | scout-data-engineer | REVIEW (ADR-051, ohne Schemaänderung; `/abdeckung`, `scout.py abdeckung`; Branch `claude/phase4-abdeckung`) |
+| P4-05 | P2 | Suchlücken und Abdeckung messen | scout-data-engineer | DONE (PR #40 gemergt; ADR-051, ohne Schemaänderung) |
 | P4-06 | P3 | Vollständige und inkrementelle Bestandssuche für berechtigte API-Zugänge | source-integrations | BLOCKED bis API-Zugang |
 
 ## Phase 5 – Intelligente Ankaufsbewertung
@@ -234,7 +234,7 @@ erhalten (Re-Import-Test).
 
 | ID | Prio | Paket | Agent | Status |
 |---|---|---|---|---|
-| P5-01 | P1 | Rechner analysieren; Kalibrierung mit manuell eingetragenen tatsächlichen Ankaufspreisen | acquisition-analyst | TODO |
+| P5-01 | P1 | Rechner analysieren; Kalibrierung mit manuell eingetragenen tatsächlichen Ankaufspreisen | acquisition-analyst | REVIEW (Schema v20, ADR-052, `docs/RECHNER-ANALYSE.md`; `/kalibrierung`, `scout.py kalibrierung`; Branch `claude/phase5-kalibrierung`) |
 | P5-02 | P1 | Vergleichsauswahl nach Marke/Modellreihe/Fahrzeugklasse, Ähnlichkeitsgewichte | acquisition-analyst | TODO |
 | P5-03 | P1 | Marktwertspannen und Unsicherheit statt Punktwerte bei dünner Datenlage | acquisition-analyst | TODO |
 | P5-04 | P2 | Angebotspreise vs. Transaktionspreise, Händler- vs. Privatpreise | acquisition-analyst | TODO |

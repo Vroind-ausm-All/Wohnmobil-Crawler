@@ -60,6 +60,7 @@ from wmscout.eingang.email import mail_ordner
 from wmscout.auktion import STATUS as AUKTION_STATUS
 from wmscout.auktion import AuktionSpeicher
 from wmscout import abdeckung, datenrechte, laufprotokoll, mandanten
+from wmscout.bewertung import kalibrierung
 from wmscout.audit import AuditSpeicher
 from wmscout.nutzung import nutzung
 from wmscout.deal import DealSpeicher
@@ -317,6 +318,36 @@ def cmd_abdeckung(cfg, db, args):
     g = m["gebietsluecken"]
     print(f"PLZ-Bereiche ohne neues Inserat ({len(g['ohne_inserat'])} von {len(g['ohne_inserat']) + len(g['je_bereich'])}): "
           + (", ".join(g["ohne_inserat"]) or "keine"))
+
+
+def cmd_kalibrierung(cfg, db, args):
+    """Kalibrierungsbericht (P5-01): Rechnung gegen tatsächliche Ankäufe – nur lesen, ändert keine Parameter. Fälle nachtragen: /kalibrierung."""
+    faelle = kalibrierung.KalibrierungSpeicher(db).faelle(cfg)
+    b = kalibrierung.bericht(faelle, cfg)
+    print(f"Kalibrierung: {b['faelle']} Fälle, davon {b['verkauft']} verkauft – {b['belastbarkeit']}")
+
+    def zeile(name, k, fmt):
+        if k is None:
+            print(f"  {name}: keine Fälle")
+        else:
+            print(f"  {name}: Median {fmt(k['median'])} (mittlere Hälfte {fmt(k['q1'])} bis {fmt(k['q3'])}, {k['n']} Fälle)")
+
+    zeile("Kaufpreis gegenüber Max-EK", b["ek_zu_max_ek"], kalibrierung.prozent)
+    zeile("Verkaufspreis gegenüber geplantem Händler-VK", b["vk_zu_plan"], kalibrierung.prozent)
+    zeile("Ist- minus Plankosten", b["kosten_abweichung"], lambda x: f"{x:+,.0f} €".replace(",", ".").replace("-", "−"))
+    zeile("Standzeit gegenüber Plan", b["standzeit_abweichung"], lambda x: f"{x:+.0f} Tage".replace("-", "−"))
+    for h in b["hinweise"]:
+        print(f"Hinweis: {h}")
+    if not b["vorschlaege"]:
+        print(f"Keine Vorschläge (ab {b['min_faelle']} verwertbaren Fällen und Abweichung über der Toleranz).")
+    for v in b["vorschlaege"]:
+        print(f"Vorschlag {v['parameter']}: {v['alt']} → {v['neu']} ({v['faelle']} Fälle) – {v['grund']}")
+        if v["alternative"]:
+            print(f"  {v['alternative']}")
+        if v["warnung"]:
+            print(f"  Achtung: {v['warnung']}")
+    if b["vorschlaege"]:
+        print("Nichts wurde geändert – Parameter bewusst in config.yaml nachstellen.")
 
 
 def cmd_report(cfg, db, args):
@@ -720,6 +751,7 @@ def main():
     md.add_argument("--monat", help="nur nutzung: JJJJ-MM")
     ab = sub.add_parser("abdeckung", help="Abdeckung und Suchlücken: Kennzahlen, Tage ohne Eingang, PLZ-Bereiche und Suchprofile (nur lesen)")
     ab.add_argument("--tage", default="30", help="Zeitraum in Tagen (1–365, Standard 30)")
+    sub.add_parser("kalibrierung", help="Kalibrierungsbericht: Kaufpreis/Max-EK, VK/Plan, Kosten, Standzeit und Vorschläge (nur lesen)")
     sub.add_parser("qualitaet", help="Datenqualität je Quelle: Anteil mit Preis/EZ/km/Ort/Anbieter, Ø-Wert, Widersprüche (nur lesen)")
     du = sub.add_parser("dubletten", help="offene Dublettenvorschläge auflisten (nur lesen) oder im Einzelplatz entscheiden: "
                                           "bestaetigen ID1 ID2 | ablehnen ID1 ID2 | aufheben NUMMER")
@@ -772,7 +804,8 @@ def main():
     {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "quellen": cmd_quellen, "rechne": cmd_rechne,
      "nutzer": cmd_nutzer, "status": cmd_status, "standort": cmd_standort,
      "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage, "audit": cmd_audit, "nutzung": cmd_nutzung,
-     "inserat": cmd_inserat, "dubletten": cmd_dubletten, "qualitaet": cmd_qualitaet, "abdeckung": cmd_abdeckung}[args.cmd](cfg, db, args)
+     "inserat": cmd_inserat, "dubletten": cmd_dubletten, "qualitaet": cmd_qualitaet, "abdeckung": cmd_abdeckung,
+     "kalibrierung": cmd_kalibrierung}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":

@@ -1038,3 +1038,39 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Folgen / offen:** Die Messung bewertet die Inserate des Zeitraums neu und läuft in der Anfrage unter der Datenbanksperre der App – die
   App speichert das Ergebnis bis zu 5 Minuten (neu bei geändertem Bestand) und erlaubt höchstens 90 Tage; QA maß 39 s für 6.000 Inserate
   und 365 Tage (synthetisch) – längere Zeiträume deshalb über `scout.py abdeckung`. Gebietslücken sagen ohne Pull-Quelle vor allem, wo eure eigenen Suchaufträge nicht hinreichen.
+
+## ADR-052 – Kalibrierung des Rechners mit tatsächlichen Ankäufen: Bericht und Vorschläge, keine automatische Änderung · gilt (25.10.2026)
+
+* **Kontext:** P5-01. Die Parameter des Rechners (Neupreise, Restwertkurve, Abschlag Angebot → Abschluss, Händleraufschlag, Kosten,
+  Standzeit) sind Schätzwerte; ob sie zu den echten Ankäufen passen, war nirgends geprüft. Die Analyse (`docs/RECHNER-ANALYSE.md`) zeigt:
+  Max-EK hängt mit einem Hebel von gut 1 an der Marktwert-Schätzung, Kosten und Standzeit wirken deutlich schwächer.
+* **Entscheidung:**
+  1. **Fälle** aus zwei Quellen: Ankäufe der App (Plan beim Kauf eingefroren, Ist aus Kaufpreis, Kosten, Verkauf; stornierte zählen nicht;
+     Ist-Kosten und Standzeit erst nach dem Verkauf) und **manuell nachgetragene frühere Ankäufe** – neue Tabelle `kalibrierung_faelle`
+     (Schema v20; nur Fahrzeugdaten, Preise, Daten, Notiz – **keine Verkäuferdaten**). Manuelle Fälle rechnet der Rechner zum Kaufdatum
+     nach (Stichtag 12 Uhr, Entfernung ab `anschreiben.plz`), **nur mit dem Marktmodell**: Vergleichsangebote von damals fehlen, und
+     heutige Angebote desselben EZ-Jahrgangs würden für ein früheres Kaufdatum zu alt bewertet (QA B1). Bezugsdaten: Kaufdatum bei App-Fällen
+     = Anlage des Vorgangs; Standzeit bei App-Fällen ab Übergabe, bei nachgetragenen ab Kauf. Ein verkaufter Ankauf ohne erfasste Kosten
+     zählt bei den Kosten als unbekannt, nicht als 0.
+  2. **Bericht** (`bewertung/kalibrierung.py`, ohne Datenbank testbar): Kaufpreis ÷ Max-EK, Verkaufspreis ÷ geplanter Händler-VK,
+     Ist- minus Plankosten, Standzeit gegenüber Plan – je Median, mittlere Hälfte (Quartile) und Anzahl; Belastbarkeit nach Fallzahl
+     (unter 3 keine Aussage, unter 5 erste Hinweise, ab 10 belastbar). Median und Quartile mit Interpolation. Max-EK 0 (Rechner riet ab)
+     wird gesondert gezählt.
+  3. **Vorschläge** erst ab 5 verwertbaren Fällen und einer Abweichung über der Toleranz (VK 5 %, Kosten 300 €, Standzeit 30 Tage):
+     `rechner.aufschlag_haendler_vk` (oder alternativ `abschlag_angebot_auf_privatwert`), `rechner.kosten.aufbereitung` (Median der
+     Kostenabweichung, auf 50 € gerundet), `rechner.kosten.standzeit_monate` (kaufmännisch gerundet). Gerechnet wird **je Fall relativ zu dem Parameterstand, mit dem er geplant
+     wurde**: Beim Anlegen eines Ankaufs speichert der Plan diesen Stand (`plan.parameter`); nachgetragene Fälle nutzen die aktuelle
+     Konfiguration. So schlägt der nächste Bericht eine übernommene Korrektur nicht erneut vor (QA B2). Ankäufe ohne gespeicherten Stand
+     (vor P5-01, Plan aus der Grundlage der Besichtigung) zählen in den Kennzahlen, nicht in den Vorschlägen. Werte außerhalb des üblichen
+     Bereichs (Aufschlag 0–30 %, Abschlag 0–25 %) erhalten eine Warnung; Anteile auf 0,01 gerundet. **Nichts wird automatisch geändert**; der Betreiber stellt
+     `config.yaml` bewusst nach. Hinweis, wenn im Median über dem Max-EK gekauft wurde.
+  4. Ausgabe: Seite `/kalibrierung` (Bericht, Fälle, Formular zum Nachtragen und Löschen; Link aus `/ankaeufe`), `GET /api/kalibrierung`,
+     `POST /api/kalibrierung`, `POST /api/kalibrierung/<id>/loeschen`, `scout.py kalibrierung`. Im Team **nur der Inhaber** (Kaufpreise);
+     Händler-Zugang nicht; Änderungen im Audit-Protokoll.
+* **Alternativen:** Parameter automatisch anpassen (Regel 15: Bewertung darf sich nicht unbemerkt verschieben; zu wenige Fälle);
+  Regression über mehrere Parameter (braucht deutlich mehr Fälle); Marktdaten zum Kaufdatum rekonstruieren (liegen nicht vor).
+* **Folgen / offen:** Der Bericht wird bei jedem Aufruf neu gerechnet (je manuellem Fall eine Bewertung ohne Vergleichsangebote –
+  schnell). Nachgetragene Fälle prüfen damit das Marktmodell, Ankäufe der App das Modell samt Vergleichsangeboten; beide stehen
+  gemeinsam im Bericht (Spalte Fall). Die Kostenabweichung wird ganz der Aufbereitung zugeschlagen; die Alternative im Vorschlag nennt
+  die Verteilung auf die verursachenden Posten. §25a bleibt eine fachliche Annahme, keine Steuerberatung. Betreiberfragen: Mindestfallzahl
+  (5) und Toleranzen; ob Mitarbeiter den Bericht sehen dürfen (derzeit nein).
