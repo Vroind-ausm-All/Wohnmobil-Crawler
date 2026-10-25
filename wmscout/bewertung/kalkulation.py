@@ -20,9 +20,9 @@ import json
 from datetime import datetime
 
 from .auswertung import _sicht_als, bewerte_anzeige, fuer_rechner, kandidaten_arten
-from .rechner import STANDARD_AEHNLICHKEIT, STANDARD_MARKTMODELL, Rechner, _runde, privatangebot
+from .rechner import STANDARD_AEHNLICHKEIT, STANDARD_MARKTMODELL, Rechner, _runde, haendlerangebot, privatangebot
 
-VERSION = "E3"          # bei jeder Änderung an Formeln erhöhen – ältere Kalkulationen gelten dann als „andere Version“ (E2: P5-02, E3: P5-03)
+VERSION = "E4"          # bei jeder Änderung an Formeln erhöhen – ältere Kalkulationen gelten dann als „andere Version“ (E2–E4: P5-02 bis P5-04)
 SZENARIEN = {"vorsichtig": "unteres Ende der Marktspanne", "erwartet": "Schätzung des Marktniveaus",
              "guenstig": "oberes Ende der Marktspanne"}
 FAHRZEUG_FELDER = ("id", "suche", "art", "titel", "marke", "modell", "serie", "ez_jahr", "km", "preis", "kurzbeschreibung",
@@ -55,6 +55,9 @@ def _rechner_cfg(cfg: dict) -> dict:
     r["marktmodell"] = {**STANDARD_MARKTMODELL, **(r.get("marktmodell") or {})}
     r["vergleich_aehnlichkeit"] = {**STANDARD_AEHNLICHKEIT, **(r.get("vergleich_aehnlichkeit") or {})}
     r.setdefault("abschlag_marke_unbekannt", 0.05)
+    r.setdefault("haendler_vergleich_min", 3)
+    r.setdefault("abschlag_haendler_angebot", 0.05)
+    r.setdefault("haendler_vk_deckel", True)
     return r
 
 
@@ -65,7 +68,7 @@ def _sichten(fahrzeug: dict) -> list[dict]:
 
 def vergleich_auszug(rechner: Rechner, fahrzeug: dict, vergleich: list[dict]) -> list[dict]:
     """Nur die Vergleichsangebote, die der Rechner für dieses Fahrzeug überhaupt berücksichtigen kann (gleiche Art, EZ- und
-    km-Toleranz, Privatangebot mit Preis) – dieselben Filter wie ``Rechner.vergleiche``, damit das Ergebnis mit dem Auszug
+    km-Toleranz, Privat- oder Händlerangebot mit Preis) – dieselben Filter wie ``Rechner.vergleiche``, damit das Ergebnis mit dem Auszug
     exakt dem mit der ganzen Datenbank entspricht. Nur die Felder, die der Rechner liest."""
     if not fahrzeug.get("ez_jahr"):
         return []
@@ -74,7 +77,7 @@ def vergleich_auszug(rechner: Rechner, fahrzeug: dict, vergleich: list[dict]) ->
     arten = {rechner.art(s) for s in _sichten(fahrzeug)}
     aus = []
     for b in vergleich:
-        if not b.get("preis") or b["preis"] < 1000 or not privatangebot(b) or not b.get("ez_jahr"):
+        if not b.get("preis") or b["preis"] < 1000 or not (privatangebot(b) or haendlerangebot(b)) or not b.get("ez_jahr"):
             continue
         if abs(b["ez_jahr"] - fahrzeug["ez_jahr"]) > jt or rechner.art(b) not in arten:
             continue
@@ -122,7 +125,8 @@ def rechne(e: dict) -> dict:
         niveaus = {"vorsichtig": b.spanne_von, "erwartet": None, "guenstig": b.spanne_bis}
     szenarien = {}
     for name, niveau in niveaus.items():
-        s = b if niveau is None else bewerte_anzeige(rechner, a, vergleich, marktwert_manuell=niveau)
+        s = b if niveau is None else bewerte_anzeige(rechner, a, vergleich, marktwert_manuell=niveau,     # Händlermarkt-Grenze je Szenario
+                                                     haendler_quantil={"vorsichtig": .25, "guenstig": .75}[name])
         z = {"marktniveau": s.marktwert_angebote, "haendler_vk": s.haendler_vk, "kosten": s.kosten, "ziel_marge": s.ziel_marge,
              "max_ek": _max_ek(rechner, s.haendler_vk, s.kosten, s.ziel_marge, p)}
         if betrag:
@@ -171,7 +175,9 @@ def _annahmen(e: dict, b) -> list[str]:
             f"Abholung: {e['abholung']}" + (f", {e['fahrzeug']['entfernung_km']} km" if e["fahrzeug"].get("entfernung_km") is not None
                                             else ", Entfernung unbekannt (Transportpauschale)"),
             f"Marktwert privat = Marktniveau − {r['abschlag_angebot_auf_privatwert']:.0%}; Händler-VK = privat + {r['aufschlag_haendler_vk']:.0%}"
-            + (f", davon − {b.abschlag_marke:.0%} für unbekannte Marke" if b.abschlag_marke else ""),
+            + (f", davon − {b.abschlag_marke:.0%} für unbekannte Marke" if b.abschlag_marke else "")
+            + (f"; höchstens Händlermarkt ({b.haendler_anzahl} Händlerangebote, Niveau {_eur(b.haendler_niveau)}) − "
+               f"{r['abschlag_haendler_angebot']:.0%} Verhandlung" if b.vk_gedeckelt else ""),
             "Kosten (erwartet): " + ", ".join(f"{n} {_eur(v)}" for n, v in b.kosten_posten.items()),
             f"Zielmarge {r['ziel_marge_prozent']:.0%} vom Händler-VK, mindestens {_eur(r['ziel_marge_min'])}",
             f"Provision {e['kalkulation']['provision_prozent']:.1%} vom Zuschlag (als Kosten, im Max-EK enthalten)",

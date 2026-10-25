@@ -93,6 +93,15 @@ var TOKEN = {{ token | tojson }};
         ' Fälle)</span><br>' + esc(v.grund) + (v.warnung ? '<br><b>Achtung: ' + esc(v.warnung) + '</b>' : '') + (v.alternative ? '<br><span class="leise">' + esc(v.alternative) + '</span>' : '') + '</div>';
     }).join('') : '<p class="leise">Keine Vorschläge – zu wenige Fälle oder alle Abweichungen innerhalb der Toleranz.</p>';
     h += b.hinweise.map(function(t){ return '<p class="hinweis warn">' + esc(t) + '</p>'; }).join('');
+    var m = d.markt;
+    if(m){
+      h += '<h3>Marktbeobachtung: Angebotspreise</h3><p class="leise" data-markt>Abschlusspreise liefert kein Portal. Private Inserate, die vom Markt ' +
+        'verschwunden sind: ' + m.n + ' mit Preisverlauf, davon ' + m.mit_senkung + ' mit Preissenkung' +
+        (m.median !== null ? ' · Senkung bis zum Verschwinden im Median ' + Math.round(m.median * 100) + ' %' +
+          (m.median_gesenkt !== null ? ' (nur gesenkte: ' + Math.round(m.median_gesenkt * 100) + ' %)' : '') : '') +
+        ' · eingestellter Abschlag Angebot → Abschluss ' + Math.round(m.abschlag * 100) + ' %. Das ist eine Untergrenze, kein Abschlusspreis.</p>' +
+        (m.hinweis ? '<p class="hinweis warn">' + esc(m.hinweis) + '</p>' : '');
+    }
     document.getElementById('bericht').innerHTML = h;
     var manuell = {};
     d.manuelle.forEach(function(m){ manuell['M-' + m.id] = m; });

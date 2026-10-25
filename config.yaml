@@ -149,6 +149,11 @@ rechner:
   # Händler-Verkaufspreis liegt über Privatwert (Gewährleistung, Aufbereitung, Finanzierung)
   aufschlag_haendler_vk: 0.10
   abschlag_marke_unbekannt: 0.05  # Aufbaumarke unbekannt (nur „Wohnmobil“ oder nur Fiat/Mercedes …): Händler-VK 5 % niedriger, mit Hinweis
+  # Händlermarkt (P5-04): vergleichbare gewerbliche Angebote (gleiche Auswahl und Gewichte wie oben) begrenzen den Händler-VK –
+  # teurer als vergleichbare Händler kann ein Händler nicht verkaufen. Erst ab haendler_vergleich_min Händlerangeboten.
+  haendler_vk_deckel: true
+  haendler_vergleich_min: 3
+  abschlag_haendler_angebot: 0.05  # Händler-Angebotspreis → Abschluss (Verhandlung beim Händler)
 
   kosten:
     aufbereitung: 900

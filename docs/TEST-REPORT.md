@@ -4,6 +4,21 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P5-04 – Angebots- gegen Abschlusspreise, Händler- gegen Privatpreise (25.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2380 bestanden (vorher 2364), neu `test_preisarten.py` (16). Angepasst: `test_anbieter.py` (Auszug der Kalkulation enthält jetzt Händlerangebote), `test_spannen.py` (Rechenstand ≥ E3) |
+| `ruff check .` | grün |
+| Händlerangebote getrennt (unbekannte Anbieter nie), Privatmarkt unverändert durch Händler, Vorfilter liefert dasselbe (privat und Händler) | bestanden |
+| Händlermarkt: erst ab 3 Angeboten; Obergrenze bei Händlern knapp über dem Privatmarkt (VK sinkt, Max-EK höchstens moderat, nie unter Marktwert privat, Spanne ≥ 500 €, Sicherheit höchstens mittel); teure Händler ohne Wirkung; **Miet-/Raten-/Lockangebote (1.500 € bzw. 25.000 €) und billigere Händler (Datenkonflikt) drücken den Max-EK nicht** (QA B1); Schalter streng (false, 0, „nein“, „aus“) | bestanden |
+| Kalkulation E4: Standardwerte eingefroren, Händler im Auszug, Ergebnis = Bewertung aus der Datenbank, Annahmen nennen die Begrenzung, Szenarien vorsichtig < erwartet < günstig | bestanden |
+| Marktbeobachtung: rein (Mindestzahl, Median, Hinweis nur über dem Abschlag, Erhöhung = 0) und aus der Datenbank (Händler und aktive Inserate zählen nicht, vermutlich offline nach 400 Tagen, **je Fahrzeug**: wieder eingestelltes Fahrzeug nicht, zwei Inserate einmal); API, Seite, CLI | bestanden |
+| Oberfläche: Händlermarkt im Desktop-Detail (begrenzt, Datenkonflikt) und im Handy-Skript, Service-Worker wm-scout-18 | bestanden |
+| Browser (Orchestrator, Chromium über Playwright, nach der Korrekturrunde): Desktop 1280 – Karte mit Spanne, Detail „Händlermarkt: 5 vergleichbare Händlerangebote, Angebotsniveau 41.000 €“ mit Datenkonflikt in der Vergleichsbasis; `/kalibrierung` – Marktbeobachtung (6 verschwundene Inserate, Senkung 8 %) mit Hinweis; Handy 390 – Händlermarkt im Detail, ohne Querscrollen; 0 JS-Fehler | bestanden |
+| QA (eine Runde, vor der Korrekturrunde: 119 bestanden, Probe mit Lockangeboten) | **Ablehnung** wegen B1 (kritisch) – B1–B5 behoben, B6 beachtet, Regressionstests ergänzt; Korrekturen **nicht** erneut von der QA geprüft |
+| Echter Datenbestand (Anteil Händlerangebote, Häufigkeit der Begrenzung), Windows-CI | nicht geprüft (CI folgt im PR) |
+
 ## P5-03 – Spannen statt Punktwerte, Abschlag bei unbekannter Marke, Mängelliste (25.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

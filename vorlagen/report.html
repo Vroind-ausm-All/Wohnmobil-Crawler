@@ -354,6 +354,10 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
           {% if b.max_ek_bis %}<p class="spanne" data-spannen>Max. Einkaufspreis <b>{{ b.max_ek_von | euro }} – {{ b.max_ek_bis | euro }}</b>
             · Marktwert privat <b>{{ b.privat_von | euro }} – {{ b.privat_bis | euro }}</b>
             <span class="meta">(Sicherheit {{ b.sicherheit }}; Punktwerte unten nur zur Herleitung)</span></p>{% endif %}
+          {% if b.haendler_anzahl %}<p class="meta" data-haendlermarkt>Händlermarkt: {{ b.haendler_anzahl }} vergleichbare Händlerangebote{% if b.haendler_niveau %},
+            Angebotsniveau {{ b.haendler_niveau | euro }}{% if b.vk_gedeckelt %} – <b>Händler-VK darauf begrenzt</b> (abzüglich Verhandlung){% endif %}
+            {%- if b.haendler_konflikt %} – billiger als der Privatmarkt (Datenkonflikt), keine Obergrenze{% endif %}{% else %}
+            – zu wenige für eine Obergrenze{% endif %}</p>{% endif %}
           <p class="spanne">Marktniveau <b>{{ b.marktwert_angebote | euro }}</b>{% if b.spanne_von %} <span class="meta">(plausibel {{ b.spanne_von | euro }} – {{ b.spanne_bis | euro }})</span>{% endif %}</p>
           <p class="meta">Sicherheit: <span class="sicherheit s-{{ b.sicherheit }}">{{ b.sicherheit }}</span> · {{ b.vergleich_basis }}</p>
           {% if b.maengel %}<div class="maengel" data-maengel-liste><b>Im Inserat genannte Mängel</b> – bei der Besichtigung prüfen:
@@ -368,7 +372,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
             {% if b.modellwert %}<tr><td>Referenzwert (Neupreis × Restwert, km, Ausstattung)</td><td>{{ b.modellwert | euro }}</td></tr>{% endif %}
             <tr><td>Marktniveau Angebote{% if b.marktfaktor %} (Faktor {{ '%.2f' | format(b.marktfaktor) | replace('.', ',') }}){% endif %}</td><td>{{ b.marktwert_angebote | euro }}</td></tr>
             <tr><td>Marktwert privat (nach Verhandlung)</td><td>{{ b.marktwert_privat | euro }}</td></tr>
-            <tr class="zwischen"><td>Händler-VK (Ziel){% if b.abschlag_marke %} – darin −{{ (b.abschlag_marke * 100) | round | int }} % für unbekannte Marke{% endif %}</td><td>{{ b.haendler_vk | euro }}</td></tr>
+            <tr class="zwischen"><td>Händler-VK (Ziel){% if b.abschlag_marke %} – darin −{{ (b.abschlag_marke * 100) | round | int }} % für unbekannte Marke{% endif %}{% if b.vk_gedeckelt %} – begrenzt auf den Händlermarkt{% endif %}</td><td>{{ b.haendler_vk | euro }}</td></tr>
             {% for name, wert in b.kosten_posten.items() %}<tr><td>− {{ name }}</td><td>{{ wert | euro }}</td></tr>{% endfor %}
             <tr><td>− Ziel-Marge (netto)</td><td>{{ b.ziel_marge | euro }}</td></tr>
             <tr><td>− {{ ust_label }}</td><td>{{ z.ust | euro }}</td></tr>

@@ -236,8 +236,8 @@ erhalten (Re-Import-Test).
 |---|---|---|---|---|
 | P5-01 | P1 | Rechner analysieren; Kalibrierung mit manuell eingetragenen tatsächlichen Ankaufspreisen | acquisition-analyst | DONE (PR #41 gemergt; Schema v20, ADR-052, `docs/RECHNER-ANALYSE.md`) |
 | P5-02 | P1 | Vergleichsauswahl nach Marke/Modellreihe/Fahrzeugklasse, Ähnlichkeitsgewichte | acquisition-analyst | DONE (PR #42 gemergt; ADR-053, Rechenstand E2) |
-| P5-03 | P1 | Marktwertspannen und Unsicherheit statt Punktwerte bei dünner Datenlage – mit Betreiberwunsch 25.10.2026: Abschlag bei unbekannter Marke (nur Hinweis), Mängel als Liste beim Inserat | acquisition-analyst, scout-ui-engineer | REVIEW (ADR-054, ohne Schemaänderung; Rechenstand E3; Branch `claude/phase5-spannen`) |
-| P5-04 | P2 | Angebotspreise vs. Transaktionspreise, Händler- vs. Privatpreise | acquisition-analyst | TODO |
+| P5-03 | P1 | Marktwertspannen und Unsicherheit statt Punktwerte bei dünner Datenlage – mit Betreiberwunsch 25.10.2026: Abschlag bei unbekannter Marke (nur Hinweis), Mängel als Liste beim Inserat | acquisition-analyst, scout-ui-engineer | DONE (PR #43 gemergt; ADR-054, Rechenstand E3) |
+| P5-04 | P2 | Angebotspreise vs. Transaktionspreise, Händler- vs. Privatpreise | acquisition-analyst | REVIEW (ADR-055, ohne Schemaänderung; Rechenstand E4; Branch `claude/phase5-preisarten`) |
 | P5-05 | P2 | Ausstattung und Mängel; Reparatur-, Gewährleistungs-, Standkostenrisiko | acquisition-analyst | TODO |
 | P5-06 | P2 | Transportkosten ab konfigurierbarer Standort-PLZ (Grundlage vorhanden: `anschreiben.plz`, `rechner.kosten.transport_*`) | acquisition-analyst | TODO |
 | P5-07 | P1 | Deal-Score 0–100 mit benannten Komponenten; Speicherung in `bewertungen` mit `modell_version` (braucht Migration auf Version 6, scout-data-engineer) | acquisition-analyst | TODO |
