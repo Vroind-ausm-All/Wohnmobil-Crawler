@@ -6,6 +6,28 @@ Wert „–“.
 
 ---
 
+## P5-02 – Vergleichsauswahl nach Marke, Modellreihe und Fahrzeugklasse (25.10.2026) · Status: REVIEW
+
+- **Auftrag:** „Stelle 5-02 fertig“ (Betreiber, 25.10.2026, nach dem Merge von PR #41).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `acquisition-analyst`); QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/normalisierung/fahrzeug.py` (Länge, Basisfahrzeug), `wmscout/bewertung/rechner.py` (Ähnlichkeitsstufen,
+  Fahrzeugklasse, Erklärung), `wmscout/bewertung/kalkulation.py` (Rechenstand E2, Feld `modell`, Gewichte eingefroren), `config.yaml`
+  (`rechner.vergleich_aehnlichkeit`), Tests `test_vergleichsauswahl.py` (neu), `test_deal.py` (Versionsprüfung unabhängig von „E1“);
+  Doku ADR-053, `docs/RECHNER-ANALYSE.md`, ROADMAP (P5-01 DONE, P5-02 REVIEW), README.
+- **Implementierte Funktionen:** siehe ADR-053. Keine Schemaänderung; kein Angebot wird ausgeschlossen, nur gewichtet.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Ablehnung** wegen B1 (hoch: ein einzelnes gleiches Modell mit Wunschpreis überstimmte 7 andere Angebote,
+  Max-EK +15–20 %, Sicherheit stieg auf „hoch“) → flachere Gewichte, Deckel 25 % je Angebot, Streuung mindestens ungewichtet;
+  B2 (Basismarke Fiat/Ducato als „gleiches Modell“, Modell ohne Grundriss) → keine Markenstufe bei Basismarke, „Modell“ nur mit Grundriss;
+  B3 (Längen von Markise/Kabel/Stellplatz/Anhänger) → Zubehörfilter, Bindestrich; B4 (Basisfahrzeug nach Listenreihenfolge) → erste
+  Nennung; B5 (Knaus/Dethleffs ohne Klasse) → Klasse „Mittel“; B6 Hinweis an den Mustern; B7 Einzahl. Alle mit Regressionstests.
+  Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Gewichte 2,5/1,8/1,0/0,7/0,5, Einzelangebot höchstens 25 %, Länge −40 % je Meter (bis 40 %),
+  anderes Basisfahrzeug ×0,8; bekannte Marken ohne Klasseneintrag gelten untereinander als „Mittel“.
+- **Bekannte Risiken:** Länge/Basisfahrzeug nur, wenn der Text sie nennt; gespeicherte Kalkulationen mit Rechenstand E1 gelten beim
+  Nachrechnen als „andere Version“.
+- **Nächster sinnvoller Schritt:** Rückmeldung des Betreibers, danach P5-03 (Marktwertspannen und Unsicherheit).
+
 ## P5-01 – Rechner analysieren, Kalibrierung mit tatsächlichen Ankaufspreisen (25.10.2026) · Status: REVIEW
 
 - **Freigabe:** Phase 5 vom Betreiber freigegeben (25.10.2026, „Phase 5 beginnen Schritt für Schritt“) – damit Phase 4 abgenommen;

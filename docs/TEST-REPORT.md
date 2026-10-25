@@ -4,6 +4,22 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P5-02 – Vergleichsauswahl nach Marke, Modellreihe und Fahrzeugklasse (25.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2335 bestanden (vorher 2283), neu `test_vergleichsauswahl.py` (52). `test_deal.py`: zwei Prüfungen hingen fest an „E1“ → gegen `kalk.VERSION` geprüft. Ein erster Lauf vor der Korrekturrunde lief ohne Fehler durch, gilt aber für den alten Stand |
+| `ruff check .` | grün |
+| Länge aus dem Text (22 Fälle: m/cm/mm, „lang“, „über alles“; Bett-, Markisen-, Kabel-, Stellplatz-, Anhängerlänge und Werte außerhalb 4–12 m nicht) | bestanden |
+| Basisfahrzeug (15 Fälle: baugleiche Plattformen, erste Nennung zählt; „Knaus T5“, „Transitbereich“, „Boxer Hund“, „Master-Bett“ nicht) | bestanden |
+| Stufen und Gewichte (Modell nur mit Grundriss, Modellreihe, Marke, Klasse inkl. „Mittel“, andere; Basismarke Fiat/Ducato ohne Markenstufe), Länge und Basisfahrzeug im Gewicht (unbekannt neutral), Konfiguration überschreibt einzelne Werte | bestanden |
+| Wirkung: gleiche Modelle bestimmen den Marktfaktor, ähnliche Länge gibt den Ausschlag, **ein einzelnes gleiches Modell überstimmt 7 andere nicht und hebt die Sicherheit nicht** (QA B1), Deckel 25 % (6 Fälle), Erklärung mit Zusammensetzung und Fahrzeugklasse, Vorfilter liefert dasselbe | bestanden |
+| Kalkulation: Rechenstand E2, Gewichte und Feld `modell` eingefroren, gespeicherte Eingabe rechnet unverändert, neue Gewichte wirken nur auf neue Kalkulationen | bestanden |
+| Wirkung auf synthetischen Daten (Orchestrator, 120 von 300 Inseraten, gegen die alten Gewichte): Marktniveau Median ±0 %, −6,8 % bis +5,3 %; Sicherheit 117× gleich | gerechnet, nicht als Test hinterlegt |
+| QA (eine Runde, vor der Korrekturrunde: 71 bestanden, Proben p1–p4) | **Ablehnung** wegen B1 (hoch) – B1–B7 behoben, Regressionstests ergänzt; Korrekturen **nicht** erneut von der QA geprüft |
+| Browser | nicht geprüft (nur der Erklärungstext ändert sich; die Vorlagen escapen ihn) |
+| Wirkung auf echten Datenbestand, Windows-CI | nicht geprüft (CI folgt im PR) |
+
 ## P5-01 – Rechner analysieren, Kalibrierung mit tatsächlichen Ankaufspreisen (25.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

@@ -248,6 +248,47 @@ def serie_aus_modell(marke: str | None, modell: str | None) -> str | None:
     return None if erstes.isdigit() else erstes
 
 
+# Fahrzeugklasse (P5-02): Länge und Basisfahrzeug aus dem Text – nur Hinweise für die Vergleichsgewichtung, nie ein Ausschluss.
+# Gespeicherte Kalkulationen frieren den Text ein, nicht das Ergebnis: jede Änderung hier verlangt eine neue kalkulation.VERSION.
+_LAENGE = re.compile(r"(?<![a-zäöüß-])(?:gesamt|fahrzeug|au(?:ß|ss)en)?l(?:ä|ae)nge\b[\s:=.]*(?:(?:ca|etwa|über alles|ü\.\s?a)\.?[\s:=.]*)?"
+                     r"(\d{1,2}(?:[.,]\d{1,2})?|\d{3,4})\s*(m|cm|mm)(?![a-zäöüß²³])", re.I)
+_LAENGE_NACH = re.compile(r"(?<![\d.,])(\d{1,2}[.,]\d{1,2})\s*m\s+(?:lang|gesamtl(?:ä|ae)nge|l(?:ä|ae)nge)\b", re.I)
+_ZUBEHOER = re.compile(r"markise|kabel|schlauch|stellplatz|anh(?:ä|ae)nger|bett|garage|vorzelt|teppich|tisch|leiter|boot|trailer", re.I)
+LAENGE_BEREICH = (4.0, 12.0)                     # Wohnmobile; außerhalb (Bett, Markise, Anhänger) wird nichts erkannt
+BASISFAHRZEUGE = [                               # (Plattform, Muster) – baugleiche Fahrgestelle zusammengefasst
+    ("Fiat Ducato/Citroën Jumper/Peugeot Boxer", r"ducato|jumper|peugeot\s*boxer"),
+    ("Mercedes Sprinter", r"sprinter"),
+    ("Ford Transit", r"transit"),
+    ("Iveco Daily", r"iveco\s*daily|daily\s+\d{2}\s*c\b"),
+    ("Renault Master/Opel Movano/Nissan NV400", r"renault\s*master|movano|nv\s?400"),
+    ("VW Crafter/MAN TGE", r"crafter|man\s*tge"),
+    ("VW Transporter", r"(?:vw|volkswagen)\s*t\s?[3-7]|multivan|california"),
+]
+_BASIS_FAHRZEUG = [(n, re.compile(r"(?<![\w])(?:" + m + r")(?![\w])", re.I)) for n, m in BASISFAHRZEUGE]
+
+
+def laenge_aus_text(text: str | None) -> float | None:
+    """Fahrzeuglänge in Metern aus „Länge 7,40 m“, „Gesamtlänge: 699 cm“ oder „7,4 m lang“ – nur 4–12 m und nicht direkt nach
+    Zubehör (Markise, Kabel, Stellplatz, Anhänger …), sonst None. Der früheste passende Treffer im Text gilt."""
+    text = text or ""
+    treffer = sorted((*_LAENGE.finditer(text), *_LAENGE_NACH.finditer(text)), key=lambda m: m.start())
+    for m in treffer:
+        if _ZUBEHOER.search(text[max(0, m.start() - 25):m.start()]):
+            continue
+        zahl = float(m.group(1).replace(",", "."))
+        einheit = m.group(2).lower() if m.re is _LAENGE else "m"
+        meter = zahl / {"m": 1, "cm": 100, "mm": 1000}[einheit]
+        if LAENGE_BEREICH[0] <= meter <= LAENGE_BEREICH[1]:
+            return round(meter, 2)
+    return None
+
+
+def basisfahrzeug_aus_text(text: str | None) -> str | None:
+    """Plattform des Fahrgestells (z. B. „Fiat Ducato/Citroën Jumper/Peugeot Boxer“) – die erste Nennung im Text – oder None."""
+    funde = [(m.start(), name) for name, mu in _BASIS_FAHRZEUG if (m := mu.search(text or ""))]
+    return min(funde)[1] if funde else None
+
+
 def ergaenze_fahrzeug(a: dict) -> dict:
     """Setzt marke (normalisiert), modell, serie, fahrzeug („Knaus Sky TI 650 MEG“), plz und ausland (Länderkürzel bei Orten im
     Ausland, sonst None; dann gibt es keine PLZ und keine Entfernung) in einer Anzeige."""

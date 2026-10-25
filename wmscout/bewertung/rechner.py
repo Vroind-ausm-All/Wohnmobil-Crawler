@@ -6,7 +6,9 @@ Alle Parameter stehen in config.yaml → rechner.
                             × km-Faktor (Laufleistung im Vergleich zum Alter) × Wertfaktoren (Ausstattung/Mängel)
 2. Marktniveau            = Referenzwert × Marktfaktor
      Marktfaktor          = gewichteter Median von (Preis ÷ Referenzwert) vergleichbarer Privatangebote
-                            (gleiche Art, EZ ± Toleranz, ähnliche km; gleiche Marke zählt doppelt).
+                            (gleiche Art, EZ ± Toleranz, ähnliche km), nach Ähnlichkeit gewichtet (P5-02, ADR-053):
+                            gleiches Modell > gleiche Modellreihe > gleiche Marke > gleiche Markenklasse > andere,
+                            dazu Fahrzeugklasse (Länge, Basisfahrzeug), Baujahr-, km-Abstand und Alter der Anzeige.
                             Jeder Vergleich wird so auf Alter, km und Ausstattung DIESES Fahrzeugs
                             umgerechnet. Bei wenigen Vergleichen wird zum Referenzwert hin gemittelt:
                             Gewicht Markt = n / (n + k).
@@ -28,7 +30,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 
-from ..normalisierung.fahrzeug import art_schluessel
+from ..normalisierung.fahrzeug import MARKEN, art_schluessel, basisfahrzeug_aus_text, ist_basismarke, laenge_aus_text
 
 # Fallbacks, falls config.yaml (ältere Version) den Abschnitt nicht enthält
 STANDARD_MARKTMODELL = {
@@ -50,6 +52,42 @@ STANDARD_MARKTMODELL = {
     "km_korrektur_max": 0.12,
     "unsicherheit_ohne_vergleich": 0.15,
 }
+# Ähnlichkeit der Vergleichsangebote (P5-02, ADR-053); config.yaml → rechner.vergleich_aehnlichkeit überschreibt einzelne Werte
+STANDARD_AEHNLICHKEIT = {
+    "modell": 2.5,             # gleiche Marke und gleiches Modell samt Grundriss („Sky TI 650 MEG“)
+    "reihe": 1.8,              # gleiche Marke und Modellreihe („Sky TI“)
+    "marke": 1.0,              # gleiche Marke
+    "klasse": 0.7,             # andere Marke derselben Markenklasse (Premium/Gehoben/Mittel/Einstieg)
+    "andere": 0.5,             # andere Marke, Marke unbekannt oder nur das Basisfahrzeug (Fiat, Mercedes …)
+    "laenge_pro_meter": 0.4,   # je Meter Längenunterschied −40 % (nur wenn beide Längen bekannt) …
+    "laenge_min": 0.4,         # … aber höchstens auf 40 %
+    "basis_anders": 0.8,       # anderes Basisfahrzeug (nur wenn beide bekannt)
+    "anteil_max": 0.25,        # kein einzelnes Angebot trägt mehr als 25 % des Gesamtgewichts (bei weniger als 4 Vergleichen: alle gleich)
+}
+STUFEN = {"modell": ("gleiches Modell", "gleiches Modell"), "reihe": ("gleiche Modellreihe", "gleiche Modellreihe"),
+          "marke": ("gleiche Marke", "gleiche Marke"), "klasse": ("gleiche Markenklasse", "gleiche Markenklasse"),
+          "andere": ("andere Marke", "andere Marken")}
+_AUFBAU_MARKEN = {m.lower() for m in MARKEN}
+
+
+def gedeckelt(gewichte: list[float], anteil: float) -> list[float]:
+    """Gewichte so begrenzen, dass keines mehr als ``anteil`` der Summe trägt (bei n < 1/anteil: alle gleich). Die größten werden auf
+    einen gemeinsamen Wert gesetzt, die übrigen bleiben – so kann ein einzelnes sehr ähnliches Angebot den Markt nicht überstimmen."""
+    n = len(gewichte)
+    if not n:
+        return []
+    anteil = max(anteil, 1 / n)
+    absteigend = sorted(range(n), key=lambda i: -gewichte[i])
+    rest = sum(gewichte)
+    for k in range(n):                             # k größte gedeckelt: x = anteil · (k·x + Rest) → x = anteil · Rest / (1 − k·anteil)
+        x = anteil * rest / (1 - k * anteil) if k * anteil < 1 else float("inf")
+        if gewichte[absteigend[k]] <= x:
+            erg = list(gewichte)
+            for i in absteigend[:k]:
+                erg[i] = x
+            return erg
+        rest -= gewichte[absteigend[k]]
+    return [1.0] * n
 NEGATION_DAVOR = re.compile(r"\b(?:kein\w*|ohne|nicht|nie|null|frei von)\b(?P<luecke>[^.!?\n]{0,40})$", re.I)
 NEGATION_DANACH = re.compile(r"^\w*frei\b|^\s*[:=\-–]?\s*(?:kein\w*|ohne|nicht vorhanden|nein\b|0\s*%)", re.I)
 
@@ -74,7 +112,9 @@ class Bewertung:
     modellwert: int | None = None           # Referenzwert ohne Marktdaten
     marktfaktor: float | None = None        # Markt ÷ Referenz (1,00 = Referenz)
     markt_gewicht: float = 0.0              # Anteil der Vergleichsangebote an der Schätzung
-    vergleich_marke: int = 0                # davon gleiche Marke
+    vergleich_marke: int = 0                # davon gleiche Marke (Modell, Modellreihe oder nur Marke)
+    vergleich_stufen: dict = field(default_factory=dict)    # Anzahl je Ähnlichkeitsstufe (P5-02)
+    fahrzeugklasse: dict = field(default_factory=dict)      # erkannte Länge / Basisfahrzeug dieses Fahrzeugs
     wertfaktoren: dict = field(default_factory=dict)
     km_korrektur: float = 0.0
     sicherheit: str = "keine"               # hoch | mittel | niedrig | manuell | keine
@@ -177,8 +217,11 @@ class Rechner:
         self.wf_liste = [(e["name"], float(e["wert"]), re.compile(r"(?<!\w)(?:" + e["muster"] + ")", re.I))
                          for e in wf.get("liste", [])]
         self.marken_faktor = {m.lower(): k["faktor"] for k in self.mm["markenklassen"] for m in k["marken"]}
+        self.marken_klasse = {m.lower(): k["name"] for k in self.mm["markenklassen"] for m in k["marken"]}
+        self.ae = {**STANDARD_AEHNLICHKEIT, **(self.c.get("vergleich_aehnlichkeit") or {})}
         self.heute = stichtag.date() if stichtag else date.today()
         self._cache: dict[str, tuple] = {}
+        self._klassen: dict[str, dict] = {}
 
     # ---------- Bausteine ----------
     def art(self, a: dict) -> str:
@@ -239,12 +282,50 @@ class Rechner:
             self._cache[schluessel] = erg
         return erg
 
+    def fahrzeugklasse(self, a: dict) -> dict:
+        """Länge (m) und Basisfahrzeug aus Titel und Beschreibung – gecacht je Anzeige wie der Referenzwert."""
+        schluessel = a.get("id")
+        if schluessel and schluessel != "manuell" and schluessel in self._klassen:
+            return self._klassen[schluessel]
+        text = " ".join(str(a.get(k) or "") for k in ("titel", "kurzbeschreibung", "beschreibung"))
+        erg = {"laenge": laenge_aus_text(text), "basis": basisfahrzeug_aus_text(text)}
+        if schluessel and schluessel != "manuell":
+            self._klassen[schluessel] = erg
+        return erg
+
+    def klasse_der_marke(self, marke: str) -> str | None:
+        """Markenklasse aus ``marktmodell.markenklassen``; bekannte Aufbauhersteller ohne Eintrag (Faktor 1,0) bilden die Klasse „Mittel“."""
+        return self.marken_klasse.get(marke) or ("Mittel" if marke in _AUFBAU_MARKEN else None)
+
+    def aehnlichkeit(self, a: dict, b: dict) -> tuple[float, str]:
+        """(Gewicht, Stufe) aus Marke/Modellreihe/Modell und Fahrzeugklasse; Baujahr, km und Anzeigenalter kommen in ``vergleiche`` dazu."""
+        marke = "" if ist_basismarke(a.get("marke")) else (a.get("marke") or "").lower()   # Fiat/Ducato sagt nichts über den Aufbau
+        gleich = bool(marke) and (b.get("marke") or "").lower() == marke
+        if gleich:
+            modell, serie = (a.get("modell") or "").lower(), (a.get("serie") or "").lower()
+            if modell and modell != serie and (b.get("modell") or "").lower() == modell:          # nur mit Grundriss „gleiches Modell“
+                stufe = "modell"
+            elif serie and (b.get("serie") or "").lower() == serie:
+                stufe = "reihe"
+            else:
+                stufe = "marke"
+        else:
+            klasse = self.klasse_der_marke(marke)
+            stufe = "klasse" if klasse and self.klasse_der_marke((b.get("marke") or "").lower()) == klasse else "andere"
+        g = self.ae[stufe]
+        ka, kb = self.fahrzeugklasse(a), self.fahrzeugklasse(b)
+        if ka["laenge"] and kb["laenge"]:
+            g *= max(self.ae["laenge_min"], 1 - self.ae["laenge_pro_meter"] * abs(ka["laenge"] - kb["laenge"]))
+        if ka["basis"] and kb["basis"] and ka["basis"] != kb["basis"]:
+            g *= self.ae["basis_anders"]
+        return g, stufe
+
     # ---------- Vergleichsbasis ----------
     # Nur Privatangebote; ein Angebot mit unbekanntem Anbieter (``gewerblich`` ausdrücklich None) zählt nicht als privat (P2-05d, ADR-043)
-    def vergleiche(self, a: dict, alle: list[dict]) -> list[tuple[float, float, bool]]:
-        """[(Preis ÷ Referenzwert, Gewicht, gleiche Marke)] für vergleichbare Angebote."""
+    def vergleiche(self, a: dict, alle: list[dict]) -> list[tuple[float, float, bool, str]]:
+        """[(Preis ÷ Referenzwert, Gewicht, gleiche Marke, Ähnlichkeitsstufe)] für vergleichbare Angebote."""
         jt, kt = self.c["vergleich_jahre_toleranz"], self.c["vergleich_km_toleranz"]
-        art, marke, serie = self.art(a), (a.get("marke") or "").lower(), (a.get("serie") or "").lower()
+        art = self.art(a)
         alt_grenze = ((self.stichtag or datetime.now()) - timedelta(days=180)).isoformat(timespec="seconds")
         if isinstance(alle, Vergleichsliste) and isinstance(a.get("ez_jahr"), int) and isinstance(jt, int):
             alle = alle.kandidaten(art, a["ez_jahr"], jt)                  # Vorfilter; die Prüfungen unten bleiben vollständig
@@ -260,21 +341,20 @@ class Rechner:
             ref = self.modellwert(b)[0]
             if not ref:
                 continue
-            gleich = bool(marke) and (b.get("marke") or "").lower() == marke
-            g = (1.0 if gleich else 0.5) / (1 + 0.5 * abs(b["ez_jahr"] - a["ez_jahr"]))
-            if gleich and serie and (b.get("serie") or "").lower() == serie:
-                g *= 1.5                     # gleiche Modellreihe (z. B. „Sky TI“) ist der beste Vergleich
+            g, stufe = self.aehnlichkeit(a, b)
+            g /= 1 + 0.5 * abs(b["ez_jahr"] - a["ez_jahr"])
             if dkm is not None:
                 g /= 1 + dkm / kt
             if (b.get("zuletzt_gesehen") or "9") < alt_grenze:
                 g *= 0.5                     # alte Anzeigen spiegeln den aktuellen Markt schlechter
-            erg.append((b["preis"] / ref, g, gleich))
+            erg.append((b["preis"] / ref, g, stufe in ("modell", "reihe", "marke"), stufe))
         if len(erg) >= 5:                    # Ausreißer (Tippfehler, Fantasiepreise) nach Tukey entfernen
-            ungewichtet = [(r, 1) for r, _, _ in erg]
+            ungewichtet = [(r, 1) for r, *_ in erg]
             q1, q3 = gewichtetes_quantil(ungewichtet, .25), gewichtetes_quantil(ungewichtet, .75)
             iqr = max(q3 - q1, 0.05 * gewichtetes_quantil(ungewichtet, .5))   # Mindestbreite bei sehr einheitlichen Preisen
             erg = [e for e in erg if q1 - 1.5 * iqr <= e[0] <= q3 + 1.5 * iqr]
-        return erg
+        gewichte = gedeckelt([e[1] for e in erg], self.ae["anteil_max"])   # QA P5-02 B1: kein Einzelangebot überstimmt den Markt
+        return [(e[0], g, *e[2:]) for e, g in zip(erg, gewichte, strict=True)]
 
     # ---------- Kosten ----------
     def transport(self, a: dict) -> float:
@@ -309,19 +389,22 @@ class Rechner:
     def marktniveau(self, a: dict, alle: list[dict]) -> dict:
         ref, kmk, wf = self.modellwert(a)
         info = {"modellwert": _runde(ref) if ref else None, "km_korrektur": kmk, "wertfaktoren": wf,
-                "art": self.art(a), "alter": self.alter(a)}
+                "art": self.art(a), "alter": self.alter(a), "klasse": {k: v for k, v in self.fahrzeugklasse(a).items() if v}}
         if not ref:
-            return {**info, "niveau": a.get("preis"), "n": 0, "n_marke": 0, "faktor": None, "gewicht": 0.0,
+            return {**info, "niveau": a.get("preis"), "n": 0, "n_marke": 0, "stufen": {}, "faktor": None, "gewicht": 0.0,
                     "sicherheit": "keine", "spanne": None,
                     "basis": "Erstzulassung fehlt – keine unabhängige Bewertung, daher keine Beträge (Marktwert manuell eingeben)"}
         vgl = self.vergleiche(a, alle)
         n, n_marke = len(vgl), sum(1 for v in vgl if v[2])
+        stufen = {s: c for s in STUFEN if (c := sum(1 for v in vgl if v[3] == s))}
         u = self.mm["unsicherheit_ohne_vergleich"]
         g = n / (n + self.c.get("vergleich_gewicht_k", 4))
         if n:
-            paare = [(r, w) for r, w, _ in vgl]
+            paare = [(r, w) for r, w, *_ in vgl]
             m = gewichtetes_quantil(paare, .5)
-            streu = (gewichtetes_quantil(paare, .75) - gewichtetes_quantil(paare, .25)) / 2 / m if n >= 3 else u
+            gleich_gewichtet = [(r, 1) for r, _ in paare]       # Streuung ungewichtet als Untergrenze: Gewichte dürfen die Sicherheit nicht heben
+            streu = max((gewichtetes_quantil(p, .75) - gewichtetes_quantil(p, .25)) / 2 / gewichtetes_quantil(p, .5)
+                        for p in (paare, gleich_gewichtet)) if n >= 3 else u
         else:
             m, streu = 1.0, u
         faktor = g * m + (1 - g) * 1.0
@@ -334,18 +417,23 @@ class Rechner:
         else:
             sicherheit = "niedrig"
         if n:
+            teile = ", ".join(f"{c} {STUFEN[s][c != 1]}" for s, c in stufen.items())
             basis = (f"{n} Vergleichsangebote {info['art']}, EZ ± {self.c['vergleich_jahre_toleranz']} J."
-                     f" ({n_marke} gleiche Marke) · Markt {g:.0%} / Referenzmodell {1 - g:.0%}")
+                     f" ({teile}; ähnlichere zählen mehr) · Markt {g:.0%} / Referenzmodell {1 - g:.0%}")
         else:
             basis = "noch keine Vergleichsangebote – Referenzmodell (Neupreis × Restwert), bitte gegenprüfen"
-        return {**info, "niveau": niveau, "n": n, "n_marke": n_marke, "faktor": round(faktor, 3), "gewicht": round(g, 2),
+        if info["klasse"]:
+            k = info["klasse"]
+            basis += " · Fahrzeugklasse: " + ", ".join(
+                ([f"{k['laenge']:.2f} m".replace(".", ",")] if "laenge" in k else []) + ([k["basis"]] if "basis" in k else []))
+        return {**info, "niveau": niveau, "n": n, "n_marke": n_marke, "stufen": stufen, "faktor": round(faktor, 3), "gewicht": round(g, 2),
                 "sicherheit": sicherheit, "spanne": (niveau * (1 - s), niveau * (1 + s)), "basis": basis}
 
     # ---------- Hauptrechnung ----------
     def bewerte(self, a: dict, alle: list[dict] | None = None, marktwert_manuell: int | None = None) -> Bewertung:
         mn = self.marktniveau(a, alle or [])
         if marktwert_manuell:
-            mn.update(niveau=marktwert_manuell, n=0, n_marke=0, gewicht=0.0, sicherheit="manuell", spanne=None,
+            mn.update(niveau=marktwert_manuell, n=0, n_marke=0, stufen={}, gewicht=0.0, sicherheit="manuell", spanne=None,
                       basis="manuell eingegebener Marktwert")
         if mn["sicherheit"] == "keine":
             # P1-12: ohne Erstzulassung gibt es keinen unabhängigen Marktwert. Max-EK und Erstangebot aus dem Angebotspreis
@@ -375,7 +463,8 @@ class Rechner:
             kosten_posten=posten, ziel_marge=_runde(marge), max_ek=_runde(max_ek, 100),
             erstangebot=_runde(erst, 100), angebotspreis=a.get("preis"),
             modellwert=mn["modellwert"], marktfaktor=mn["faktor"], markt_gewicht=mn["gewicht"],
-            vergleich_marke=mn["n_marke"], wertfaktoren=mn["wertfaktoren"], km_korrektur=round(mn["km_korrektur"], 3),
+            vergleich_marke=mn["n_marke"], vergleich_stufen=mn["stufen"], fahrzeugklasse=mn["klasse"], wertfaktoren=mn["wertfaktoren"],
+            km_korrektur=round(mn["km_korrektur"], 3),
             sicherheit=mn["sicherheit"], art=mn["art"], alter=mn["alter"], fair_hinweis=fair_hinweis,
         )
         if mn["spanne"]:

@@ -60,7 +60,7 @@ def test_nachrechnen_haengt_nicht_an_config_datenbank_oder_heute(cfg, db, anfrag
     db.con.commit()
     assert kalk.rechne(gespeichert) == erg                               # wirken nicht auf die gespeicherte Kalkulation
     assert kalk.rechne(_eingabe(cfg, db, anfrage[0])) != erg             # wohl aber auf eine neue
-    assert erg["annahmen"][0] == "Stichtag 2025-03-01T12:00:00, Rechenstand E1"
+    assert erg["annahmen"][0] == f"Stichtag 2025-03-01T12:00:00, Rechenstand {kalk.VERSION}"
 
 
 def test_max_ek_und_gewinn_mit_provision(cfg, db, anfrage):
@@ -155,7 +155,7 @@ def test_gespeicherte_kalkulation_ist_nur_anfuegbar_und_manipulation_faellt_auf(
 def test_neue_rechenversion_wird_als_solche_erkannt(cfg, db, anfrage, monkeypatch):
     d = DealSpeicher(db, cfg)
     kid = d.speichern(*d.berechne(anfrage[0], 30000), anlass="gespeichert", anfrage_id=anfrage[0])
-    monkeypatch.setattr(kalk, "VERSION", "E2")
+    monkeypatch.setattr(kalk, "VERSION", kalk.VERSION + "-neu")
     assert d.lade(kid)["nachrechnung"] == {"gleich": False, "hash_ok": True, "version_gleich": False}
 
 
