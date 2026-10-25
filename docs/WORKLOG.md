@@ -6,6 +6,25 @@ Wert „–“.
 
 ---
 
+## P4-05 – Abdeckung und Suchlücken messen (25.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-data-engineer`); QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/abdeckung.py` (neu), `wmscout/bewertung/auswertung.py` (`bewerte_alle(…, erstmals_seit=…)`),
+  `wmscout/datenbank.py` (`erstmals_seit`), `wmscout/normalisierung/geo.py` (`plz_bereiche`), `wmscout/web/api.py` (`/abdeckung`,
+  `/api/abdeckung`, Zwischenspeicher), `vorlagen/abdeckung.html` (neu), `vorlagen/status.html` (Link), `scout.py` (`abdeckung`), Tests
+  `test_abdeckung.py` (neu); Doku ADR-051, ROADMAP (P4-04 DONE, P4-05 REVIEW, Kennzahl Importerfolg), README.
+- **Implementierte Funktionen:** siehe ADR-051. Keine Schemaänderung, nur lesen.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. B1 (hoch: Bearbeitungsstatus senkte „relevante
+  Privatangebote“) → Filter ohne Status; B2 (wieder eingestellte Altfahrzeuge als neu, nicht transitive Gruppen) → Zusammenhangskomponenten,
+  nur Fahrzeuge mit allen Inseraten im Zeitraum; B3 (39 s unter der App-Sperre bei 6.000 Inseraten/365 Tagen) → Zwischenspeicher 5 min,
+  App höchstens 90 Tage; B4 (Detailabruf/„gelöscht“ zählten als Eingang) → nur neu/geändert; B5 (Zeitraum nicht kalendertagsgenau) → ab
+  Mitternacht; B6 Kennzahl in der ROADMAP angepasst; B7 Kommentar. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Standardzeitraum 30 Tage; „unklar“-Hinweis ab 50 % (mind. 4 Treffer); Lücken ab 2 Tagen;
+  keine gespeicherte Zeitreihe der Kennzahlen.
+- **Bekannte Risiken:** Laufzeit bei großen Beständen (siehe ADR-051); ohne Pull-Quelle spiegeln Gebietslücken vor allem die eigenen Suchaufträge.
+- **Nächster sinnvoller Schritt:** Abnahme von Phase 4 durch den Betreiber (P4-06 bleibt BLOCKED bis API-Zugang), danach Freigabe Phase 5.
+
 ## P4-04 – Laufprotokoll, Intervalle je Quelle, Pause nach Sperre, Statusseite (24.10.2026) · Status: REVIEW
 
 - **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `source-integrations`, Migration wie `scout-data-engineer`); QA

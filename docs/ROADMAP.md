@@ -224,8 +224,8 @@ erhalten (Re-Import-Test).
 | P4-01 | P1 | Suchprofile in der Datenbank, verwaltbar in der App (Art, Marke, Modell, Preis, EZ, km) – solange keine freigegebene Pull-Quelle existiert, als **Filter über eingegangene Daten** plus **Abdeckungscheckliste** der vom Nutzer angelegten Suchaufträge je Plattform | source-integrations, scout-ui-engineer | DONE (PR #36 gemergt; Schema v17, ADR-047) |
 | P4-02 | P1 | Suchgebiete und PLZ-Regionen (bundesweit, Umkreis, Regionenliste) | source-integrations | DONE (PR #37 gemergt; Schema v18, ADR-048) |
 | P4-03 | P1 | Neue Angebote priorisieren; Preissenkungen erkennen und melden | source-integrations | DONE (PR #38 gemergt; ADR-049, ohne Schemaänderung) |
-| P4-04 | P2 | Intervalle je Quelle; Suchläufe und Fehler überwachen (Statusseite) | source-integrations | REVIEW (Schema v19, ADR-050; Laufprotokoll, `/status`; Branch `claude/phase4-statusseite`) |
-| P4-05 | P2 | Suchlücken und Abdeckung messen | scout-data-engineer | TODO |
+| P4-04 | P2 | Intervalle je Quelle; Suchläufe und Fehler überwachen (Statusseite) | source-integrations | DONE (PR #39 gemergt; Schema v19, ADR-050) |
+| P4-05 | P2 | Suchlücken und Abdeckung messen | scout-data-engineer | REVIEW (ADR-051, ohne Schemaänderung; `/abdeckung`, `scout.py abdeckung`; Branch `claude/phase4-abdeckung`) |
 | P4-06 | P3 | Vollständige und inkrementelle Bestandssuche für berechtigte API-Zugänge | source-integrations | BLOCKED bis API-Zugang |
 
 ## Phase 5 – Intelligente Ankaufsbewertung
@@ -270,7 +270,7 @@ Optimiert wird auf **relevante, verfügbare Ankaufsgelegenheiten**, nicht auf ab
 | Neue unterschiedliche Fahrzeuge | neue `fahrzeuge` im Zeitraum (nach Dublettenprüfung) | `fahrzeuge` | Phase 3 |
 | Relevante Privatangebote pro Tag | neue Inserate mit `anbieter_typ = privat`, im Filter, verfügbar | `inserate`, Filter | Phase 3 |
 | Doppelte Inserate | Inserate je Fahrzeug > 1 (bestätigt / vorgeschlagen) | `inserate`, `fahrzeuge` | Phase 3 |
-| Importerfolgsquote | erfolgreich verarbeitete / angelieferte Datensätze je Quelle und Lauf | `suchlaeufe` | Phase 2 |
+| Importerfolgsquote | Läufe ohne Fehler / alle Läufe je Art (Suchlauf, Seiten, Mails) – verarbeitete je angelieferte Datensätze liefert keine Quelle (ADR-051) | `suchlaeufe` | Phase 4 (P4-05) |
 | Nicht verfügbare Inserate | Anteil `verfuegbarkeit ∈ {offline, verkauft}` | `inserate` | Phase 3 |
 | Erkannte Preisänderungen | Einträge in `preis_historie` mit Änderung im Zeitraum | `preis_historie` | Phase 3 |
 | Zeit Sichtung → Import | `erstmals_gesehen` − Einstellzeitpunkt laut Quelle (sofern geliefert) bzw. E-Mail-Zeitstempel | `beobachtungen` | Phase 3 |

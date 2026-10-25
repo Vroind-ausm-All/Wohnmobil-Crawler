@@ -1012,3 +1012,29 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   Such- und Inserat-URLs sowie Dateinamen gespeicherter Seiten enthalten (keine systematischen Personendaten; 365 Tage, Team sichtbar).
   Ein abgestürzter Lauf hat keine Zahlen je Quelle: er erscheint als „abgebrochen“ mit Warnung, startet aber das Intervall der Quelle
   nicht neu. Beschädigte Protokollzeilen werden gemeldet und als leer gelesen. Betreiberfragen: Pausendauer nach einer Sperre, Intervalle je Quelle (Standard: keine).
+
+## ADR-051 – Abdeckung und Suchlücken messen: Kennzahlen, Zeit-, Gebiets- und Profillücken, nur lesen · gilt (25.10.2026)
+
+* **Kontext:** P4-05 und die Abnahme von Phase 4 („Datenabdeckung messbar“). Die Kennzahlen der ROADMAP waren beschrieben, aber nirgends
+  berechnet; ob Suchaufträge, Benachrichtigungen oder Importe ausfallen, war nur indirekt zu erkennen.
+* **Entscheidung:**
+  1. Reines Modul `abdeckung.py`, **ohne Schemaänderung und ohne Schreibzugriff**. Grundlage: alle Inserate, die im Zeitraum (Standard
+     30 Kalendertage einschließlich heute, ab Mitternacht; App 1–90, Kommandozeile 1–365) **zuerst** eingingen, bewertet wie in der App (`bewerte_alle(…, erstmals_seit=…)` – auch Inserate, die inzwischen nicht
+     mehr gesehen werden), dazu `beobachtungen`, `preis_historie` und das Laufprotokoll (ADR-050).
+  2. **Kennzahlen:** neue Inserate (je Quelle), neue unterschiedliche Fahrzeuge (Zusammenhangskomponenten der bestätigten oder erkannten
+     Dubletten; ein wieder eingestelltes Fahrzeug, dessen anderes Inserat vor dem Zeitraum einging, ist nicht neu), relevante
+     Privatangebote (privat, im Filter – der Bearbeitungsstatus zählt nicht, sonst senkte jeder Kontakt die Kennzahl –, verfügbar; je Tag), Inserate mit Dublette, nicht mehr verfügbar, erkannte
+     Preisänderungen (Eintrag im Preisverlauf mit Vorgänger – der erste Preis zählt nicht), vollständig beschrieben (Preis, EZ, km, PLZ,
+     Art, Anbieterart), Läufe ohne Fehler je Art (statt verarbeiteter je angelieferter Datensätze – das liefert keine Quelle). „Zeit Sichtung → Import“ bleibt offen (Einstellzeitpunkt liefert keine Quelle verlässlich).
+  3. **Zeitlücken:** je lesbarer Plattform Tage ohne neues oder geändertes Inserat (Beobachtung „neu“/„geändert“ aus Suche, Seite, Mail,
+     Text oder Ereignis; Detailabruf und „gelöscht“ zählen nicht – ein Tag mit nur Bekanntem gilt als Lücke) und die längsten zusammenhängenden Lücken ab 2 Tagen.
+     **Gebietslücken:** zweistellige PLZ-Bereiche (96) ohne neues Inserat; ohne PLZ und Ausland getrennt. **Profillücken:** je aktivem
+     Suchprofil Treffer (passt/unklar, Fahrzeuge einmal), je Plattform, Hinweise: kein Suchauftrag, Auftrag ohne passenden Eingang, Arten
+     bzw. PLZ-Bereiche des Profils ohne Treffer, mindestens 50 % „unklar“ (ab 4 Treffern).
+  4. Ausgabe: Seite `/abdeckung` (Zeitraum 7/30/90 Tage, Link von `/status`), `GET /api/abdeckung?tage=`, `scout.py abdeckung --tage`.
+     Team darf lesen, Händler-Zugang nicht; keine Personendaten.
+* **Alternativen:** Kennzahlen täglich speichern (Verlauf über Monate – eigene Tabelle, erst bei Bedarf); Lücken je Landkreis/Bundesland
+  (keine amtliche Zuordnung im Projekt, ADR-048); Messung über die 21-Tage-Liste der App (würde ältere Eingänge des Zeitraums verlieren).
+* **Folgen / offen:** Die Messung bewertet die Inserate des Zeitraums neu und läuft in der Anfrage unter der Datenbanksperre der App – die
+  App speichert das Ergebnis bis zu 5 Minuten (neu bei geändertem Bestand) und erlaubt höchstens 90 Tage; QA maß 39 s für 6.000 Inserate
+  und 365 Tage (synthetisch) – längere Zeiträume deshalb über `scout.py abdeckung`. Gebietslücken sagen ohne Pull-Quelle vor allem, wo eure eigenen Suchaufträge nicht hinreichen.
