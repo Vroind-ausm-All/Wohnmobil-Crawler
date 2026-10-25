@@ -985,3 +985,30 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   Eingänge über Mails, Seiten und Text lösen keinen eigenen Hinweis aus (nur sichtbar in Kachel, Filter und Liste) –
   Hinweise nach jedem Import wären eine Erweiterung. Betreiberfragen: Schwellen (48 h, 14 Tage, 3 % / 500 €) und ob Preissenkungen per Mail
   gemeldet werden sollen (Standard: ja).
+
+## ADR-050 – Laufprotokoll, Intervalle je Quelle, Pause nach Sperre, Statusseite (Schema v19) · gilt (24.10.2026)
+
+* **Kontext:** P4-04. Ob und wie Suchläufe und Importe liefen, stand nur im Speicher der App (letzte Meldung) und in `scout.log`. Es gab
+  ein Intervall für die Auto-Suche, aber keines je Quelle, und nach einer Sperre (403/429/Captcha) versuchte die Automatik es beim nächsten
+  Termin erneut.
+* **Entscheidung:**
+  1. Additive Migration v19: Tabelle `suchlaeufe` – je Suchlauf bzw. Import gespeicherter Seiten/Mails (nur wenn Dateien gelesen wurden):
+     Art, Auslöser (von Hand in der App, automatisch, Kommandozeile/geplante Aufgabe), Beginn, Ende, Ergebnis (ohne Fehler / mit Fehler /
+     Quelle blockt / abgebrochen), Zähler, Fehlertext (gekürzt) und je Quelle Zahlen, Ergebnis und Fehler (JSON). Einträge älter als
+     365 Tage löscht der nächste Lauf. Ein Lauf ohne Ende gilt nach 6 Stunden als abgebrochen (Absturz, Stromausfall). Das Protokoll
+     darf einen Lauf nie scheitern lassen (Schreibfehler werden nur geloggt).
+  2. **Intervall je Quelle** (`app.intervall_stunden_je_quelle`, Standard leer) und **Pause nach Sperre** (`app.pause_nach_sperre_stunden`,
+     Standard 24): gelten nur für die automatische Suche der App und `scout.py lauf` (geplante Aufgabe); `--sofort` und der Knopf „Neue
+     Anzeigen suchen“ warten nicht. Eine übersprungene Quelle wird nicht abgerufen, auch nicht ihre Detailseiten. Nichts wird umgangen
+     (Regel 11) – es wird nur länger gewartet. Ausgewertet werden alle Läufe im längsten Fenster (Pause bzw. Intervall), ohne
+     Anzahlgrenze. Eine geladene, aber nicht erkannte Suchseite (Layout geändert) zählt als Fehler der Quelle.
+  3. **Statusseite** `/status` (serverseitig gerendert, ohne eigenes JavaScript; Team, nicht Händler-Zugang) und `GET /api/status`:
+     Pull-Quellen (Freigabe/Schalter, eingetragene Suchen, letzter Lauf, letzter Erfolg, Fehler in Folge, letzter Fehler, Intervall,
+     nächster automatischer Abruf), Eingänge (an/aus, letzter Import), die letzten 30 Läufe und Warnungen (3 Fehler in Folge, Pause nach
+     Sperre, abgebrochener Lauf, Auto-Suche ohne laufende Quelle). `scout.py quellen liste` zeigt den Status je Quelle mit.
+* **Alternativen:** eine Zeile je Quelle und Lauf (mehr Zeilen, gleiche Aussage); Auswertung von `scout.log` (rotiert, nicht strukturiert);
+  Intervall auch für Läufe von Hand (würde den Betreiber bevormunden; der Knopf ist eine bewusste Entscheidung).
+* **Folgen / offen:** Der Import einzelner Inserate über „Link + Text“ wird nicht protokolliert (einzelne Handgriffe). Fehlertexte können
+  Such- und Inserat-URLs sowie Dateinamen gespeicherter Seiten enthalten (keine systematischen Personendaten; 365 Tage, Team sichtbar).
+  Ein abgestürzter Lauf hat keine Zahlen je Quelle: er erscheint als „abgebrochen“ mit Warnung, startet aber das Intervall der Quelle
+  nicht neu. Beschädigte Protokollzeilen werden gemeldet und als leer gelesen. Betreiberfragen: Pausendauer nach einer Sperre, Intervalle je Quelle (Standard: keine).

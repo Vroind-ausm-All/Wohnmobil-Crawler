@@ -4,6 +4,21 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P4-04 – Laufprotokoll, Intervalle je Quelle, Pause nach Sperre, Statusseite (24.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2204 bestanden, 14 fehlgeschlagen – alle in älteren Testdateien: `test_reimport.py` (13; der Vergleich des ganzen Datenbestands vor/nach einem Re-Import sah das neue Laufprotokoll wachsen → Protokoll aus diesem Vergleich ausgenommen, eigene Tests in `test_statusseite.py`) und `test_neuigkeiten.py` (1; prüfte die Service-Worker-Version exakt → „mindestens“). Danach `test_reimport.py`, `test_neuigkeiten.py`, `test_statusseite.py`: 102 bestanden. Neu `test_statusseite.py` (24) |
+| `ruff check .` | grün |
+| Einstellungen (gültig, Fehleingaben, unbekannte Quelle), Quellenstatus (Fehler in Folge, letzter Erfolg, letzter Fehler, Pause nach Sperre, Intervall, beides, verwaister Lauf) | bestanden |
+| Importer: Suchlauf mit Zahlen je Quelle; Sperre (429) → Automatik überspringt ohne jeden Abruf (auch keine Detailseiten), von Hand läuft; Intervall; Pause hält auch nach 250 übersprungenen Läufen; geändertes Layout zählt als Fehler der Quelle (3 in Folge → Warnung); unerwarteter Fehler → „abgebrochen“; Protokoll-Schreibfehler und beschädigte Zeilen lassen den Lauf nicht scheitern; Seitenimport nur mit Dateien; Aufräumen nach 365 Tagen | bestanden |
+| App (`starte("auto")` → Auslöser automatisch), CLI (`lauf` beachtet Intervalle, `--sofort` nicht) | bestanden |
+| Übersicht/Warnungen, `/api/status`, `/status` (Fehlertext mit HTML escaped), Rechte (Mitarbeiter 200, Händler-Zugang 403), Links Desktop/Handy | bestanden |
+| Migration v1, v18 → v19: Daten unverändert, Sicherung `vor-v19`, Rollback, Idempotenz, neue Datenbank | bestanden |
+| Browser (Orchestrator, Chromium über Playwright): Desktop 1280 – Status über den Knopf „Status“, Warnung „Pause nach Sperre“, Quelle mit Fehler/Intervall/nächstem Abruf, 2 Läufe, HTML im Fehlertext als Text; Handy 390 – Link auf der Startseite, Seite ohne Querscrollen; 0 JS-Fehler | bestanden (Datumsformat und Ausrichtung danach angepasst) |
+| QA (eine Runde, vor der Korrekturrunde: 28 bestanden, eigene Proben P1–P5) | Freigabe mit Auflagen – B1 (hoch), B2, B3, B5 behoben, B4/B7 dokumentiert; Korrekturen **nicht** erneut von der QA geprüft |
+| Echte Quelle mit Sperre, Auto-Suche über reale Zeiträume, Mandantenbetrieb, Windows-CI | nicht geprüft (CI folgt im PR) |
+
 ## P4-03 – Neuigkeiten: frisch eingegangen und Preissenkungen hervorheben, priorisieren, melden (24.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

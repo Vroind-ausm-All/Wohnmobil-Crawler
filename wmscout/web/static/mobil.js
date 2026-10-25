@@ -162,7 +162,8 @@
         "<h2>Besichtigungen heute</h2>" + (heutige.length ? heutige.map(terminKarte).join("") : '<p class="leise">Keine Termine für heute.</p>') +
         (d.termine.length > heutige.length ? '<p><a href="#/termine">Alle ' + d.termine.length + " offenen Besichtigungen →</a></p>" : "") +
         "<h2>Suche</h2>" + '<p class="leise">' + esc(d.suchlauf.laeuft ? "Läuft: " + (d.suchlauf.meldung || "") : (d.suchlauf.meldung || "Bereit")) +
-        (d.suchlauf.naechste_auto ? " · nächste automatische Suche " + esc(d.suchlauf.naechste_auto.slice(11, 16)) + " Uhr" : "") + "</p>" +
+        (d.suchlauf.naechste_auto ? " · nächste automatische Suche " + esc(d.suchlauf.naechste_auto.slice(11, 16)) + " Uhr" : "") +
+        ' · <a href="/status">Status &amp; letzte Läufe</a></p>' +
         (S.ich.team && S.ich.nutzer && S.ich.nutzer.rolle !== "inhaber" ? "" :       // P1-15: Suchlauf nur Inhaber
           '<div class="reihe"><button class="knopf" data-aktion="suchen">↻ Neue Anzeigen suchen</button></div>') +
         (S.ich.team ? '<p class="leise mitte"><a href="#" data-aktion="abmelden">Abmelden</a></p>' : "");

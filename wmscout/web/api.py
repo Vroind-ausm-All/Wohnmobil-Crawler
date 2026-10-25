@@ -51,6 +51,7 @@ from ..verfuegbarkeit import fahrzeug_von, offline_nach_tagen
 from ..anbieter import einstufung
 from .. import kontakte
 from .. import suchprofile as sp
+from .. import laufprotokoll as lp
 from ..domaene import PLATTFORMEN
 from ..normalisierung.qualitaet import je_quelle
 from ..bewertung import kalkulation as kalk
@@ -581,6 +582,12 @@ class Anfrage:
             except LookupError as fehler:
                 raise Antwort(404, str(fehler)) from fehler
             return self.json(200, {"ergebnis": erg, "eingabe_hash": kalk.eingabe_hash(e)[:12]})
+        if p == "/api/status":                             # Statusseite (P4-04): Quellen, Eingänge, Läufe, Fehler – ohne Personendaten
+            return self.json(200, {**lp.uebersicht(k.db, k.cfg), "suchlauf": k.suchlauf.stand})
+        if p == "/status":
+            return self.html(k.env.get_template("status.html").render(
+                firma=k.cfg["anschreiben"]["firma"], s=lp.uebersicht(k.db, k.cfg), suchlauf=k.suchlauf.stand, arten=lp.ARTEN,
+                ausloeser=lp.AUSLOESER, ergebnisse=lp.ERGEBNISSE))
         if p == "/ankaeufe":
             return self.html(k.env.get_template("ankaeufe.html").render(
                 firma=k.cfg["anschreiben"]["firma"], token=k.token, ich=self.nutzer, kostenarten=KOSTENARTEN, status=ANKAUF_STATUS,

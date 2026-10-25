@@ -210,6 +210,11 @@ app:
   auto_suche_stunden: 0            # standardmäßig AUS: unfreigegebene Web-Quelle darf nicht automatisch laufen
   auto_suche_von: 7                # nur zwischen 7 und 21 Uhr
   auto_suche_bis: 21
+  # Statusseite /status (P4-04): Für die automatische Suche und geplante Aufgaben („scout.py lauf“) gilt je Quelle ein Mindestabstand
+  # zwischen zwei Abrufen; nach einer Sperre der Quelle (HTTP 403/429, Captcha) wird so lange pausiert. Von Hand gestartete Läufe und
+  # „scout.py lauf --sofort“ warten nicht. Beispiel: intervall_stunden_je_quelle: {kleinanzeigen: 6}
+  intervall_stunden_je_quelle: {}
+  pause_nach_sperre_stunden: 24    # 0 = keine Pause
   # Handy-App fürs Team (docs/HANDY-APP.md): Adresse, unter der die App per Tailscale erreichbar ist,
   # z. B. "https://buero-pc.tail1234.ts.net". Wird in WhatsApp-Nachrichten verlinkt und als Host freigegeben.
   oeffentliche_url: ""

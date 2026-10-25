@@ -6,6 +6,7 @@ from __future__ import annotations
 import copy
 import csv
 import logging
+import re
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
@@ -289,4 +290,5 @@ def test_oberflaeche_statisch():
     assert "if(s === 'prio')" in html and "|safe" not in html.split("data-senkung")[1][:300]
     assert 'neuigkeiten: "Neu & gesenkt"' in js and "function neuTag" in js and "esc(f.neuigkeit.text)" in js
     assert "#/liste/neuigkeiten" in js and "d.neuigkeiten" in js
-    assert "wm-scout-15" in (STATIC / "sw.js").read_text(encoding="utf-8")
+    sw = (STATIC / "sw.js").read_text(encoding="utf-8")
+    assert int(re.search(r"var VERSION = 'wm-scout-(\d+)'", sw).group(1)) >= 15 and "15: " in sw

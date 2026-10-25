@@ -56,6 +56,7 @@ es wird niemand als Bearbeiter eingetragen (eine bestehende Reservierung bleibt 
 | `python scout.py import` | Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten aus dem Ordner `import/` einlesen, bewerten, Report erzeugen (ohne Internet; anderer Ordner: `--ordner PFAD`) |
 | `python scout.py import --mails` | Suchagent-Benachrichtigungen (`.eml` aus `import/email/`) einlesen, bewerten, Report erzeugen – nur bei eingeschaltetem Eingang `email` |
 | `python scout.py quellen liste` | Pull-Quellen (Suchlauf) und Eingänge mit Status anzeigen; `quellen an KENNUNG` / `quellen aus KENNUNG` schaltet eine Quelle – `an` nur, wenn sie im Code freigegeben ist (Kleinanzeigen ist es nicht; der Suchlauf überspringt sie dann ohne Fehler). Eingänge (`seiten`, `text`, `email`) schaltest du in `config.yaml` unter `eingaenge`; ausgeschaltet wird nichts eingelesen |
+| `python scout.py lauf --sofort` | Suchlauf ohne Rücksicht auf Intervalle je Quelle und die Pause nach einer Sperre (`config.yaml → app`); ohne `--sofort` (z. B. als geplante Aufgabe) werden Quellen im Intervall übersprungen. Den Zustand zeigt `python scout.py quellen liste` bzw. die Statusseite `/status` in der App |
 | `python scout.py qualitaet` | Datenqualität je Quelle: Anteil der Inserate mit Preis, EZ, km, Ort und bekanntem Anbieter, mittlerer Qualitätswert, Fahrzeuge mit widersprüchlichen oder unplausiblen Angaben (nur lesen). Die Markierungen je Fahrzeug stehen in der App im Detail und in der CSV |
 | `python scout.py report` | Report neu erzeugen, z. B. nach Änderung der Kosten in `config.yaml` (ohne Internet) |
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --titel "Knaus Sky TI 650 MEG" --anschreiben` | Einzelfahrzeug durchrechnen und Anschreiben ausgeben (auch für Anfragen außerhalb von Kleinanzeigen; `--text` mit der Beschreibung berücksichtigt Ausstattung/Mängel) |
@@ -423,4 +424,5 @@ Die Zeilen „Phase 1“ unten beziehen sich auf den früheren Phasenplan; die n
 | Suchprofile als Filter über eingegangene Inserate, Abdeckungscheckliste je Plattform (P4-01, Schema v17) | umgesetzt | `test_suchprofile.py`, Klicktest Desktop und Handy |
 | Suchgebiet je Suchprofil: bundesweit, Umkreis, PLZ-Bereiche (P4-02, Schema v18) | umgesetzt | `test_suchgebiete.py`, Klicktest Desktop |
 | Neuigkeiten: frisch eingegangen und deutliche Preissenkungen hervorheben, priorisieren, melden (P4-03) | umgesetzt | `test_neuigkeiten.py`, Klicktest Desktop und Handy |
+| Statusseite `/status`: Quellen, Eingänge, letzte Suchläufe und Fehler; Intervalle je Quelle, Pause nach Sperre (P4-04, Schema v19) | umgesetzt | `test_statusseite.py`, Klicktest |
 | Deal-Score, Ankaufs-Dashboard | **geplant** – Phasen 4–6 in `docs/ROADMAP.md` | – |
