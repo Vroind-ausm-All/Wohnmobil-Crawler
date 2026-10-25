@@ -6,6 +6,33 @@ Wert „–“.
 
 ---
 
+## P5-01 – Rechner analysieren, Kalibrierung mit tatsächlichen Ankaufspreisen (25.10.2026) · Status: REVIEW
+
+- **Freigabe:** Phase 5 vom Betreiber freigegeben (25.10.2026, „Phase 5 beginnen Schritt für Schritt“) – damit Phase 4 abgenommen;
+  „Schritt für Schritt“: nach P5-01 Bericht und Rückmeldung abwarten.
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `acquisition-analyst`, Migration wie `scout-data-engineer`); QA
+  `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `docs/RECHNER-ANALYSE.md` (neu: Formelkette, gerechnete Empfindlichkeit, Schwächen S1–S8 mit Paketen),
+  `wmscout/bewertung/kalibrierung.py` (neu), `wmscout/migrationen.py` (v20 `kalibrierung_faelle`), `wmscout/web/api.py`
+  (`/kalibrierung`, `/api/kalibrierung`, Nachtragen/Löschen), `wmscout/audit.py`, `vorlagen/kalibrierung.html` (neu),
+  `vorlagen/ankaeufe.html` (Link für den Inhaber), `wmscout/ankauf.py` (Plan speichert den Parameterstand), `scout.py` (`kalibrierung`),
+  Tests `test_kalibrierung.py` (neu); Doku ADR-052,
+  ROADMAP (Phase 4 DONE, Phase 5 freigegeben, P4-05 DONE, P5-01 REVIEW), ARCHITECTURE, README.
+- **Implementierte Funktionen:** siehe ADR-052. Keine Wirkung auf die Bewertung; Vorschläge ändern nichts automatisch.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. B1 (hoch: Altfälle mit heutigen Vergleichsangeboten zum
+  früheren Kaufdatum nachgerechnet → Plan systematisch zu niedrig, Vorschläge verzerrt) → nur Marktmodell; B2 (eingefrorener Plan:
+  übernommene Korrektur würde erneut vorgeschlagen) → Parameterstand im Plan gespeichert, Vorschläge je Fall relativ dazu; B3 (unterer
+  Median bei gerader Anzahl) → Interpolation; B4 (verkauft ohne erfasste Kosten zählte als 0) → unbekannt; B5 (unplausible Vorschläge,
+  falsche Genauigkeit) → Warnung außerhalb des üblichen Bereichs, Rundung 0,01; B6 (Banker's Rounding) → kaufmännisch; B7
+  (Bezugsdaten) dokumentiert; B8 (Max-EK 0 fiel still heraus) → gesondert gezählt. Eigene Funde im Browser: B4 ebenso, Prozenttext
+  „-6%“ → „−6 %“. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Vorschläge ab 5 Fällen, Toleranzen VK 5 %, Kosten 300 €, Standzeit 30 Tage; den Bericht
+  sieht im Team nur der Inhaber; Kostenabweichung wird als Vorschlag der Aufbereitung zugeschlagen (Alternative genannt).
+- **Bekannte Risiken:** Nachgerechnete Altfälle nutzen die heutige Vergleichsbasis; wenige Fälle sagen wenig (Belastbarkeit wird
+  ausgewiesen).
+- **Nächster sinnvoller Schritt:** Rückmeldung des Betreibers zu P5-01, danach P5-02 (Vergleichsauswahl nach Marke/Modellreihe/Fahrzeugklasse).
+
 ## P4-05 – Abdeckung und Suchlücken messen (25.10.2026) · Status: REVIEW
 
 - **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-data-engineer`); QA `qa-security-reviewer`; Doku Orchestrator.

@@ -26,7 +26,8 @@ _LESEN = (
     (re.compile(r"/ankauf-dokumente/(\d+)/.+"), "ankauf"),
     (re.compile(r"/api/audit"), "audit"),
 )
-_OBJEKT = re.compile(r"/(verkaufsanfrage|besichtigung|ankauf|auktion|anzeige|bearbeitung|nutzer|standorte|kalkulation|dubletten|kontakt|suchprofil)/([\w-]+)")
+_OBJEKT = re.compile(r"/(verkaufsanfrage|besichtigung|ankauf|auktion|anzeige|bearbeitung|nutzer|standorte|kalkulation|dubletten|kontakt|suchprofil"
+                     r"|kalibrierung)/([\w-]+)")
 
 
 def einordnen(methode: str, pfad: str) -> tuple[str, str | None] | None:

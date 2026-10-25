@@ -55,6 +55,7 @@ from .. import laufprotokoll as lp
 from .. import abdeckung
 from ..domaene import PLATTFORMEN
 from ..normalisierung.qualitaet import je_quelle
+from ..bewertung import kalibrierung as kal
 from ..bewertung import kalkulation as kalk
 from ..bewertung.besichtigung import berechne, lade_katalog
 from ..datenbank import STATUS, Datenbank
@@ -139,6 +140,7 @@ class Kontext:
         self.verkauf = VerkaufSpeicher(db, foto_ordner / "anfragen")     # im Fotoordner: mit gesichert
         self.haendler = HaendlerSpeicher(db)
         self.suchprofile = sp.SuchprofilSpeicher(db)
+        self.kalibrierung = kal.KalibrierungSpeicher(db)
         self.auktion = AuktionSpeicher(db, cfg)             # ValueError bei falscher Konfiguration (Abschnitt auktion)
         self.bremse = LoginBremse(int(app.get("login_max_fehlversuche", 5)), int(app.get("login_max_fehlversuche_je_ip", 20)),
                                   int(app.get("login_sperre_minuten", 15)) * 60)
@@ -604,6 +606,14 @@ class Anfrage:
             if p == "/api/abdeckung":
                 return self.json(200, erg)
             return self.html(k.env.get_template("abdeckung.html").render(firma=k.cfg["anschreiben"]["firma"], m=erg))
+        if p in ("/api/kalibrierung", "/kalibrierung"):     # Kalibrierung (P5-01): Kaufpreise und Vorschläge – im Team nur der Inhaber
+            if self.team_aktiv:
+                self.nur_inhaber()
+            if p == "/kalibrierung":
+                return self.html(k.env.get_template("kalibrierung.html").render(
+                    firma=k.cfg["anschreiben"]["firma"], token=k.token, arten=kal.ARTEN, min_faelle=kal.MIN_FAELLE))
+            faelle = k.kalibrierung.faelle(k.cfg)
+            return self.json(200, {"bericht": kal.bericht(faelle, k.cfg), "faelle": faelle, "manuelle": k.kalibrierung.manuelle()})
         if p == "/status":
             return self.html(k.env.get_template("status.html").render(
                 firma=k.cfg["anschreiben"]["firma"], s=lp.uebersicht(k.db, k.cfg), suchlauf=k.suchlauf.stand, arten=lp.ARTEN,
@@ -957,6 +967,22 @@ class Anfrage:
             raise Antwort(400, str(e)) from e
         return {"ok": True, "id": profil_id}
 
+    def kalibrierung_aendern(self, pfad: str, daten: dict) -> dict:
+        """Manuellen Kalibrierungsfall anlegen oder löschen – im Team nur der Inhaber; protokolliert (Audit). Ändert keine Parameter."""
+        k = self.k
+        if self.team_aktiv:
+            self.nur_inhaber()
+        if pfad == "/api/kalibrierung":
+            try:
+                f = kal.pruefe_fall(daten, datetime.now().date())
+            except kal.Eingabefehler as e:
+                raise Antwort(400, str(e)) from e
+            return {"ok": True, "id": k.kalibrierung.anlegen(f, self.nutzer.get("id"))}
+        fall_id = int(pfad.split("/")[3])
+        if not k.kalibrierung.loeschen(fall_id):
+            raise Antwort(404, "Fall nicht gefunden")
+        return {"ok": True, "id": fall_id}
+
     def fahrzeuge(self) -> list[dict]:
         f = (self.query.get("filter") or ["bereit"])[0]
         q = (self.query.get("q") or [""])[0].lower().split()
@@ -1129,6 +1155,8 @@ class Anfrage:
             return self.json(200, getattr(self, f"bearbeitung_{m.group(2)}")(m.group(1), daten))
         if p == "/api/suchprofile" or re.fullmatch(r"/api/suchprofil/\d+(?:/loeschen|/auftrag)?", p):
             return self.json(200, self.suchprofil_aendern(p, daten))
+        if p == "/api/kalibrierung" or re.fullmatch(r"/api/kalibrierung/[0-9]{1,9}/loeschen", p):
+            return self.json(200, self.kalibrierung_aendern(p, daten))
         if m := re.fullmatch(r"/api/kontakt/(\d+)/bestaetigen", p):
             return self.json(200, self.kontakt_bestaetigen(int(m.group(1)), self.kanal(daten), daten))
         if p == "/api/notiz":

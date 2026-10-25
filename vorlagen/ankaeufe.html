@@ -21,7 +21,7 @@ td.b{text-align:right;white-space:nowrap}
 </head>
 <body>
 <main>
-  <nav class="oben"><a href="/anfragen">Verkaufsanfragen</a><a href="/m">Handy-App</a><a href="/">Ankaufsliste</a></nav>
+  <nav class="oben"><a href="/anfragen">Verkaufsanfragen</a><a href="/m">Handy-App</a><a href="/">Ankaufsliste</a>{% if ich.rolle == 'inhaber' %}<a href="/kalibrierung">Kalibrierung</a>{% endif %}</nav>
   <h1>Ankäufe</h1>
   <p class="leise">Jeder Vorgang beginnt mit einer Besichtigung, die mit „gekauft“ abgeschlossen wurde. Vertrag, Übergabe, Kosten und Verkauf
     werden hier dokumentiert – das Programm schließt keine Verträge und zahlt nichts.</p>

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#24524a">
+<link rel="icon" href="/static/icon-192.png">
+<title>Kalibrierung – {{ firma }}</title>
+<link rel="stylesheet" href="/static/mobil.css">
+<style>
+main{max-width:1100px;margin:0 auto;padding:16px}
+nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px;flex-wrap:wrap}
+.tabelle{overflow-x:auto} table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+td.z,th.z{text-align:right;white-space:nowrap}
+#form .reihe label{flex:1 1 150px}
+.vorschlag{border-left:3px solid var(--akzent);padding:6px 10px;margin:8px 0}
+</style>
+</head>
+<body>
+<main>
+  <nav class="oben"><a href="/">Ankaufsliste</a><a href="/ankaeufe">Ankäufe</a><a href="/status">Status</a></nav>
+  <h1>Kalibrierung des Rechners</h1>
+  <p class="leise">Vergleicht die Rechnung mit tatsächlichen Ankäufen: Kaufpreis gegen Max-EK, Verkaufspreis gegen geplanten Händler-VK,
+    Ist- gegen Plankosten, Standzeit. Fälle sind die Ankäufe der App und frühere Ankäufe, die hier nachgetragen werden. Vorschläge erst ab
+    {{ min_faelle }} verwertbaren Fällen – <b>geändert wird nichts automatisch</b>; Parameter bewusst in <code>config.yaml</code> nachstellen.
+    Herleitung: <code>docs/RECHNER-ANALYSE.md</code>.</p>
+
+  <h2>Bericht</h2>
+  <div id="bericht"><p class="leise">Lade …</p></div>
+
+  <h2>Fälle</h2>
+  <div class="tabelle" id="faelle"></div>
+
+  <h2>Früheren Ankauf nachtragen</h2>
+  <p class="leise">Nur Fahrzeugdaten und Preise – keine Angaben zum Verkäufer. Der Rechner rechnet den Fall zum Kaufdatum nur mit dem Marktmodell
+    nach (Vergleichsangebote von damals fehlen). Ist-Kosten zählen nur bei verkauften Fahrzeugen (vorher unvollständig); die Standzeit zählt
+    hier ab Kauf, bei Ankäufen der App ab Übergabe.</p>
+  <form id="form" class="karte" style="cursor:default">
+    <div class="reihe">
+      <label>Fahrzeug<input name="fahrzeug" maxlength="80" placeholder="z. B. Knaus Sky TI 650 MEG"></label>
+      <label>Marke<input name="marke" maxlength="80"></label>
+      <label>Modell<input name="modell" maxlength="80"></label>
+      <label>Art*<select name="art" required>{% for a in arten %}<option>{{ a }}</option>{% endfor %}</select></label>
+    </div>
+    <div class="reihe">
+      <label>EZ-Jahr*<input name="ez_jahr" type="number" min="1960" max="2100" step="1" required></label>
+      <label>km<input name="km" type="number" min="0" step="1"></label>
+      <label>PLZ Standort<input name="plz" inputmode="numeric" pattern="[0-9]{5}" maxlength="5"></label>
+      <label>Angebotspreis €<input name="angebotspreis" type="number" min="1" step="1"></label>
+    </div>
+    <div class="reihe">
+      <label>Kaufdatum*<input name="ankauf_am" type="date" required></label>
+      <label>Kaufpreis €*<input name="ankauf_preis" type="number" min="1" step="1" required></label>
+      <label>Ist-Kosten €<input name="kosten" type="number" min="0" step="1"></label>
+      <label>Verkaufsdatum<input name="verkauf_am" type="date"></label>
+      <label>Verkaufspreis €<input name="verkauf_preis" type="number" min="1" step="1"></label>
+    </div>
+    <label>Notiz<input name="notiz" maxlength="300"></label>
+    <p><button class="knopf primaer" type="submit">Fall speichern</button> <span id="meldung" class="leise" role="status"></span></p>
+  </form>
+</main>
+<script>
+var TOKEN = {{ token | tojson }};
+(function(){
+  var ZAHLEN = ['ez_jahr', 'km', 'angebotspreis', 'ankauf_preis', 'kosten', 'verkauf_preis'];
+  function esc(s){ return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function eur(x){ return x === null || x === undefined ? '–' : Math.round(x).toLocaleString('de-DE') + ' €'; }
+  function vz(x, e){ return x === null || x === undefined ? '–' : (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(Math.round(x)).toLocaleString('de-DE') + e; }
+  function pz(x){ return x === null || x === undefined ? '–' : vz((x - 1) * 100, ' %'); }
+  function datum(s){ return s ? s.slice(8, 10) + '.' + s.slice(5, 7) + '.' + s.slice(0, 4) : ''; }
+  function api(url, d){
+    var opt = {credentials:'same-origin', headers:{}};
+    if(d !== undefined){ opt.method = 'POST'; opt.headers['Content-Type'] = 'application/json'; opt.headers['X-Scout-Token'] = TOKEN; opt.body = JSON.stringify(d); }
+    return fetch(url, opt).then(function(r){
+      if(r.status === 401){ location.href = '/login?weiter=%2Fkalibrierung'; throw new Error('Bitte anmelden'); }
+      return r.json().catch(function(){ return {}; }).then(function(x){ if(!r.ok) throw new Error(x.fehler || ('Fehler ' + r.status)); return x; });
+    });
+  }
+  function zeile(name, k, fmt, text){
+    return '<tr><td>' + name + '</td><td class="z">' + (k ? k.n : 0) + '</td><td class="z">' + (k ? fmt(k.median) : '–') + '</td><td class="z">' +
+      (k ? fmt(k.q1) + ' bis ' + fmt(k.q3) : '–') + '</td><td class="leise">' + text + '</td></tr>';
+  }
+  function zeige(d){
+    var b = d.bericht, h = '<p><b>' + b.faelle + '</b> Fälle, davon <b>' + b.verkauft + '</b> verkauft · ' + esc(b.belastbarkeit) + '</p>';
+    h += '<div class="tabelle"><table><tr><th>Kennzahl</th><th class="z">Fälle</th><th class="z">Median</th><th class="z">Mittlere Hälfte</th><th></th></tr>' +
+      zeile('Kaufpreis gegenüber Max-EK', b.ek_zu_max_ek, pz, b.ueber_max_ek + '× über dem Max-EK gekauft') +
+      zeile('Verkaufspreis gegenüber geplantem Händler-VK', b.vk_zu_plan, pz, 'nur verkaufte Fahrzeuge') +
+      zeile('Ist- minus Plankosten', b.kosten_abweichung, function(x){ return vz(x, ' €'); }, 'nur verkaufte Fahrzeuge') +
+      zeile('Standzeit gegenüber Plan', b.standzeit_abweichung, function(x){ return vz(x, ' Tage'); }, 'Übergabe bzw. Kauf bis Verkauf') + '</table></div>';
+    h += b.vorschlaege.length ? '<h3>Vorschläge für config.yaml</h3>' + b.vorschlaege.map(function(v){
+      return '<div class="vorschlag"><b><code>' + esc(v.parameter) + '</code>: ' + esc(v.alt) + ' → ' + esc(v.neu) + '</b> <span class="leise">(' + v.faelle +
+        ' Fälle)</span><br>' + esc(v.grund) + (v.warnung ? '<br><b>Achtung: ' + esc(v.warnung) + '</b>' : '') + (v.alternative ? '<br><span class="leise">' + esc(v.alternative) + '</span>' : '') + '</div>';
+    }).join('') : '<p class="leise">Keine Vorschläge – zu wenige Fälle oder alle Abweichungen innerhalb der Toleranz.</p>';
+    h += b.hinweise.map(function(t){ return '<p class="hinweis warn">' + esc(t) + '</p>'; }).join('');
+    document.getElementById('bericht').innerHTML = h;
+    var manuell = {};
+    d.manuelle.forEach(function(m){ manuell['M-' + m.id] = m; });
+    document.getElementById('faelle').innerHTML = d.faelle.length ? '<table><tr><th>Fall</th><th>Kauf</th><th class="z">Kaufpreis</th><th class="z">Max-EK</th>' +
+      '<th class="z">VK Plan</th><th class="z">VK Ist</th><th class="z">Kosten Plan / Ist</th><th class="z">Standzeit</th><th></th></tr>' + d.faelle.map(function(f){
+        var m = manuell[f.ref];
+        return '<tr><td>' + esc(f.ref) + (m ? '<br><span class="leise">' + esc(m.fahrzeug || [m.marke, m.modell].filter(Boolean).join(' ') || m.art) + ', EZ ' +
+          esc(m.ez_jahr) + (f.sicherheit ? ' · Sicherheit ' + esc(f.sicherheit) : '') + '</span>' : '<br><span class="leise">Ankauf der App</span>') + '</td><td>' +
+          datum(f.datum) + '</td><td class="z">' + eur(f.ek) + '</td><td class="z">' + eur(f.max_ek) + '</td><td class="z">' + eur(f.vk_plan) + '</td><td class="z">' +
+          eur(f.vk) + '</td><td class="z">' + eur(f.kosten_plan) + ' / ' + eur(f.kosten) + '</td><td class="z">' + (f.standzeit === null ? '–' : f.standzeit + ' Tage') +
+          '</td><td>' + (m ? '<button class="knopf klein" data-loeschen="' + m.id + '">Löschen</button>' : '') + '</td></tr>';
+      }).join('') + '</table>' : '<p class="leise">Noch keine Fälle. Ankäufe der App zählen automatisch; frühere Ankäufe unten nachtragen.</p>';
+  }
+  function laden(){
+    return api('/api/kalibrierung').then(zeige).catch(function(e){ document.getElementById('bericht').innerHTML = '<p class="hinweis warn">' + esc(e.message) + '</p>'; });
+  }
+  document.getElementById('faelle').addEventListener('click', function(e){
+    var id = e.target.getAttribute('data-loeschen');
+    if(!id || !confirm('Diesen nachgetragenen Fall löschen?')) return;
+    api('/api/kalibrierung/' + id + '/loeschen', {}).then(laden).catch(function(err){ alert(err.message); });
+  });
+  document.getElementById('form').addEventListener('submit', function(e){
+    e.preventDefault();
+    var f = e.target, d = {}, meldung = document.getElementById('meldung');
+    Array.prototype.forEach.call(f.elements, function(el){
+      if(!el.name || el.value === '') return;
+      d[el.name] = ZAHLEN.indexOf(el.name) >= 0 ? el.valueAsNumber : el.value;
+    });
+    meldung.textContent = 'Speichere …';
+    api('/api/kalibrierung', d).then(function(){ f.reset(); meldung.textContent = 'Gespeichert.'; return laden(); })
+      .catch(function(err){ meldung.textContent = err.message; });
+  });
+  laden();
+})();
+</script>
+</body>
+</html>

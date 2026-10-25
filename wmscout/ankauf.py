@@ -19,7 +19,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from . import verkauf as vk
-from .bewertung import ergebnis
+from .bewertung import ergebnis, kalibrierung
 from .datenbank import Datenbank
 from .deal import DealSpeicher
 from .team import MAX_FOTO_BYTES, bild_endung, ohne_metadaten
@@ -130,6 +130,8 @@ class AnkaufSpeicher:
                                               nutzer_id=nutzer_id)
                 plan = ergebnis.plan_aus_kalkulation(erg, kalk_id, standzeit_tage=self._standzeit_tage(),
                                                      differenzbesteuerung=bool(self.cfg["rechner"]["differenzbesteuerung"]))
+            if plan.get("kosten") is not None:          # jetzt gerechnet (nicht die Grundlage der Besichtigung): Parameterstand für P5-01
+                plan = {**plan, "parameter": kalibrierung.parameter(self.cfg)}
             aid = self.con.execute(
                 "INSERT INTO ankaeufe (herkunft, anfrage_id, anzeige_id, besichtigung_id, auktion_id, standort_id, kalkulation_id, kaufpreis, "
                 "plan_json, erstellt_am, erstellt_von) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
