@@ -9,7 +9,7 @@ import pytest
 
 from tests.daten import BASIS, lade_cfg
 from wmscout.bewertung.anschreiben import (HINWEIS_ART_UNBEKANNT, HINWEIS_ART_VORLAEUFIG, Anschreiber, anrede_name, betrag_im_brief,
-                                           hinweis_art_unbekannt, hinweise, kontext)
+                                           hinweis_art_unbekannt, hinweis_marke_unbekannt, hinweise, kontext)
 from wmscout.bewertung.auswertung import bewerte_alle, bewerte_anzeige, fuer_rechner, kandidaten_arten, vergleichsbasis
 from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import IMPORT_SUCHE
@@ -21,6 +21,7 @@ EZ = date.today().year - 9
 ARTWOERTER = ("Kastenwagen", "Teilintegrierte", "Integrierte", "Alkoven", "Wohnwagen")
 EVEREST = "Everest Minicamp, Camper, Wohnwagen, Motocrosshänger"          # echter Titel aus dem QA-Befund H3
 
+MARKE_HINWEIS = hinweis_marke_unbekannt(0.05)          # P5-03: Testfahrzeuge ohne erkennbare Aufbaumarke
 WW_HINWEIS = "Fahrzeugart unbekannt (vorsichtig gerechnet als Wohnwagen; Ampel höchstens gelb, Brief ohne Betrag) – bitte prüfen"
 
 
@@ -256,9 +257,9 @@ def test_bewerte_alle_rechnet_unbekannt_vorsichtig_und_schreibt_neutral(cfg, db)
     zeilen = {z["a"]["id"]: z for z in bewerte_alle(cfg, db, BASIS)}
     ev, kw = zeilen["ev1"], zeilen["kw1"]
     assert ev["b"].art == "Wohnwagen" and ev["b"].marktwert_angebote == 15600 and ev["b"].vergleich_anzahl == 0
-    assert ev["hinweise"] == [WW_HINWEIS] and ev["a"]["titel"] == EVEREST
+    assert ev["hinweise"] == [WW_HINWEIS, MARKE_HINWEIS] and ev["a"]["titel"] == EVEREST
     assert "niedrigster Max-EK aus ohne Art, Kastenwagen, Wohnwagen" in ev["b"].vergleich_basis
-    assert kw["b"].art == "Kastenwagen" and kw["hinweise"] == [HINWEIS_ART_VORLAEUFIG]
+    assert kw["b"].art == "Kastenwagen" and kw["hinweise"] == [HINWEIS_ART_VORLAEUFIG, MARKE_HINWEIS]
     assert ev["sperre"] is None and kw["sperre"] is None
     assert ev["brief"].startswith("Hallo Herr Beispiel,\n") and kw["brief"].startswith("Hallo,\n")
     for z in (ev, kw):
@@ -306,7 +307,7 @@ def test_unbekannte_art_nimmt_niedrigsten_max_ek_und_sicherheit_hoechstens_niedr
     assert b.sicherheit == "niedrig"
     assert (b.spanne_von, b.spanne_bis) == (14300, 35200)
     assert b.ampel == als_ww.ampel and b.verhaeltnis == als_ww.verhaeltnis and b.erstangebot == als_ww.erstangebot
-    assert hinweise(a, b) == [hinweis_art_unbekannt("Wohnwagen")] == [WW_HINWEIS]
+    assert hinweise(a, b) == [hinweis_art_unbekannt("Wohnwagen"), MARKE_HINWEIS] == [WW_HINWEIS, MARKE_HINWEIS]
     # Brief: Art weiterhin nicht genannt
     t = Anschreiber(cfg, BASIS).text(a, b)
     for wort in ARTWOERTER:
@@ -323,7 +324,7 @@ def test_unbekannte_art_ohne_kandidat_rechnet_ohne_art_mit_niedriger_sicherheit(
     assert alt.sicherheit == "hoch" and b.sicherheit == "niedrig"
     assert (b.art, b.max_ek, b.erstangebot, b.ampel, b.spanne_von, b.spanne_bis, b.vergleich_basis) == \
         (alt.art, alt.max_ek, alt.erstangebot, alt.ampel, alt.spanne_von, alt.spanne_bis, alt.vergleich_basis)
-    assert hinweise(a, b) == [HINWEIS_ART_UNBEKANNT]
+    assert hinweise(a, b) == [HINWEIS_ART_UNBEKANNT, MARKE_HINWEIS]
     # ohne EZ: „keine“ bleibt „keine“ (kein Angebot), auch mit mehreren Kandidaten
     ohne_ez = {**imp(98, EVEREST, 30000), "ez_jahr": None}
     assert bewerte_anzeige(Rechner(cfg), ohne_ez, vergleich).sicherheit == "keine"
@@ -348,7 +349,7 @@ def test_unbekannte_importe_vergleichen_sich_in_rechner_sicht(cfg, db):
                               "ort": "70173 Stuttgart"}, IMPORT_SUCHE)
     z = {z["a"]["id"]: z for z in bewerte_alle(cfg, db, BASIS)}["a"]
     assert (z["b"].art, z["b"].vergleich_anzahl, z["b"].marktwert_angebote) == ("Sonstige", 1, 29050)
-    assert z["hinweise"] == [HINWEIS_ART_UNBEKANNT]
+    assert z["hinweise"] == [HINWEIS_ART_UNBEKANNT, MARKE_HINWEIS]
 
 
 def test_f14_unbekannte_art_ampel_hoechstens_gelb_und_brief_ohne_betrag():

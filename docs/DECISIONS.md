@@ -1108,3 +1108,33 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   für Länge/Basisfahrzeug: jede Änderung verlangt eine neue Rechenversion (gespeicherte Kalkulationen frieren den Text ein). Länge und Basisfahrzeug stehen in Kleinanzeigen-Texten oft nicht; dann wirkt nur
   die Markenstufe. Betreiberfragen: Gewichte und Deckel bestätigen; ob Marken ohne Eintrag (Knaus, Dethleffs, Bürstner …) als „Mittel“
   richtig eingeordnet sind.
+
+## ADR-054 – Spannen statt Punktwerte, Abschlag bei unbekannter Marke, Mängelliste · gilt (25.10.2026)
+
+* **Kontext:** P5-03 (Schwäche S3: Punktwerte dominieren, falsche Genauigkeit bei dünner Datenlage) und Betreiberwunsch vom 25.10.2026:
+  „Die fehlende Marke sollte schmälernd auf den Verkaufspreis wirken, der Käufer soll nur darauf hingewiesen werden. Bepreisung eher als
+  Spanne, Mängel als Liste beim Inserat deutlich.“ Rückfrage: gemeint ist eine **unbekannte** Marke (keine Aufbaumarke erkennbar),
+  Abschlag **5 %**.
+* **Entscheidung:**
+  1. **Abschlag bei unbekannter Marke** (`rechner.abschlag_marke_unbekannt`, Standard 0,05): keine Marke oder nur die Basismarke
+     (Fiat, Mercedes, VW …; Werks-Camper wie VW California, Mercedes Marco Polo, Ford Nugget haben eine Marke) → Händler-VK × 0,95; Kosten, Marge, Max-EK, Ampel und Erstangebot folgen daraus. Marktwert und Marktwert
+     privat bleiben unverändert (der Abschlag betrifft den Wiederverkauf). Am Fahrzeug steht ein **Hinweis** („Marke unbekannt –
+     Händler-VK 5 % niedriger angesetzt; Marke beim Verkäufer erfragen, dann neu bewerten“); er sperrt nichts, das Anschreiben bleibt
+     unverändert (keine automatische Verkäuferansprache).
+  2. **Spannen:** Max-EK und Marktwert privat zusätzlich als Spanne aus der Marktspanne (unteres/oberes Ende durch dieselbe
+     Rechenkette), auf **500 € nach außen** gerundet – die Spanne umschließt den Punktwert immer und ist nie 0 € breit. Oberfläche (Karte und Handy-Liste): „Max-EK (Spanne) 23.500–32.500 €“, darunter klein „Mitte
+     28.100 €“; im Detail eine Spannen-Zeile, die Punktwerte dienen nur der Herleitung. Ampel, Erstangebot und Anschreiben rechnen weiter
+     mit dem Punktwert (ein Brief braucht einen Betrag). Ohne Marktwert (Sicherheit „keine“) oder bei manuellem Marktwert keine Spanne.
+     Bei unbekannter Art die weiteste Spanne aller Kandidaten.
+  3. **Mängelliste:** im Inserat genannte Mängel (negative Wertfaktoren aus `config.yaml`, verneinte Nennungen zählen nicht) als
+     `Bewertung.maengel`, der schwerste zuerst – auch ohne Erstzulassung. Karte und Handy-Liste: rote Zeile „Mängel laut Inserat: …“;
+     Detail: Liste „Im Inserat genannte Mängel – bei der Besichtigung prüfen“ mit dem Abzug im Referenzwert.
+  4. Kalkulation: Rechenstand **E3**, der Abschlag wird eingefroren und in den Annahmen genannt; Verkaufsanfragen zeigen Spanne,
+     Hinweis und Mängel ebenso. Der Plan beim Kauf speichert den Abschlag; die Kalibrierung (ADR-052) wertet Fälle mit Abschlag
+     getrennt aus und schlägt dafür `rechner.abschlag_marke_unbekannt` vor, nicht den Händleraufschlag.
+* **Alternativen:** Abschlag auf den Marktwert (würde Erstangebot und Fair-Untergrenze gegenüber dem Verkäufer senken – nicht gewollt,
+  es geht um den Wiederverkauf); nur noch Spannen ohne Punktwert (Ampel, Brief und Verhandlungs-Assistent brauchen einen Betrag);
+  effektive Fallzahl für die Spanne (offen für eine spätere Kalibrierung).
+* **Folgen / offen:** Fahrzeuge ohne erkennbare Marke landen seltener auf Grün. Die Spanne ist bei dünner Datenlage breit (±15 % auf
+  das Marktniveau, nach Kosten oft ±20 % auf den Max-EK) – gewollt sichtbar. Betreiberfragen: Rundung auf 500 €; ob die Spanne auch im
+  Verkäuferportal bzw. Händlerportal anders erscheinen soll (dort unverändert).

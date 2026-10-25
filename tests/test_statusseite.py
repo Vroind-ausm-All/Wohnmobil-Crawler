@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 from datetime import datetime, timedelta
 
@@ -299,7 +300,8 @@ def test_oberflaeche_statisch():
     js = (BASIS / "wmscout" / "web" / "static" / "mobil.js").read_text(encoding="utf-8")
     status = (BASIS / "vorlagen" / "status.html").read_text(encoding="utf-8")
     assert 'href="/status"' in html and 'href="/status"' in js and "|safe" not in status and "<script" not in status
-    assert "wm-scout-16" in (BASIS / "wmscout" / "web" / "static" / "sw.js").read_text(encoding="utf-8")
+    sw = (BASIS / "wmscout" / "web" / "static" / "sw.js").read_text(encoding="utf-8")
+    assert int(re.search(r"var VERSION = 'wm-scout-(\d+)'", sw).group(1)) >= 16 and "16: " in sw
 
 
 # ---------------------------------------------------------------- 5. Schema 19

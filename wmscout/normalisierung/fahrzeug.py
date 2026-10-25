@@ -149,6 +149,14 @@ def ist_basismarke(marke: str | None) -> bool:
     return marke in BASIS_MARKEN
 
 
+# Ab Werk ausgebaute Camper der Fahrzeughersteller (QA P5-03 B1): hier ist die Basismarke zugleich die Aufbaumarke
+WERKS_CAMPER = {"Volkswagen": ("Grand California", "California"), "Mercedes": ("Marco Polo",), "Ford": ("Nugget",)}
+
+
+def ist_werks_camper(marke: str | None, modell: str | None) -> bool:
+    return bool(modell) and any((modell or "").lower().startswith(m.lower()) for m in WERKS_CAMPER.get(marke or "", ()))
+
+
 def _erste_marke(text: str, muster: list) -> str | None:
     treffer = [(t.start(), m) for m, mu in muster if (t := mu.search(text))]
     return min(treffer)[1] if treffer else None

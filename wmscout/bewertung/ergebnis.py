@@ -29,7 +29,8 @@ def plan_aus_kalkulation(erg: dict, kalkulation_id: int, *, standzeit_tage: int,
             "haendler_vk": erw["haendler_vk"], "kosten": erw["kosten"] + erw.get("provision", 0), "provision": erw.get("provision", 0),
             "ziel_marge": erw["ziel_marge"], "max_ek": erw["max_ek"], "gewinn": erw.get("gewinn"),
             "vk_spanne": [s["vorsichtig"]["haendler_vk"], s["guenstig"]["haendler_vk"]] if "vorsichtig" in s else None,
-            "standzeit_tage": standzeit_tage, "differenzbesteuerung": differenzbesteuerung}
+            "standzeit_tage": standzeit_tage, "differenzbesteuerung": differenzbesteuerung,
+            "abschlag_marke": erg.get("abschlag_marke", 0.0)}
 
 
 def plan_aus_bewertung(b, kaufpreis: int, *, standzeit_tage: int, differenzbesteuerung: bool) -> dict:
@@ -37,7 +38,8 @@ def plan_aus_bewertung(b, kaufpreis: int, *, standzeit_tage: int, differenzbeste
     return {"quelle": "Bewertung des Inserats zum Kaufzeitpunkt (eingefroren)", "kalkulation_id": None,
             "haendler_vk": b.haendler_vk, "kosten": b.kosten, "provision": 0, "ziel_marge": b.ziel_marge, "max_ek": b.max_ek,
             "gewinn": _gewinn(b.haendler_vk, b.kosten, kaufpreis, differenzbesteuerung),
-            "vk_spanne": None, "standzeit_tage": standzeit_tage, "differenzbesteuerung": differenzbesteuerung}
+            "vk_spanne": None, "standzeit_tage": standzeit_tage, "differenzbesteuerung": differenzbesteuerung,
+            "abschlag_marke": b.abschlag_marke}
 
 
 def plan_aus_basis(basis: dict, *, standzeit_tage: int) -> dict:

@@ -30,7 +30,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 
-from ..normalisierung.fahrzeug import MARKEN, art_schluessel, basisfahrzeug_aus_text, ist_basismarke, laenge_aus_text
+from ..normalisierung.fahrzeug import MARKEN, art_schluessel, basisfahrzeug_aus_text, ist_basismarke, ist_werks_camper, laenge_aus_text
 
 # Fallbacks, falls config.yaml (ältere Version) den Abschnitt nicht enthält
 STANDARD_MARKTMODELL = {
@@ -115,6 +115,13 @@ class Bewertung:
     vergleich_marke: int = 0                # davon gleiche Marke (Modell, Modellreihe oder nur Marke)
     vergleich_stufen: dict = field(default_factory=dict)    # Anzahl je Ähnlichkeitsstufe (P5-02)
     fahrzeugklasse: dict = field(default_factory=dict)      # erkannte Länge / Basisfahrzeug dieses Fahrzeugs
+    # P5-03 (ADR-054): Spannen statt Punktwerte, Abschlag bei unbekannter Marke, Mängelliste
+    max_ek_von: int | None = None           # Max-EK am unteren / oberen Ende der Marktspanne (auf 500 € gerundet)
+    max_ek_bis: int | None = None
+    privat_von: int | None = None           # Marktwert privat als Spanne (auf 500 € gerundet)
+    privat_bis: int | None = None
+    abschlag_marke: float = 0.0             # Abschlag auf den Händler-VK, weil die Aufbaumarke unbekannt ist
+    maengel: list = field(default_factory=list)              # [{name, wert}] im Inserat genannte Mängel (negative Wertfaktoren)
     wertfaktoren: dict = field(default_factory=dict)
     km_korrektur: float = 0.0
     sicherheit: str = "keine"               # hoch | mittel | niedrig | manuell | keine
@@ -132,6 +139,17 @@ class Bewertung:
 
 def _runde(x: float, auf: int = 50) -> int:
     return int(round(x / auf) * auf)
+
+
+def _nach_aussen(von: float, bis: float, auf: int = 500) -> tuple[int, int]:
+    """Untere Grenze ab-, obere aufrunden (mindestens eine Stufe breit, außer beide 0)."""
+    unten, oben = int(von // auf * auf), int(-(-bis // auf) * auf)
+    return unten, max(oben, unten + auf) if oben else 0
+
+
+def _maengel(wertfaktoren: dict) -> list[dict]:
+    """Im Inserat genannte Mängel (negative Wertfaktoren), der schwerste zuerst."""
+    return [{"name": n, "wert": w} for n, w in sorted(wertfaktoren.items(), key=lambda x: (x[1], x[0])) if w < 0]
 
 
 def interpoliere(tabelle: dict, x: float) -> float:
@@ -299,7 +317,7 @@ class Rechner:
 
     def aehnlichkeit(self, a: dict, b: dict) -> tuple[float, str]:
         """(Gewicht, Stufe) aus Marke/Modellreihe/Modell und Fahrzeugklasse; Baujahr, km und Anzeigenalter kommen in ``vergleiche`` dazu."""
-        marke = "" if ist_basismarke(a.get("marke")) else (a.get("marke") or "").lower()   # Fiat/Ducato sagt nichts über den Aufbau
+        marke = "" if self.marke_unbekannt(a) else (a.get("marke") or "").lower()   # Fiat/Ducato sagt nichts über den Aufbau
         gleich = bool(marke) and (b.get("marke") or "").lower() == marke
         if gleich:
             modell, serie = (a.get("modell") or "").lower(), (a.get("serie") or "").lower()
@@ -439,21 +457,12 @@ class Rechner:
             # P1-12: ohne Erstzulassung gibt es keinen unabhängigen Marktwert. Max-EK und Erstangebot aus dem Angebotspreis
             # des Verkäufers zu rechnen, hieße seinen Wunschpreis zu bestätigen – daher keine Beträge, bis ein Marktwert vorliegt.
             return Bewertung(None, 0, mn["basis"], 0, 0, 0, angebotspreis=a.get("preis"), sicherheit="keine", art=mn["art"],
-                             wertfaktoren=mn["wertfaktoren"])
+                             wertfaktoren=mn["wertfaktoren"], maengel=_maengel(self.wertfaktoren(a)))   # Mängel auch ohne Beträge
         if not mn["niveau"]:
             return Bewertung(None, 0, "kein Preis", 0, 0, 0, angebotspreis=a.get("preis"))
 
-        mw_privat = mn["niveau"] * (1 - self.c["abschlag_angebot_auf_privatwert"])
-        vk = mw_privat * (1 + self.c["aufschlag_haendler_vk"])
-        posten = self.kosten(a, vk)
-        kosten = sum(posten.values())
-        marge = max(vk * self.c["ziel_marge_prozent"], self.c["ziel_marge_min"])
-
-        if self.c["differenzbesteuerung"]:
-            max_ek = vk - (marge + kosten) * 1.19
-        else:
-            max_ek = vk / 1.19 - kosten - marge
-        max_ek = max(0, max_ek)
+        k = self.kette(a, mn["niveau"])
+        mw_privat, vk, posten, kosten, marge, max_ek = k["mw_privat"], k["vk"], k["posten"], k["kosten"], k["marge"], k["max_ek"]
 
         erst, fair_hinweis = self.erstangebot(max_ek, mw_privat, a.get("preis"))
 
@@ -467,8 +476,15 @@ class Rechner:
             km_korrektur=round(mn["km_korrektur"], 3),
             sicherheit=mn["sicherheit"], art=mn["art"], alter=mn["alter"], fair_hinweis=fair_hinweis,
         )
+        b.abschlag_marke = k["abschlag"]
+        b.maengel = _maengel(mn["wertfaktoren"])
         if mn["spanne"]:
             b.spanne_von, b.spanne_bis = _runde(mn["spanne"][0], 100), _runde(mn["spanne"][1], 100)
+            unten, oben = self.kette(a, mn["spanne"][0]), self.kette(a, mn["spanne"][1])
+            # Spannen auf 500 € nach außen gerundet – umschließen den Punktwert immer, keine falsche Genauigkeit (P5-03, QA B2);
+            # Punktwerte bleiben für Ampel und Brief
+            b.max_ek_von, b.max_ek_bis = _nach_aussen(unten["max_ek"], oben["max_ek"])
+            b.privat_von, b.privat_bis = _nach_aussen(unten["mw_privat"], oben["mw_privat"])
         if b.marktwert_privat:
             b.fair_anteil = round(b.erstangebot / b.marktwert_privat, 3)
             b.max_anteil = round(b.max_ek / b.marktwert_privat, 3)
@@ -478,6 +494,23 @@ class Rechner:
             b.ampel = "gruen" if b.verhaeltnis <= amp["gruen_bis"] else "gelb" if b.verhaeltnis <= amp["gelb_bis"] else "rot"
             b.potenzial = _runde(self.gewinn_bei_ek(vk, kosten, b.angebotspreis))
         return b
+
+    def marke_unbekannt(self, a: dict) -> bool:
+        """Keine Aufbaumarke erkennbar – nur „Wohnmobil“ oder nur das Basisfahrzeug (Fiat, Mercedes …); Werks-Camper (VW California,
+        Mercedes Marco Polo, Ford Nugget) haben eine Marke."""
+        return not a.get("marke") or (ist_basismarke(a.get("marke")) and not ist_werks_camper(a.get("marke"), a.get("modell")))
+
+    def kette(self, a: dict, niveau: float) -> dict:
+        """Marktniveau → Marktwert privat → Händler-VK (abzüglich Abschlag bei unbekannter Marke) → Kosten, Marge, Max-EK (ungerundet)."""
+        mw_privat = niveau * (1 - self.c["abschlag_angebot_auf_privatwert"])
+        abschlag = float(self.c.get("abschlag_marke_unbekannt", 0.05)) if self.marke_unbekannt(a) else 0.0
+        vk = mw_privat * (1 + self.c["aufschlag_haendler_vk"]) * (1 - abschlag)
+        posten = self.kosten(a, vk)
+        kosten = sum(posten.values())
+        marge = max(vk * self.c["ziel_marge_prozent"], self.c["ziel_marge_min"])
+        max_ek = vk - (marge + kosten) * 1.19 if self.c["differenzbesteuerung"] else vk / 1.19 - kosten - marge
+        return {"mw_privat": mw_privat, "vk": vk, "posten": posten, "kosten": kosten, "marge": marge, "max_ek": max(0, max_ek),
+                "abschlag": abschlag}
 
     def erstangebot(self, max_ek: float, mw_privat: float, wunschpreis: int | None) -> tuple[float, str | None]:
         """Verhandlungsspielraum ja, Lockangebot nein – und nie mehr als der Verkäufer verlangt."""

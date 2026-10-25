@@ -124,6 +124,8 @@ def _bewerte_nach_art(rechner: Rechner, a: dict, vergleich: list[dict], marktwer
     b = min(alle_b, key=lambda x: x.max_ek)                       # min() nimmt bei Gleichstand den ersten: „Sonstige“
     von = [x.spanne_von for x in alle_b if x.spanne_von]
     bis = [x.spanne_bis for x in alle_b if x.spanne_bis]
+    spannen = {f"{feld}_{ende}": (min if ende == "von" else max)(w) for feld in ("max_ek", "privat") for ende in ("von", "bis")
+               if (w := [getattr(x, f"{feld}_{ende}") for x in alle_b if getattr(x, f"{feld}_{ende}") is not None])}
     basis = b.vergleich_basis
     if len(kandidaten) > 1:
         geprueft = ", ".join("ohne Art" if k == "Sonstige" else k for k in kandidaten)
@@ -131,7 +133,7 @@ def _bewerte_nach_art(rechner: Rechner, a: dict, vergleich: list[dict], marktwer
     return replace(b, sicherheit=SICHERHEIT_ART_UNBEKANNT if b.sicherheit in ("hoch", "mittel") else b.sicherheit,
                    ampel="gelb" if b.ampel == "gruen" else b.ampel,
                    spanne_von=min(von) if von else b.spanne_von, spanne_bis=max(bis) if bis else b.spanne_bis,
-                   vergleich_basis=basis)
+                   vergleich_basis=basis, **spannen)
 
 
 def vergleichsbasis(alle: list[dict], duplikate: dict[str, list[dict]] | None = None) -> list[dict]:

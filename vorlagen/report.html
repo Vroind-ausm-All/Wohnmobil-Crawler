@@ -98,6 +98,8 @@ dialog::backdrop{background:rgba(10,12,10,.5)}
 .chip{font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--line)}
 .chip.plus{background:var(--gruen-bg);color:var(--gruen);border-color:transparent}
 .chip.minus{background:var(--rot-bg);color:var(--rot);border-color:transparent}
+.maengel{background:var(--rot-bg);color:var(--rot);font-size:13px;margin:0 0 6px;padding:4px 8px;border-radius:8px}
+.maengel ul{margin:4px 0 0;padding-left:18px} .zahlen small{display:block;font-size:11px;color:var(--mute);font-weight:400}
 table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums;margin-top:8px}
 td{padding:4px 0;border-bottom:1px dashed var(--line);vertical-align:top} td:last-child{text-align:right;padding-left:10px;white-space:nowrap}
 tr.zwischen td{font-weight:600}
@@ -296,8 +298,11 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
         <div class="zahlen">
           <div><span>Wunschpreis</span><b>{{ a.preis | euro }}</b></div>
           <div class="betont"><span>Erstangebot</span><b>{{ b.erstangebot | euro if b.sicherheit != 'keine' else '–' }}</b></div>
-          <div><span>Max-EK</span><b>{{ b.max_ek | euro if b.sicherheit != 'keine' else '–' }}</b></div>
+          <div data-maxek-spanne><span>Max-EK{{ ' (Spanne)' if b.max_ek_bis and b.sicherheit != 'keine' }}</span>{% if b.sicherheit == 'keine' %}<b>–</b>
+            {%- elif b.max_ek_bis %}<b>{{ b.max_ek_von | tsd }}–{{ b.max_ek_bis | euro }}</b><small>Mitte {{ b.max_ek | euro }}</small>
+            {%- else %}<b>{{ b.max_ek | euro }}</b>{% endif %}</div>
         </div>
+        {% if b.maengel %}<p class="maengel" data-maengel>Mängel laut Inserat: {{ b.maengel | map(attribute='name') | join(', ') }}</p>{% endif %}
         {% for h in z.hinweise %}<p class="hinweiszeile">⚠ {{ h }}</p>{% endfor %}
         {% if z.nachfassen %}<p class="sperre" style="color:var(--gelb)">Nachfassen: {{ z.nachfassen }}</p>
         {% elif z.sperre and not a.anschreiben_text %}<p class="sperre">Kein Anschreiben: {{ z.sperre }}</p>{% endif %}
@@ -346,8 +351,13 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
         {% if b.sicherheit == 'keine' %}
           <p class="warn">{{ b.vergleich_basis }}. Ohne Erstzulassung kein belastbarer Einkaufspreis – im Anschreiben wird deshalb nach EZ/km gefragt.</p>
         {% else %}
+          {% if b.max_ek_bis %}<p class="spanne" data-spannen>Max. Einkaufspreis <b>{{ b.max_ek_von | euro }} – {{ b.max_ek_bis | euro }}</b>
+            · Marktwert privat <b>{{ b.privat_von | euro }} – {{ b.privat_bis | euro }}</b>
+            <span class="meta">(Sicherheit {{ b.sicherheit }}; Punktwerte unten nur zur Herleitung)</span></p>{% endif %}
           <p class="spanne">Marktniveau <b>{{ b.marktwert_angebote | euro }}</b>{% if b.spanne_von %} <span class="meta">(plausibel {{ b.spanne_von | euro }} – {{ b.spanne_bis | euro }})</span>{% endif %}</p>
           <p class="meta">Sicherheit: <span class="sicherheit s-{{ b.sicherheit }}">{{ b.sicherheit }}</span> · {{ b.vergleich_basis }}</p>
+          {% if b.maengel %}<div class="maengel" data-maengel-liste><b>Im Inserat genannte Mängel</b> – bei der Besichtigung prüfen:
+            <ul>{% for m in b.maengel %}<li>{{ m.name }} (−{{ (-m.wert * 100) | round | int }} % im Referenzwert)</li>{% endfor %}</ul></div>{% endif %}
           {% if b.wertfaktoren or b.km_korrektur %}
           <div class="chips">
             {% if b.km_korrektur %}<span class="chip {{ 'plus' if b.km_korrektur > 0 else 'minus' }}">km-Stand für das Alter {{ b.km_korrektur | prozent }}</span>{% endif %}
@@ -358,7 +368,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
             {% if b.modellwert %}<tr><td>Referenzwert (Neupreis × Restwert, km, Ausstattung)</td><td>{{ b.modellwert | euro }}</td></tr>{% endif %}
             <tr><td>Marktniveau Angebote{% if b.marktfaktor %} (Faktor {{ '%.2f' | format(b.marktfaktor) | replace('.', ',') }}){% endif %}</td><td>{{ b.marktwert_angebote | euro }}</td></tr>
             <tr><td>Marktwert privat (nach Verhandlung)</td><td>{{ b.marktwert_privat | euro }}</td></tr>
-            <tr class="zwischen"><td>Händler-VK (Ziel)</td><td>{{ b.haendler_vk | euro }}</td></tr>
+            <tr class="zwischen"><td>Händler-VK (Ziel){% if b.abschlag_marke %} – darin −{{ (b.abschlag_marke * 100) | round | int }} % für unbekannte Marke{% endif %}</td><td>{{ b.haendler_vk | euro }}</td></tr>
             {% for name, wert in b.kosten_posten.items() %}<tr><td>− {{ name }}</td><td>{{ wert | euro }}</td></tr>{% endfor %}
             <tr><td>− Ziel-Marge (netto)</td><td>{{ b.ziel_marge | euro }}</td></tr>
             <tr><td>− {{ ust_label }}</td><td>{{ z.ust | euro }}</td></tr>

@@ -6,6 +6,31 @@ Wert „–“.
 
 ---
 
+## P5-03 – Spannen statt Punktwerte, Abschlag bei unbekannter Marke, Mängelliste (25.10.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 25.10.2026 nach dem Merge von PR #42 (Antwort auf die Fragen zu P5-02): unbekannte Marke schmälert den
+  Verkaufspreis, nur Hinweis an den Ankäufer; Bepreisung als Spanne; Mängel als Liste beim Inserat. Rückfrage beantwortet: unbekannte
+  Marke, 5 %.
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `acquisition-analyst` und `scout-ui-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/bewertung/rechner.py` (`kette`, `marke_unbekannt`, Spannen, Mängel), `bewertung/auswertung.py`
+  (unbekannte Art), `bewertung/anschreiben.py` (Hinweis), `bewertung/kalkulation.py` (E3), `bewertung/ergebnis.py` und
+  `bewertung/kalibrierung.py` (Abschlag im Plan), `normalisierung/fahrzeug.py` (Werks-Camper), `web/api.py`, `vorlagen/report.html`, `vorlagen/anfragen.html`,
+  `web/static/mobil.js`, `sw.js` (wm-scout-17), `config.yaml`; Tests `test_spannen.py` (neu), `test_anschreiben.py` (Hinweislisten der
+  Testfahrzeuge ohne Marke), `test_vergleichsauswahl.py`, `test_statusseite.py` (Service-Worker-Version als Mindestwert), `test_seitenimport.py`,
+  `test_kleinanzeigen_echt.py`, `test_mobilede.py` (Art-Hinweise ohne den neuen Markenhinweis geprüft); Doku ADR-054,
+  `docs/RECHNER-ANALYSE.md`, ROADMAP (P5-02 DONE, P5-03 REVIEW), README.
+- **Implementierte Funktionen:** siehe ADR-054. Keine Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“ (nein bis B1/B2), kein kritischer Befund. B1 (hoch: VW California, Marco Polo,
+  Nugget als „Marke unbekannt“ → −5 % und falscher Hinweis) → Werks-Camper haben eine Marke; B2 (Spanne umschloss den Punktwert bei
+  dichten Daten nicht, Breite 0) → nach außen gerundet, mindestens 500 €; B3 (Kalibrierung hätte den Markenabschlag dem Händleraufschlag
+  zugeschlagen) → Abschlag im Plan gespeichert, Fälle getrennt, eigener Vorschlag; B4 (Abschlag in Kalkulation und Verkaufsanfrage
+  unsichtbar) → Annahmen-Zeile, Anfrage-Ansicht mit Spanne, Hinweis, Mängeln; B5 (Max-EK 0 uneinheitlich) → Spanne nur bei oberer
+  Grenze > 0; B6 (alte E2-Kalkulationen gelten als andere Version) dokumentiert. Regressionstests ergänzt; Korrekturen nicht erneut von
+  der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Spannen auf 500 € gerundet; Verkäufer- und Händlerportal unverändert.
+- **Nächster sinnvoller Schritt:** Rückmeldung des Betreibers, danach P5-04 (Angebots- vs. Transaktionspreise, Händler- vs. Privatpreise).
+
 ## P5-02 – Vergleichsauswahl nach Marke, Modellreihe und Fahrzeugklasse (25.10.2026) · Status: REVIEW
 
 - **Auftrag:** „Stelle 5-02 fertig“ (Betreiber, 25.10.2026, nach dem Merge von PR #41).

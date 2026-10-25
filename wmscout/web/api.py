@@ -94,7 +94,8 @@ GRUENDE = {403: "recht", 409: "konflikt", 503: "belegt"}
 
 # Unterschriften und Kontaktdaten des Verkäufers nur im Protokoll-Dokument (/protokoll/ID), nie in der Handy-API (P1-14b)
 OHNE_GERAET = ("unterschrift_verkaeufer", "unterschrift_ankaeufer", "verkaeufer")
-BETRAEGE = ("marktwert_privat", "haendler_vk", "kosten", "ziel_marge", "max_ek", "erstangebot")
+BETRAEGE = ("marktwert_privat", "haendler_vk", "kosten", "ziel_marge", "max_ek", "erstangebot", "max_ek_von", "max_ek_bis", "privat_von",
+            "privat_bis")
 
 
 def bewertung_json(b) -> dict:
@@ -245,6 +246,9 @@ def fahrzeug_kurz(z: dict, team: dict | None = None) -> dict:
             "ampel": b.ampel, "erstangebot": b.erstangebot if b.sicherheit != "keine" else None,
             "brief_betrag": z.get("brief_betrag"),
             "max_ek": b.max_ek if b.sicherheit != "keine" else None, "bereit": z["bereit"], "nachfassen": z["nachfassen"],
+            # Spannen und Mängelliste (P5-03): Max-EK von–bis (500 €), im Inserat genannte Mängel [{name, wert}]
+            "max_ek_von": b.max_ek_von if b.sicherheit != "keine" else None, "max_ek_bis": b.max_ek_bis if b.sicherheit != "keine" else None,
+            "maengel": b.maengel,
             "sperre": z["sperre"], "hinweise": z["hinweise"], "neu": z["neu"], "team": team,
             # frisch / Preis deutlich gesenkt / jetzt im Rahmen (P4-03): {stufe, text, frisch, senkung, im_rahmen} oder None
             "neuigkeit": z.get("neuigkeit"),
@@ -834,7 +838,7 @@ class Anfrage:
         keine = b.sicherheit == "keine"
         return {"ampel": b.ampel, "sicherheit": b.sicherheit, "marktwert": None if keine else b.marktwert_angebote,
                 "max_ek": None if keine else b.max_ek, "erstangebot": None if keine else b.erstangebot,
-                "spanne_von": b.spanne_von, "spanne_bis": b.spanne_bis, "art": b.art}
+                "spanne_von": b.spanne_von, "spanne_bis": b.spanne_bis, "art": b.art, "abschlag_marke": b.abschlag_marke}
 
     def _nutzer_namen(self) -> dict:
         return {n["id"]: n["name"] for n in self.k.team.nutzer_mit_kuerzel(False)} if self.team_aktiv else {}

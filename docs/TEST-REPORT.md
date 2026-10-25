@@ -4,6 +4,21 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P5-03 – Spannen statt Punktwerte, Abschlag bei unbekannter Marke, Mängelliste (25.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2364 bestanden (vorher 2335), neu `test_spannen.py` (29). Vorheriger Lauf nach der Korrekturrunde: 2358 bestanden, 6 fehlgeschlagen in `test_seitenimport.py`, `test_kleinanzeigen_echt.py`, `test_mobilede.py` – sie prüften die Hinweisliste exakt mit Testfahrzeugen ohne Marke; jetzt prüfen sie die Art-Hinweise ohne den neuen Markenhinweis. Ebenso vorher angepasst: `test_anschreiben.py` (Hinweislisten), `test_vergleichsauswahl.py` (Rechenstand ≥ E2), `test_statusseite.py` (Service-Worker ≥ 16) |
+| `ruff check .` | grün |
+| Marke unbekannt (keine Marke, nur Basismarke; Werks-Camper California/Marco Polo/Nugget haben eine Marke), Abschlag nur auf den Händler-VK, abschaltbar, Standard 5 % ohne Eintrag, Hinweis nur bei Abschlag | bestanden |
+| Spannen: umschließen den Punktwert (0, 2, 9 Vergleiche und dichte Daten mit 40–150 Vergleichen), auf 500 € nach außen, nie 0 € breit, mehr Daten → engere Spanne; keine Spanne ohne Marktwert oder bei manuellem Wert; unbekannte Art → weiteste Spanne; Max-EK 0 ohne Spanne (Desktop und Handy) | bestanden |
+| Mängelliste (schwerste zuerst, verneinte Nennungen nicht, auch ohne Erstzulassung) | bestanden |
+| Kalkulation E3 (Abschlag eingefroren, in den Annahmen genannt, im Plan gespeichert); Kalibrierung trennt Fälle mit Abschlag und schlägt dafür den Abschlag vor, nicht den Händleraufschlag | bestanden |
+| API (`/api/fahrzeuge`, `/api/fahrzeug/<id>`: Spannen, Mängel, `null` ohne Marktwert), Desktop-Seite (Spanne auf der Karte, Mängelzeile, Detail mit Spannen und Mängelliste, HTML im Titel escaped), Handy-Skript, Verkaufsanfrage-Ansicht, Service-Worker wm-scout-17 | bestanden |
+| Browser (Orchestrator, Chromium über Playwright, nach der Korrekturrunde): Desktop 1280 – Karte „Max-EK (Spanne) 23.500–32.500 € · Mitte 28.100 €“, „Mängel laut Inserat: Wasserschaden, Rost“, Hinweis „Marke unbekannt“, Detail mit Spannen, Mängelliste und VK „darin −5 %“; Handy 390 – Liste und Detail mit Spanne, Mängeln und Hinweis, ohne Querscrollen; 0 JS-Fehler | bestanden |
+| QA (eine Runde, vor der Korrekturrunde: 115 bestanden, Proben mit 1.248 bzw. 300 Fällen) | Freigabe mit Auflagen – B1 (hoch) und B2–B5 behoben, B6 dokumentiert, Regressionstests ergänzt; Korrekturen **nicht** erneut von der QA geprüft |
+| Echter Datenbestand, Service-Worker-Update auf dem Gerät, Windows-CI | nicht geprüft (CI folgt im PR) |
+
 ## P5-02 – Vergleichsauswahl nach Marke, Modellreihe und Fahrzeugklasse (25.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

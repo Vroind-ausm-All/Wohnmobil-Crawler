@@ -235,11 +235,11 @@
           return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + teamBadge(f.team) + neuTag(f) + verfTag(f) + dqTag(f) +
             (f.profil_treffer === "unklar" ? '<span class="tag dq" data-profil-unklar="">Profil unklar</span>' : "") + ampelTag(f.ampel) + "</div>" +
             '<p class="leise">EZ ' + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") + (f.entfernung_km !== null ? " · " + tsd(f.entfernung_km) + " km entfernt" : "") + "</p>" +
-            hinweisZeilen(f) +
+            maengelZeile(f) + hinweisZeilen(f) +
             (f.neuigkeit && f.neuigkeit.senkung ? '<p class="leise" data-senkung="">' + esc(f.neuigkeit.text) + "</p>" : "") +
             (f.nachfassen ? '<p class="leise" style="color:var(--gelb)">Nachfassen: ' + esc(f.nachfassen) + "</p>" : "") +
             '<div class="zahlen"><div><span>Wunschpreis</span>' + eur(f.preis) + "</div><div><span>Erstangebot</span><b>" + eur(f.erstangebot) +
-            "</b></div><div><span>Max-EK</span>" + eur(f.max_ek) + "</div></div></a>";
+            "</b></div>" + maxEkZelle(f) + "</div></a>";
         }).join("") : '<p class="leise">Nichts gefunden.</p>');
       var pw = document.getElementById("profil");
       if (pw) pw.onchange = function () { S.profil = pw.value; liste(filter, document.getElementById("suche").value); };
@@ -262,6 +262,21 @@
   }
   function hinweisZeilen(f) {
     return (f.hinweise || []).map(function (h) { return '<p class="hinweis info">⚠ ' + esc(h) + "</p>"; }).join("");
+  }
+
+  // P5-03: Max-EK als Spanne (500 €), Punktwert nur klein; im Inserat genannte Mängel deutlich als Liste
+  function maxEkZelle(f) {
+    if (f.max_ek_von === null || f.max_ek_von === undefined || !f.max_ek_bis || f.max_ek === null) return "<div><span>Max-EK</span>" + eur(f.max_ek) + "</div>";
+    return '<div data-maxek-spanne=""><span>Max-EK (Spanne)</span>' + Number(f.max_ek_von).toLocaleString("de-DE") + "–" + eur(f.max_ek_bis) +
+      '<small class="leise" style="display:block">Mitte ' + eur(f.max_ek) + "</small></div>";
+  }
+
+  function maengelZeile(f, liste) {
+    var m = f.maengel || [];
+    if (!m.length) return "";
+    return liste ? '<div class="hinweis warn" data-maengel-liste=""><b>Im Inserat genannte Mängel</b> – bei der Besichtigung prüfen:<ul>' +
+      m.map(function (x) { return "<li>" + esc(x.name) + "</li>"; }).join("") + "</ul></div>"
+      : '<p class="hinweis warn" data-maengel="">Mängel laut Inserat: ' + esc(m.map(function (x) { return x.name; }).join(", ")) + "</p>";
   }
 
   // ---------------------------------------------------------------- Team (nur mit angelegten Nutzern, T2)
@@ -315,10 +330,11 @@
         '<p class="leise">' + ampelTag(f.ampel) + verfTag(f) + " EZ " + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") +
         (f.entfernung_km !== null ? " · " + tsd(f.entfernung_km) + " km entfernt" : "") + "</p>" +
         '<div class="karte"><div class="zahlen"><div><span>Wunschpreis</span>' + eur(f.preis) + "</div><div><span>Erstangebot</span><b>" + eur(f.erstangebot) +
-        "</b></div><div><span>Max-EK</span>" + eur(f.max_ek) + "</div></div>" +
+        "</b></div>" + maxEkZelle(f) + "</div>" +
+        (b.privat_von ? '<p class="leise" data-privat-spanne="">Marktwert privat ' + Number(b.privat_von).toLocaleString("de-DE") + "–" + eur(b.privat_bis) + "</p>" : "") +
         '<p class="leise">Marktniveau ' + eur(b.marktwert_angebote) + " · Sicherheit " + esc(b.sicherheit) + "</p>" +
         '<a class="knopf klein" href="' + link(f.url) + '" target="_blank" rel="noopener">Anzeige öffnen ↗</a></div>' +
-        hinweisZeilen(f) +
+        maengelZeile(f, true) + hinweisZeilen(f) +
         (f.anbieter ? '<div class="karte"><div class="zeile"><span class="leise">Anbieter</span>' + anbTag(f) + "</div>" +
           '<label>Anbieter korrigieren<select id="anbieter"><option value="">–</option><option value="privat">privat</option>' +
           '<option value="gewerblich">gewerblich</option><option value="unbekannt">unbekannt</option></select></label></div>' : "") +
