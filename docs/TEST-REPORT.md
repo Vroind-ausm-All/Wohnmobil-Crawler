@@ -4,6 +4,21 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P5-05 – Ausstattung, Mängel und Kostenrisiken; Spannen auf 100 € (25.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2424 bestanden (vorher 2380), neu `test_risiko.py` (44). Angepasst: `test_spannen.py` (Rundung 100 €, Mängel nach Namen, Rechenstand numerisch), `test_preisarten.py`, `test_vergleichsauswahl.py` (Rechenstand numerisch), `test_kalibrierung.py` (Plan-Standzeit im Oktober (3 + 2) × 30 Tage) |
+| `ruff check .` | grün |
+| Spannen und Händlerniveau auf 100 € nach außen gerundet, Spanne nie 0 € breit | bestanden |
+| Standzeit nach Kaufmonat (Saisonzuschlag je Monat, Tippfehler in der Konfiguration → verständliche Meldung), Gewährleistungsrücklage nach Altersstaffel (ohne Staffel pauschal), Kapitalbindung als eigener Posten; Ankauf im Herbst senkt den Max-EK | bestanden |
+| Neue Wertfaktoren: Motor-, Getriebe-, Unfallschaden; Anhängerkupplung, Dieselheizung; Gegenproben ohne Treffer („Zylinderkopfdichtung neu“, Webasto-Dachluke) | bestanden |
+| Mängelrisiko: nach vollem Wert vor der Deckelung, höchstens 15 %, weitet nur die untere Spanne; ein schwerer Mangel → Sicherheit höchstens mittel, zwei → niedrig; Hinweis „Schwerer Mangel laut Inserat …“ | bestanden |
+| Kalkulation E5 (Standardwerte eingefroren, Konfiguration nicht verändert, JSON-Rundlauf); Plan-Standzeit und Kapitalbindung im Ankauf gespeichert, Kalibrierung rechnet die Kapitalbindung heraus | bestanden |
+| Browser (Orchestrator, Chromium über Playwright, Desktop 1280, Kaufmonat Oktober): Karte „Max-EK (Spanne) 16.500–25.800 €“ mit Hinweis auf Motorschaden und Feuchtigkeit; Detail „Geplante Standzeit 5 Monate“, Kosten mit Standkosten 600 €, Gewährleistungsrücklage 840 €, „Kapitalbindung (5 Mon.)“ 560 €, Mängelliste mit „Ausmaß unklar: untere Spanne um 15 % weiter“, Sicherheit niedrig; HTML im Titel escaped; 0 JS-Fehler | bestanden |
+| QA (eine Runde, vor der Korrekturrunde) | Freigabe mit Auflagen – B1 (hoch) und B2–B8 behoben bzw. dokumentiert, Regressionstests ergänzt; Korrekturen **nicht** erneut von der QA geprüft |
+| Handy-Ansicht (keine Änderung an `mobil.js`), echter Datenbestand, Windows-CI | nicht geprüft (CI folgt im PR) |
+
 ## P5-04 – Angebots- gegen Abschlusspreise, Händler- gegen Privatpreise (25.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

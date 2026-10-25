@@ -360,8 +360,10 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
             – zu wenige für eine Obergrenze{% endif %}</p>{% endif %}
           <p class="spanne">Marktniveau <b>{{ b.marktwert_angebote | euro }}</b>{% if b.spanne_von %} <span class="meta">(plausibel {{ b.spanne_von | euro }} – {{ b.spanne_bis | euro }})</span>{% endif %}</p>
           <p class="meta">Sicherheit: <span class="sicherheit s-{{ b.sicherheit }}">{{ b.sicherheit }}</span> · {{ b.vergleich_basis }}</p>
+          {% if b.standzeit_monate %}<p class="meta" data-standzeit>Geplante Standzeit {{ b.standzeit_monate }} Monate (inkl. Saison nach Kaufmonat) – Standkosten, Kapitalbindung und Gewährleistungsrücklage nach Alter stehen in den Kosten.</p>{% endif %}
           {% if b.maengel %}<div class="maengel" data-maengel-liste><b>Im Inserat genannte Mängel</b> – bei der Besichtigung prüfen:
-            <ul>{% for m in b.maengel %}<li>{{ m.name }} (−{{ (-m.wert * 100) | round | int }} % im Referenzwert)</li>{% endfor %}</ul></div>{% endif %}
+            <ul>{% for m in b.maengel %}<li>{{ m.name }} (−{{ (-m.wert * 100) | round | int }} % im Referenzwert)</li>{% endfor %}</ul>
+            {%- if b.maengel_risiko %}<span data-maengelrisiko>Ausmaß unklar: untere Spanne um {{ (b.maengel_risiko * 100) | round | int }} % weiter.</span>{% endif %}</div>{% endif %}
           {% if b.wertfaktoren or b.km_korrektur %}
           <div class="chips">
             {% if b.km_korrektur %}<span class="chip {{ 'plus' if b.km_korrektur > 0 else 'minus' }}">km-Stand für das Alter {{ b.km_korrektur | prozent }}</span>{% endif %}

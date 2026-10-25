@@ -91,7 +91,7 @@ def test_fall_aus_manuell_zum_kaufdatum(cfg):
     f = {**kal.pruefe_fall({**FALL, "verkauf_am": "2026-01-24", "verkauf_preis": 50000, "kosten": 5000}, HEUTE), "id": 3}
     m = kal.fall_aus_manuell(f, cfg)
     assert m["ref"] == "M-3" and m["quelle"] == "manuell" and m["nachgerechnet"] and m["sicherheit"] == "niedrig"
-    assert m["standzeit"] == 91 and m["standzeit_plan"] == cfg["rechner"]["kosten"]["standzeit_monate"] * 30 and m["kosten"] == 5000
+    assert m["standzeit"] == 91 and m["standzeit_plan"] == (3 + 2) * 30 and m["kosten"] == 5000          # Kauf im Oktober: +2 Monate (P5-05)
     assert m["max_ek"] > 0 and m["vk_plan"] > m["max_ek"] and m["kosten_plan"] > 0
     spaeter = kal.fall_aus_manuell({**f, "ankauf_am": "2026-10-25"}, cfg)            # ein Jahr älter → weniger wert
     assert spaeter["vk_plan"] < m["vk_plan"]

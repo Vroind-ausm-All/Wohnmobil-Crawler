@@ -64,6 +64,7 @@ STANDARD_AEHNLICHKEIT = {
     "basis_anders": 0.8,       # anderes Basisfahrzeug (nur wenn beide bekannt)
     "anteil_max": 0.25,        # kein einzelnes Angebot trägt mehr als 25 % des Gesamtgewichts (bei weniger als 4 Vergleichen: alle gleich)
 }
+SCHWERER_MANGEL = 0.05        # ab diesem Abzug (Feuchtigkeit, Wasserschaden, Delamination, Motorschaden …) gilt ein Mangel als schwer
 STUFEN = {"modell": ("gleiches Modell", "gleiches Modell"), "reihe": ("gleiche Modellreihe", "gleiche Modellreihe"),
           "marke": ("gleiche Marke", "gleiche Marke"), "klasse": ("gleiche Markenklasse", "gleiche Markenklasse"),
           "andere": ("andere Marke", "andere Marken")}
@@ -116,17 +117,20 @@ class Bewertung:
     vergleich_stufen: dict = field(default_factory=dict)    # Anzahl je Ähnlichkeitsstufe (P5-02)
     fahrzeugklasse: dict = field(default_factory=dict)      # erkannte Länge / Basisfahrzeug dieses Fahrzeugs
     # P5-03 (ADR-054): Spannen statt Punktwerte, Abschlag bei unbekannter Marke, Mängelliste
-    max_ek_von: int | None = None           # Max-EK am unteren / oberen Ende der Marktspanne (auf 500 € gerundet)
+    max_ek_von: int | None = None           # Max-EK am unteren / oberen Ende der Marktspanne (auf 100 € gerundet)
     max_ek_bis: int | None = None
-    privat_von: int | None = None           # Marktwert privat als Spanne (auf 500 € gerundet)
+    privat_von: int | None = None           # Marktwert privat als Spanne (auf 100 € gerundet)
     privat_bis: int | None = None
     abschlag_marke: float = 0.0             # Abschlag auf den Händler-VK, weil die Aufbaumarke unbekannt ist
     maengel: list = field(default_factory=list)              # [{name, wert}] im Inserat genannte Mängel (negative Wertfaktoren)
     # P5-04 (ADR-055): Händlermarkt – vergleichbare gewerbliche Angebote als Obergrenze für den Händler-VK
     haendler_anzahl: int = 0                # vergleichbare Händlerangebote
-    haendler_niveau: int | None = None      # Niveau ihrer Angebotspreise (auf 500 €), erst ab ``haendler_vergleich_min``
+    haendler_niveau: int | None = None      # Niveau ihrer Angebotspreise (auf 100 €), erst ab ``haendler_vergleich_min``
     vk_gedeckelt: bool = False              # Händler-VK auf das Händlermarkt-Niveau abzüglich Verhandlung begrenzt
     haendler_konflikt: bool = False         # Händlerangebote billiger als der Privatmarkt – keine Obergrenze
+    # P5-05 (ADR-056): Mängelrisiko – um so viel reicht die untere Spanne weiter nach unten (Ausmaß genannter Mängel unklar)
+    maengel_risiko: float = 0.0
+    standzeit_monate: int | None = None     # geplante Standzeit inkl. Saisonzuschlag
     wertfaktoren: dict = field(default_factory=dict)
     km_korrektur: float = 0.0
     sicherheit: str = "keine"               # hoch | mittel | niedrig | manuell | keine
@@ -146,20 +150,35 @@ def _runde(x: float, auf: int = 50) -> int:
     return int(round(x / auf) * auf)
 
 
+def _saison(roh) -> dict[int, int]:
+    """``kosten.standzeit_saison_zuschlag`` → {Monat: Monate}; Monatsschlüssel auch als Text (gespeicherte Kalkulation). Fehleingaben
+    melden verständlich, statt jede Bewertung scheitern zu lassen (QA P5-05 B7)."""
+    try:
+        erg = {int(m): int(z) for m, z in (roh or {}).items()}
+    except (TypeError, ValueError, AttributeError) as e:
+        raise ValueError("config.yaml: rechner -> kosten -> standzeit_saison_zuschlag muss Monat: ganze Zahl sein, z. B. {10: 2}") from e
+    if any(not 1 <= m <= 12 or not 0 <= z <= 12 for m, z in erg.items()):
+        raise ValueError("config.yaml: rechner -> kosten -> standzeit_saison_zuschlag: Monat 1–12, Zuschlag 0–12 Monate")
+    return erg
+
+
 def _schalter(wert) -> bool:
     """Ein/Aus aus config.yaml: nur ausdrücklich „aus“ (false, 0, „nein“, „aus“, „false“) schaltet ab."""
     return not (wert is False or wert == 0 or (isinstance(wert, str) and wert.strip().lower() in ("nein", "aus", "false", "0")))
 
 
-def _nach_aussen(von: float, bis: float, auf: int = 500) -> tuple[int, int]:
+def _nach_aussen(von: float, bis: float, auf: int = 100) -> tuple[int, int]:
     """Untere Grenze ab-, obere aufrunden (mindestens eine Stufe breit, außer beide 0)."""
     unten, oben = int(von // auf * auf), int(-(-bis // auf) * auf)
     return unten, max(oben, unten + auf) if oben else 0
 
 
-def _maengel(wertfaktoren: dict) -> list[dict]:
-    """Im Inserat genannte Mängel (negative Wertfaktoren), der schwerste zuerst."""
-    return [{"name": n, "wert": w} for n, w in sorted(wertfaktoren.items(), key=lambda x: (x[1], x[0])) if w < 0]
+def _maengel(wertfaktoren: dict, roh: dict | None = None) -> list[dict]:
+    """Im Inserat genannte Mängel (negative Wertfaktoren), der schwerste zuerst: ``wert`` wie im Referenzwert (anteilig gedeckelt),
+    ``roh`` der volle Wert aus config.yaml – danach richten sich „schwer“ und das Mängelrisiko (QA P5-05 B2)."""
+    roh = roh or {}
+    liste = [{"name": n, "wert": w, "roh": roh.get(n, w)} for n, w in wertfaktoren.items() if w < 0]
+    return sorted(liste, key=lambda m: (m["roh"], m["name"]))
 
 
 def interpoliere(tabelle: dict, x: float) -> float:
@@ -251,6 +270,8 @@ class Rechner:
         self.wf_max_minus = wf.get("max_minus", 0.15)
         self.wf_liste = [(e["name"], float(e["wert"]), re.compile(r"(?<!\w)(?:" + e["muster"] + ")", re.I))
                          for e in wf.get("liste", [])]
+        self.wf_roh = {name: wert for name, wert, _ in self.wf_liste}
+        self.saison = _saison((self.c.get("kosten") or {}).get("standzeit_saison_zuschlag"))
         self.marken_faktor = {m.lower(): k["faktor"] for k in self.mm["markenklassen"] for m in k["marken"]}
         self.marken_klasse = {m.lower(): k["name"] for k in self.mm["markenklassen"] for m in k["marken"]}
         self.ae = {**STANDARD_AEHNLICHKEIT, **(self.c.get("vergleich_aehnlichkeit") or {})}
@@ -402,18 +423,35 @@ class Rechner:
             return k["transport_pauschal"]
         return k.get("transport_grundpauschale", 0) + km * k["transport_pro_km"]
 
+    def standzeit_monate(self) -> int:
+        """Geplante Standzeit: ``kosten.standzeit_monate`` plus Saisonzuschlag nach Kaufmonat (``standzeit_saison_zuschlag``, P5-05) –
+        im Herbst gekauft, im Frühjahr verkauft. Ohne Eintrag wie bisher."""
+        return int(self.c["kosten"]["standzeit_monate"]) + self.saison.get(self.heute.month, 0)
+
+    def gewaehrleistung_prozent(self, alter: int) -> float:
+        """Gewährleistungsrücklage vom Händler-VK nach Alter (``gewaehrleistung_staffel``, P5-05), sonst der feste Satz."""
+        k = self.c["kosten"]
+        for stufe in k.get("gewaehrleistung_staffel") or []:
+            if alter <= stufe["bis_jahre"]:
+                return float(stufe["prozent"])
+        return float(k["gewährleistung_rücklage_prozent"])
+
     def kosten(self, a: dict, vk: float) -> dict:
         k = self.c["kosten"]
+        alter = self.alter(a)
+        alter = 12 if alter is None else alter
+        monate = self.standzeit_monate()
         posten = {
             "Aufbereitung": k["aufbereitung"],
             "HU / Gasprüfung": k["hu_gasprüfung"],
             (f"Abholung ({a['entfernung_km']} km)" if a.get("entfernung_km") is not None else "Transport"):
                 self.transport(a),
-            "Standkosten": k["standkosten_pro_monat"] * k["standzeit_monate"],
-            "Gewährleistungsrücklage": vk * k["gewährleistung_rücklage_prozent"],
+            "Standkosten": k["standkosten_pro_monat"] * monate,
+            "Gewährleistungsrücklage": vk * self.gewaehrleistung_prozent(alter),
         }
-        alter = self.alter(a)
-        alter = 12 if alter is None else alter
+        if zins := float(k.get("kapitalzins_jahr") or 0):
+            # gebundenes Kapital ≈ Anteil vom Händler-VK (Einkauf + Kosten), über die geplante Standzeit (P5-05)
+            posten[f"Kapitalbindung ({monate} Mon.)"] = vk * float(k.get("kapital_anteil_vk", 0.8)) * zins * monate / 12
         for stufe in k["reparatur_risiko"]:
             if alter <= stufe["bis_jahre"]:
                 posten[f"Reparaturrisiko ({alter} J.)"] = stufe["betrag"]
@@ -479,7 +517,7 @@ class Rechner:
             # P1-12: ohne Erstzulassung gibt es keinen unabhängigen Marktwert. Max-EK und Erstangebot aus dem Angebotspreis
             # des Verkäufers zu rechnen, hieße seinen Wunschpreis zu bestätigen – daher keine Beträge, bis ein Marktwert vorliegt.
             return Bewertung(None, 0, mn["basis"], 0, 0, 0, angebotspreis=a.get("preis"), sicherheit="keine", art=mn["art"],
-                             wertfaktoren=mn["wertfaktoren"], maengel=_maengel(self.wertfaktoren(a)))   # Mängel auch ohne Beträge
+                             wertfaktoren=mn["wertfaktoren"], maengel=_maengel(self.wertfaktoren(a), self.wf_roh))   # Mängel auch ohne Beträge
         if not mn["niveau"]:
             return Bewertung(None, 0, "kein Preis", 0, 0, 0, angebotspreis=a.get("preis"))
 
@@ -488,7 +526,7 @@ class Rechner:
         mw_privat, vk, posten, kosten, marge, max_ek = k["mw_privat"], k["vk"], k["posten"], k["kosten"], k["marge"], k["max_ek"]
         if hm["n"] or hm["verworfen"]:
             mn["basis"] += f" · {hm['n']} Händlerangebot{'e' if hm['n'] != 1 else ''}" + (
-                f" (Niveau {_runde(hm['niveau'], 500):,} €)".replace(",", ".") if hm["niveau"] else " (zu wenige für eine Obergrenze)")
+                f" (Niveau {_runde(hm['niveau'], 100):,} €)".replace(",", ".") if hm["niveau"] else " (zu wenige für eine Obergrenze)")
             if hm["verworfen"]:
                 mn["basis"] += f", {hm['verworfen']} weit unter dem Privatmarkt nicht gezählt (Miete, Rate, Lockangebot?)"
             if hm["konflikt"]:
@@ -497,6 +535,17 @@ class Rechner:
                 mn["basis"] += f" – Händler-VK auf {_runde(vk, 100):,} € begrenzt".replace(",", ".")
                 if mn["sicherheit"] == "hoch":
                     mn["sicherheit"] = "mittel"                          # Obergrenze aus wenigen Händlerangeboten (QA P5-04 B2)
+        # P5-05: genannte Mängel – das Ausmaß ist unklar. Der Punktwert enthält den Abzug (Wertfaktor), die untere Spanne reicht um ihre
+        # Summe weiter nach unten (höchstens ``maengelrisiko_max``); bei einem schweren Mangel ist die Sicherheit höchstens „mittel“.
+        maengel = _maengel(mn["wertfaktoren"], self.wf_roh)
+        risiko = min(float(self.c.get("maengelrisiko_max", 0) or 0), sum(-m["roh"] for m in maengel))
+        if risiko:
+            mn["basis"] += f" · Mängelrisiko: untere Spanne {risiko:.0%} weiter".replace("%", " %")
+        schwer = sum(1 for m in maengel if m["roh"] <= -SCHWERER_MANGEL)
+        if schwer >= 2 and mn["sicherheit"] in ("hoch", "mittel"):
+            mn["sicherheit"] = "niedrig"                                  # mehrere schwere Mängel: Zustand kaum einzuschätzen
+        elif schwer and mn["sicherheit"] == "hoch":
+            mn["sicherheit"] = "mittel"
 
         erst, fair_hinweis = self.erstangebot(max_ek, mw_privat, a.get("preis"))
 
@@ -512,12 +561,13 @@ class Rechner:
         )
         b.abschlag_marke = k["abschlag"]
         b.haendler_anzahl, b.vk_gedeckelt, b.haendler_konflikt = hm["n"], k["gedeckelt"], hm["konflikt"]
-        b.haendler_niveau = _runde(hm["niveau"], 500) if hm["niveau"] else None
-        b.maengel = _maengel(mn["wertfaktoren"])
+        b.haendler_niveau = _runde(hm["niveau"], 100) if hm["niveau"] else None
+        b.maengel, b.maengel_risiko, b.standzeit_monate = maengel, risiko, self.standzeit_monate()
         if mn["spanne"]:
-            b.spanne_von, b.spanne_bis = _runde(mn["spanne"][0], 100), _runde(mn["spanne"][1], 100)
-            unten, oben = self.kette(a, mn["spanne"][0], hm["deckel_unten"]), self.kette(a, mn["spanne"][1], hm["deckel_oben"])
-            # Spannen auf 500 € nach außen gerundet – umschließen den Punktwert immer, keine falsche Genauigkeit (P5-03, QA B2);
+            von = mn["spanne"][0] * (1 - risiko)
+            b.spanne_von, b.spanne_bis = _runde(von, 100), _runde(mn["spanne"][1], 100)
+            unten, oben = self.kette(a, von, hm["deckel_unten"]), self.kette(a, mn["spanne"][1], hm["deckel_oben"])
+            # Spannen auf 100 € nach außen gerundet (Betreiber 25.10.2026) – umschließen den Punktwert immer (P5-03, QA B2);
             # Punktwerte bleiben für Ampel und Brief
             b.max_ek_von, b.max_ek_bis = _nach_aussen(unten["max_ek"], oben["max_ek"])
             b.privat_von, b.privat_bis = _nach_aussen(unten["mw_privat"], oben["mw_privat"])

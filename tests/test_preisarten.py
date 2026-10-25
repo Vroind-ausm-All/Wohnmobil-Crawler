@@ -81,12 +81,12 @@ def test_haendlermarkt_erst_ab_mindestzahl(r):
 def test_haendler_knapp_ueber_privat_begrenzen_den_vk(r):
     ohne = r.bewerte(FZ, _privat())
     mit = r.bewerte(FZ, _privat() + _haendler(5, KNAPP))
-    assert mit.vk_gedeckelt and mit.haendler_anzahl == 5 and mit.haendler_niveau % 500 == 0
+    assert mit.vk_gedeckelt and mit.haendler_anzahl == 5 and mit.haendler_niveau % 100 == 0
     assert mit.haendler_vk < ohne.haendler_vk and mit.max_ek < ohne.max_ek and mit.marktwert_privat == ohne.marktwert_privat
     assert mit.haendler_vk >= mit.marktwert_privat                                            # nie unter den Marktwert privat
     assert mit.max_ek >= ohne.max_ek * 0.85                                                   # Begrenzung, kein Absturz
     assert "5 Händlerangebote (Niveau" in mit.vergleich_basis and "Händler-VK auf" in mit.vergleich_basis
-    assert mit.max_ek_von <= mit.max_ek <= mit.max_ek_bis and mit.max_ek_bis - mit.max_ek_von >= 500
+    assert mit.max_ek_von <= mit.max_ek <= mit.max_ek_bis and mit.max_ek_bis - mit.max_ek_von >= 100
     assert ohne.sicherheit != "hoch" or mit.sicherheit == "mittel"                           # QA B2: Obergrenze → höchstens mittel
 
 
@@ -118,7 +118,7 @@ def test_kalkulation_nachrechenbar_mit_haendlermarkt():
         del cfg["rechner"][schluessel]
     alle = _privat() + [_v(i, KNAPP - 1500 + i * 1000, gewerblich=1) for i in range(5)]
     e = kalk.eingabe(cfg, {**FZ, "entfernung_km": 50}, alle, betrag=30000, stichtag=STICHTAG, abholung="Firmensitz")
-    assert e["version"] == kalk.VERSION == "E4"
+    assert e["version"] == kalk.VERSION and int(kalk.VERSION[1:]) >= 4
     assert (e["rechner"]["haendler_vk_deckel"], e["rechner"]["haendler_vergleich_min"], e["rechner"]["abschlag_haendler_angebot"]) == (True, 3, 0.05)
     assert sum(1 for v in e["vergleich"] if v["gewerblich"] == 1) == 5
     erg = kalk.rechne(e)

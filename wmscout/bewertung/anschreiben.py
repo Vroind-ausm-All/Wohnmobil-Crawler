@@ -10,6 +10,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from ..domaene import STATUS, UNBEKANNT, VORLAEUFIG, import_art
 from ..normalisierung.fahrzeug import ART_PLURAL, fahrzeug_bezeichnung
 from ..normalisierung.person import profilname
+from .rechner import SCHWERER_MANGEL
 
 AMPEL_RANG = {"gruen": 0, "gelb": 1, "rot": 2, "grau": 3}
 ART_EINZAHL = {"Sonstige": "Wohnmobil"}
@@ -78,6 +79,11 @@ HINWEIS_AUSLAND = "Ausland – Abholung, Überführung und Zulassung prüfen"
 HINWEIS_ANBIETER_UNBEKANNT = "Anbieter unbekannt (privat oder gewerblich) – bitte vor dem Anschreiben prüfen"
 
 
+def hinweis_schwere_maengel(namen: list[str]) -> str:
+    """P5-05: nur ein Hinweis an den Ankäufer – das Ausmaß eines schweren Mangels steht im Inserat nicht."""
+    return f"Schwerer Mangel laut Inserat ({', '.join(namen)}) – Ausmaß vor einem verbindlichen Angebot bei der Besichtigung klären"
+
+
 def hinweis_marke_unbekannt(abschlag: float) -> str:
     """P5-03: nur ein Hinweis an den Ankäufer – der Abschlag steckt schon im Händler-VK, das Anschreiben bleibt wie es ist."""
     return (f"Marke unbekannt – Händler-VK {abschlag:.0%} niedriger angesetzt; Marke beim Verkäufer erfragen, dann neu bewerten"
@@ -111,6 +117,8 @@ def hinweise(a: dict, b=None) -> list[str]:
         liste.append(HINWEIS_ANBIETER_UNBEKANNT)
     if b is not None and b.abschlag_marke:
         liste.append(hinweis_marke_unbekannt(b.abschlag_marke))
+    if b is not None and (schwer := [m["name"] for m in b.maengel if m.get("roh", m["wert"]) <= -SCHWERER_MANGEL]):
+        liste.append(hinweis_schwere_maengel(schwer))
     return liste
 
 

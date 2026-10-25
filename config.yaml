@@ -120,7 +120,7 @@ rechner:
   # muster = regulärer Ausdruck, passt ab Wortanfang, Groß-/Kleinschreibung egal.
   wertfaktoren:
     max_plus: 0.06
-    max_minus: 0.15
+    max_minus: 0.25                # P5-05: mit Motor-/Getriebe-/Unfallschaden höher (vorher 0,15), sonst zählt ein zweiter schwerer Mangel nicht
     liste:
       - {name: Automatik,            wert: 0.030, muster: "automatik|comfort-?matic|tronic\\b|wandler"}
       - {name: Solaranlage,          wert: 0.010, muster: "solar"}
@@ -134,6 +134,8 @@ rechner:
       - {name: Dichtigkeitsprüfung,  wert: 0.010, muster: "dichtigkeitsprüfung|dichtheitsprüfung|dichtigkeitsprotokoll"}
       - {name: Garagen-/Hallenplatz, wert: 0.010, muster: "garagengepflegt|garagenfahrzeug|hallenstellplatz|in (der |einer )?halle (gestanden|untergestellt)|unterstellplatz"}
       - {name: Nichtraucher,         wert: 0.005, muster: "nichtraucher"}
+      - {name: Anhängerkupplung,     wert: 0.005, muster: "anhängerkupplung|anhaengerkupplung|\\bahk\\b"}
+      - {name: Dieselheizung,        wert: 0.005, muster: "dieselheizung|truma combi d|combi ?d ?\\d|webasto (standheizung|dieselheizung|air ?top|thermo)|autoterm"}
       - {name: Feuchtigkeit,         wert: -0.060, muster: "feuchtigkeit(?!s(messung|prüfung|test|check|frei))|feuchte stellen|feuchtigkeitsschaden"}
       - {name: Wasserschaden,        wert: -0.080, muster: "wasserschaden|wassereintritt"}
       - {name: Undichtigkeit,        wert: -0.050, muster: "undicht"}
@@ -143,11 +145,17 @@ rechner:
       - {name: HU abgelaufen,        wert: -0.030, muster: "(tüv|hu) (ist )?abgelaufen|ohne (tüv|hu)\\b|kein (tüv|hu)\\b"}
       - {name: Defekt genannt,       wert: -0.040, muster: "defekt"}
       - {name: Reparaturbedarf,      wert: -0.060, muster: "reparaturbedürftig|an bastler|für bastler|bastlerfahrzeug"}
+      - {name: Motorschaden,         wert: -0.150, muster: "motorschaden|motor (ist )?(kaputt|defekt)|kolbenfresser|(zylinderkopfdichtung|zkd) (ist )?(kaputt|defekt|durch)"}
+      - {name: Getriebeschaden,      wert: -0.100, muster: "getriebeschaden|getriebe (ist )?(kaputt|defekt)|kupplung (ist )?(kaputt|defekt)"}
+      - {name: Unfallschaden,        wert: -0.080, muster: "unfallschaden|unfallfahrzeug|unfallwagen|hatte einen unfall"}
 
   # Privat-Angebotspreise liegen über dem, was am Ende gezahlt wird
   abschlag_angebot_auf_privatwert: 0.07
   # Händler-Verkaufspreis liegt über Privatwert (Gewährleistung, Aufbereitung, Finanzierung)
   aufschlag_haendler_vk: 0.10
+  # P5-05: Mängelrisiko – genannte Mängel senken den Wert (Wertfaktoren); ihr Ausmaß ist unklar, deshalb reicht die untere Spanne
+  # um die Summe der Mängelabzüge weiter nach unten, höchstens so weit. 0 = aus.
+  maengelrisiko_max: 0.15
   abschlag_marke_unbekannt: 0.05  # Aufbaumarke unbekannt (nur „Wohnmobil“ oder nur Fiat/Mercedes …): Händler-VK 5 % niedriger, mit Hinweis
   # Händlermarkt (P5-04): vergleichbare gewerbliche Angebote (gleiche Auswahl und Gewichte wie oben) begrenzen den Händler-VK –
   # teurer als vergleichbare Händler kann ein Händler nicht verkaufen. Erst ab haendler_vergleich_min Händlerangeboten.
@@ -165,7 +173,18 @@ rechner:
     transport_grundpauschale: 80
     transport_pro_km: 0.90
     transport_pauschal: 300           # wenn die Entfernung unbekannt ist
-    gewährleistung_rücklage_prozent: 0.025   # vom Händler-VK
+    gewährleistung_rücklage_prozent: 0.025   # vom Händler-VK (gilt, wenn keine Staffel eingetragen ist)
+    # P5-05: Gewährleistungsrücklage nach Alter – ältere Fahrzeuge haben mehr Sachmängelfälle
+    gewaehrleistung_staffel:
+      - {bis_jahre: 5,  prozent: 0.020}
+      - {bis_jahre: 10, prozent: 0.025}
+      - {bis_jahre: 15, prozent: 0.035}
+      - {bis_jahre: 99, prozent: 0.045}
+    # P5-05: Saisonzuschlag zur Standzeit nach Kaufmonat (Monat: zusätzliche Monate) – im Herbst gekauft, im Frühjahr verkauft
+    standzeit_saison_zuschlag: {9: 1, 10: 2, 11: 2, 12: 1, 1: 1}
+    # P5-05: Kapitalbindung über die Standzeit; gebundenes Kapital ≈ Anteil vom Händler-VK (Einkauf + Kosten). 0 = aus.
+    kapitalzins_jahr: 0.05
+    kapital_anteil_vk: 0.8
     # Reparaturrisiko nach Fahrzeugalter (Jahre bis)
     reparatur_risiko:
       - {bis_jahre: 5,  betrag: 500}

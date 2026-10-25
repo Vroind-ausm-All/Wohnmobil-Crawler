@@ -1122,7 +1122,7 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
      Händler-VK 5 % niedriger angesetzt; Marke beim Verkäufer erfragen, dann neu bewerten“); er sperrt nichts, das Anschreiben bleibt
      unverändert (keine automatische Verkäuferansprache).
   2. **Spannen:** Max-EK und Marktwert privat zusätzlich als Spanne aus der Marktspanne (unteres/oberes Ende durch dieselbe
-     Rechenkette), auf **500 € nach außen** gerundet – die Spanne umschließt den Punktwert immer und ist nie 0 € breit. Oberfläche (Karte und Handy-Liste): „Max-EK (Spanne) 23.500–32.500 €“, darunter klein „Mitte
+     Rechenkette), auf **500 € nach außen** gerundet (seit P5-05 auf Wunsch des Betreibers **100 €**, ADR-056) – die Spanne umschließt den Punktwert immer und ist nie 0 € breit. Oberfläche (Karte und Handy-Liste): „Max-EK (Spanne) 23.500–32.500 €“, darunter klein „Mitte
      28.100 €“; im Detail eine Spannen-Zeile, die Punktwerte dienen nur der Herleitung. Ampel, Erstangebot und Anschreiben rechnen weiter
      mit dem Punktwert (ein Brief braucht einen Betrag). Ohne Marktwert (Sicherheit „keine“) oder bei manuellem Marktwert keine Spanne.
      Bei unbekannter Art die weiteste Spanne aller Kandidaten.
@@ -1171,3 +1171,36 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   Händler-VK dann um höchstens rund 7 % (bis auf den Marktwert privat); deutlich billigere Händlerangebote gelten als Miet-/Lockangebote
   oder Datenkonflikt. Die Händlersicht ist so
   gut wie die Anbietererkennung (ADR-043). Betreiberfragen: Mindestzahl 3 und 5 % Verhandlung beim Händler bestätigen.
+
+## ADR-056 – Ausstattung, Mängel und Kostenrisiken: Gewährleistung nach Alter, Standzeit nach Saison, Kapitalbindung, Mängelrisiko · gilt (25.10.2026)
+
+* **Kontext:** P5-05 (Schwächen S5/S6): Gewährleistungsrücklage pauschal 2,5 %, Standzeit fest 3 Monate unabhängig vom Kaufmonat,
+  gebundenes Kapital kostet nichts, schwere Mängel (Motor, Getriebe, Unfall) fehlten in der Liste, und das unklare Ausmaß genannter
+  Mängel war in Spanne und Sicherheit nicht sichtbar. Dazu Betreiberwunsch vom 25.10.2026: Spannen nur auf 100 € runden.
+* **Entscheidung:**
+  1. **Gewährleistungsrücklage nach Alter** (`kosten.gewaehrleistung_staffel`): bis 5 J. 2,0 %, bis 10 J. 2,5 %, bis 15 J. 3,5 %, darüber
+     4,5 % vom Händler-VK. Ohne Staffel der bisherige feste Satz.
+  2. **Standzeit nach Saison** (`kosten.standzeit_saison_zuschlag`, Monat → zusätzliche Monate): September +1, Oktober/November +2,
+     Dezember/Januar +1 – im Herbst gekauft, im Frühjahr verkauft. Gilt für Standkosten, Kapitalbindung, den Plan beim Ankauf und die
+     Kalibrierung (Standzeit-Vorschlag bleibt relativ zum Grundwert).
+  3. **Kapitalbindung** als Kostenposten: Händler-VK × 0,8 (gebundenes Kapital ≈ Einkauf + Kosten) × 5 % p. a. × Standzeit. 0 = aus.
+  4. **Mängel:** neue Wertfaktoren Motorschaden −15 %, Getriebeschaden −10 %, Unfallschaden −8 % (verneinte Nennungen wie „unfallfrei“
+     zählen nicht; erledigte Reparaturen wie „Zylinderkopfdichtung neu“ ebenfalls nicht), Ausstattung Anhängerkupplung und
+     Dieselheizung je +0,5 % („Webasto“ nur mit Standheizung/Air Top). Der Deckel für Mängelabzüge steigt von 15 % auf 25 %
+     (`wertfaktoren.max_minus`), sonst zählte ein zweiter schwerer Mangel neben einem Motorschaden nicht. „Defekt genannt“ (−4 %) kann
+     zusätzlich zu einem bestimmten Mangel zählen („Getriebe defekt“) – bewusst, die Summe bleibt gedeckelt. **Mängelrisiko:** Der Punktwert enthält den Abzug; weil das
+     Ausmaß im Inserat unklar ist, reicht die untere Spanne um die Summe der Mängelabzüge weiter nach unten (höchstens 15 %,
+     `maengelrisiko_max`), ebenso das Kalkulationsszenario „vorsichtig“. Ein schwerer Mangel (voller Abzug laut config.yaml ≥ 5 %)
+     senkt die Sicherheit auf höchstens „mittel“, zwei oder mehr auf „niedrig“, und erzeugt einen Hinweis an den Ankäufer („Ausmaß bei
+     der Besichtigung klären“) – sperrt nichts.
+  5. **Spannen auf 100 €** nach außen gerundet (statt 500 €), ebenso das Händlermarkt-Niveau.
+  6. Kalkulation: Rechenstand **E5**; alle neuen Werte werden eingefroren (ohne Eintrag: altes Verhalten). Der Plan beim Ankauf
+     übernimmt die Standzeit aus derselben Bewertung bzw. Kalkulation und speichert die Kapitalbindung getrennt; die Kalibrierung
+     vergleicht Ist-Kosten mit den Plankosten **ohne** Kapitalbindung (sie fällt nie als Ausgabe an). Fehleingaben bei den
+     Saisonzuschlägen melden sich verständlich.
+* **Alternativen:** Reparaturreserve je Mangel zusätzlich zum Wertabzug (Doppelzählung); Mängel aus der Besichtigung automatisch in die
+  Inseratsbewertung zurückschreiben (die Besichtigung hat eine eigene, verbindlichere Abzugsrechnung – offen für später).
+* **Folgen / offen:** Im Herbst gekaufte Fahrzeuge bekommen einen niedrigeren Max-EK (Beispiel Teilintegrierter 2018: rund 2 Monate
+  mehr Standkosten und Kapitalbindung). Die Saisonwerte sind Annahmen; die Kalibrierung zeigt mit der Zeit, ob sie stimmen.
+  Alle Ampeln können zum 1. September, 1. Oktober, 1. Dezember und 1. Februar umspringen (Saisonwechsel) – gewollt.
+  Betreiberfragen: Staffel, Saisonzuschläge, Zinssatz, Mängelrisiko-Deckel.
