@@ -90,7 +90,8 @@ def _sicht_als(sicht: dict, art: str) -> dict:
 SICHERHEIT_ART_UNBEKANNT = "niedrig"
 
 
-def bewerte_anzeige(rechner: Rechner, a: dict, vergleich: list[dict], marktwert_manuell: int | None = None) -> Bewertung:
+def bewerte_anzeige(rechner: Rechner, a: dict, vergleich: list[dict], marktwert_manuell: int | None = None,
+                    haendler_quantil: float = .5) -> Bewertung:
     """Bewertung einer Anzeige in Rechner-Sicht; `vergleich` aus `vergleichsbasis`.
 
     Orte im Ausland (`a["ausland"]`, siehe `normalisierung.geo.auslands_kuerzel`) haben keine PLZ und keine Entfernung; der Rechner
@@ -108,19 +109,20 @@ def bewerte_anzeige(rechner: Rechner, a: dict, vergleich: list[dict], marktwert_
         „Sonstige“ grün; der Brief nennt dann keinen Betrag (`anschreiben.kontext`).
       * Spanne = von der kleinsten bis zur größten Spanne aller Kandidaten (Unsicherheit über die Art ausweisen).
     Welche Art genommen wurde, steht in `b.art` und im Hinweis am Fahrzeug (`anschreiben.hinweise(a, b)`)."""
-    b = _bewerte_nach_art(rechner, a, vergleich, marktwert_manuell)
+    b = _bewerte_nach_art(rechner, a, vergleich, marktwert_manuell, haendler_quantil)
     if a.get("ausland"):
         b = replace(b, ampel="gelb" if b.ampel == "gruen" else b.ampel,
                     vergleich_basis=f"{b.vergleich_basis} · Ausland ({a['ausland']}): Entfernung und Transport nicht berechnet")
     return b
 
 
-def _bewerte_nach_art(rechner: Rechner, a: dict, vergleich: list[dict], marktwert_manuell: int | None) -> Bewertung:
+def _bewerte_nach_art(rechner: Rechner, a: dict, vergleich: list[dict], marktwert_manuell: int | None, haendler_quantil: float = .5) -> Bewertung:
     sicht = fuer_rechner(a)
     kandidaten = kandidaten_arten(a)
     if not kandidaten:
-        return rechner.bewerte(sicht, vergleich, marktwert_manuell=marktwert_manuell)
-    alle_b = [rechner.bewerte(_sicht_als(sicht, art), vergleich, marktwert_manuell=marktwert_manuell) for art in kandidaten]
+        return rechner.bewerte(sicht, vergleich, marktwert_manuell=marktwert_manuell, haendler_quantil=haendler_quantil)
+    alle_b = [rechner.bewerte(_sicht_als(sicht, art), vergleich, marktwert_manuell=marktwert_manuell, haendler_quantil=haendler_quantil)
+              for art in kandidaten]
     b = min(alle_b, key=lambda x: x.max_ek)                       # min() nimmt bei Gleichstand den ersten: „Sonstige“
     von = [x.spanne_von for x in alle_b if x.spanne_von]
     bis = [x.spanne_bis for x in alle_b if x.spanne_bis]

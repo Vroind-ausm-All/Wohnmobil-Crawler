@@ -254,7 +254,8 @@ def test_rechner_vergleicht_nur_mit_privatangeboten(cfg):
     ohne_unbekannte = Rechner(cfg).vergleiche(a, [x for x in alle if x["gewerblich"] is not None])
     assert r.vergleiche(a, alle) == ohne_unbekannte                                                  # Unbekannte verändern nichts
     auszug = vergleich_auszug(Rechner(cfg), a, alle)
-    assert {x["id"] for x in auszug} == {"ich", "p0", "p1", "p2", "p3"} and all(x["gewerblich"] == 0 for x in auszug)
+    # P5-04: Händlerangebote gehören in den Auszug (Händlermarkt), unbekannte Anbieter nie; im Marktwert privat zählen nur private
+    assert {x["id"] for x in auszug} == {"ich", "p0", "p1", "p2", "p3", "g1"} and all(x["gewerblich"] in (0, 1) for x in auszug)
     # gespeicherte Kalkulations-Eingaben (vor P3-05) ließen None-Werte weg: ohne Schlüssel gilt weiter „privat“ – Nachrechnen bleibt gleich
     alt = [{k: v for k, v in x.items() if v is not None} for x in alle]
     assert len(Rechner(cfg).vergleiche(a, alt)) == 7

@@ -617,7 +617,8 @@ class Anfrage:
                 return self.html(k.env.get_template("kalibrierung.html").render(
                     firma=k.cfg["anschreiben"]["firma"], token=k.token, arten=kal.ARTEN, min_faelle=kal.MIN_FAELLE))
             faelle = k.kalibrierung.faelle(k.cfg)
-            return self.json(200, {"bericht": kal.bericht(faelle, k.cfg), "faelle": faelle, "manuelle": k.kalibrierung.manuelle()})
+            return self.json(200, {"bericht": kal.bericht(faelle, k.cfg), "faelle": faelle, "manuelle": k.kalibrierung.manuelle(),
+                                   "markt": k.kalibrierung.marktbeobachtung(k.cfg)})
         if p == "/status":
             return self.html(k.env.get_template("status.html").render(
                 firma=k.cfg["anschreiben"]["firma"], s=lp.uebersicht(k.db, k.cfg), suchlauf=k.suchlauf.stand, arten=lp.ARTEN,

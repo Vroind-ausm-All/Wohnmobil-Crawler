@@ -249,6 +249,29 @@ def bericht(faelle: list[dict], cfg: dict) -> dict:
             "vorschlaege": vorschlaege, "hinweise": hinweise, "min_faelle": MIN_FAELLE}
 
 
+# ---------------------------------------------------------------- Marktbeobachtung (P5-04)
+def preissenkungen(verlaeufe: list[tuple[int, int]], abschlag: float) -> dict:
+    """Angebotspreise privater Inserate, die vom Markt verschwunden sind: (erster, letzter Preis) je Inserat. Echte Abschlusspreise liefert
+    kein Portal – die Senkung bis zum Verschwinden ist nur eine **Untergrenze** für den Abschlag Angebot → Abschluss."""
+    senkungen = [max(0.0, 1 - letzter / erster) for erster, letzter in verlaeufe if erster and letzter]
+    n = len(senkungen)
+    gesenkt = [x for x in senkungen if x > 0]
+    erg = {"n": n, "mit_senkung": len(gesenkt), "median": round(statistics.median(senkungen), 3) if senkungen else None,
+           "median_gesenkt": round(statistics.median(gesenkt), 3) if gesenkt else None, "abschlag": abschlag, "hinweis": None}
+    if n < MIN_FAELLE:
+        erg["hinweis"] = f"Zu wenige verschwundene Privatinserate mit Preisverlauf ({n}) – noch keine Aussage"
+    elif erg["median"] > abschlag:
+        erg["hinweis"] = (f"Private Inserate senkten bis zum Verschwinden im Median um {erg['median']:.0%} – mehr als der eingestellte Abschlag "
+                          f"Angebot → Abschluss ({abschlag:.0%}); rechner.abschlag_angebot_auf_privatwert prüfen").replace("%", " %")
+    return erg
+
+
+def _eintrag(text: str) -> tuple[str, int, int]:
+    """„zeitpunkt|id|preis“ aus der Abfrage → sortierbar nach Zeitpunkt, bei Gleichstand nach Eintragsreihenfolge."""
+    zeit, nr, preis = text.rsplit("|", 2)
+    return zeit, int(nr), int(preis)
+
+
 # ---------------------------------------------------------------- Speicher
 class KalibrierungSpeicher:
     """Tabelle ``kalibrierung_faelle`` (Schema v20) und das Einsammeln aller Fälle."""
@@ -272,6 +295,37 @@ class KalibrierungSpeicher:
     def loeschen(self, fall_id: int) -> bool:
         with self.db.transaktion():
             return self.db.con.execute("DELETE FROM kalibrierung_faelle WHERE id=?", (fall_id,)).rowcount > 0
+
+    def marktbeobachtung(self, cfg: dict, jetzt: datetime | None = None) -> dict:
+        """Private **Fahrzeuge**, deren Inserate alle vom Markt verschwunden sind (verkauft, offline oder vermutlich offline nach derselben
+        Regel wie in der App, ``verfuegbarkeit.bewerte``): erster Preis über alle Inserate des Fahrzeugs gegen den letzten (nur lesen).
+        Wieder eingestellte oder auf mehreren Plattformen inserierte Fahrzeuge zählen einmal; eines mit noch verfügbarem Inserat nicht
+        (QA P5-04 B3)."""
+        from ..datenbank import STANDARD_PLATTFORM
+        from ..verfuegbarkeit import bewerte as verfuegbarkeit, offline_nach_tagen
+        tage, jetzt = offline_nach_tagen(cfg), jetzt or datetime.now()
+        zeilen = self.db.con.execute(
+            """SELECT i.id, i.fahrzeug_id, i.verfuegbarkeit, i.zuletzt_bestaetigt, i.zuletzt_gesehen, a.status, a.gewerblich,
+                      (SELECT p.zeitpunkt || '|' || p.id || '|' || p.preis FROM preis_historie p WHERE p.inserat_id = i.id ORDER BY p.zeitpunkt, p.id LIMIT 1),
+                      (SELECT p.zeitpunkt || '|' || p.id || '|' || p.preis FROM preis_historie p WHERE p.inserat_id = i.id
+                       ORDER BY p.zeitpunkt DESC, p.id DESC LIMIT 1)
+               FROM inserate i LEFT JOIN anzeigen a ON i.plattform = COALESCE(NULLIF(a.quelle, ''), ?) AND i.anzeigen_id = a.id""",
+            (STANDARD_PLATTFORM,)).fetchall()
+        fahrzeuge: dict = {}
+        for z in zeilen:
+            fahrzeuge.setdefault(z[1] if z[1] is not None else f"i{z[0]}", []).append(z)
+        verlaeufe = []
+        for inserate in fahrzeuge.values():
+            if any(z[6] != 0 for z in inserate):                       # gewerblich, unbekannt oder ohne Anzeige: nicht privat
+                continue
+            weg = [verfuegbarkeit(z[2], z[3], z[4], z[5], jetzt, tage) for z in inserate]
+            if not all(v["nicht_verfuegbar"] or v["vermutlich_offline"] for v in weg):
+                continue
+            erste = [_eintrag(z[7]) for z in inserate if z[7]]
+            letzte = [_eintrag(z[8]) for z in inserate if z[8]]
+            if erste and letzte:
+                verlaeufe.append((min(erste)[2], max(letzte)[2]))
+        return preissenkungen(verlaeufe, float(cfg["rechner"]["abschlag_angebot_auf_privatwert"]))
 
     def faelle(self, cfg: dict) -> list[dict]:
         """Ankäufe der App und nachgerechnete manuelle Fälle (nur lesen)."""

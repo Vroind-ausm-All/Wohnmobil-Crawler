@@ -102,7 +102,7 @@ def test_kalkulation_rechenstand_und_eingefrorener_abschlag():
     cfg = lade_cfg()
     del cfg["rechner"]["abschlag_marke_unbekannt"]
     e = kalk.eingabe(cfg, {**FZ, "marke": None, "entfernung_km": 50}, _vgl(5), betrag=None, stichtag=STICHTAG, abholung="Firmensitz")
-    assert e["version"] == kalk.VERSION == "E3" and e["rechner"]["abschlag_marke_unbekannt"] == 0.05
+    assert e["version"] == kalk.VERSION and kalk.VERSION >= "E3" and e["rechner"]["abschlag_marke_unbekannt"] == 0.05
     mit = kalk.rechne(e)
     ohne = kalk.rechne(kalk.eingabe(lade_cfg(), {**FZ, "entfernung_km": 50}, _vgl(5), betrag=None, stichtag=STICHTAG, abholung="Firmensitz"))
     assert mit["szenarien"]["erwartet"]["haendler_vk"] < ohne["szenarien"]["erwartet"]["haendler_vk"]

@@ -1138,3 +1138,36 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
 * **Folgen / offen:** Fahrzeuge ohne erkennbare Marke landen seltener auf Grün. Die Spanne ist bei dünner Datenlage breit (±15 % auf
   das Marktniveau, nach Kosten oft ±20 % auf den Max-EK) – gewollt sichtbar. Betreiberfragen: Rundung auf 500 €; ob die Spanne auch im
   Verkäuferportal bzw. Händlerportal anders erscheinen soll (dort unverändert).
+
+## ADR-055 – Angebots- gegen Abschlusspreise, Händler- gegen Privatpreise: Händlermarkt als Obergrenze, Marktbeobachtung · gilt (25.10.2026)
+
+* **Kontext:** P5-04, Schwäche S4 der Rechner-Analyse: Der Rechner kennt nur Angebotspreise privater Inserate und setzt pauschal 7 % für
+  Angebot → Abschluss an; Händlerangebote fließen gar nicht ein. Kein Portal liefert echte Abschlusspreise – die einzigen sind die eigenen
+  Ankäufe und Verkäufe (Kalibrierung, ADR-052).
+* **Entscheidung:**
+  1. **Privat und Händler getrennt.** Marktwert und Marktwert privat bleiben reine Privatsicht (gewerbliche und unbekannte Anbieter zählen
+     dort nie). Händlerangebote (`gewerblich` ausdrücklich gesetzt) bilden eine eigene **Händlermarkt-Sicht** mit derselben Auswahl,
+     Ähnlichkeit und Ausreißerbehandlung (ADR-053).
+  2. **Händlermarkt als Obergrenze** für den eigenen Händler-VK: ab `rechner.haendler_vergleich_min` (3) vergleichbaren Händlerangeboten
+     gilt Händler-VK ≤ Niveau ihrer Angebotspreise × (1 − `abschlag_haendler_angebot`, 5 % Verhandlung beim Händler). Teurer als
+     vergleichbare Händler kann ein Händler nicht verkaufen. Die Obergrenze wirkt nur nach unten (nie Aufschlag); Kosten, Marge, Max-EK,
+     Ampel und Erstangebot folgen. **Schutz vor Miet-, Raten- und Lockangeboten** (QA B1): Händlerangebote unter 80 % des privaten
+     Marktniveaus zählen nicht (die Erklärung nennt sie); liegt das Händlerniveau danach unter dem privaten, ist das ein **Datenkonflikt**
+     – keine Obergrenze; der Händler-VK sinkt nie unter den Marktwert privat. Die Spanne nutzt die Streuung der Händlerangebote
+     (Obergrenze am unteren/oberen Viertel, in der Kalkulation je Szenario), die Sicherheit ist bei aktiver Obergrenze höchstens
+     „mittel“ (QA B2). Abschaltbar (`haendler_vk_deckel: false`, auch 0/„nein“/„aus“). Erklärung und Detail nennen Anzahl, Niveau und
+     ob begrenzt wurde.
+  3. **Marktbeobachtung** (Kalibrierungsbericht, Seite, CLI): private **Fahrzeuge**, deren Inserate alle vom Markt verschwunden sind
+     (verkauft, offline oder vermutlich offline nach der Regel der App) – erster Preis über alle Inserate gegen den letzten; wieder
+     eingestellte oder mehrfach inserierte Fahrzeuge zählen einmal bzw. gar nicht, solange ein Inserat verfügbar ist (QA B3). Die Senkung bis zum
+     Verschwinden ist eine **Untergrenze** für den Abschlag Angebot → Abschluss (verhandelt wird danach noch). Liegt ihr Median über dem
+     eingestellten Abschlag (ab 5 Inseraten), gibt es einen Hinweis; geändert wird nichts.
+  4. Kalkulation: Rechenstand **E4**; der Auszug enthält die Händlerangebote, die Standardwerte werden eingefroren, die Annahmen nennen
+     eine Begrenzung.
+* **Alternativen:** Händlerangebote mit einem festen Faktor in den Privatmarkt mischen (Händleraufschläge schwanken stark nach Marke,
+  Alter und Garantieleistung – die Mischung würde den Privatmarkt verzerren); Abschlag Angebot → Abschluss automatisch aus der
+  Marktbeobachtung setzen (nur Untergrenze, außerdem verschwinden Inserate auch ohne Verkauf).
+* **Folgen / offen:** Die Obergrenze greift nur, wenn das Händlerniveau zwischen dem Privatniveau und etwa +8 % liegt, und senkt den
+  Händler-VK dann um höchstens rund 7 % (bis auf den Marktwert privat); deutlich billigere Händlerangebote gelten als Miet-/Lockangebote
+  oder Datenkonflikt. Die Händlersicht ist so
+  gut wie die Anbietererkennung (ADR-043). Betreiberfragen: Mindestzahl 3 und 5 % Verhandlung beim Händler bestätigen.

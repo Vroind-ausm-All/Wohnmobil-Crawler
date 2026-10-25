@@ -6,6 +6,28 @@ Wert „–“.
 
 ---
 
+## P5-04 – Angebots- gegen Abschlusspreise, Händler- gegen Privatpreise (25.10.2026) · Status: REVIEW
+
+- **Auftrag:** „Arbeite p5-04 komplett aus“ (Betreiber, 25.10.2026, nach dem Merge von PR #43).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `acquisition-analyst`); QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/bewertung/rechner.py` (Händlerangebote, `haendlermarkt`, Obergrenze in `kette`), `bewertung/kalkulation.py`
+  (E4, Auszug mit Händlern), `bewertung/kalibrierung.py` (`preissenkungen`, `marktbeobachtung`), `web/api.py`, `scout.py`,
+  `vorlagen/kalibrierung.html`, `vorlagen/report.html`, `web/static/mobil.js`, `sw.js` (wm-scout-18), `config.yaml`; Tests
+  `test_preisarten.py` (neu), `test_anbieter.py` (Auszug enthält Händlerangebote), `test_spannen.py` (Rechenstand ≥ E3); Doku ADR-055,
+  `docs/RECHNER-ANALYSE.md`, ROADMAP (P5-03 DONE, P5-04 REVIEW), README.
+- **Implementierte Funktionen:** siehe ADR-055. Keine Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Ablehnung** wegen B1 (kritisch: drei Miet-, Raten- oder Lockangebote von Händlern drückten den Max-EK auf 0
+  bzw. −57 %) → Händlerangebote unter 80 % des Privatniveaus zählen nicht, Händlerniveau unter dem Privatniveau = Datenkonflikt ohne
+  Obergrenze, Händler-VK nie unter dem Marktwert privat; B2 (hoch: Spanne und Szenarien fielen bei aktiver Obergrenze zusammen,
+  Sicherheit blieb „hoch“) → Obergrenze am unteren/oberen Viertel der Händlerangebote, Szenarien je Viertel, Sicherheit höchstens
+  „mittel“; B3 (Marktbeobachtung je Inserat, wieder eingestellte Fahrzeuge als verschwunden) → je Fahrzeug, Verfügbarkeitsregel der App;
+  B4 ADR angepasst; B5 Schalter streng; B6 (.bat-Artefakte, .venv-Link) beim Commit beachtet. Regressionstests ergänzt; Korrekturen
+  nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Obergrenze ab 3 Händlerangeboten, 5 % Verhandlung beim Händler; Marktbeobachtung nur als
+  Hinweis.
+- **Nächster sinnvoller Schritt:** Rückmeldung des Betreibers, danach P5-05 (Ausstattung und Mängel; Reparatur-, Gewährleistungs-, Standkostenrisiko).
+
 ## P5-03 – Spannen statt Punktwerte, Abschlag bei unbekannter Marke, Mängelliste (25.10.2026) · Status: REVIEW
 
 - **Auftrag:** Betreiber 25.10.2026 nach dem Merge von PR #42 (Antwort auf die Fragen zu P5-02): unbekannte Marke schmälert den

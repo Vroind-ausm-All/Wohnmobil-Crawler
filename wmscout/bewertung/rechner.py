@@ -122,6 +122,11 @@ class Bewertung:
     privat_bis: int | None = None
     abschlag_marke: float = 0.0             # Abschlag auf den Händler-VK, weil die Aufbaumarke unbekannt ist
     maengel: list = field(default_factory=list)              # [{name, wert}] im Inserat genannte Mängel (negative Wertfaktoren)
+    # P5-04 (ADR-055): Händlermarkt – vergleichbare gewerbliche Angebote als Obergrenze für den Händler-VK
+    haendler_anzahl: int = 0                # vergleichbare Händlerangebote
+    haendler_niveau: int | None = None      # Niveau ihrer Angebotspreise (auf 500 €), erst ab ``haendler_vergleich_min``
+    vk_gedeckelt: bool = False              # Händler-VK auf das Händlermarkt-Niveau abzüglich Verhandlung begrenzt
+    haendler_konflikt: bool = False         # Händlerangebote billiger als der Privatmarkt – keine Obergrenze
     wertfaktoren: dict = field(default_factory=dict)
     km_korrektur: float = 0.0
     sicherheit: str = "keine"               # hoch | mittel | niedrig | manuell | keine
@@ -139,6 +144,11 @@ class Bewertung:
 
 def _runde(x: float, auf: int = 50) -> int:
     return int(round(x / auf) * auf)
+
+
+def _schalter(wert) -> bool:
+    """Ein/Aus aus config.yaml: nur ausdrücklich „aus“ (false, 0, „nein“, „aus“, „false“) schaltet ab."""
+    return not (wert is False or wert == 0 or (isinstance(wert, str) and wert.strip().lower() in ("nein", "aus", "false", "0")))
 
 
 def _nach_aussen(von: float, bis: float, auf: int = 500) -> tuple[int, int]:
@@ -184,6 +194,11 @@ def privatangebot(b: dict) -> bool:
     return not b.get("gewerblich") and not ("gewerblich" in b and b["gewerblich"] is None)
 
 
+def haendlerangebot(b: dict) -> bool:
+    """Ausdrücklich gewerbliches Angebot (P5-04): eigene Händlermarkt-Sicht, nie in der Vergleichsbasis „Marktwert privat“."""
+    return bool(b.get("gewerblich"))
+
+
 class Vergleichsliste(list):
     """Vergleichsangebote mit Vorfilter (P3-07, R12): einmal je Liste nach (Fahrzeugart, Erstzulassungsjahr) einsortiert – nur Angebote, die die
     datenabhängigen Bedingungen von ``Rechner.vergleiche`` überhaupt erfüllen können (Preis ab 1.000 €, Privatangebot, Jahr bekannt). ``kandidaten``
@@ -193,22 +208,24 @@ class Vergleichsliste(list):
     die Einträge nach dem Anlegen nicht verändern."""
 
     _index: dict | None = None
-    _rest: list = []
+    _rest: dict = {}
 
-    def kandidaten(self, art: str, ez_jahr: int, toleranz: int) -> list[dict]:
+    def kandidaten(self, art: str, ez_jahr: int, toleranz: int, haendler: bool = False) -> list[dict]:
+        """Privatangebote – oder mit ``haendler`` die gewerblichen (P5-04) – des Jahresfensters."""
         if self._index is None:
             index: dict[tuple, list] = {}
-            rest = []
+            rest: dict[bool, list] = {False: [], True: []}
             for pos, b in enumerate(self):
-                if b.get("preis") and b["preis"] >= 1000 and privatangebot(b) and b.get("ez_jahr"):
+                gruppe = False if privatangebot(b) else True if haendlerangebot(b) else None
+                if b.get("preis") and b["preis"] >= 1000 and gruppe is not None and b.get("ez_jahr"):
                     j = b["ez_jahr"]
                     if isinstance(j, int) or (isinstance(j, float) and j.is_integer()):
-                        index.setdefault((art_schluessel(b.get("suche"), b.get("art"), b.get("titel")), int(j)), []).append((pos, b))
+                        index.setdefault((gruppe, art_schluessel(b.get("suche"), b.get("art"), b.get("titel")), int(j)), []).append((pos, b))
                     else:
-                        rest.append((pos, b))
+                        rest[gruppe].append((pos, b))
             self._index, self._rest = index, rest
-        treffer = [t for j in range(ez_jahr - toleranz, ez_jahr + toleranz + 1) for t in self._index.get((art, j), ())] + self._rest
-        return [b for _, b in sorted(treffer, key=lambda t: t[0])]
+        treffer = [t for j in range(ez_jahr - toleranz, ez_jahr + toleranz + 1) for t in self._index.get((haendler, art, j), ())]
+        return [b for _, b in sorted(treffer + self._rest[haendler], key=lambda t: t[0])]
 
     def _veraendert(name):                                     # jede Änderung der Liste verwirft den Index
         def methode(self, *a, **k):
@@ -340,16 +357,18 @@ class Rechner:
 
     # ---------- Vergleichsbasis ----------
     # Nur Privatangebote; ein Angebot mit unbekanntem Anbieter (``gewerblich`` ausdrücklich None) zählt nicht als privat (P2-05d, ADR-043)
-    def vergleiche(self, a: dict, alle: list[dict]) -> list[tuple[float, float, bool, str]]:
-        """[(Preis ÷ Referenzwert, Gewicht, gleiche Marke, Ähnlichkeitsstufe)] für vergleichbare Angebote."""
+    def vergleiche(self, a: dict, alle: list[dict], haendler: bool = False) -> list[tuple[float, float, bool, str]]:
+        """[(Preis ÷ Referenzwert, Gewicht, gleiche Marke, Ähnlichkeitsstufe)] für vergleichbare Privatangebote – mit ``haendler`` für
+        vergleichbare gewerbliche Angebote (Händlermarkt, P5-04), sonst gleich gefiltert und gewichtet."""
         jt, kt = self.c["vergleich_jahre_toleranz"], self.c["vergleich_km_toleranz"]
         art = self.art(a)
+        passt = haendlerangebot if haendler else privatangebot
         alt_grenze = ((self.stichtag or datetime.now()) - timedelta(days=180)).isoformat(timespec="seconds")
         if isinstance(alle, Vergleichsliste) and isinstance(a.get("ez_jahr"), int) and isinstance(jt, int):
-            alle = alle.kandidaten(art, a["ez_jahr"], jt)                  # Vorfilter; die Prüfungen unten bleiben vollständig
+            alle = alle.kandidaten(art, a["ez_jahr"], jt, haendler)          # Vorfilter; die Prüfungen unten bleiben vollständig
         erg = []
         for b in alle:
-            if b.get("id") == a.get("id") or not b.get("preis") or b["preis"] < 1000 or not privatangebot(b):
+            if b.get("id") == a.get("id") or not b.get("preis") or b["preis"] < 1000 or not passt(b):
                 continue
             if not b.get("ez_jahr") or abs(b["ez_jahr"] - a["ez_jahr"]) > jt or self.art(b) != art:
                 continue
@@ -448,7 +467,10 @@ class Rechner:
                 "sicherheit": sicherheit, "spanne": (niveau * (1 - s), niveau * (1 + s)), "basis": basis}
 
     # ---------- Hauptrechnung ----------
-    def bewerte(self, a: dict, alle: list[dict] | None = None, marktwert_manuell: int | None = None) -> Bewertung:
+    def bewerte(self, a: dict, alle: list[dict] | None = None, marktwert_manuell: int | None = None,
+                haendler_quantil: float = .5) -> Bewertung:
+        """``haendler_quantil``: an welcher Stelle der Händlerangebote die Obergrenze für den Punktwert liegt (Kalkulation: Szenarien
+        vorsichtig/günstig am unteren/oberen Viertel)."""
         mn = self.marktniveau(a, alle or [])
         if marktwert_manuell:
             mn.update(niveau=marktwert_manuell, n=0, n_marke=0, stufen={}, gewicht=0.0, sicherheit="manuell", spanne=None,
@@ -461,8 +483,20 @@ class Rechner:
         if not mn["niveau"]:
             return Bewertung(None, 0, "kein Preis", 0, 0, 0, angebotspreis=a.get("preis"))
 
-        k = self.kette(a, mn["niveau"])
+        hm = self.haendlermarkt(a, alle or [], mn["niveau"], haendler_quantil)
+        k = self.kette(a, mn["niveau"], hm["deckel"])
         mw_privat, vk, posten, kosten, marge, max_ek = k["mw_privat"], k["vk"], k["posten"], k["kosten"], k["marge"], k["max_ek"]
+        if hm["n"] or hm["verworfen"]:
+            mn["basis"] += f" · {hm['n']} Händlerangebot{'e' if hm['n'] != 1 else ''}" + (
+                f" (Niveau {_runde(hm['niveau'], 500):,} €)".replace(",", ".") if hm["niveau"] else " (zu wenige für eine Obergrenze)")
+            if hm["verworfen"]:
+                mn["basis"] += f", {hm['verworfen']} weit unter dem Privatmarkt nicht gezählt (Miete, Rate, Lockangebot?)"
+            if hm["konflikt"]:
+                mn["basis"] += " – Händler billiger als privat: Datenkonflikt, keine Obergrenze"
+            if k["gedeckelt"]:
+                mn["basis"] += f" – Händler-VK auf {_runde(vk, 100):,} € begrenzt".replace(",", ".")
+                if mn["sicherheit"] == "hoch":
+                    mn["sicherheit"] = "mittel"                          # Obergrenze aus wenigen Händlerangeboten (QA P5-04 B2)
 
         erst, fair_hinweis = self.erstangebot(max_ek, mw_privat, a.get("preis"))
 
@@ -477,10 +511,12 @@ class Rechner:
             sicherheit=mn["sicherheit"], art=mn["art"], alter=mn["alter"], fair_hinweis=fair_hinweis,
         )
         b.abschlag_marke = k["abschlag"]
+        b.haendler_anzahl, b.vk_gedeckelt, b.haendler_konflikt = hm["n"], k["gedeckelt"], hm["konflikt"]
+        b.haendler_niveau = _runde(hm["niveau"], 500) if hm["niveau"] else None
         b.maengel = _maengel(mn["wertfaktoren"])
         if mn["spanne"]:
             b.spanne_von, b.spanne_bis = _runde(mn["spanne"][0], 100), _runde(mn["spanne"][1], 100)
-            unten, oben = self.kette(a, mn["spanne"][0]), self.kette(a, mn["spanne"][1])
+            unten, oben = self.kette(a, mn["spanne"][0], hm["deckel_unten"]), self.kette(a, mn["spanne"][1], hm["deckel_oben"])
             # Spannen auf 500 € nach außen gerundet – umschließen den Punktwert immer, keine falsche Genauigkeit (P5-03, QA B2);
             # Punktwerte bleiben für Ampel und Brief
             b.max_ek_von, b.max_ek_bis = _nach_aussen(unten["max_ek"], oben["max_ek"])
@@ -500,17 +536,45 @@ class Rechner:
         Mercedes Marco Polo, Ford Nugget) haben eine Marke."""
         return not a.get("marke") or (ist_basismarke(a.get("marke")) and not ist_werks_camper(a.get("marke"), a.get("modell")))
 
-    def kette(self, a: dict, niveau: float) -> dict:
-        """Marktniveau → Marktwert privat → Händler-VK (abzüglich Abschlag bei unbekannter Marke) → Kosten, Marge, Max-EK (ungerundet)."""
+    def haendlermarkt(self, a: dict, alle: list[dict], privat_niveau: float | None = None, quantil: float = .5) -> dict:
+        """Vergleichbare Händlerangebote (P5-04): Anzahl, Niveau ihrer Angebotspreise und – ab ``haendler_vergleich_min`` Angeboten – die
+        Obergrenze für den eigenen Händler-VK (Niveau abzüglich ``abschlag_haendler_angebot`` für die Verhandlung), am ``quantil`` sowie für
+        die Spanne am unteren/oberen Viertel. Ohne Mischung mit dem Referenzmodell: zu wenige Händlerangebote heißen „keine Obergrenze“.
+        Schutz vor Miet-, Raten- und Lockangeboten (QA P5-04 B1): Händlerangebote unter 80 % des privaten Marktniveaus zählen nicht;
+        liegt das Händlerniveau dann noch unter dem privaten, ist das ein Datenkonflikt – keine Obergrenze."""
+        leer = {"n": 0, "verworfen": 0, "niveau": None, "deckel": None, "deckel_unten": None, "deckel_oben": None, "konflikt": False}
+        ref = self.modellwert(a)[0] if a.get("ez_jahr") else None
+        vgl = self.vergleiche(a, alle, haendler=True) if ref else []
+        if not vgl:
+            return leer
+        untergrenze = 0.8 * privat_niveau / ref if privat_niveau else 0
+        gueltig = [(r, w) for r, w, *_ in vgl if r >= untergrenze]
+        erg = {**leer, "n": len(gueltig), "verworfen": len(vgl) - len(gueltig)}
+        if len(gueltig) < int(self.c.get("haendler_vergleich_min", 3)):
+            return erg
+        erg["niveau"] = ref * gewichtetes_quantil(gueltig, .5)
+        if privat_niveau and erg["niveau"] < privat_niveau:
+            return {**erg, "konflikt": True}
+        if _schalter(self.c.get("haendler_vk_deckel", True)):
+            faktor = ref * (1 - float(self.c.get("abschlag_haendler_angebot", 0.05)))
+            erg.update(deckel=faktor * gewichtetes_quantil(gueltig, quantil), deckel_unten=faktor * gewichtetes_quantil(gueltig, .25),
+                       deckel_oben=faktor * gewichtetes_quantil(gueltig, .75))
+        return erg
+
+    def kette(self, a: dict, niveau: float, vk_max: float | None = None) -> dict:
+        """Marktniveau → Marktwert privat → Händler-VK (abzüglich Abschlag bei unbekannter Marke, höchstens ``vk_max`` aus dem Händlermarkt)
+        → Kosten, Marge, Max-EK (ungerundet)."""
         mw_privat = niveau * (1 - self.c["abschlag_angebot_auf_privatwert"])
         abschlag = float(self.c.get("abschlag_marke_unbekannt", 0.05)) if self.marke_unbekannt(a) else 0.0
         vk = mw_privat * (1 + self.c["aufschlag_haendler_vk"]) * (1 - abschlag)
+        gedeckelt = vk_max is not None and vk > vk_max
+        vk = max(vk_max, mw_privat) if gedeckelt else vk           # nie unter den Marktwert privat (QA P5-04 B1)
         posten = self.kosten(a, vk)
         kosten = sum(posten.values())
         marge = max(vk * self.c["ziel_marge_prozent"], self.c["ziel_marge_min"])
         max_ek = vk - (marge + kosten) * 1.19 if self.c["differenzbesteuerung"] else vk / 1.19 - kosten - marge
         return {"mw_privat": mw_privat, "vk": vk, "posten": posten, "kosten": kosten, "marge": marge, "max_ek": max(0, max_ek),
-                "abschlag": abschlag}
+                "abschlag": abschlag, "gedeckelt": gedeckelt}
 
     def erstangebot(self, max_ek: float, mw_privat: float, wunschpreis: int | None) -> tuple[float, str | None]:
         """Verhandlungsspielraum ja, Lockangebot nein – und nie mehr als der Verkäufer verlangt."""

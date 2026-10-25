@@ -333,6 +333,8 @@
         "</b></div>" + maxEkZelle(f) + "</div>" +
         (b.privat_von ? '<p class="leise" data-privat-spanne="">Marktwert privat ' + Number(b.privat_von).toLocaleString("de-DE") + "–" + eur(b.privat_bis) + "</p>" : "") +
         '<p class="leise">Marktniveau ' + eur(b.marktwert_angebote) + " · Sicherheit " + esc(b.sicherheit) + "</p>" +
+        (b.haendler_anzahl ? '<p class="leise" data-haendlermarkt="">Händlermarkt: ' + b.haendler_anzahl + " Händlerangebote" +
+          (b.haendler_niveau ? ", Niveau " + eur(b.haendler_niveau) + (b.vk_gedeckelt ? " – Händler-VK darauf begrenzt" : "") + (b.haendler_konflikt ? " – billiger als privat (Datenkonflikt), keine Obergrenze" : "") : " – zu wenige für eine Obergrenze") + "</p>" : "") +
         '<a class="knopf klein" href="' + link(f.url) + '" target="_blank" rel="noopener">Anzeige öffnen ↗</a></div>' +
         maengelZeile(f, true) + hinweisZeilen(f) +
         (f.anbieter ? '<div class="karte"><div class="zeile"><span class="leise">Anbieter</span>' + anbTag(f) + "</div>" +

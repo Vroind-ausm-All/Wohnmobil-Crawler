@@ -348,6 +348,12 @@ def cmd_kalibrierung(cfg, db, args):
             print(f"  Achtung: {v['warnung']}")
     if b["vorschlaege"]:
         print("Nichts wurde geändert – Parameter bewusst in config.yaml nachstellen.")
+    m = kalibrierung.KalibrierungSpeicher(db).marktbeobachtung(cfg)
+    senkung = "–" if m["median"] is None else f"{m['median']:.0%}"
+    print(f"Marktbeobachtung: {m['n']} verschwundene Privatinserate mit Preisverlauf, {m['mit_senkung']} gesenkt, Senkung im Median {senkung}"
+          f" (Untergrenze für den Abschlag Angebot → Abschluss, derzeit {m['abschlag']:.0%})")
+    if m["hinweis"]:
+        print(f"Hinweis: {m['hinweis']}")
 
 
 def cmd_report(cfg, db, args):

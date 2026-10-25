@@ -49,7 +49,7 @@ Kalibrierung lohnt deshalb zuerst beim **Verkaufspreis** (Ist-VK gegen geplanten
 | S1 | Keine Rückkopplung mit echten Ankäufen/Verkäufen; Parameter sind Schätzwerte | systematische Über-/Unterbewertung bleibt unbemerkt | **P5-01** (Kalibrierungsbericht) |
 | S2 | Vergleich nur nach Art + Jahr + km; Marke gewichtet, Modellreihe nur als Zuschlag; keine Fahrzeugklasse (Länge, Basisfahrzeug) | Teilintegrierte von 6 m und 7,5 m gelten als gleich | P5-02 – **angegangen** (ADR-053: Ähnlichkeitsstufen, Länge/Basisfahrzeug aus dem Text) |
 | S3 | Spanne nur aus Vergleichsstreuung, Punktwert in der Oberfläche dominiert; bei 1–4 Vergleichen Mischwert mit dem Modell | falsche Genauigkeit bei dünner Datenlage | P5-03 – **angegangen** (ADR-054: Max-EK und Marktwert privat als Spanne in der Oberfläche) |
-| S4 | Angebotspreise statt Abschlusspreisen; fester Abschlag 7 %; Händlerangebote fließen gar nicht ein | Marktwert privat systematisch verschoben | P5-04 (+ Kalibrierung) |
+| S4 | Angebotspreise statt Abschlusspreisen; fester Abschlag 7 %; Händlerangebote fließen gar nicht ein | Marktwert privat systematisch verschoben | P5-04 – **angegangen** (ADR-055: Händlermarkt als Obergrenze für den Händler-VK, Marktbeobachtung der Preissenkungen; Abschlusspreise nur aus eigenen Ankäufen, ADR-052) |
 | S5 | Wertfaktoren nur aus Stichworten im Text, Deckel ±; Mängel aus der Besichtigung fließen nicht zurück | Zustand schlecht abgebildet | P5-05 |
 | S6 | Transport nur ab Firmensitz; Reparaturrisiko nur nach Alter | Standorte/Kostenrisiko ungenau | P5-06, P5-05 |
 | S7 | Keine Gesamtbewertung (Deal-Score), keine gespeicherte Modellversion | Bewertungen nicht vergleichbar über die Zeit | P5-07 |
