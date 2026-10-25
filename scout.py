@@ -59,7 +59,7 @@ from wmscout.eingang import import_ordner
 from wmscout.eingang.email import mail_ordner
 from wmscout.auktion import STATUS as AUKTION_STATUS
 from wmscout.auktion import AuktionSpeicher
-from wmscout import datenrechte, laufprotokoll, mandanten
+from wmscout import abdeckung, datenrechte, laufprotokoll, mandanten
 from wmscout.audit import AuditSpeicher
 from wmscout.nutzung import nutzung
 from wmscout.deal import DealSpeicher
@@ -289,6 +289,34 @@ def cmd_qualitaet(cfg, db, args):
               f"{q['mittel']:>8.0f}{q['mit_widerspruch']:>10}")
     schwach = [z for z in zeilen if z["a"]["datenqualitaet"]["stufe"] == "schwach"]
     print(f"\n{len(schwach)} von {len(zeilen)} Fahrzeugen mit schwacher Datenlage (Wert unter 50).")
+
+
+def cmd_abdeckung(cfg, db, args):
+    """Abdeckung und Suchlücken (P4-05) für die letzten ``--tage`` Tage – nur lesen. Ausführlich in der App unter /abdeckung."""
+    try:
+        tage = abdeckung.tage_aus(args.tage)
+    except ValueError as e:
+        sys.exit(str(e))
+    m = abdeckung.messe(cfg, db, BASIS, tage)
+    k = m["kennzahlen"]
+    print(f"Abdeckung der letzten {tage} Tage")
+    je_quelle = ", ".join(f"{q} {n}" for q, n in k["neue_inserate_je_quelle"].items())
+    print(f"  Neue Inserate: {k['neue_inserate']}" + (f" ({je_quelle})" if je_quelle else "") +
+          f" · unterschiedliche Fahrzeuge: {k['neue_fahrzeuge']} · relevante Privatangebote: {k['relevante_privatangebote']}"
+          f" ({k['relevante_privatangebote_pro_tag']} pro Tag)")
+    voll = "–" if k["anteil_vollstaendig"] is None else f"{k['anteil_vollstaendig']:.0%}"
+    print(f"  Preisänderungen: {k['preisaenderungen']} · mit Dublette: {k['inserate_mit_dublette']} · nicht verfügbar: {k['nicht_verfuegbar']}"
+          f" · vollständig beschrieben: {voll}")
+    print("Zeitlücken je Plattform")
+    for p, z in m["zeitluecken"].items():
+        luecken = ", ".join(f"{lk['von']}–{lk['bis']} ({lk['tage']} Tage)" for lk in z["luecken"]) or "keine"
+        print(f"  {p:<14}{z['tage_mit_eingang']:>3} von {tage} Tagen mit Eingang · letzter {z['letzter_eingang'] or '–'} · Lücken: {luecken}")
+    print("Suchprofile")
+    for p in m["profile"] or [{"name": "(kein aktives Profil)", "passt": 0, "unklar": 0, "hinweise": []}]:
+        print(f"  {p['name']}: {p['passt']} passend, {p['unklar']} unklar" + "".join(f"\n    - {h}" for h in p["hinweise"]))
+    g = m["gebietsluecken"]
+    print(f"PLZ-Bereiche ohne neues Inserat ({len(g['ohne_inserat'])} von {len(g['ohne_inserat']) + len(g['je_bereich'])}): "
+          + (", ".join(g["ohne_inserat"]) or "keine"))
 
 
 def cmd_report(cfg, db, args):
@@ -690,6 +718,8 @@ def main():
     md.add_argument("--name")
     md.add_argument("--url", help="nur anlegen: eigene Adresse, z. B. https://firma-b.example.de")
     md.add_argument("--monat", help="nur nutzung: JJJJ-MM")
+    ab = sub.add_parser("abdeckung", help="Abdeckung und Suchlücken: Kennzahlen, Tage ohne Eingang, PLZ-Bereiche und Suchprofile (nur lesen)")
+    ab.add_argument("--tage", default="30", help="Zeitraum in Tagen (1–365, Standard 30)")
     sub.add_parser("qualitaet", help="Datenqualität je Quelle: Anteil mit Preis/EZ/km/Ort/Anbieter, Ø-Wert, Widersprüche (nur lesen)")
     du = sub.add_parser("dubletten", help="offene Dublettenvorschläge auflisten (nur lesen) oder im Einzelplatz entscheiden: "
                                           "bestaetigen ID1 ID2 | ablehnen ID1 ID2 | aufheben NUMMER")
@@ -742,7 +772,7 @@ def main():
     {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "quellen": cmd_quellen, "rechne": cmd_rechne,
      "nutzer": cmd_nutzer, "status": cmd_status, "standort": cmd_standort,
      "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage, "audit": cmd_audit, "nutzung": cmd_nutzung,
-     "inserat": cmd_inserat, "dubletten": cmd_dubletten, "qualitaet": cmd_qualitaet}[args.cmd](cfg, db, args)
+     "inserat": cmd_inserat, "dubletten": cmd_dubletten, "qualitaet": cmd_qualitaet, "abdeckung": cmd_abdeckung}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":

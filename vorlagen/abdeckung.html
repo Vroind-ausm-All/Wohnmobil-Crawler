@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#24524a">
+<link rel="icon" href="/static/icon-192.png">
+<title>Abdeckung – {{ firma }}</title>
+<link rel="stylesheet" href="/static/mobil.css">
+<style>
+main{max-width:1100px;margin:0 auto;padding:16px}
+nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px;flex-wrap:wrap}
+.tabelle{overflow-x:auto} table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top} td:last-child{text-align:left}
+td.z{text-align:right;white-space:nowrap}
+.hinweis-l{color:var(--gelb)} .bereiche{font-size:13px;line-height:1.7}
+</style>
+</head>
+<body>
+<main>
+  {% set k = m.kennzahlen %}
+  {% macro prozent(x) %}{{ ((x * 100) | round(0) | int ~ ' %') if x is not none else '–' }}{% endmacro %}
+  {% macro tag(iso) %}{{ iso[8:10] }}.{{ iso[5:7] }}.{% endmacro %}
+  <nav class="oben"><a href="/">Ankaufsliste</a><a href="/status">Status</a>
+    {% for t in [7, 30, 90] %}<a href="/abdeckung?tage={{ t }}"{% if t == m.tage %} aria-current="page"{% endif %}>{{ t }} Tage</a>{% endfor %}</nav>
+  <h1>Abdeckung und Suchlücken</h1>
+  <p class="leise">Zeitraum: {{ m.tage }} Tage einschließlich heute ({{ tag(m.von) }}–{{ tag(m.bis) }}). Gezählt werden Inserate, die in diesem
+    Zeitraum zuerst eingingen – über Suchlauf, gespeicherte Seiten, Mails oder Text. Ein Tag, an dem nur Bekanntes gesehen wurde, gilt bei den
+    Zeitlücken als Tag ohne Eingang. Nur Anzeige: Bewertung und Suche ändern sich dadurch nicht. Längere Zeiträume (bis 365 Tage):
+    <code>scout.py abdeckung --tage N</code>.</p>
+
+  <h2>Kennzahlen</h2>
+  <div class="tabelle"><table id="kennzahlen">
+    <tr><td>Neue Inserate</td><td class="z" data-k="neue_inserate">{{ k.neue_inserate }}</td>
+      <td class="leise">{% for q, n in k.neue_inserate_je_quelle.items() %}{{ q }} {{ n }}{{ ' · ' if not loop.last }}{% endfor %}</td></tr>
+    <tr><td>Neue unterschiedliche Fahrzeuge</td><td class="z" data-k="neue_fahrzeuge">{{ k.neue_fahrzeuge }}</td>
+      <td class="leise">Inserate desselben Fahrzeugs (bestätigte oder erkannte Dubletten) einmal gezählt</td></tr>
+    <tr><td>Relevante Privatangebote</td><td class="z">{{ k.relevante_privatangebote }}</td>
+      <td class="leise">{{ k.relevante_privatangebote_pro_tag | string | replace('.', ',') }} pro Tag – privat, nicht gesperrt, verfügbar</td></tr>
+    <tr><td>Inserate mit Dublette</td><td class="z">{{ k.inserate_mit_dublette }}</td><td class="leise">{{ prozent(k.anteil_mit_dublette) }}</td></tr>
+    <tr><td>Nicht mehr verfügbar</td><td class="z">{{ k.nicht_verfuegbar }}</td><td class="leise">{{ prozent(k.anteil_nicht_verfuegbar) }}</td></tr>
+    <tr><td>Erkannte Preisänderungen</td><td class="z">{{ k.preisaenderungen }}</td><td></td></tr>
+    <tr><td>Vollständig beschrieben</td><td class="z">{{ prozent(k.anteil_vollstaendig) }}</td>
+      <td class="leise">Preis, EZ, km, PLZ, Fahrzeugart und Anbieterart bekannt</td></tr>
+    {% for art, e in k.importerfolg.items() %}
+    <tr><td>Läufe ohne Fehler ({{ art }})</td><td class="z">{{ prozent(e.quote) }}</td><td class="leise">{{ e.ohne_fehler }} von {{ e.laeufe }}</td></tr>
+    {% endfor %}
+  </table></div>
+
+  <h2>Zeitlücken je Plattform</h2>
+  <div class="tabelle"><table id="zeitluecken">
+    <tr><th>Plattform</th><th>Tage mit neuen oder geänderten Inseraten</th><th>Letzter solcher Eingang</th><th>Längste Lücken (ab 2 Tagen)</th></tr>
+    {% for p, z in m.zeitluecken.items() %}
+    <tr data-plattform="{{ p }}"><td>{{ p }}</td><td class="z">{{ z.tage_mit_eingang }} von {{ m.tage }}</td>
+      <td>{{ tag(z.letzter_eingang) if z.letzter_eingang else '–' }}</td>
+      <td>{% for l in z.luecken %}<span class="hinweis-l">{{ tag(l.von) }}–{{ tag(l.bis) }} ({{ l.tage }} Tage)</span>{{ ', ' if not loop.last }}{% else %}–{% endfor %}</td></tr>
+    {% endfor %}
+  </table></div>
+
+  <h2>Suchprofile</h2>
+  {% if m.profile %}
+  <div class="tabelle"><table id="profile">
+    <tr><th>Profil</th><th>Gebiet</th><th>Passend</th><th>Fahrzeuge</th><th>Unklar</th><th>Je Plattform</th><th>Lücken</th></tr>
+    {% for p in m.profile %}
+    <tr data-profil="{{ p.id }}"><td>{{ p.name }}</td><td>{{ p.gebiet }}</td><td class="z">{{ p.passt }}</td><td class="z">{{ p.fahrzeuge }}</td>
+      <td class="z">{{ p.unklar }}</td>
+      <td>{% for q, n in p.je_plattform.items() %}{{ q }} {{ n }}{{ ' · ' if not loop.last }}{% else %}–{% endfor %}</td>
+      <td>{% for h in p.hinweise %}<div class="hinweis-l">{{ h }}</div>{% else %}–{% endfor %}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<p class="leise">Kein aktives Suchprofil. Profile legst du in der Ankaufsliste unter „Suchprofile“ an.</p>{% endif %}
+
+  <h2>Gebietslücken (PLZ-Bereiche)</h2>
+  {% set g = m.gebietsluecken %}
+  <p>{{ prozent(g.anteil_bereiche_mit_inserat) }} der zweistelligen PLZ-Bereiche mit mindestens einem neuen Inserat ·
+    {{ g.ohne_plz }} ohne erkennbare PLZ · {{ g.ausland }} im Ausland.</p>
+  <p class="bereiche" id="ohne-inserat"><b>Ohne neues Inserat:</b> {% for b in g.ohne_inserat %}{{ b }}{{ ', ' if not loop.last }}{% else %}keine{% endfor %}</p>
+  <p class="bereiche"><b>Mit Inseraten:</b> {% for b, n in g.je_bereich.items() %}{{ b }} ({{ n }}){{ ', ' if not loop.last }}{% else %}keine{% endfor %}</p>
+</main>
+</body>
+</html>

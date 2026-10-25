@@ -52,6 +52,7 @@ from ..anbieter import einstufung
 from .. import kontakte
 from .. import suchprofile as sp
 from .. import laufprotokoll as lp
+from .. import abdeckung
 from ..domaene import PLATTFORMEN
 from ..normalisierung.qualitaet import je_quelle
 from ..bewertung import kalkulation as kalk
@@ -166,6 +167,16 @@ class Kontext:
 
     def veraendert(self):
         self._zeilen = None
+
+    def abdeckung(self, tage: int) -> dict:
+        """Messung (P4-05) bis zu 5 Minuten zwischenspeichern, solange sich der Bestand nicht ändert: sie bewertet alle Inserate des Zeitraums
+        und läuft unter der Datenbanksperre der App."""
+        stand = (tage, self.db.daten_version(), self.db.con.total_changes, datetime.now().date())
+        gemerkt = getattr(self, "_abdeckung", None)
+        if not gemerkt or gemerkt[0] != stand or time.monotonic() - gemerkt[1] > 300:
+            gemerkt = (stand, time.monotonic(), abdeckung.messe(self.cfg, self.db, self.basis, tage))
+            self._abdeckung = gemerkt
+        return gemerkt[2]
 
     def dubletten_von(self, anzeige_id: str) -> list[str]:
         """IDs der Dubletten ohne die teure Bewertung (`bewerte_alle`). Eigener Zwischenspeicher: Statuswechsel und Reservierungen
@@ -584,6 +595,15 @@ class Anfrage:
             return self.json(200, {"ergebnis": erg, "eingabe_hash": kalk.eingabe_hash(e)[:12]})
         if p == "/api/status":                             # Statusseite (P4-04): Quellen, Eingänge, Läufe, Fehler – ohne Personendaten
             return self.json(200, {**lp.uebersicht(k.db, k.cfg), "suchlauf": k.suchlauf.stand})
+        if p in ("/api/abdeckung", "/abdeckung"):           # Abdeckung und Suchlücken (P4-05): nur lesen, ohne Personendaten
+            try:
+                tage = abdeckung.tage_aus((self.query.get("tage") or [""])[0], abdeckung.MAX_TAGE_APP)
+            except ValueError as e:
+                raise Antwort(400, str(e)) from e
+            erg = k.abdeckung(tage)
+            if p == "/api/abdeckung":
+                return self.json(200, erg)
+            return self.html(k.env.get_template("abdeckung.html").render(firma=k.cfg["anschreiben"]["firma"], m=erg))
         if p == "/status":
             return self.html(k.env.get_template("status.html").render(
                 firma=k.cfg["anschreiben"]["firma"], s=lp.uebersicht(k.db, k.cfg), suchlauf=k.suchlauf.stand, arten=lp.ARTEN,

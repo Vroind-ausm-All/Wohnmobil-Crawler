@@ -4,6 +4,21 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P4-05 – Abdeckung und Suchlücken messen (25.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2239 bestanden (vorher 2218), neu `test_abdeckung.py` (21) |
+| `ruff check .` | grün |
+| Zeitraum (`tage` 1–365, App 1–90, ungültige Eingaben, ab Mitternacht) | bestanden |
+| Kennzahlen: neue Inserate je Quelle, Fahrzeuge als Zusammenhangskomponenten (nicht transitive Dubletten, wieder eingestelltes Altfahrzeug nicht neu), relevante Privatangebote (Bearbeitungsstatus zählt nicht, Filter-Sperre schon), Dubletten, nicht verfügbar, vollständig beschrieben, Läufe ohne Fehler je Art | bestanden |
+| Zeitlücken (Lücken ab 2 Tagen, Rand bis heute, Plattform ohne Eingang), Gebietslücken (96 PLZ-Bereiche, ohne PLZ, Ausland), Profillücken (Hinweise zu Auftrag, Arten, PLZ-Bereichen, Anteil „unklar“) | bestanden |
+| Ende zu Ende über die Datenbank: Zeitraumgrenze (2 ältere Inserate ausgenommen), Preisänderung ohne Erstpreis, Laufprotokoll, Eingangstage nur aus neu/geändert (Detailabruf und „gelöscht“ zählen nicht), **keine Schreibzugriffe** (`total_changes` unverändert) | bestanden |
+| API/Seite (`/api/abdeckung`, `/abdeckung`, Link von `/status`), 400 bei ungültigem Zeitraum, HTML im Profilnamen escaped, Rechte (Mitarbeiter 200, Händler-Zugang 403), Zwischenspeicher der App (neu nur bei geändertem Bestand), CLI `scout.py abdeckung` | bestanden |
+| Browser (Orchestrator, Chromium über Playwright, nach der Korrekturrunde): Desktop 1280 – über „Status“ → „Abdeckung & Suchlücken“, Kennzahlen, Zeitlücken, Profilhinweise, Gebietslücken, Zeitraumwechsel 7 Tage; Handy 390 ohne Querscrollen; 0 JS-Fehler | bestanden |
+| QA (eine Runde, vor der Korrekturrunde: 18 bestanden, Proben P1–P3, u. a. 38,6 s für 6.000 Inserate/365 Tage) | Freigabe mit Auflagen – B1–B7 behoben bzw. dokumentiert; Korrekturen **nicht** erneut von der QA geprüft |
+| Laufzeit mit echtem Bestand, Windows-CI | nicht geprüft (CI folgt im PR) |
+
 ## P4-04 – Laufprotokoll, Intervalle je Quelle, Pause nach Sperre, Statusseite (24.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

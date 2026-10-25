@@ -19,7 +19,7 @@ td.z{text-align:right;white-space:nowrap}
 </head>
 <body>
 <main>
-  <nav class="oben"><a href="/">Ankaufsliste</a><a href="/m">Handy-App</a><a href="/status">Neu laden</a></nav>
+  <nav class="oben"><a href="/">Ankaufsliste</a><a href="/m">Handy-App</a><a href="/abdeckung">Abdeckung &amp; Suchlücken</a><a href="/status">Neu laden</a></nav>
   <h1>Status: Quellen, Eingänge, Suchläufe</h1>
   <p class="leise">Stand {{ s.jetzt[8:10] }}.{{ s.jetzt[5:7] }}. {{ s.jetzt[11:16] }} Uhr ·
     {% if suchlauf.laeuft %}<b>Suchlauf läuft:</b> {{ suchlauf.meldung }}{% else %}{{ suchlauf.meldung or 'kein Suchlauf aktiv' }}{% endif %} ·

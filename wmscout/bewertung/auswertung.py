@@ -169,8 +169,9 @@ def nachfass_grund(a: dict, cfg: dict, jetzt: datetime) -> str | None:
     return None
 
 
-def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None = None) -> list[dict]:
-    """Liest die Inserate und die geltenden Dublettenentscheidungen aus der Datenbank und bewertet sie (``bewerte_zeilen``)."""
+def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None = None, erstmals_seit: str | None = None) -> list[dict]:
+    """Liest die Inserate und die geltenden Dublettenentscheidungen aus der Datenbank und bewertet sie (``bewerte_zeilen``).
+    ``erstmals_seit`` (ISO, lokal): statt der aktiven Inserate alle, die ab diesem Zeitpunkt zuerst eingingen (Abdeckung, P4-05)."""
     wirkung = lade_wirkung(db)
     mitglieder = {i for g in wirkung.gruppen for i in g}
     roh = db.verfuegbarkeit_zu()                       # Verfügbarkeit aus „inserate“, eine Abfrage für alle Zeilen (P3-04)
@@ -178,7 +179,8 @@ def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None =
 
     def zeile(r) -> dict:
         return {**dict(r), **roh.get(r["id"], {}), "hat_arbeit": r["id"] in arbeit}
-    return bewerte_zeilen(cfg, basis, [zeile(r) for r in db.alle_mit_preis()], [zeile(r) for r in db.aktive()], lauf_start,
+    zu_bewerten = db.erstmals_seit(erstmals_seit) if erstmals_seit else db.aktive()
+    return bewerte_zeilen(cfg, basis, [zeile(r) for r in db.alle_mit_preis()], [zeile(r) for r in zu_bewerten], lauf_start,
                           wirkung=wirkung, gruppenzeilen=[zeile(r) for r in db.anzeigen_zu(mitglieder)])
 
 
