@@ -22,7 +22,7 @@ from datetime import datetime
 from .auswertung import _sicht_als, bewerte_anzeige, fuer_rechner, kandidaten_arten
 from .rechner import STANDARD_AEHNLICHKEIT, STANDARD_MARKTMODELL, Rechner, _runde, privatangebot
 
-VERSION = "E2"          # bei jeder Änderung an Formeln erhöhen – ältere Kalkulationen gelten dann als „andere Version“ (E2: P5-02)
+VERSION = "E3"          # bei jeder Änderung an Formeln erhöhen – ältere Kalkulationen gelten dann als „andere Version“ (E2: P5-02, E3: P5-03)
 SZENARIEN = {"vorsichtig": "unteres Ende der Marktspanne", "erwartet": "Schätzung des Marktniveaus",
              "guenstig": "oberes Ende der Marktspanne"}
 FAHRZEUG_FELDER = ("id", "suche", "art", "titel", "marke", "modell", "serie", "ez_jahr", "km", "preis", "kurzbeschreibung",
@@ -54,6 +54,7 @@ def _rechner_cfg(cfg: dict) -> dict:
     r = dict(cfg["rechner"])
     r["marktmodell"] = {**STANDARD_MARKTMODELL, **(r.get("marktmodell") or {})}
     r["vergleich_aehnlichkeit"] = {**STANDARD_AEHNLICHKEIT, **(r.get("vergleich_aehnlichkeit") or {})}
+    r.setdefault("abschlag_marke_unbekannt", 0.05)
     return r
 
 
@@ -132,7 +133,7 @@ def rechne(e: dict) -> dict:
     ampel = None
     if betrag:
         ampel = "gruen" if betrag <= sicher else "gelb" if betrag <= ober else "rot"
-    return {"version": VERSION, "moeglich": True, "betrag": betrag, "szenarien": szenarien,
+    return {"version": VERSION, "moeglich": True, "betrag": betrag, "szenarien": szenarien, "abschlag_marke": b.abschlag_marke,
             "korridor": {"sicher_bis": sicher, "obergrenze": ober}, "ampel": ampel,
             "sicherheit": b.sicherheit, "spanne": [b.spanne_von, b.spanne_bis] if b.spanne_von else None,
             "risiko": _risiko(b, a, betrag, sicher, ober), "annahmen": _annahmen(e, b), "vergleich_basis": b.vergleich_basis}
@@ -169,7 +170,8 @@ def _annahmen(e: dict, b) -> list[str]:
     return [f"Stichtag {e['stichtag']}, Rechenstand {VERSION}",
             f"Abholung: {e['abholung']}" + (f", {e['fahrzeug']['entfernung_km']} km" if e["fahrzeug"].get("entfernung_km") is not None
                                             else ", Entfernung unbekannt (Transportpauschale)"),
-            f"Marktwert privat = Marktniveau − {r['abschlag_angebot_auf_privatwert']:.0%}; Händler-VK = privat + {r['aufschlag_haendler_vk']:.0%}",
+            f"Marktwert privat = Marktniveau − {r['abschlag_angebot_auf_privatwert']:.0%}; Händler-VK = privat + {r['aufschlag_haendler_vk']:.0%}"
+            + (f", davon − {b.abschlag_marke:.0%} für unbekannte Marke" if b.abschlag_marke else ""),
             "Kosten (erwartet): " + ", ".join(f"{n} {_eur(v)}" for n, v in b.kosten_posten.items()),
             f"Zielmarge {r['ziel_marge_prozent']:.0%} vom Händler-VK, mindestens {_eur(r['ziel_marge_min'])}",
             f"Provision {e['kalkulation']['provision_prozent']:.1%} vom Zuschlag (als Kosten, im Max-EK enthalten)",

@@ -380,7 +380,8 @@ def test_bewertung_ohne_quellenlogik_gewerbliche_gesperrt_private_bewertet(cfg, 
     for ad_id in ("md-390000019", "md-3900000013", "md-3900000014", "md-3900000016"):
         assert zeilen[ad_id]["sperre"] == "gewerblicher Anbieter" and not zeilen[ad_id]["bereit"]
     privat = zeilen["md-3900000021"]
-    assert privat["sperre"] is None and privat["hinweise"] == [] and privat["b"].art == "Kastenwagen"       # bestätigte Art: kein Hinweis
+    art_hinweise = [h for h in privat["hinweise"] if not h.startswith("Marke unbekannt")]                    # Marke: P5-03, eigene Tests
+    assert privat["sperre"] is None and art_hinweise == [] and privat["b"].art == "Kastenwagen"            # bestätigte Art: kein Hinweis
     unbekannt = zeilen["md-3900000012"]
     assert unbekannt["sperre"] is None and unbekannt["hinweise"] and unbekannt["hinweise"][0].startswith(HINWEIS_ART_UNBEKANNT_ANFANG)
     assert HINWEIS_ART_VORLAEUFIG not in unbekannt["hinweise"]

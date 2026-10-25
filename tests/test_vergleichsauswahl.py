@@ -180,7 +180,7 @@ def test_kalkulation_friert_aehnlichkeit_und_modell_ein():
             *(_v(2 + i, marke="Hymer", preis=42000 + i * 3000) for i in range(4))]
     fahrzeug = {**ZIEL, "entfernung_km": 100}
     e = kalk.eingabe(cfg, fahrzeug, alle, betrag=30000, stichtag=STICHTAG, abholung="Firmensitz")
-    assert e["version"] == kalk.VERSION == "E2" and e["rechner"]["vergleich_aehnlichkeit"] == STANDARD_AEHNLICHKEIT
+    assert e["version"] == kalk.VERSION and kalk.VERSION >= "E2" and e["rechner"]["vergleich_aehnlichkeit"] == STANDARD_AEHNLICHKEIT
     assert e["vergleich"][0]["modell"] == "Sky TI 650 MEG" and "Länge 7,30 m" in e["vergleich"][0]["beschreibung"]
     gespeichert = json.loads(json.dumps(e))
     erg = kalk.rechne(e)

@@ -124,7 +124,7 @@ def fall_aus_ankauf(ankauf: dict, kosten: list[dict]) -> dict | None:
             "ek": ankauf["kaufpreis"], "max_ek": plan.get("max_ek"), "vk_plan": plan.get("haendler_vk"), "vk": ist["vk"],
             "kosten_plan": plan.get("kosten"), "kosten": ist["kosten"] if verkauft and kosten else None,     # ohne Erfassung: unbekannt, nicht 0
             "standzeit_plan": plan.get("standzeit_tage"), "standzeit": ist["standzeit_tage"] if verkauft else None,
-            "sicherheit": None, "nachgerechnet": False, "parameter": plan.get("parameter")}
+            "sicherheit": None, "nachgerechnet": False, "parameter": plan.get("parameter"), "abschlag_marke": plan.get("abschlag_marke") or 0.0}
 
 
 def fall_aus_manuell(f: dict, cfg: dict) -> dict:
@@ -141,7 +141,7 @@ def fall_aus_manuell(f: dict, cfg: dict) -> dict:
             "max_ek": b.max_ek if gerechnet else None, "vk_plan": b.haendler_vk if gerechnet else None, "vk": f["verkauf_preis"],
             "kosten_plan": b.kosten if gerechnet else None, "kosten": f["kosten"] if f["verkauf_preis"] else None,
             "standzeit_plan": int(cfg["rechner"]["kosten"].get("standzeit_monate", 3)) * 30, "standzeit": standzeit,
-            "sicherheit": b.sicherheit, "nachgerechnet": True, "parameter": parameter(cfg)}
+            "sicherheit": b.sicherheit, "nachgerechnet": True, "parameter": parameter(cfg), "abschlag_marke": b.abschlag_marke}
 
 
 # ---------------------------------------------------------------- Bericht
@@ -191,7 +191,17 @@ def bericht(faelle: list[dict], cfg: dict) -> dict:
     standzeit = kennzahl([f["standzeit"] - f["standzeit_plan"] for f in faelle if f.get("standzeit") is not None and f.get("standzeit_plan")])
     mit = [f for f in faelle if f.get("parameter")]
     vorschlaege = []
-    vk_faelle = [f for f in mit if f.get("vk") and f.get("vk_plan")]
+    # Fälle mit Abschlag für unbekannte Marke (P5-03) prüfen den Abschlag, nicht den Händleraufschlag (QA P5-03 B3)
+    vk_faelle = [f for f in mit if f.get("vk") and f.get("vk_plan") and not f.get("abschlag_marke")]
+    marke_faelle = [f for f in mit if f.get("vk") and f.get("vk_plan") and f.get("abschlag_marke")]
+    if len(marke_faelle) >= MIN_FAELLE:
+        jetzt_abschlag = float(cfg["rechner"].get("abschlag_marke_unbekannt", 0.05))
+        abschlag = statistics.median(1 - (1 - f["abschlag_marke"]) * f["vk"] / f["vk_plan"] for f in marke_faelle)
+        if abs((1 - abschlag) / (1 - jetzt_abschlag) - 1) > TOLERANZ_VK:
+            vorschlaege.append({"parameter": "rechner.abschlag_marke_unbekannt", "alt": jetzt_abschlag, "neu": round(max(0.0, abschlag), 2),
+                                "faelle": len(marke_faelle), "grund": "Fahrzeuge mit unbekannter Marke verkaufen sich im Median "
+                                f"{prozent(statistics.median(f['vk'] / f['vk_plan'] for f in marke_faelle))} gegenüber dem Plan",
+                                "alternative": None, "warnung": _warnung(abschlag, (0.0, 0.25))})
     if len(vk_faelle) >= MIN_FAELLE:
         aufschlag = statistics.median((1 + f["parameter"]["aufschlag_haendler_vk"]) * f["vk"] / f["vk_plan"] - 1 for f in vk_faelle)
         if abs((1 + aufschlag) / (1 + jetzt["aufschlag_haendler_vk"]) - 1) > TOLERANZ_VK:

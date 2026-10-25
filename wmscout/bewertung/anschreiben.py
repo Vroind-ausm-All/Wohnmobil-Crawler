@@ -78,6 +78,12 @@ HINWEIS_AUSLAND = "Ausland – Abholung, Überführung und Zulassung prüfen"
 HINWEIS_ANBIETER_UNBEKANNT = "Anbieter unbekannt (privat oder gewerblich) – bitte vor dem Anschreiben prüfen"
 
 
+def hinweis_marke_unbekannt(abschlag: float) -> str:
+    """P5-03: nur ein Hinweis an den Ankäufer – der Abschlag steckt schon im Händler-VK, das Anschreiben bleibt wie es ist."""
+    return (f"Marke unbekannt – Händler-VK {abschlag:.0%} niedriger angesetzt; Marke beim Verkäufer erfragen, dann neu bewerten"
+            ).replace("%", " %")
+
+
 def hinweis_ausland(land: str) -> str:
     return (f"{HINWEIS_AUSLAND} (Standort {land}; Entfernung und Transportkosten nicht berechnet – Ampel höchstens gelb, Brief ohne Betrag)")
 
@@ -89,7 +95,8 @@ def hinweise(a: dict, b=None) -> list[str]:
     vorläufigen bzw. vorsichtig mit der Kandidaten-Art mit dem niedrigsten Max-EK (`b.art`, siehe
     auswertung.bewerte_anzeige). Crawler-Funde (Art aus der Suche) und bestätigte Arten tragen keinen Hinweis.
     Außerdem: Ort im Ausland (`a["ausland"]` – keine Entfernung, Transport ungewiss) und unbekannter Anbieter (`gewerblich` ist
-    None, z. B. fehlender Anbieterkasten der Trefferliste) – beides sperrt nichts, steht aber sichtbar am Fahrzeug."""
+    None, z. B. fehlender Anbieterkasten der Trefferliste) – beides sperrt nichts, steht aber sichtbar am Fahrzeug. Ebenso eine unbekannte
+    Aufbaumarke (P5-03: Händler-VK mit Abschlag gerechnet)."""
     liste = []
     if a.get("verfuegbarkeit_hinweis"):                   # reserviert / vermutlich nicht mehr online (P3-04): sperrt nichts
         liste.append(a["verfuegbarkeit_hinweis"])
@@ -102,6 +109,8 @@ def hinweise(a: dict, b=None) -> list[str]:
         liste.append(hinweis_ausland(a["ausland"]))
     if "gewerblich" in a and a["gewerblich"] is None:
         liste.append(HINWEIS_ANBIETER_UNBEKANNT)
+    if b is not None and b.abschlag_marke:
+        liste.append(hinweis_marke_unbekannt(b.abschlag_marke))
     return liste
 
 

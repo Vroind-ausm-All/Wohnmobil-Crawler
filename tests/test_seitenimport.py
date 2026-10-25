@@ -364,7 +364,7 @@ def nur_hinweis(z, text):
     if text == UNBEKANNT_TEXT:
         text = hinweis_art_unbekannt(z["b"].art)
         assert text.startswith(HINWEIS_ART_UNBEKANNT_ANFANG)
-    assert z["hinweise"] == [text], z["hinweise"]
+    assert [h for h in z["hinweise"] if not h.startswith("Marke unbekannt")] == [text], z["hinweise"]   # Marke: P5-03, eigene Tests
     assert "Fahrzeugart" not in (z["sperre"] or "")
     assert (z["brief"] is not None) == (z["sperre"] is None)              # ohne anderen Sperrgrund gibt es den Brief
 
