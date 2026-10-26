@@ -6,7 +6,7 @@ Wert „–“.
 
 ---
 
-## P5-05 – Ausstattung, Mängel und Kostenrisiken; Spannen auf 100 € (25.10.2026) · Status: REVIEW
+## P5-05 – Ausstattung, Mängel und Kostenrisiken; Spannen auf 100 € (25.10.2026) · Status: DONE (PR #45 gemergt)
 
 - **Auftrag:** Betreiber 25.10.2026 nach dem Merge von PR #44: „1. Spannen sollen nur auf 100er gerundet werden. 2. Was ist mit der
   Händlerobergrenze gemeint? … Arbeite im Anschluss den nächsten Punkt p5-05 komplett aus.“ Zu 2 erklärt: Die Obergrenze betrifft nur den
@@ -27,6 +27,14 @@ Wert „–“.
 - **Betreiberfragen (konservativ entschieden):** Staffel 2,0/2,5/3,5/4,5 %, Saison Sep +1, Okt/Nov +2, Dez/Jan +1, Zins 5 % auf 80 % des VK,
   Mängelrisiko höchstens 15 %.
 - **Nächster sinnvoller Schritt:** Rückmeldung des Betreibers, danach P5-06 (Transportkosten ab konfigurierbarer Standort-PLZ).
+
+## Statuspflege – P5-05 abgeschlossen, Stand für P5-06 (26.10.2026)
+
+- **Erledigt:** PR #45 (P5-05) ist gemergt; alle CI-Prüfungen waren grün (Tests Linux und Windows, Start-Skripte, pip-audit). Der
+  Arbeitsbaum des Pakets ist entfernt.
+- **Nicht geprüft:** Handy-Ansicht, echter Datenbestand (wie im TEST-REPORT vermerkt).
+- **Nächster Schritt:** P5-06 (Transportkosten ab konfigurierbarer Standort-PLZ). Start erst nach Freigabe durch den Betreiber.
+- **Offene Betreiberfragen aus P5-05:** Gewährleistungsstaffel, Saisonzuschläge, Zinssatz 5 % auf 80 % des VK, Mängelrisiko höchstens 15 %.
 
 ## P5-04 – Angebots- gegen Abschlusspreise, Händler- gegen Privatpreise (25.10.2026) · Status: REVIEW
 
