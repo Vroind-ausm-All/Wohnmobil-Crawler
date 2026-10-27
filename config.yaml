@@ -173,6 +173,30 @@ rechner:
     transport_grundpauschale: 80
     transport_pro_km: 0.90
     transport_pauschal: 300           # wenn die Entfernung unbekannt ist
+    # P5-06: Abholung – zwei Wege, der günstigere zählt (ersetzt Grundpauschale + €/km; ohne diesen Abschnitt gilt wieder die alte Formel).
+    # Grobe Annahmen, keine Preisauskunft: Strecken aus PLZ geschätzt (Luftlinie × 1,25), Ticketpreise und Fahrzeiten Näherungswerte.
+    # Leerer Abschnitt oder false = alte Formel; unbekannte Einträge (Tippfehler) werden als Fehler gemeldet.
+    abholung:
+      wohnmobil_pro_km: 0.25          # Rückfahrt im Wohnmobil: Diesel ≈ 12 l/100 km + Verschleiß
+      wohnmobil_kmh: 80               # Reiseschnitt Wohnmobil inkl. Pausen
+      stundensatz: 25                 # Fahrerzeit je Person und Stunde (0 = Zeit nicht rechnen)
+      uebergabe_stunden: 1.0          # vor Ort je Person: Übergabe, Papiere, kurze Probefahrt
+      tag_max_stunden: 10             # mehr Stunden je Person → je weiterem Tag eine Übernachtung
+      uebernachtung_euro: 90          # je Person und Nacht
+      auto:                           # ab Firmensitz (anschreiben → plz): zwei Personen im PKW hin, zurück eine im Wohnmobil, eine im PKW
+        pkw_pro_km: 0.30              # Sprit + Verschleiß PKW, je gefahrenem km (hin und zurück)
+        pkw_kmh: 90
+      bahn:                           # eine Person mit dem Zug zum Verkäufer, zurück im Wohnmobil zum Firmensitz (false = aus)
+        ab_plz: "70173"               # Stuttgart Hbf
+        ab_name: "Stuttgart Hbf"
+        zubringer_euro: 6             # Firmensitz → Stuttgart Hbf (Regionalverkehr)
+        zubringer_stunden: 0.5
+        zubringer_max_km: 80          # Firmensitz weiter vom Bahnhof entfernt (z. B. Mandant) → Bahn-Variante entfällt mit Hinweis
+        ticket_pro_km: 0.30           # ICE Flexpreis 2. Klasse grob je km (ohne BahnCard; Sparpreise oft günstiger, aber nicht sicher)
+        ticket_min: 12
+        ticket_max: 160               # Flexpreise langer Strecken liegen grob bei 150–160 €
+        kmh: 110                      # Reiseschnitt Fernverkehr inkl. Umstiege
+        zuschlag_stunden: 0.75        # Weg vom Zielbahnhof zum Verkäufer (Nahverkehr/Bus), Wartezeiten
     gewährleistung_rücklage_prozent: 0.025   # vom Händler-VK (gilt, wenn keine Staffel eingetragen ist)
     # P5-05: Gewährleistungsrücklage nach Alter – ältere Fahrzeuge haben mehr Sachmängelfälle
     gewaehrleistung_staffel:
@@ -214,8 +238,8 @@ anschreiben:
   firma: "Muster Reisemobile GmbH"
   ansprechpartner: "Max Mustermann"
   telefon: "0711 123456"
-  ort: "Stuttgart"
-  plz: "70173"                     # dein Standort – für Entfernung und Abholkosten
+  ort: "Besigheim"
+  plz: "74354"                     # dein Standort (Firmensitz) – für Entfernung, Abholung und Rückfahrt im Wohnmobil
   # Nur Anzeigen mit dieser Ampel oder besser bekommen ein Anschreiben
   ab_ampel: gelb
 

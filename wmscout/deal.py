@@ -44,6 +44,7 @@ class DealSpeicher:
         if s:
             km = entfernung_km(s["plz"], f.get("plz")) if s["plz"] else None
             f["entfernung_km"], abholung = (None if km is None else int(round(km, -1))), f"ab Standort {s['name']}"
+            f["entfernung_bahn_km"] = None          # Bahn-Variante nur ab Firmensitz (P5-06): Abholung durch den Standort selbst
         else:
             f["entfernung_km"] = entfernung_km(str(self.cfg["anschreiben"].get("plz") or "") or None, f.get("plz"))
             abholung = "ab Firmensitz"
