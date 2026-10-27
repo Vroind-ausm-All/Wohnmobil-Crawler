@@ -21,7 +21,7 @@ from pathlib import Path
 
 from .sicherung import SicherungsFehler, oeffne_lesend, sichere
 
-AKTUELLE_VERSION = 20
+AKTUELLE_VERSION = 21
 
 
 class MigrationsFehler(RuntimeError):
@@ -567,12 +567,32 @@ def _schritt_20(con: sqlite3.Connection):
         raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 20 geändert: {vorher} -> {nachher}")
 
 
+def _schritt_21(con: sqlite3.Connection):
+    """Additive v21 (F4, ADR-059): ``einladungen`` – einfacher erster Login: Einmal-Link (nur der Hash des Tokens wird gespeichert),
+    mit dem ein Kunde oder Mitarbeiter sein Passwort selbst setzt – und ``plattform_zugaenge`` – Händlerzugang der Firma bei mobile.de
+    bzw. AutoScout24: Händlernummer, API-Benutzer und nur der NAME der Umgebungsvariable mit dem Geheimnis, nie das Geheimnis selbst
+    (Regel 5). Keine bestehende Tabelle wird verändert."""
+    vorher = _zaehle_v11(con)
+    con.execute("""CREATE TABLE IF NOT EXISTS einladungen (
+        id INTEGER PRIMARY KEY, nutzer_id INTEGER NOT NULL REFERENCES nutzer(id), token_hash TEXT NOT NULL UNIQUE,
+        ablauf TEXT NOT NULL, erstellt_am TEXT NOT NULL, erstellt_von INTEGER, eingeloest_am TEXT)""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_einladungen_nutzer ON einladungen(nutzer_id)")
+    con.execute("""CREATE TABLE IF NOT EXISTS plattform_zugaenge (
+        plattform TEXT PRIMARY KEY CHECK(plattform IN ('mobilede', 'autoscout24')),
+        haendlernummer TEXT, api_benutzer TEXT, geheimnis_variable TEXT,
+        letzter_test_am TEXT, letzter_test_ergebnis TEXT,
+        aktualisiert_am TEXT NOT NULL, aktualisiert_von INTEGER)""")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 21 geändert: {vorher} -> {nachher}")
+
+
 SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4, 5: _schritt_5,
                                                              6: _schritt_6, 7: _schritt_7, 8: _schritt_8, 9: _schritt_9,
                                                              10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
                                                              14: _schritt_14, 15: _schritt_15,
                                                              16: _schritt_16, 17: _schritt_17, 18: _schritt_18,
-                                                             19: _schritt_19, 20: _schritt_20}
+                                                             19: _schritt_19, 20: _schritt_20, 21: _schritt_21}
 
 _SCHEMA_VERSION = ("CREATE TABLE IF NOT EXISTS schema_version ("
                    "version INTEGER PRIMARY KEY, angewendet_am TEXT NOT NULL)")

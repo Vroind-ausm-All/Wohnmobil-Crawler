@@ -6,7 +6,23 @@ Wert „–“.
 
 ---
 
-## P5-06 – Abholung: Auto ab Besigheim oder Bahn ab Stuttgart Hbf (27.10.2026) · Status: REVIEW
+## F4 / P2-08a – Kunden-Zugänge: Einladungslink und Händlerzugänge mobile.de/AutoScout24 (27.10.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 27.10.2026: „F4 Kunden sind als Händler registriert (soll vorbereitet sein zum Einpflegen und einfachen Login
+  für Kunden der fertigen Software. Test wird dann durchgeführt.“
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `source-integrations` und `scout-ui-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/migrationen.py` (v21), `wmscout/team.py`, `wmscout/zugaenge.py` (neu), `wmscout/quellen/api_rahmen.py`
+  (`versuche`), `wmscout/web/api.py`, `wmscout/audit.py`, `scout.py`, `vorlagen/einladung.html` und `vorlagen/zugaenge.html` (neu),
+  `vorlagen/report.html`; Tests `test_zugaenge.py` (neu); Doku ADR-059, `docs/SOURCES.md`, `docs/DATENRECHTE.md`, `docs/MANDANTEN.md`,
+  ROADMAP (P2-08, P2-08a), README.
+- **Implementierte Funktionen:** siehe ADR-059. Schema v21 (additiv: `einladungen`, `plattform_zugaenge`; Sicherung vor der Migration).
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“ – B1–B3 (hoch), B4–B6, B8, B10 behoben, B7 dokumentiert, B9 beim Commit beachtet.
+  Regressionstests ergänzt; Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen:** Verbindungstest gegen mobile.de freigeben (eine Suchanfrage, Inhalte verworfen)? Sollen Kunden ihr Passwort später
+  selbst in der App eintragen können (dann verschlüsselte Ablage mit Server-Schlüssel – neue Abhängigkeit)?
+- **Nächster sinnvoller Schritt:** Test mit echtem API-Account durch den Betreiber; danach P2-08 (Adapter) bzw. P5-07.
+## P5-06 – Abholung: Auto ab Besigheim oder Bahn ab Stuttgart Hbf (27.10.2026) · Status: DONE (PR #47 gemergt)
 
 - **Auftrag:** Betreiber 27.10.2026: „P5-06 ausarbeiten – ausgehend von Besigheim 74534 (mit dem Auto) oder von Stuttgart HBF mit dem
   Zug (berechne hier ungefähre Ticketpreise mit dem ICE und Reisezeit mit öffentlichen Verkehrsmitteln). Die Werte aus P5-05 sollen
