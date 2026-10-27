@@ -21,6 +21,8 @@ HAENDLER = "haendler"          # sieht nur das Händlerportal (/haendler); nie T
 BESICHTIGUNG_STATUS = {"geplant": "geplant", "laeuft": "läuft", "abgeschlossen": "abgeschlossen",
                        "abgebrochen": "abgebrochen"}
 SITZUNG_TAGE = 30
+EINLADUNG_TAGE = 7             # F4: so lange gilt ein Einladungslink (einmal einlösbar)
+EINLADUNG_OFFEN = "einladung-offen"      # Platzhalter statt Passwort-Hash bis zum Einlösen – passt zu keinem Passwort
 LEERLAUF_STUNDEN = 72          # Standard: nach 3 Tagen ohne Nutzung neu anmelden (G0b; config app.sitzung_leerlauf_stunden, 0 = aus)
 MAX_FOTO_BYTES = 8 * 1024 * 1024
 
@@ -46,6 +48,10 @@ def pruefe_passwort(passwort: str, gespeichert: str) -> bool:
 
 
 _ERSATZ_HASH = hash_passwort(secrets.token_urlsafe(16))      # für unbekannte Namen: gleiche Rechenzeit wie ein echter Versuch
+
+
+class ZugangVorhanden(ValueError):
+    """Den Namen gibt es schon – erneut einladen nur ausdrücklich (QA F4 B2)."""
 
 
 def lade_team_sicht(db: Datenbank, tage: int, ich: dict | None = None, jetzt: datetime | None = None) -> TeamSicht | None:
@@ -169,7 +175,9 @@ class TeamSpeicher:
     def login_daten(self, name: str) -> tuple[int | None, str]:
         """(Nutzer-ID, Hash) – bei unbekanntem oder gesperrtem Namen ein Ersatz-Hash, damit die Antwortzeit nichts verrät."""
         r = self.con.execute("SELECT id, passwort_hash FROM nutzer WHERE name=? AND aktiv=1", (name.strip(),)).fetchone()
-        return (r["id"], r["passwort_hash"]) if r else (None, _ERSATZ_HASH)
+        if not r or not str(r["passwort_hash"]).startswith("scrypt$"):     # offene Einladung: gleiche Rechenzeit, keine Anmeldung
+            return None, _ERSATZ_HASH
+        return r["id"], r["passwort_hash"]
 
     def sitzung_anlegen(self, nutzer_id: int) -> str:
         token = secrets.token_urlsafe(32)
@@ -204,6 +212,61 @@ class TeamSpeicher:
     def abmelden(self, token: str):
         self.con.execute("DELETE FROM sitzungen WHERE token_hash=?", (_token_hash(token),))
         self.con.commit()
+
+    # ---------- Einladungen (F4, ADR-059): einfacher erster Login ohne Passwort per Telefon oder Mail ----------
+    def einladen(self, name: str, rolle: str = "mitarbeiter", telefon: str | None = None, standort_id: int | None = None,
+                 erstellt_von: int | None = None, tage: int = EINLADUNG_TAGE, erneut: bool = False) -> tuple[int, str, str]:
+        """Zugang ohne Passwort anlegen und einen Einmal-Token für den Link ausgeben – in EINER Transaktion, ohne teuren Hash (QA B10).
+        Einen vorhandenen, aktiven Zugang nur mit ``erneut`` und nur mit seiner Rolle neu einladen – sonst übernähme der Link womöglich
+        ein Inhaber-Konto unter falscher Rolle (QA B2, ``ZugangVorhanden``). Gespeichert wird nur der Hash des Tokens; ältere offene
+        Einladungen dieses Zugangs verfallen, eingelöste und abgelaufene über 30 Tage werden aufgeräumt. Rückgabe: (ID, Token, Rolle)."""
+        name = name.strip()
+        if rolle not in ROLLEN:
+            raise ValueError(f"Rolle muss {' oder '.join(ROLLEN)} sein")
+        if (rolle == HAENDLER) != (standort_id is not None):
+            raise ValueError("Händler brauchen einen Standort (--standort); andere Rollen haben keinen")
+        token, jetzt = secrets.token_urlsafe(32), datetime.now()
+        with self.db.transaktion():
+            r = self.con.execute("SELECT id, aktiv, rolle FROM nutzer WHERE name=?", (name,)).fetchone()
+            if r:
+                if not r["aktiv"]:
+                    raise ValueError(f"{name} ist gesperrt – erst entsperren, dann einladen")
+                if not erneut:
+                    raise ZugangVorhanden(f"„{name}“ gibt es schon ({ROLLEN[r['rolle']]}). Erneut einladen? Beim Einlösen wird das Passwort neu gesetzt.")
+                if r["rolle"] != rolle:
+                    raise ValueError(f"„{name}“ hat die Rolle {ROLLEN[r['rolle']]}, nicht {ROLLEN[rolle]} – die Rolle ändert eine Einladung nicht")
+                nid = r["id"]
+            else:
+                nid = self.con.execute("INSERT INTO nutzer (name, rolle, passwort_hash, telefon, erstellt_am, standort_id) VALUES (?,?,?,?,?,?)",
+                                       (name, rolle, EINLADUNG_OFFEN, telefon, _jetzt(), standort_id)).lastrowid
+            self.con.execute("DELETE FROM einladungen WHERE nutzer_id=? AND eingeloest_am IS NULL", (nid,))
+            self.con.execute("DELETE FROM einladungen WHERE (eingeloest_am IS NOT NULL OR ablauf < ?) AND erstellt_am < ?",
+                             (jetzt.isoformat(timespec="seconds"), (jetzt - timedelta(days=30)).isoformat(timespec="seconds")))
+            self.con.execute("INSERT INTO einladungen (nutzer_id, token_hash, ablauf, erstellt_am, erstellt_von) VALUES (?,?,?,?,?)",
+                             (nid, _token_hash(token), (jetzt + timedelta(days=tage)).isoformat(timespec="seconds"),
+                              jetzt.isoformat(timespec="seconds"), erstellt_von))
+        return nid, token, r["rolle"] if r else rolle
+
+    def einladung(self, token: str | None) -> dict | None:
+        """Gültige, noch nicht eingelöste Einladung eines aktiven Zugangs: {id, nutzer_id, name, rolle} – sonst None."""
+        if not token:
+            return None
+        r = self.con.execute("SELECT e.id, n.id AS nutzer_id, n.name, n.rolle FROM einladungen e JOIN nutzer n ON n.id=e.nutzer_id "
+                             "WHERE e.token_hash=? AND e.eingeloest_am IS NULL AND e.ablauf>=? AND n.aktiv=1",
+                             (_token_hash(token), datetime.now().isoformat(timespec="seconds"))).fetchone()
+        return dict(r) if r else None
+
+    def einladung_einloesen(self, token: str, passwort_hash: str) -> dict | None:
+        """Passwort setzen (Hash vorher außerhalb der Sperre berechnet), Einladung entwerten, alte Sitzungen beenden – in EINER Transaktion.
+        None, wenn die Einladung inzwischen ungültig ist (abgelaufen, schon eingelöst, Zugang gesperrt)."""
+        with self.db.transaktion():
+            e = self.einladung(token)
+            if not e:
+                return None
+            self.con.execute("UPDATE nutzer SET passwort_hash=? WHERE id=?", (passwort_hash, e["nutzer_id"]))
+            self.con.execute("UPDATE einladungen SET eingeloest_am=? WHERE id=?", (_jetzt(), e["id"]))
+            self.con.execute("DELETE FROM sitzungen WHERE nutzer_id=?", (e["nutzer_id"],))
+        return e
 
     # ---------- Besichtigungen ----------
     def _fertig(self):

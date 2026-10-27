@@ -35,7 +35,7 @@ from ..schalter import EingangDeaktiviert, eingang_pruefen, pruefe_eingaenge
 from ..audit import AuditSpeicher, einordnen
 from ..nutzung import nutzung
 from ..deal import DealSpeicher
-from ..team import pruefe_passwort
+from ..team import hash_passwort, pruefe_passwort
 from .live import Ereignisse, art_fuer, sse_block
 from .sicherheit import SICHERHEITS_KOPF, LoginBremse
 from ..ankauf import DOKUMENTARTEN, AnkaufFehler, AnkaufSpeicher
@@ -53,6 +53,8 @@ from .. import kontakte
 from .. import suchprofile as sp
 from .. import laufprotokoll as lp
 from .. import abdeckung
+from ..zugaenge import PLATTFORMEN as ZUGANG_PLATTFORMEN
+from ..zugaenge import ZugangSpeicher
 from ..domaene import PLATTFORMEN
 from ..normalisierung.qualitaet import je_quelle
 from ..bewertung import kalibrierung as kal
@@ -68,12 +70,13 @@ from ..eingang import TextEingang, ergebnis_der, import_ordner, relativ_zum_proj
 from ..eingang.text import ANBIETER, MAX_PREIS, MAX_TEXT, MAX_URL, widerspricht_marke
 from ..eingang.email import mail_ordner
 from ..importer import Importer
-from ..team import BESICHTIGUNG_STATUS, LEERLAUF_STUNDEN, ROLLEN, TeamSpeicher
+from ..team import BESICHTIGUNG_STATUS, EINLADUNG_TAGE, LEERLAUF_STUNDEN, ROLLEN, TeamSpeicher, ZugangVorhanden
 
 log = logging.getLogger("scout")
 STATIC = Path(__file__).with_name("static")
 COOKIE = "scout_sitzung"
-OFFENE_PFADE = {"/login", "/api/login", "/manifest.webmanifest", "/sw.js", "/favicon.ico"}
+OFFENE_PFADE = {"/login", "/api/login", "/einladung", "/api/einladung", "/api/einladung/pruefen", "/manifest.webmanifest", "/sw.js",
+                "/favicon.ico"}
 MAX_JSON = 1_000_000
 MAX_FOTO = 12_000_000          # Base64-kodiert, entspricht ca. 8 MB Bild
 MAX_IMPORT_DATEIEN = 25        # gespeicherte Seiten je Klick, der Rest beim nächsten Mal
@@ -140,6 +143,7 @@ class Kontext:
         self.live_lebensdauer, self.live_ping = 300.0, 15.0      # Sekunden; Tests verkürzen
         self.verkauf = VerkaufSpeicher(db, foto_ordner / "anfragen")     # im Fotoordner: mit gesichert
         self.haendler = HaendlerSpeicher(db)
+        self.zugaenge = ZugangSpeicher(db, cfg)              # Händlerzugänge mobile.de/AutoScout24 (F4) – ohne Geheimnisse
         self.suchprofile = sp.SuchprofilSpeicher(db)
         self.kalibrierung = kal.KalibrierungSpeicher(db)
         self.auktion = AuktionSpeicher(db, cfg)             # ValueError bei falscher Konfiguration (Abschnitt auktion)
@@ -497,6 +501,14 @@ class Anfrage:
         if p == "/login":
             ziel = sicheres_ziel((self.query.get("weiter") or [None])[0])
             return self.html(k.env.get_template("login.html").render(firma=k.cfg["anschreiben"]["firma"], ziel=ziel))
+        if p == "/einladung":                             # F4: Token steht im #-Teil des Links – er erreicht den Server nie per GET
+            return self.html(k.env.get_template("einladung.html").render(firma=k.cfg["anschreiben"]["firma"]))
+        if p in ("/zugaenge", "/api/zugaenge"):            # F4: Zugänge einladen, Händlerzugänge der Plattformen – nur der Inhaber
+            self.nur_inhaber()
+            if p == "/zugaenge":
+                return self.html(k.env.get_template("zugaenge.html").render(firma=k.cfg["anschreiben"]["firma"], token=k.token,
+                                                                            rollen={r: ROLLEN[r] for r in ("inhaber", "mitarbeiter")}))
+            return self.json(200, {"plattformen": k.zugaenge.liste(), "nutzer": k.team.nutzer_liste(nur_aktive=False)})
         if self.nutzer.get("rolle") == HAENDLER and p in ("/", "/m"):
             return self.weiterleiten("/haendler")
         if p == "/":
@@ -761,16 +773,95 @@ class Anfrage:
         log.info("Widerruf für Anfrage %s ausgeführt durch %s", anfrage_id, self.nutzer["name"])
         return {"ok": True, **erg}
 
+    # ----- Einladungen und Händlerzugänge (F4, ADR-059)
+    def nutzer_einladen(self, daten: dict) -> dict:
+        """Team-Zugang (Inhaber oder Mitarbeiter) anlegen oder erneut einladen; der Link geht nur an den Inhaber zurück, der ihn weitergibt."""
+        name, rolle = str(daten.get("name") or "").strip()[:60], str(daten.get("rolle") or "mitarbeiter")
+        telefon = str(daten.get("telefon") or "").strip()[:40] or None
+        if not name:
+            raise Antwort(400, "Name fehlt")
+        if rolle not in ("inhaber", "mitarbeiter"):
+            raise Antwort(400, "Rolle: Inhaber oder Mitarbeiter (Standort-Zugänge über die Kommandozeile mit --standort)")
+        erster = not self.team_aktiv                        # Einzelplatz ohne Nutzer: danach ist eine Anmeldung nötig (QA B1)
+        try:
+            _, token, rolle = self.k.team.einladen(name, rolle, telefon, erstellt_von=self.nutzer["id"], erneut=daten.get("erneut") is True)
+        except ZugangVorhanden as e:
+            raise Antwort(409, str(e), {"vorhanden": True}) from e
+        except ValueError as e:
+            raise Antwort(400, str(e)) from e
+        https = self.k.nur_https or (self.k.vertrauter_proxy and self.h.headers.get("X-Forwarded-Proto") == "https")
+        basis = self.k.app_link("") or f"{'https' if https else 'http'}://{self.h.headers.get('Host') or '127.0.0.1'}"
+        hinweise = []
+        if erster:
+            hinweise.append("Ab jetzt ist für die App eine Anmeldung nötig – den Link jetzt selbst öffnen (oder sicher weitergeben) und das "
+                            "Passwort setzen, sonst bleibt nur die Kommandozeile.")
+        if not self.k.app_link(""):
+            hinweise.append("Ohne öffentliche Adresse (config.yaml → app → oeffentliche_url) funktioniert der Link nur auf diesem Rechner.")
+        log.info("Einladung für %s angelegt durch %s", name, self.nutzer.get("name"))
+        return {"name": name, "rolle": ROLLEN.get(rolle, rolle), "link": f"{basis}/einladung#{token}", "gueltig_tage": EINLADUNG_TAGE,
+                "erster_zugang": erster, "hinweise": hinweise}
+
+    def _herkunft_pruefen(self, was: str):
+        if not (self.h.headers.get("Content-Type") or "").startswith("application/json"):
+            raise Antwort(415, f"{was} nur als JSON")
+        if self.h.headers.get("Sec-Fetch-Site") == "cross-site":
+            raise Antwort(403, f"{was} von fremden Seiten nicht erlaubt", grund="csrf")
+        herkunft = self.h.headers.get("Origin")
+        if herkunft and urlparse(herkunft).netloc not in self.k.erlaubte_hosts(self.h.server.server_address[1]):
+            raise Antwort(403, f"{was} von fremden Seiten nicht erlaubt", grund="csrf")
+
+    def _mit_sitzung(self, daten: dict, token: str):
+        https = self.k.nur_https or (self.k.vertrauter_proxy and self.h.headers.get("X-Forwarded-Proto") == "https")
+        return self.json(200, daten, {"Set-Cookie": f"{COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; "
+                                                    f"Max-Age={30 * 86400}{'; Secure' if https else ''}"})
+
+    def einladung_einloesen(self, daten: dict):
+        """Passwort selbst setzen und gleich angemeldet sein (F4) – wie die Anmeldung: Bremse je IP, Hash ohne globale Sperre."""
+        k = self.k
+        self._herkunft_pruefen("Einladung")
+        token, passwort, ip = str(daten.get("token") or "")[:100], str(daten.get("passwort") or ""), self.client_ip()
+        if warten := k.bremse.wartezeit(ip, "(einladung)"):
+            raise Antwort(429, f"Zu viele Fehlversuche – bitte in {max(1, warten // 60)} Minute(n) erneut versuchen", {"warten_sek": warten})
+        if not 8 <= len(passwort) <= 200:
+            raise Antwort(400, "Passwort: mindestens 8 Zeichen")
+        with k.sperre:
+            gueltig = k.team.einladung(token)
+        if not gueltig:
+            k.bremse.fehlschlag(ip, "(einladung)")
+            raise Antwort(410, "Einladung ungültig, abgelaufen oder schon eingelöst – bitte eine neue anfordern")
+        neu = hash_passwort(passwort)                                   # teuer – bewusst ohne Sperre
+        with k.sperre:
+            e = k.team.einladung_einloesen(token, neu)
+            if not e:
+                raise Antwort(410, "Einladung ungültig, abgelaufen oder schon eingelöst – bitte eine neue anfordern")
+            sitzung = k.team.sitzung_anlegen(e["nutzer_id"])
+        self.audit_name = e["name"]
+        log.info("Einladung eingelöst: %s von %s", e["name"][:40], ip)
+        return self._mit_sitzung({"ok": True, "name": e["name"]}, sitzung)
+
+    def zugang_testen(self, plattform: str):
+        """Verbindungstest (F4): Rechte und Daten unter der Sperre prüfen, die eine Anfrage an den Anbieter ohne Sperre, Ergebnis wieder
+        unter der Sperre merken – ein langsamer Anbieter blockiert die App nicht."""
+        k = self.k
+        with k.sperre:
+            self.pruefe_zugriff(aendernd=True)
+            self.nur_inhaber()
+            try:
+                vorbereitet = k.zugaenge.test_vorbereiten(plattform)
+            except LookupError as e:
+                raise Antwort(404, str(e)) from e
+            except ValueError as e:
+                raise Antwort(400, str(e)) from e
+        ergebnis = ZugangSpeicher.test_ausfuehren(vorbereitet)
+        with k.sperre:
+            k.zugaenge.test_merken(plattform, ergebnis)
+        log.info("Verbindungstest %s durch %s: %s", ZUGANG_PLATTFORMEN[plattform]["name"], self.nutzer.get("name"), "ok" if ergebnis["ok"] else "Fehler")
+        return self.json(200, ergebnis)
+
     # ----- Anmeldung (G0: Bremse je IP und Name, scrypt außerhalb der globalen Sperre, Herkunftsprüfung)
     def login(self, daten: dict):
         k = self.k
-        if not (self.h.headers.get("Content-Type") or "").startswith("application/json"):
-            raise Antwort(415, "Anmeldung nur als JSON")
-        if self.h.headers.get("Sec-Fetch-Site") == "cross-site":
-            raise Antwort(403, "Anmeldung von fremden Seiten nicht erlaubt", grund="csrf")
-        herkunft = self.h.headers.get("Origin")
-        if herkunft and urlparse(herkunft).netloc not in k.erlaubte_hosts(self.h.server.server_address[1]):
-            raise Antwort(403, "Anmeldung von fremden Seiten nicht erlaubt", grund="csrf")
+        self._herkunft_pruefen("Anmeldung")
         name, passwort, ip = str(daten.get("name") or "")[:100], str(daten.get("passwort") or ""), self.client_ip()
         self.audit_name = name
         warten = k.bremse.wartezeit(ip, name)
@@ -789,9 +880,7 @@ class Anfrage:
             token = k.team.sitzung_anlegen(nid)
         k.bremse.erfolg(ip, name)
         log.info("Anmeldung: %s von %s", name[:40], ip)
-        https = k.nur_https or (k.vertrauter_proxy and self.h.headers.get("X-Forwarded-Proto") == "https")
-        return self.json(200, {"ok": True}, {"Set-Cookie": f"{COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; "
-                                                           f"Max-Age={30 * 86400}{'; Secure' if https else ''}"})
+        return self._mit_sitzung({"ok": True}, token)
 
     # ----- Deal Intelligence (Phase E)
     def betrag_aus_query(self) -> int | None:
@@ -1225,6 +1314,27 @@ class Anfrage:
                 raise Antwort(404, str(fehler)) from fehler
             kid = k.deal.speichern(e, erg, anlass="gespeichert", anfrage_id=int(m.group(1)), standort_id=standort, nutzer_id=self.nutzer["id"])
             return self.json(200, {"id": kid})
+        if p == "/api/einladung/pruefen":                  # F4: Name zur Einladung anzeigen (offen, nur mit gültigem Token, gebremst)
+            self._herkunft_pruefen("Einladung")
+            ip = self.client_ip()
+            if warten := k.bremse.wartezeit(ip, "(einladung)"):
+                raise Antwort(429, f"Zu viele Fehlversuche – bitte in {max(1, warten // 60)} Minute(n) erneut versuchen", {"warten_sek": warten})
+            e = k.team.einladung(str(daten.get("token") or "")[:100]) if k.team.hat_nutzer() else None
+            if not e:
+                k.bremse.fehlschlag(ip, "(einladung)")
+                raise Antwort(410, "Einladung ungültig, abgelaufen oder schon eingelöst – bitte eine neue anfordern")
+            return self.json(200, {"name": e["name"], "rolle": ROLLEN.get(e["rolle"], e["rolle"])})
+        if p == "/api/nutzer/einladen":                    # F4: Zugang anlegen bzw. erneut einladen – Link zum Weitergeben
+            self.nur_inhaber()
+            return self.json(200, self.nutzer_einladen(daten))
+        if m := re.fullmatch(r"/api/zugaenge/(\w+)", p):
+            self.nur_inhaber()
+            try:
+                return self.json(200, k.zugaenge.speichern(m.group(1), daten, self.nutzer["id"]))
+            except LookupError as e:
+                raise Antwort(404, str(e)) from e
+            except ValueError as e:
+                raise Antwort(400, str(e)) from e
         if m := re.fullmatch(r"/api/verkaufsanfrage/(\d+)/widerruf", p):
             self.nur_inhaber()
             return self.json(200, self.anfrage_widerruf(int(m.group(1))))
@@ -1863,6 +1973,10 @@ def _bearbeite(a: Anfrage, handler, k: Kontext, methode: str):
                 raise Antwort(400, "ungültige Anfrage")
             if a.pfad == "/api/login":
                 return a.login(daten)              # eigene Sperrführung (scrypt ohne globale Sperre)
+            if a.pfad == "/api/einladung":
+                return a.einladung_einloesen(daten)                # ebenso (F4)
+            if m := re.fullmatch(r"/api/zugaenge/(\w+)/test", a.pfad):
+                return a.zugang_testen(m.group(1))                 # Anfrage an den Anbieter ohne globale Sperre (F4)
         with k.sperre:
             try:
                 a.pruefe_zugriff(aendernd=methode == "POST" and a.pfad != "/api/login")

@@ -4,6 +4,22 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## F4 / P2-08a – Kunden-Zugänge: Einladungslink und Händlerzugänge (27.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2443 bestanden (vorher 2424), neu `test_zugaenge.py` (19). Lauf vor der Korrekturrunde: 2437 bestanden |
+| `ruff check .` | grün |
+| Schema v21: additiv, Sicherung „vor-v21“, Altbestand (Nutzer aus v20) bleibt, idempotent | bestanden |
+| Einladung: nur Hash gespeichert, einmal gültig, abgelaufen/gesperrt ungültig, neue macht alte ungültig, bis zum Einlösen keine Anmeldung, vorhandene Zugänge nur ausdrücklich und mit ihrer Rolle, alte Einladungen aufgeräumt | bestanden |
+| App: Einladen nur Inhaber (Mitarbeiter 403, Händler-Rolle 400), Seite `/einladung` offen, Prüfen und Einlösen gebremst (429), Passwort ≥ 8, nach dem Einlösen angemeldet, zweites Einlösen 410, Audit „einladung“ mit Namen, Prüfen nicht protokolliert; Einzelplatz: erste Einladung mit Hinweis „Anmeldung nötig“ und ohne Neuladen der Seite | bestanden |
+| Kommandozeile `nutzer einladen` (Link mit öffentlicher Adresse; vorhandener Name nur mit `--erneut`) | bestanden |
+| Händlerzugänge: kein Geheimnis in DB/Antwort, Variable nur `WMSCOUT_…` bzw. im Mandantenbetrieb `WMSCOUT_<KENNUNG>_…`, AutoScout24 ohne Lesefelder, Fehleingaben verständlich | bestanden |
+| Verbindungstest (Attrappe statt Netz): genau eine Anfrage auch bei 5xx, Basic-Anmeldung, nur Aufbau gemerkt (keine Inseratsinhalte), 401 ohne Passwort im Text; über die App nur Inhaber, ohne Passwort auf dem Server 400 | bestanden |
+| Browser (Orchestrator, Chromium über Playwright, Desktop 1280): Anna meldet sich an, „Zugänge“ zeigt mobile.de/AutoScout24 mit Variablenhinweis, Einladung „Kunde &lt;b&gt;“ als Inhaber → Link mit Hinweis zur fehlenden öffentlichen Adresse; Link im neuen Browser: Code aus der Adresszeile entfernt, Name als Text (escaped), Passwort gesetzt → angemeldet auf „/“; 0 JS-Fehler | bestanden |
+| QA (eine Runde, vor der Korrekturrunde: 118 gezielte Tests bestanden, 9 eigene Proben inkl. Wettlauf beim Einlösen und fremder Herkunft) | Freigabe mit Auflagen – B1–B3 (hoch), B4–B6, B8, B10 behoben, B7 dokumentiert, B9 beim Commit beachtet; Korrekturen **nicht** erneut von der QA geprüft |
+| Echter Aufruf der mobile.de Search-API (Pfad, Accept-Kopf, Antwortformat), Betrieb hinter einem Reverse-Proxy, Windows-CI | nicht geprüft (Test mit echtem API-Account durch den Betreiber; CI folgt im PR) |
+
 ## P5-05 – Ausstattung, Mängel und Kostenrisiken; Spannen auf 100 € (25.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

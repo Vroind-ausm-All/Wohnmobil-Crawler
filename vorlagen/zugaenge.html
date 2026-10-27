@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#24524a">
+<link rel="icon" href="/static/icon-192.png">
+<title>Zugänge – {{ firma }}</title>
+<link rel="stylesheet" href="/static/mobil.css">
+<style>
+main{max-width:900px;margin:0 auto;padding:16px}
+nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px;flex-wrap:wrap}
+.reihe label{flex:1 1 200px}
+.link{word-break:break-all;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px}
+.ok{color:var(--gruen,#2f7d32)} .fehlt{color:var(--rot)}
+table{border-collapse:collapse;width:100%;font-size:14px} td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left}
+</style>
+</head>
+<body>
+<main>
+  <nav class="oben"><a href="/">Ankaufsliste</a><a href="/status">Status</a></nav>
+  <h1>Zugänge</h1>
+
+  <h2>Team-Zugang einladen</h2>
+  <p class="leise">Der Eingeladene öffnet den Link, legt sein Passwort selbst fest und ist angemeldet – kein Passwort per Telefon oder Mail.
+    Der Link gilt 7 Tage und nur einmal; eine neue Einladung macht die alte ungültig. Ab dem ersten Zugang ist für die App eine Anmeldung nötig.</p>
+  <form id="einladen" class="karte">
+    <div class="reihe">
+      <label>Name<input name="name" required maxlength="60" autocomplete="off"></label>
+      <label>Rolle<select name="rolle">{% for k, n in rollen.items() %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select></label>
+      <label>Telefon (optional)<input name="telefon" maxlength="40" autocomplete="off"></label>
+    </div>
+    <button class="knopf primaer" type="submit">Einladungslink erstellen</button>
+    <div id="einladung" hidden>
+      <p>Link für <b data-name></b> (nur einmal, 7 Tage gültig) – über einen vertrauten Weg weitergeben:</p>
+      <p class="link" data-link></p>
+      <button class="knopf klein" type="button" data-kopieren>Link kopieren</button>
+      <p class="fehler" data-hinweise></p>
+    </div>
+    <p class="fehler" data-fehler role="alert"></p>
+  </form>
+  <div id="nutzer"></div>
+
+  <h2>Händlerzugänge bei mobile.de und AutoScout24</h2>
+  <p class="leise">Hier trägt die Firma ihre Händlerdaten ein. <b>Passwörter und Schlüssel stehen nie in der App</b>: Sie werden auf dem Server als
+    Umgebungsvariable gesetzt (Name siehe unten). Daten werden erst abgerufen, wenn die Nutzungsbedingungen des Anbieters geklärt sind –
+    der Verbindungstest prüft nur den Zugang (eine Anfrage, nichts wird gespeichert).</p>
+  <div id="plattformen"><p class="leise">Lade …</p></div>
+</main>
+<script>
+(function(){
+  var TOKEN = {{ token|tojson }};
+  function esc(s){ return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function api(url, d){
+    var opt = {credentials:'same-origin', headers:{}};
+    if(d !== undefined){ opt.method = 'POST'; opt.headers['Content-Type'] = 'application/json'; opt.headers['X-Scout-Token'] = TOKEN; opt.body = JSON.stringify(d); }
+    return fetch(url, opt).then(function(r){
+      if(r.status === 401){ location.href = '/login?weiter=%2Fzugaenge'; throw new Error('Bitte anmelden'); }
+      return r.json().catch(function(){ return {}; }).then(function(x){
+        if(!r.ok){ var f = new Error(x.fehler || ('Fehler ' + r.status)); f.status = r.status; f.daten = x; throw f; }
+        return x;
+      });
+    });
+  }
+  function karte(p){
+    var h = '<form class="karte" data-plattform="' + esc(p.plattform) + '"><h3>' + esc(p.name) + '</h3><p class="leise">' + esc(p.hinweis) + '</p>' +
+      '<div class="reihe"><label>Händlernummer<input name="haendlernummer" maxlength="30" value="' + esc(p.haendlernummer) + '"></label>';
+    if(p.lesen){
+      h += '<label>API-Benutzer<input name="api_benutzer" maxlength="80" autocomplete="off" value="' + esc(p.api_benutzer) + '"></label>' +
+        '<label>Umgebungsvariable mit dem Passwort<input name="geheimnis_variable" maxlength="68" value="' + esc(p.variable) + '"></label>';
+    }
+    h += '</div>';
+    if(p.lesen){
+      h += '<p>Passwort auf dem Server: ' + (p.geheimnis_gesetzt ? '<span class="ok">gesetzt</span>' : '<span class="fehlt">fehlt</span> – Variable <code>' +
+        esc(p.variable) + '</code> setzen (nie in config.yaml) und die App neu starten') + ' · Datenabruf: <b>gesperrt</b> bis zur Freigabe</p>';
+      if(p.letzter_test_am) h += '<p class="leise">Letzter Test ' + esc(p.letzter_test_am.replace('T', ' ')) + ': ' + esc(p.letzter_test_ergebnis) + '</p>';
+    }
+    h += '<div class="reihe"><button class="knopf primaer" type="submit">Speichern</button>' +
+      (p.lesen ? '<button class="knopf" type="button" data-test>Verbindung testen</button>' : '') + '</div><p class="fehler" data-fehler role="alert"></p>' +
+      '<p class="leise" data-ergebnis></p></form>';
+    return h;
+  }
+  function laden(){
+    return api('/api/zugaenge').then(function(d){
+      var box = document.getElementById('plattformen');
+      box.innerHTML = d.plattformen.map(karte).join('');
+      document.getElementById('nutzer').innerHTML = d.nutzer.length ? '<table><tr><th>Zugang</th><th>Rolle</th><th>Status</th></tr>' +
+        d.nutzer.map(function(n){ return '<tr><td>' + esc(n.name) + '</td><td>' + esc(n.rolle) + '</td><td>' + (n.aktiv ? 'aktiv' : 'gesperrt') + '</td></tr>'; }).join('') +
+        '</table>' : '<p class="leise">Noch keine Zugänge angelegt.</p>';
+      box.querySelectorAll('form').forEach(function(f){
+        var fehler = f.querySelector('[data-fehler]'), ergebnis = f.querySelector('[data-ergebnis]');
+        f.onsubmit = function(e){
+          e.preventDefault(); fehler.textContent = '';
+          var d = {}; f.querySelectorAll('input').forEach(function(i){ d[i.name] = i.value; });
+          api('/api/zugaenge/' + f.dataset.plattform, d).then(laden, function(err){ fehler.textContent = err.message; });
+        };
+        var t = f.querySelector('[data-test]');
+        if(t) t.onclick = function(){
+          fehler.textContent = ''; ergebnis.textContent = 'Teste …'; t.disabled = true;
+          api('/api/zugaenge/' + f.dataset.plattform + '/test', {}).then(function(r){
+            ergebnis.textContent = (r.ok ? '✓ ' : '✗ ') + r.text + (r.aufbau && r.aufbau.length ? ' · Aufbau: ' + r.aufbau.join(', ') : '');
+            t.disabled = false;
+          }, function(err){ ergebnis.textContent = ''; fehler.textContent = err.message; t.disabled = false; });
+        };
+      });
+    }, function(err){ document.getElementById('plattformen').innerHTML = '<p class="fehler">' + esc(err.message) + '</p>'; });
+  }
+  var ein = document.getElementById('einladen');
+  function einladen(erneut){
+    var fehler = ein.querySelector('[data-fehler]'); fehler.textContent = '';
+    api('/api/nutzer/einladen', {name: ein.name.value, rolle: ein.rolle.value, telefon: ein.telefon.value, erneut: erneut}).then(function(d){
+      var box = document.getElementById('einladung');
+      box.querySelector('[data-name]').textContent = d.name + ' (' + d.rolle + ')';
+      box.querySelector('[data-link]').textContent = d.link;
+      box.querySelector('[data-hinweise]').textContent = d.hinweise.join(' ');
+      box.hidden = false;
+      if(!d.erster_zugang) laden();       // erster Zugang: ab jetzt Anmeldung nötig – Link nicht durch eine Umleitung verlieren
+    }, function(err){
+      if(err.status === 409 && err.daten && err.daten.vorhanden && !erneut && confirm(err.message)) return einladen(true);
+      fehler.textContent = err.message;
+    });
+  }
+  ein.onsubmit = function(e){ e.preventDefault(); einladen(false); };
+  ein.querySelector('[data-kopieren]').onclick = function(){
+    var text = document.querySelector('#einladung [data-link]').textContent;
+    if(navigator.clipboard) navigator.clipboard.writeText(text);
+  };
+  laden();
+})();
+</script>
+</body>
+</html>

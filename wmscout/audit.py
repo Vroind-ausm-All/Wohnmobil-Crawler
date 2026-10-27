@@ -33,8 +33,10 @@ _OBJEKT = re.compile(r"/(verkaufsanfrage|besichtigung|ankauf|auktion|anzeige|bea
 def einordnen(methode: str, pfad: str) -> tuple[str, str | None] | None:
     """(Aktion, Objekt) oder None, wenn der Zugriff nicht protokolliert wird. Jede Änderung (POST) zählt; gelesen nur Personendaten."""
     if methode == "POST":
-        if pfad in ("/api/login", "/api/logout"):
+        if pfad in ("/api/login", "/api/logout", "/api/einladung"):
             return pfad.rsplit("/", 1)[1], None
+        if pfad == "/api/einladung/pruefen":
+            return None                                    # liest nur Name und Rolle zur Einladung (F4)
         m = _OBJEKT.search(pfad)
         return "aendern", (f"{'dublette' if m.group(1) == 'dubletten' else m.group(1)}:{m.group(2)}" if m else None)
     if methode == "GET":

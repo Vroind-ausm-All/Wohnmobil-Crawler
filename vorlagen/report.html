@@ -187,6 +187,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
       <a class="btn" href="/anfragen" title="Fahrzeuge, die Verkäufer uns selbst anbieten">Verkaufsanfragen</a>
       <a class="btn" href="/ankaeufe" title="Gekaufte Fahrzeuge: Vertrag, Übergabe, Kosten, Verkauf, Plan gegen Ist">Ankäufe</a>
       <a class="btn" href="/status" title="Quellen, Eingänge, letzte Suchläufe und Fehler">Status</a>
+      {% if not (team and team.ich and team.ich.rolle != 'inhaber') %}<a class="btn" href="/zugaenge" title="Team-Zugänge einladen, Händlerzugänge bei mobile.de und AutoScout24">Zugänge</a>{% endif %}
     </div>
     {% endif %}
   </header>

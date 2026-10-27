@@ -27,7 +27,7 @@ Anleitung zum Programmieren eines Adapters: `docs/QUELLEN.md`.
 | Kleinanzeigen – E-Mail-Suchauftrag | Generalist | hoch | Suchauftrag des Nutzers | kostenlos | gering (Titel, Preis, Ort, Link) | Takt unbekannt | **OK** |
 | Kleinanzeigen – manueller Import | Generalist | hoch | Nutzer fügt ein | kostenlos | wie eingefügt | Handarbeit | **OK** |
 | mobile.de – URL + eingefügter Text (manuell, P2-05) | Händler-Mix | ca. 19 % (Wohnmobil-Suche 14.10.2026, s. Zeile „im Browser gespeicherte Seiten“) | Nutzer fügt Adresse und Anzeigentext ein; die Adresse wird nicht abgerufen (ADR-010) | kostenlos | wie eingefügt | Handarbeit | **OK** (wie manueller Import; AGB-Hinweis der Zeile „im Browser gespeicherte Seiten“ gilt entsprechend) |
-| mobile.de – Search-API / Ad-Stream | Händler-Mix | gering–mittel (wahrscheinlich) | API-Account über Kundenservice | unbekannt | hoch | Ad-Stream ereignisbasiert | **PRÜFEN** |
+| mobile.de – Search-API / Ad-Stream | Händler-Mix | gering–mittel (wahrscheinlich) | API-Account über Kundenservice | unbekannt | hoch | Ad-Stream ereignisbasiert | **PRÜFEN** – vorbereitet (F4): Zugang je Firma, Verbindungstest nur auf Klick des Inhabers (eine Suchanfrage, Inhalte verworfen, nur Aufbau gemerkt) – vor dem ersten Test vom Betreiber freizugeben; kein Datenabruf |
 | mobile.de – gespeicherte Suche per E-Mail | Händler-Mix | gering–mittel | Suchauftrag | kostenlos | gering | **max. 1 E-Mail/Tag** (belegt) | **OK** (ergänzend) |
 | mobile.de – im Browser gespeicherte Such-/Anzeigenseiten (manueller Import, P2-05b) | Händler-Mix | ca. 19 % (Wohnmobil-Suche 14.10.2026: 9.846 von 52.604 Angeboten „Privatanbieter“, 42.458 Händler, 301 Firmenfahrzeuge) | Nutzer speichert Seiten selbst (Strg+S); kein Abruf, ADR-010 | kostenlos | hoch (Preis, EZ, km, Ort, Kategorie, Anbietertyp je Treffer) | Handarbeit, 20 Treffer je Seite | **OK** (technisch; Verbraucher-AGB zum dauerhaften Speichern manuell gesicherter Seiten nicht zitiert – Betreiber gegenlesen, P2-01) |
 | AutoScout24 – Listing Creation API | Händler-Mix | gering | nur Einstellen, kein Lesen | unbekannt | – | – | **BLOCKED** als Lesequelle |
@@ -124,7 +124,10 @@ Anleitung zum Programmieren eines Adapters: `docs/QUELLEN.md`.
 * Kleinanzeigen-HTML-Adapter endgültig abschalten oder nur standardmäßig deaktivieren?
 * Eigenes Postfach für Suchbenachrichtigungen? `.eml`-Upload oder IMAP gewünscht?
 * Anonymisierte Beispiel-E-Mails der Suchaufträge (Kleinanzeigen, AutoScout24, mobile.de) als Testdaten.
-* Ist der Betrieb bei mobile.de oder AutoScout24 als Händler registriert?
+* ~~Ist der Betrieb bei mobile.de oder AutoScout24 als Händler registriert?~~ **Beantwortet 27.10.2026 (F4):** Die Kunden der
+  Software sind als Händler registriert. Vorbereitet (ADR-059): Händlerzugang je Firma einpflegen (Seite „Zugänge“), Passwort nur als
+  Umgebungsvariable, Verbindungstest mit genau einer Anfrage. Datenabruf bleibt gesperrt, bis der API-Account freigeschaltet und die
+  Bedingungen (Speicherdauer, Nutzung zur Preisbewertung) schriftlich geklärt sind.
 * Juristische Prüfung: E-Mail-Auswertung zu gewerblichen Zwecken, Speicherung von Verkäuferdaten (DSGVO),
   Speicherfristen bei API-Daten.
 * AGB-Originale und `robots.txt` im Browser gegenlesen (Backlog `P2-01`).

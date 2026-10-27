@@ -1204,3 +1204,35 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   mehr Standkosten und Kapitalbindung). Die Saisonwerte sind Annahmen; die Kalibrierung zeigt mit der Zeit, ob sie stimmen.
   Alle Ampeln können zum 1. September, 1. Oktober, 1. Dezember und 1. Februar umspringen (Saisonwechsel) – gewollt.
   Betreiberfragen: Staffel, Saisonzuschläge, Zinssatz, Mängelrisiko-Deckel.
+
+## ADR-059 – Kunden-Zugänge: Einladungslink für den ersten Login, Händlerzugänge bei mobile.de/AutoScout24 ohne Geheimnisse · gilt (27.10.2026)
+
+* **Kontext:** F4 (Betreiber 27.10.2026): „Kunden sind als Händler registriert – soll vorbereitet sein zum Einpflegen und einfachen Login
+  für Kunden der fertigen Software. Test wird dann durchgeführt.“ Bisher: Zugänge nur per Kommandozeile mit Passworteingabe durch den
+  Betreiber; kein Ort für die Händlerdaten der Kunden; die Search-API von mobile.de braucht einen vom Kundenservice freigeschalteten
+  API-Account, AutoScout24 hat nur eine Einstell-API (docs/SOURCES.md).
+* **Entscheidung:**
+  1. **Einladung statt Passwortübergabe:** `scout.py [--mandant K] nutzer einladen NAME --rolle inhaber` bzw. „Zugänge“ in der App
+     (Inhaber) legt den Zugang ohne bekanntes Passwort an und gibt einen Einmal-Link `…/einladung#<Code>` aus (7 Tage, nur einmal,
+     gespeichert nur der Hash; eine neue Einladung macht die alte ungültig). Der Code steht hinter `#` und erreicht den Server nie als
+     Adresse (nicht im Protokoll); die Seite sendet ihn per POST. Einlösen setzt das Passwort, beendet alte Sitzungen und meldet an;
+     Fehlversuche gebremst wie die Anmeldung, im Audit als „einladung“.
+  2. **Händlerzugänge je Firma** (`plattform_zugaenge`, Schema v21): Händlernummer, API-Benutzer und nur der **Name** der
+     Umgebungsvariable mit dem Passwort (Regel 5); der Name muss mit `WMSCOUT_` beginnen, damit über die Oberfläche keine andere
+     Server-Variable an einen Anbieter gesendet werden kann. Vorschlag `WMSCOUT_<MANDANT>_MOBILEDE_PASSWORT`.
+  3. **Verbindungstest** (nur Inhaber, ausdrücklicher Klick): genau eine HTTPS-Anfrage an die Search-API (Basic-Anmeldung, JSON-Kopf –
+     Annahmen aus der öffentlichen Übersicht, mit echtem Zugang zu bestätigen), ohne globale Sperre; gespeichert werden nur Status und
+     Aufbau der Antwort (Schlüssel, Anzahl), keine Inserate. 401/403/429 werden gemeldet, nie wiederholt.
+  4. **Kein Datenabruf** bis zur Freigabe (Regel 12): Der mobile.de-Adapter (P2-08) folgt erst nach dem Test mit echtem API-Account und
+     schriftlicher Klärung der Bedingungen (Speicherdauer laut älteren Bedingungen „maximal 24 Stunden“ – Konflikt mit der Preishistorie).
+     AutoScout24: nur Händlernummer; neue Angebote weiter über Suchaufträge per E-Mail.
+* **Alternativen:** Passwörter verschlüsselt in der Datenbank (bräuchte eine Krypto-Bibliothek und einen Server-Schlüssel – Betreiberentscheidung,
+  falls Kunden ihr Passwort selbst eintragen sollen); Anmeldung „mit mobile.de“ (kein öffentlicher Login-Dienst bekannt).
+  5. **Korrekturrunde (QA):** Vorhandene Zugänge nur ausdrücklich (`erneut`) und nur mit ihrer Rolle neu einladen – eine Einladung übernimmt
+     nie still ein Konto mit anderer Rolle (B2); bis zum Einlösen steht statt eines Hashs ein Platzhalter, eine Anmeldung ist unmöglich,
+     angelegt in einer Transaktion (B10); im Einzelplatz meldet die erste Einladung, dass ab jetzt eine Anmeldung nötig ist, und die Seite
+     lädt nicht neu (B1); im Mandantenbetrieb nur Variablen `WMSCOUT_<KENNUNG>_…` – alle Mandanten teilen die Umgebung des Servers (B3);
+     Verbindungstest auch bei 5xx ohne Wiederholung (B4); auch die Code-Prüfung ist gebremst und prüft die Herkunft (B6); alte Einladungen
+     werden aufgeräumt (B8). Die Bremse zählt je IP: hinter einem Proxy `vertrauter_proxy: true` setzen, sonst teilen sich alle eine Grenze (B7).
+* **Folgen / offen:** Für den Test braucht der Kunde einen freigeschalteten API-Account; der Betreiber setzt die Umgebungsvariable und gibt den
+  Verbindungstest frei (SOURCES: PRÜFEN). Antwortformat und Pfad nicht gegen eine echte Antwort geprüft (Doku von hier nicht erreichbar).
