@@ -55,3 +55,7 @@ python scout.py app --mandanten --lokal firma-b # zusätzlich über http://127.0
 * **Mandant löschen:** App beenden, `python scout.py --mandant KENNUNG sichern`, Sicherung nach Vertrag aufbewahren bzw.
   löschen, dann den Ordner `mandanten/<kennung>/` entfernen. Das Programm löscht nie selbst einen Mandanten.
 * Bestehende Daten (`daten/`) werden nicht automatisch in einen Mandanten verschoben.
+* **Aufbewahrungsfristen (F10):** gelten je Mandant (Abschnitt `datenschutz`, in `mandant.yaml` überschreibbar). Beim Start des
+  Mandantenservers und nach Suchläufen je Mandant wie im Einzelplatz (ausgeliefert nur Bericht); auf einem Server täglich per Aufgabenplanung
+  `python scout.py datenschutz --ausfuehren --bestaetigt --alle-mandanten --json` (je Mandant eigene Datenbank, Sicherung und Ordner;
+  ein Fehler bei einem Mandanten hält die anderen nicht auf, Exit-Code 1).

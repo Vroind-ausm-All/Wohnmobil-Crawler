@@ -69,5 +69,5 @@ Die App begrenzt selbst: JSON 1 MB, Fotos/Dokumente ca. 8 MB je Bild, Lesezeitli
 | Audit-Protokoll wer was gesehen/geändert hat | **erledigt (G0b, Schema v10):** `scout.py audit`, `/api/audit` (Inhaber); Aufbewahrungsfrist festlegen |
 | Rechte je Ankaufsschritt, PDF als Anhang | **erledigt (G0b):** nur Zuständiger/Bearbeiter/Inhaber; Dokumente als Download in Sandbox |
 | Notizen frei für das ganze Team | bewusst so (F11, `docs/ROLLEN.md`) |
-| Löschfristen für Inserate | **umgesetzt (P1-14a):** `datenschutz.inserate_anonymisieren_nach_monaten` – vor dem Pilot festlegen (Standard 0 = aus) |
+| Löschfristen | **festgelegt (F10, 27.10.2026):** `config.yaml` → `datenschutz` – Inserate 6, Verkaufsanfragen 12 Monate, Sitzungen 30 Tage, Audit 24 Monate, Kaufunterlagen 10 Jahre (nur melden); vor dem Pilot mit Datenschutzbeauftragtem/Steuerberatung bestätigen (`docs/DATENRECHTE.md`) |
 | Handy-Offline-Speicher | **eingeschränkt (P1-14b):** keine abgeschlossenen Besichtigungen, keine Unterschriften; `/api/ich` und Fotos offener Besichtigungen bleiben offline |

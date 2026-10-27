@@ -50,6 +50,25 @@ td.z{text-align:right;white-space:nowrap}
     {% endfor %}
   </table></div>
 
+  <h2>Aufbewahrungsfristen (Datenschutz)</h2>
+  {% if datenschutz.fehler %}<p class="warnung">⚠ {{ datenschutz.fehler }}</p>{% else %}
+  <p class="leise">Fristen in <code>config.yaml → datenschutz</code> (Erläuterung: <code>docs/DATENRECHTE.md</code>) – fachliche Annahmen, keine
+    Rechtsberatung. Beim Start und nach Läufen: {% if datenschutz.automatisch == 'ja' %}<b>automatisch angewendet</b>{% else %}<b>nur Bericht</b>
+    (nach Prüfung <code>automatisch: ja</code> setzen oder hier ausführen){% endif %}. Vor dem Löschen wird die Datenbank gesichert.</p>
+  <div class="tabelle"><table id="datenschutz">
+    <tr><th>Daten</th><th>Frist</th><th>Danach</th><th>Fällig</th></tr>
+    {% for z in datenschutz.plan %}
+    <tr data-frist="{{ z.schluessel }}"><td>{{ z.beschreibung }}</td><td>{{ (z.frist ~ ' ' ~ z.einheit) if z.aktion != 'aus' else 'aus' }}</td>
+      <td>{{ {'anonymisieren': 'anonymisieren', 'loeschen': 'löschen', 'melden': 'nur melden', 'aus': '–'}[z.aktion] }}</td>
+      <td class="z">{{ z.faellig }}{% if z.dateien %} + {{ z.dateien }} Dateien{% endif %}
+        {% if z.referenzen %}<br><span class="leise">prüfen: {{ z.referenzen | join(', ') }}</span>{% endif %}
+        {% if z.gesperrte_zugaenge %}<br><span class="leise">{{ z.gesperrte_zugaenge }} gesperrte Zugänge</span>{% endif %}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% if inhaber %}<p class="leise">Ausführen (Inhaber): <code>python scout.py datenschutz --ausfuehren --bestaetigt</code> – oder in der App
+    <code>POST /api/datenschutz/ausfuehren</code>.</p>{% endif %}
+  {% endif %}
+
   <h2>Eingänge</h2>
   <div class="tabelle"><table id="eingaenge">
     <tr><th>Eingang</th><th>Schalter</th><th>Letzter Import</th></tr>

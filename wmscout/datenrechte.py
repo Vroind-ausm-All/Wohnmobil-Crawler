@@ -19,8 +19,9 @@ from .verkauf import VerkaufSpeicher
 log = logging.getLogger("scout")
 
 
-def widerruf(db: Datenbank, cfg: dict, foto_ordner: Path, anfrage_id: int, nutzer_id: int | None) -> dict:
-    """``ValueError`` bei bestehendem Ankauf (nichts geändert), ``LookupError`` wenn es die Anfrage nicht gibt."""
+def widerruf(db: Datenbank, cfg: dict, foto_ordner: Path, anfrage_id: int, nutzer_id: int | None, grund: str = "widerruf") -> dict:
+    """``ValueError`` bei bestehendem Ankauf (nichts geändert), ``LookupError`` wenn es die Anfrage nicht gibt. ``grund="frist"``:
+    dieselbe Löschung nach Ablauf der Aufbewahrungsfrist (F10) – der Status der Anfrage bleibt."""
     verkauf = VerkaufSpeicher(db, Path(foto_ordner) / "anfragen")
     if not verkauf.lade(anfrage_id):
         raise LookupError("Anfrage nicht gefunden")
@@ -32,10 +33,10 @@ def widerruf(db: Datenbank, cfg: dict, foto_ordner: Path, anfrage_id: int, nutze
     auktion = AuktionSpeicher(db, cfg)
     for a in auktion.fuer_anfrage(anfrage_id):
         if a["status"] == "laeuft":
-            auktion.abbrechen(a["id"], nutzer_id, "Widerruf des Verkäufers")
+            auktion.abbrechen(a["id"], nutzer_id, "Widerruf des Verkäufers" if grund == "widerruf" else "Aufbewahrungsfrist abgelaufen")
         elif a["status"] == "beendet":
             auktion.entscheiden(a["id"], nutzer_id, False)
-    return verkauf.widerruf(anfrage_id, nutzer_id)
+    return verkauf.widerruf(anfrage_id, nutzer_id, grund)
 
 
 # ---------------------------------------------------------------- Inserate fremder Börsen (P1-14a, F10)
@@ -126,17 +127,8 @@ def inserate_nach_frist(db: Datenbank, ausgabe_ordner: Path, monate: int, jetzt:
     Fristen festlegt)."""
     if not monate or monate <= 0:
         return []
-    grenze = ((jetzt or datetime.now()) - timedelta(days=round(monate * 30.44))).isoformat(timespec="seconds")
-    kandidaten = [r[0] for r in db.con.execute(
-        "SELECT id FROM anzeigen WHERE COALESCE(status, 'neu') != 'gekauft' "
-        "AND MAX(COALESCE(zuletzt_gesehen, ''), COALESCE(status_am, ''), COALESCE(kontaktiert_am, '')) < ? "
-        "AND (details_json LIKE '%verkaeufer_name%' OR anschreiben_text IS NOT NULL OR notiz IS NOT NULL "
-        "     OR id IN (SELECT anzeige_id FROM kontakte WHERE text IS NOT NULL) "
-        "     OR id IN (SELECT anzeige_id FROM besichtigungen WHERE anzeige_id IS NOT NULL)) "
-        "AND id NOT IN (SELECT anzeige_id FROM besichtigungen WHERE anzeige_id IS NOT NULL AND status IN ('geplant', 'laeuft')) "
-        "AND COALESCE(details_json, '') NOT LIKE '%anonymisiert_am%'", (grenze,))]
     erledigt = []
-    for anzeige_id in kandidaten:
+    for anzeige_id in inserate_faellig(db, monate, jetzt):
         try:
             inserat_anonymisieren(db, ausgabe_ordner, anzeige_id, foto_ordner)
             erledigt.append(anzeige_id)
@@ -145,13 +137,39 @@ def inserate_nach_frist(db: Datenbank, ausgabe_ordner: Path, monate: int, jetzt:
     return erledigt
 
 
+def grenze_monate(monate: int, jetzt: datetime | None = None) -> datetime:
+    return (jetzt or datetime.now()) - timedelta(days=round(monate * 30.44))
+
+
+def inserate_faellig(db: Datenbank, monate: int, jetzt: datetime | None = None) -> list[str]:
+    """Inserate, die ``inserate_nach_frist`` anonymisieren würde (ohne Kauf, ohne offene Besichtigung, noch mit Personendaten)."""
+    if not monate or monate <= 0:
+        return []
+    grenze = grenze_monate(monate, jetzt).isoformat(timespec="seconds")
+    # Ankaufsvorgang ohne Status „gekauft“: Aufbewahrung – nicht fällig, sonst meldete jeder Lauf es erneut (QA F10 B3)
+    ankauf = (" AND id NOT IN (SELECT anzeige_id FROM ankaeufe WHERE anzeige_id IS NOT NULL)"
+              if db.con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ankaeufe'").fetchone() else "")
+    return [r[0] for r in db.con.execute(
+        "SELECT id FROM anzeigen WHERE COALESCE(status, 'neu') != 'gekauft' "
+        "AND MAX(COALESCE(zuletzt_gesehen, ''), COALESCE(status_am, ''), COALESCE(kontaktiert_am, '')) < ? "
+        "AND (details_json LIKE '%verkaeufer_name%' OR anschreiben_text IS NOT NULL OR notiz IS NOT NULL "
+        "     OR id IN (SELECT anzeige_id FROM kontakte WHERE text IS NOT NULL) "
+        "     OR id IN (SELECT anzeige_id FROM besichtigungen WHERE anzeige_id IS NOT NULL)) "
+        "AND id NOT IN (SELECT anzeige_id FROM besichtigungen WHERE anzeige_id IS NOT NULL AND status IN ('geplant', 'laeuft')) "
+        "AND COALESCE(details_json, '') NOT LIKE '%anonymisiert_am%'" + ankauf, (grenze,))]
+
+
 def diagnose_nach_frist(ausgabe_ordner: Path, monate: int, jetzt: datetime | None = None) -> int:
     """Rohseiten aus der Layout-Diagnose (enthalten ganze Inserate) nach derselben Frist löschen (Q11)."""
+    return _loeschen(diagnose_faellig(ausgabe_ordner, monate, jetzt))
+
+
+def diagnose_faellig(ausgabe_ordner: Path, monate: int, jetzt: datetime | None = None) -> list[Path]:
     if not monate or monate <= 0:
-        return 0
-    grenze = ((jetzt or datetime.now()) - timedelta(days=round(monate * 30.44))).timestamp()
+        return []
+    grenze = grenze_monate(monate, jetzt).timestamp()
     alt = [Path(ausgabe_ordner) / n for n in DIAGNOSE]
-    return _loeschen([p for p in alt if p.is_file() and p.stat().st_mtime < grenze])
+    return [p for p in alt if p.is_file() and p.stat().st_mtime < grenze]
 
 
 MAIL_ABLAGEN = ("eingelesen", "nicht_erkannt", "fehlerhaft")      # Unterordner von import/email/, die der Scout selbst anlegt (P2-06)
@@ -168,13 +186,30 @@ def mails_nach_frist(ordner: Path, monate: int, jetzt: datetime | None = None) -
     Zukunft) und Änderungszeit der Datei; wo es keinen Datumsordner gibt, die Änderungszeit (der Import setzt sie beim Ablegen auf „jetzt“).
     Leere Datumsordner verschwinden mit. Verknüpfungen und Junctions werden nie verfolgt, nur `*.eml`-Dateien gelöscht. Noch nicht
     verarbeitete Mails direkt in `<ordner>` bleiben unberührt (siehe `mails_unverarbeitet`). ``monate`` ≤ 0: nichts."""
-    ordner = Path(ordner)
+    gefunden = mails_faellig(ordner, monate, jetzt)
+    n = _loeschen(gefunden)
+    for tag in {p.parent for p in gefunden if p.parent.parent.name == "eingelesen"}:
+        try:
+            tag.rmdir()                                       # nur wenn leer
+        except OSError:
+            pass
+    return n
+
+
+def mails_faellig(ordner: Path, monate: int, jetzt: datetime | None = None) -> list[Path]:
+    """Die Dateien, die ``mails_nach_frist`` löschen würde."""
+    return _abgelegt_faellig(Path(ordner), monate, jetzt, MAIL_ABLAGEN, lambda p: p.suffix.lower() == ".eml")
+
+
+def _abgelegt_faellig(ordner: Path, monate: int, jetzt: datetime | None, ablagen, passt) -> list[Path]:
+    """Vom Scout abgelegte Dateien (``<ordner>/<ablage>/`` bzw. ``eingelesen/<Datum>/``), älter als die Frist: maßgeblich ist das spätere
+    von Datumsordner (ISO-Name, nicht in der Zukunft) und Änderungszeit. Verknüpfungen und Junctions werden nie verfolgt."""
     if not monate or monate <= 0 or not ordner.is_dir():
-        return 0
+        return []
     jetzt = jetzt or datetime.now()
-    grenze = (jetzt - timedelta(days=round(monate * 30.44))).timestamp()
+    grenze = grenze_monate(monate, jetzt).timestamp()
     gefunden: list[Path] = []
-    for ablage in MAIL_ABLAGEN:
+    for ablage in ablagen:
         wurzel = ordner / ablage
         if not wurzel.is_dir() or _ist_verknuepfung(wurzel):
             continue
@@ -188,12 +223,39 @@ def mails_nach_frist(ordner: Path, monate: int, jetzt: datetime | None = None) -
                 ebenen.append((datum.timestamp() if datum and datum <= jetzt else None, tag))
         for tag_zeit, verzeichnis in ebenen:
             for p in verzeichnis.iterdir():
-                if p.suffix.lower() == ".eml" and p.is_file() and not _ist_verknuepfung(p) and max(tag_zeit or 0, p.stat().st_mtime) < grenze:
+                if passt(p) and p.is_file() and not _ist_verknuepfung(p) and max(tag_zeit or 0, p.stat().st_mtime) < grenze:
                     gefunden.append(p)
+    return gefunden
+
+
+SEITEN_ABLAGEN = ("eingelesen", "nicht_erkannt")       # Unterordner von import/, die der Seitenimport anlegt
+
+
+def seiten_faellig(ordner: Path, monate: int, jetzt: datetime | None = None) -> list[Path]:
+    """Gespeicherte Seiten, die der Seitenimport abgelegt hat (``import/eingelesen/<Datum>/``, ``import/nicht_erkannt/``) – sie enthalten
+    ganze Inserate samt Anbietername (F10, schließt die Lücke aus P1-14a). Unverarbeitete Seiten direkt in ``import/`` bleiben."""
+    from .eingang.seiten import HTML_ENDUNGEN
+    return _abgelegt_faellig(Path(ordner), monate, jetzt, SEITEN_ABLAGEN, lambda p: p.suffix.lower() in HTML_ENDUNGEN)
+
+
+def seiten_nach_frist(ordner: Path, monate: int, jetzt: datetime | None = None) -> int:
+    """Fällige gespeicherte Seiten samt Begleitordner (``<name>_files``) löschen; Verknüpfungen nie verfolgen."""
+    import shutil
+
+    from .eingang.seiten import BEGLEITORDNER
+    gefunden = seiten_faellig(ordner, monate, jetzt)
+    for datei in gefunden:
+        for s in BEGLEITORDNER:
+            begleiter = datei.with_name(f"{datei.stem}{s}")
+            if begleiter.is_dir() and not _ist_verknuepfung(begleiter):
+                try:
+                    shutil.rmtree(begleiter)
+                except OSError as e:
+                    log.warning("Datenschutz: %s nicht gelöscht (%s) – bitte von Hand entfernen", begleiter, type(e).__name__)
     n = _loeschen(gefunden)
     for tag in {p.parent for p in gefunden if p.parent.parent.name == "eingelesen"}:
         try:
-            tag.rmdir()                                       # nur wenn leer
+            tag.rmdir()
         except OSError:
             pass
     return n
@@ -218,29 +280,37 @@ def mails_unverarbeitet_gemeldet(cfg: dict, ordner: Path) -> int:
 
 
 def frist_anwenden(db: Datenbank, cfg: dict, basis: Path, foto_ordner: Path) -> list[str]:
-    """Nach Suchlauf und Seitenimport sowie beim Start der App (Verkäufernamen kommen vor allem über den Seitenimport).
-    Ein Fehler wird protokolliert und bricht den Lauf nie ab."""
+    """Nach Suchlauf und Seitenimport sowie beim Start der App: alle Aufbewahrungsfristen (F10, ``aufbewahrung``) anwenden – mit
+    ``datenschutz → automatisch: nur_bericht`` nur melden. Rückgabe: anonymisierte Inserate. Ein Fehler wird protokolliert und bricht
+    den Lauf nie ab."""
+    from . import aufbewahrung
     try:
-        monate = frist_aus(cfg)
-        ausgabe = Path(basis) / cfg["ausgabe"]["ordner"]
-        erledigt = inserate_nach_frist(db, ausgabe, monate, foto_ordner=foto_ordner)
-        diagnose_nach_frist(ausgabe, monate)
+        e = aufbewahrung.einstellungen(cfg)
+        if e["automatisch"] == "ja":
+            from .audit import AuditSpeicher
+            plan = aufbewahrung.ausfuehren(db, cfg, basis, foto_ordner, audit=AuditSpeicher(db))     # Nachweis auch im Automatikbetrieb
+        else:
+            plan = aufbewahrung.bericht(db, cfg, basis)
+            if faellig := sum(z["faellig"] + z.get("dateien", 0) for z in plan if z["aktion"] in ("anonymisieren", "loeschen")):
+                log.warning("Aufbewahrungsfristen: %d Einträge/Dateien fällig – nur Bericht (datenschutz → automatisch); ausführen mit "
+                            "python scout.py datenschutz --ausfuehren --bestaetigt", faellig)
+        for z in plan:
+            if z["aktion"] == "melden" and z["faellig"]:
+                log.warning("Aufbewahrungsfristen: %d Ankäufe über der Aufbewahrungsfrist – Löschung von Hand prüfen (%s)", z["faellig"],
+                            ", ".join(z["referenzen"][:5]))
+        if ids := next((z.get("anzeige_ids", []) for z in plan if z["schluessel"] == "inserate_anonymisieren_nach_monaten"), []):
+            log.info("Datenschutz-Frist: %d Inserate anonymisiert", len(ids))
         mail_dir = mail_ordner(cfg, basis)
-        if mails := mails_nach_frist(mail_dir, monate):
-            log.info("Datenschutz-Frist: %d abgelegte Mails gelöscht", mails)
+        monate = e["inserate_anonymisieren_nach_monaten"]
         if offen := mails_unverarbeitet(mail_dir, monate):
             log.warning("Datenschutz-Frist: %d Mails liegen seit über %d Monaten unverarbeitet in %s – bitte einlesen oder löschen", offen, monate, mail_dir)
     except Exception:  # noqa: BLE001 – Datenschutz-Wartung darf Suchlauf/Import/Start nicht verhindern
         log.exception("Datenschutz-Frist konnte nicht angewendet werden")
         return []
-    if erledigt:
-        log.info("Datenschutz-Frist: %d Inserate anonymisiert", len(erledigt))
-    return erledigt
+    return ids
 
 
 def frist_aus(cfg: dict) -> int:
-    """config.yaml → datenschutz → inserate_anonymisieren_nach_monaten (0 = aus)."""
-    wert = (cfg.get("datenschutz") or {}).get("inserate_anonymisieren_nach_monaten", 0) or 0
-    if isinstance(wert, bool) or not isinstance(wert, int) or wert < 0:
-        raise ValueError("datenschutz → inserate_anonymisieren_nach_monaten: ganze Zahl ≥ 0 (0 = aus)")
-    return wert
+    """config.yaml → datenschutz → inserate_anonymisieren_nach_monaten (0 = aus); prüft dabei den ganzen Abschnitt (F10)."""
+    from .aufbewahrung import einstellungen
+    return einstellungen(cfg)["inserate_anonymisieren_nach_monaten"]

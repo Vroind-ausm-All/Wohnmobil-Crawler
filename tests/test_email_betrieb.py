@@ -102,7 +102,8 @@ def test_unverarbeitete_mails_ueber_der_frist_mit_konfigurierter_frist(cfg, mail
     alt = mails / "alt.eml"
     alt.write_bytes(b"x")
     os.utime(alt, (time.time() - 400 * 86400,) * 2)
-    assert datenrechte.mails_unverarbeitet_gemeldet(cfg, mails) == 0                  # Standard: keine Frist
+    cfg["datenschutz"] = {}
+    assert datenrechte.mails_unverarbeitet_gemeldet(cfg, mails) == 0                  # ohne Eintrag: keine Frist (config.yaml trägt seit F10 6 Monate ein)
     cfg["datenschutz"] = {"inserate_anonymisieren_nach_monaten": 6}
     assert datenrechte.mails_unverarbeitet_gemeldet(cfg, mails) == 1 and alt.is_file()
     cfg["datenschutz"] = {"inserate_anonymisieren_nach_monaten": "kaputt"}

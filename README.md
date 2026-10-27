@@ -301,7 +301,7 @@ auf **„✉ Mails einlesen“** klicken oder `python scout.py import --mails` a
 Fahrzeuge kommen mit Titel, Preis (nur aus einer eigenen Preiszeile) und Ort in die Liste; Absender, Empfänger und Betreff werden nicht gespeichert. Ob echte
 Mails so aufgebaut sind, ist noch nicht belegt (Abnahme mit echten Mails steht aus, `docs/QUELLEN.md` Abschnitt 6). Eingelesene Mails liegen danach in
 `import/email/eingelesen/<Datum>/`, nicht erkannte in `nicht_erkannt/`, unlesbare in `fehlerhaft/`; alles davon löscht die Datenschutz-Frist
-(`datenschutz` → `inserate_anonymisieren_nach_monaten`), noch nicht eingelesene Mails nicht, die werden nach Fristablauf gemeldet.
+(`datenschutz` → `inserate_anonymisieren_nach_monaten`, 6 Monate), noch nicht eingelesene Mails nicht, die werden nach Fristablauf gemeldet.
 
 Status (offen / kontaktiert / uninteressant / gekauft) und Notizen setzt du im Fahrzeugfenster. Unter
 „Kontaktiert“ findest du alle angeschriebenen Fahrzeuge mit dem Text, den du geschickt hast.
@@ -329,8 +329,9 @@ Nachrichten verschicken, und viele Verkäufer reagieren auf Massenanfragen aller
   Benachrichtigungs-Mail (`report.html`, verlässt damit den Rechner), im Offline-Speicher der Handy-App (Fahrzeugansicht
   mit Brief) und – nach dem Kontakt – im gespeicherten Anschreibentext der Datenbank. **Löschen:** `python scout.py inserat anonymisieren ID --bestaetigt` (oder `--aelter-als MONATE`) entfernt den Profilnamen aus
   `details_json`, den Namen im gespeicherten Anschreiben, Verkäuferangaben im Besichtigungsprotokoll und die Anschreiben-Datei; mit
-  `datenschutz → inserate_anonymisieren_nach_monaten` auch automatisch nach jedem Suchlauf (Standard 0 = aus). Gekaufte Fahrzeuge
-  bleiben unverändert (Aufbewahrung). Die App selbst lauscht nur auf dem eigenen Rechner (127.0.0.1;
+  `datenschutz → inserate_anonymisieren_nach_monaten` auch automatisch nach jedem Suchlauf (6 Monate). Gekaufte Fahrzeuge
+  bleiben unverändert (Aufbewahrung). **Alle Aufbewahrungsfristen** (Inserate, Verkaufsanfragen, Sitzungen, Audit, Kaufunterlagen –
+  `docs/DATENRECHTE.md`): Bericht mit `python scout.py datenschutz`, ausführen mit `--ausfuehren --bestaetigt` (vorher Sicherung). Die App selbst lauscht nur auf dem eigenen Rechner (127.0.0.1;
   Handys über `tailscale serve`); Mail-Anhang und Handy-Speicher liegen außerhalb davon.
 - **Betrieb über das eigene Büro hinaus** (öffentliche Adresse, weitere Firmen): erst die Checkliste
   `docs/PILOTBETRIEB.md` abarbeiten. Was gespeichert wird und wie es sich löschen lässt: `docs/DATENRECHTE.md`
