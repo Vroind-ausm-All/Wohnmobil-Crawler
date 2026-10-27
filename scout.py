@@ -59,7 +59,7 @@ from wmscout.eingang import import_ordner
 from wmscout.eingang.email import mail_ordner
 from wmscout.auktion import STATUS as AUKTION_STATUS
 from wmscout.auktion import AuktionSpeicher
-from wmscout import abdeckung, datenrechte, laufprotokoll, mandanten
+from wmscout import abdeckung, aufbewahrung, datenrechte, laufprotokoll, mandanten
 from wmscout.bewertung import kalibrierung
 from wmscout.audit import AuditSpeicher
 from wmscout.nutzung import nutzung
@@ -616,6 +616,64 @@ def cmd_inserat(cfg, db, args):
     print(f"{len(erledigt)} Inserat(e) ohne Kauf, älter als {args.aelter_als} Monate, anonymisiert.")
 
 
+def _protokoll_nach_stderr():
+    """Mit --json gehört stdout allein dem JSON (Aufgabenplanung/Überwachung) – das Protokoll geht nach stderr und in die Datei."""
+    for h in logging.getLogger().handlers:
+        if type(h) is logging.StreamHandler:
+            h.setStream(sys.stderr)
+
+
+def _datenschutz_lauf(cfg, db, args, kopf: str = "") -> list[dict]:
+    if args.ausfuehren:
+        plan = aufbewahrung.ausfuehren(db, cfg, BASIS, foto_ordner(cfg), audit=AuditSpeicher(db))
+    else:
+        plan = aufbewahrung.bericht(db, cfg, BASIS)
+    if args.json:
+        return plan
+    print(kopf + ("Aufbewahrungsfristen angewendet (vorher gesichert):" if args.ausfuehren else "Aufbewahrungsfristen – Bericht (nichts geändert):"))
+    for zeile in aufbewahrung.kurztext(plan):
+        print("  " + zeile)
+    return plan
+
+
+def cmd_datenschutz(cfg, db, args):
+    """Aufbewahrungsfristen (F10): Bericht oder ausführen – für Einzelplatz, Mandant (--mandant) und Server (--alle-mandanten)."""
+    import json
+    if args.ausfuehren and not args.bestaetigt:
+        sys.exit("Anonymisiert bzw. löscht fällige Personendaten unwiderruflich (vorher Sicherung) – zur Bestätigung --bestaetigt angeben")
+    if args.json:
+        _protokoll_nach_stderr()
+    plan = _datenschutz_lauf(cfg, db, args)
+    if args.json:
+        print(json.dumps(plan, ensure_ascii=False, indent=1))
+
+
+def cmd_datenschutz_mandanten(cfg, args):
+    """Wie ``datenschutz`` für jeden Mandanten nacheinander – für einen späteren Server-Aufruf (z. B. täglich per Aufgabenplanung).
+    Ein fehlerhafter Mandant hält die anderen nicht auf; Exit-Code 1, wenn einer scheiterte."""
+    import json
+    if args.ausfuehren and not args.bestaetigt:
+        sys.exit("Anonymisiert bzw. löscht fällige Personendaten unwiderruflich (vorher Sicherung) – zur Bestätigung --bestaetigt angeben")
+    if args.json:
+        _protokoll_nach_stderr()
+    alle, fehler = {}, []
+    for k in mandanten.kennungen(cfg, BASIS):           # je Kennung einzeln laden: ein kaputter Mandant hält die anderen nicht auf (QA B7)
+        try:
+            m = mandanten.mandant_cfg(cfg, BASIS, k)
+            db = Datenbank(str(BASIS / m["ausgabe"]["datenbank"]), str(sicherung_ordner(m, BASIS)), wal=wal_aktiv(m))
+            try:
+                alle[k] = _datenschutz_lauf(m, db, args, kopf=f"[{k}] ")
+            finally:
+                db.con.close()
+        except Exception as e:  # noqa: BLE001 – ein Mandant darf die anderen nicht aufhalten
+            logging.getLogger("scout").exception("Aufbewahrung für Mandant %s fehlgeschlagen", k)
+            fehler.append(f"{k}: {type(e).__name__}: {e}")
+    if args.json:
+        print(json.dumps({"mandanten": alle, "fehler": fehler}, ensure_ascii=False, indent=1))
+    if fehler:
+        sys.exit("Fehlgeschlagen: " + "; ".join(fehler))
+
+
 def cmd_audit(cfg, db, args):
     """Audit-Protokoll (G0b): wer hat wann Personendaten gelesen oder etwas geändert."""
     zeilen = AuditSpeicher(db).liste(tage=args.tage, nutzer=args.nutzer, objekt=args.objekt, limit=args.limit)
@@ -765,6 +823,11 @@ def main():
     ins.add_argument("id", nargs="?", help="Inserat-ID (oder --aelter-als)")
     ins.add_argument("--aelter-als", type=int, help="alle Inserate ohne Kauf, letzte Aktivität älter als so viele Monate")
     ins.add_argument("--bestaetigt", action="store_true")
+    ds = sub.add_parser("datenschutz", help="Aufbewahrungsfristen: was ist fällig (Bericht) – oder ausführen (anonymisieren/löschen, vorher Sicherung)")
+    ds.add_argument("--ausfuehren", action="store_true", help="fällige Daten anonymisieren bzw. löschen (Kaufunterlagen nur melden)")
+    ds.add_argument("--bestaetigt", action="store_true")
+    ds.add_argument("--alle-mandanten", action="store_true", help="für jeden Mandanten nacheinander (Server-Betrieb)")
+    ds.add_argument("--json", action="store_true", help="Ergebnis als JSON (für Aufgabenplanung/Überwachung)")
     md = sub.add_parser("mandant", help="Mandanten (mehrere Firmen) anlegen, auflisten, Nutzung je Mandant")
     md.add_argument("aktion", choices=["anlegen", "liste", "nutzung"])
     md.add_argument("kennung", nargs="?", help="nur anlegen: z. B. firma-b (a–z, 0–9, Bindestrich)")
@@ -799,10 +862,12 @@ def main():
 
     cfg = lade_config(args.config)
     try:
-        if args.cmd == "mandant" or (args.cmd == "app" and args.mandanten):
+        if args.cmd == "mandant" or (args.cmd == "app" and args.mandanten) or (args.cmd == "datenschutz" and args.alle_mandanten):
             logging_einrichten(cfg)
             if args.cmd == "mandant":
                 return cmd_mandant(cfg, args)
+            if args.cmd == "datenschutz":
+                return cmd_datenschutz_mandanten(cfg, args)
             from wmscout.app import starte_mandanten
             return starte_mandanten(cfg, BASIS, port=args.port, lokal=args.lokal)
         if args.mandant:
@@ -827,7 +892,7 @@ def main():
      "nutzer": cmd_nutzer, "status": cmd_status, "standort": cmd_standort,
      "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage, "audit": cmd_audit, "nutzung": cmd_nutzung,
      "inserat": cmd_inserat, "dubletten": cmd_dubletten, "qualitaet": cmd_qualitaet, "abdeckung": cmd_abdeckung,
-     "kalibrierung": cmd_kalibrierung}[args.cmd](cfg, db, args)
+     "kalibrierung": cmd_kalibrierung, "datenschutz": cmd_datenschutz}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":

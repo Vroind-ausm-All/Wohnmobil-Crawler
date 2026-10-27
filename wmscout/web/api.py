@@ -30,7 +30,7 @@ from ..verkauf import Eingabefehler, VerkaufSpeicher
 from ..haendler import STANDORT_STATUS, HaendlerSpeicher
 from ..auktion import STANDARD as MINDESTPREIS_STANDARD
 from ..auktion import AuktionSpeicher, AuktionsFehler
-from .. import datenrechte
+from .. import aufbewahrung, datenrechte
 from ..schalter import EingangDeaktiviert, eingang_pruefen, pruefe_eingaenge
 from ..audit import AuditSpeicher, einordnen
 from ..nutzung import nutzung
@@ -633,10 +633,18 @@ class Anfrage:
             faelle = k.kalibrierung.faelle(k.cfg)
             return self.json(200, {"bericht": kal.bericht(faelle, k.cfg), "faelle": faelle, "manuelle": k.kalibrierung.manuelle(),
                                    "markt": k.kalibrierung.marktbeobachtung(k.cfg)})
+        if p == "/api/datenschutz":                         # Aufbewahrungsfristen (F10): was ist fällig – nur Anzahlen, nur der Inhaber
+            if self.team_aktiv:
+                self.nur_inhaber()
+            return self.json(200, {"einstellungen": aufbewahrung.einstellungen(k.cfg), "plan": aufbewahrung.bericht(k.db, k.cfg, k.basis)})
         if p == "/status":
+            try:                                            # Aufbewahrungsfristen (F10): nur Anzahlen; Ausführen nur der Inhaber
+                ds = {"plan": aufbewahrung.bericht(k.db, k.cfg, k.basis), "automatisch": aufbewahrung.einstellungen(k.cfg)["automatisch"]}
+            except ValueError as e:
+                ds = {"fehler": str(e)}
             return self.html(k.env.get_template("status.html").render(
                 firma=k.cfg["anschreiben"]["firma"], s=lp.uebersicht(k.db, k.cfg), suchlauf=k.suchlauf.stand, arten=lp.ARTEN,
-                ausloeser=lp.AUSLOESER, ergebnisse=lp.ERGEBNISSE))
+                ausloeser=lp.AUSLOESER, ergebnisse=lp.ERGEBNISSE, datenschutz=ds, inhaber=self.nutzer.get("rolle") == "inhaber"))
         if p == "/ankaeufe":
             return self.html(k.env.get_template("ankaeufe.html").render(
                 firma=k.cfg["anschreiben"]["firma"], token=k.token, ich=self.nutzer, kostenarten=KOSTENARTEN, status=ANKAUF_STATUS,
@@ -1316,6 +1324,14 @@ class Anfrage:
                 raise Antwort(404, str(fehler)) from fehler
             kid = k.deal.speichern(e, erg, anlass="gespeichert", anfrage_id=int(m.group(1)), standort_id=standort, nutzer_id=self.nutzer["id"])
             return self.json(200, {"id": kid})
+        if p == "/api/datenschutz/ausfuehren":              # F10: fällige Daten anonymisieren/löschen (vorher Sicherung), nur der Inhaber
+            if self.team_aktiv:
+                self.nur_inhaber()
+            if daten.get("bestaetigt") is not True:
+                raise Antwort(400, "Löscht fällige Personendaten unwiderruflich – Bestätigung fehlt (bestaetigt: true)")
+            plan = aufbewahrung.ausfuehren(k.db, k.cfg, k.basis, k.team.foto_ordner, audit=k.audit)
+            log.info("Aufbewahrungsfristen angewendet durch %s", (self.nutzer or {}).get("name") or "Einzelplatz")
+            return self.json(200, {"plan": plan})
         if p == "/api/einladung/pruefen":                  # F4: Name zur Einladung anzeigen (offen, nur mit gültigem Token, gebremst)
             self._herkunft_pruefen("Einladung")
             ip = self.client_ip()

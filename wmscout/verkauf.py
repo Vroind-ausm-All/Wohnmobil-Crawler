@@ -260,9 +260,10 @@ class VerkaufSpeicher:
             self._verlauf(anfrage_id, nutzer_id, "foto", None, name)
         return {"id": fid, "datei": name}
 
-    def widerruf(self, anfrage_id: int, nutzer_id: int | None) -> dict:
+    def widerruf(self, anfrage_id: int, nutzer_id: int | None, grund: str = "widerruf") -> dict:
         """Widerruf der Einwilligung (Datenrechte, G0): Verkäufer anonymisieren, Freitexte, Notiz und Fotos löschen, Freigabe für
-        Standorte zurücknehmen, Status „zurückgezogen“. Fahrzeugdaten ohne Personenbezug (Art, Marke, EZ, km, Preisvorstellung)
+        Standorte zurücknehmen, Status „zurückgezogen“. ``grund="frist"`` (F10): dieselbe Löschung nach Ablauf der Aufbewahrungsfrist,
+        der Status bleibt. Fahrzeugdaten ohne Personenbezug (Art, Marke, EZ, km, Preisvorstellung)
         bleiben für Statistik und nachrechenbare Kalkulationen. Besteht ein nicht stornierter Ankauf, wird NICHT gelöscht
         (gesetzliche Aufbewahrung – im Einzelfall klären). Laufende Auktionen bricht der Aufrufer vorher ab."""
         tabellen = {r[0] for r in self.con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -283,7 +284,8 @@ class VerkaufSpeicher:
                 self.con.execute("UPDATE verkaeufer SET name='(gelöscht)', email=NULL, telefon='(gelöscht)', plz=NULL, ort=NULL WHERE id=?",
                                  (a["verkaeufer_id"],))
             self.con.execute("UPDATE verkaufsanfragen SET beschreibung=NULL, notiz=NULL, freigegeben_am=NULL, freigegeben_von=NULL, "
-                             "status='zurueckgezogen', aktualisiert_am=? WHERE id=?", (_jetzt(), anfrage_id))
+                             "status=CASE WHEN ?='frist' THEN status ELSE 'zurueckgezogen' END, aktualisiert_am=? WHERE id=?",
+                             (grund, _jetzt(), anfrage_id))
             self.con.execute("UPDATE anfrage_verlauf SET alt=NULL, neu=NULL WHERE anfrage_id=? AND ereignis='notiz'", (anfrage_id,))
             dateien = [r[0] for r in self.con.execute("SELECT datei FROM anfrage_fotos WHERE anfrage_id=?", (anfrage_id,))]
             self.con.execute("DELETE FROM anfrage_fotos WHERE anfrage_id=?", (anfrage_id,))
@@ -305,7 +307,8 @@ class VerkaufSpeicher:
                                             self.con.execute("SELECT datei FROM fotos WHERE besichtigung_id=?", (b["id"],))]
                     self.con.execute("DELETE FROM fotos WHERE besichtigung_id=?", (b["id"],))
                     geschwaerzt += 1
-            self._verlauf(anfrage_id, nutzer_id, "widerruf", None, "personenbezogene Daten gelöscht")
+            self._verlauf(anfrage_id, nutzer_id, "frist" if grund == "frist" else "widerruf", None,
+                          "personenbezogene Daten nach Ablauf der Aufbewahrungsfrist gelöscht" if grund == "frist" else "personenbezogene Daten gelöscht")
         # Dateien erst nach erfolgreichem Commit entfernen (Besichtigungsfotos liegen im Fotoordner des Teams, eine Ebene höher)
         for pfad in [self.foto_ordner / str(int(anfrage_id)) / d for d in dateien] + \
                     [self.foto_ordner.parent / str(int(bid)) / d for bid, d in besichtigungs_fotos]:

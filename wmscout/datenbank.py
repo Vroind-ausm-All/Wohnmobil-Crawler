@@ -81,6 +81,7 @@ class Datenbank:
         """
         Path(pfad).parent.mkdir(parents=True, exist_ok=True)
         migriere(pfad, sicherung_ordner)
+        self.sicherung_ordner = Path(sicherung_ordner) if sicherung_ordner else Path(pfad).parent / "sicherungen"
         # check_same_thread=False: die App bedient Anfragen in mehreren Threads (ThreadingHTTPServer); Zugriffe auf diese
         # Verbindung serialisiert die Sperre des App-Kontexts, Suchlauf und Auto-Suche öffnen eigene Verbindungen
         self.con = sqlite3.connect(pfad, check_same_thread=False, timeout=timeout)

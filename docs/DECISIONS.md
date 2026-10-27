@@ -1236,6 +1236,37 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   ca. 330 € (Bahn, Ticket ca. 75 €), Köln ca. 440 €, Hamburg ca. 820 € (Ticket ca. 160 €, eine Übernachtung) – im Nahbereich günstiger,
   in der Ferne teurer als die alte Formel. Ticketpreise, Stundensatz, Übernachtung und Übergabezeit sind Annahmen; die Kalibrierung
   vergleicht sie mit tatsächlichen Transportkosten.
+## ADR-058 – Aufbewahrungsfristen: ein Plan für alle Personendaten, ein Wartungsschritt für Einzelplatz, Kommandozeile und Server · gilt (27.10.2026)
+
+* **Kontext:** F10 (Betreiber 27.10.2026: „Aufbewahrungsfristen nach DSGVO etablieren und vorbereiten für spätere Serveranbindung“).
+  Bisher gab es nur die Inseratsfrist (P1-14a, Standard aus); Verkaufsanfragen ohne Widerruf, Audit-Protokoll, Sitzungen und
+  gespeicherte Seiten in `import/eingelesen/` hatten keinen Löschweg, Kaufunterlagen keine Frist.
+* **Entscheidung:**
+  1. **Fristen in `config.yaml` → `datenschutz`** (0 = aus, fehlender Eintrag = 0, damit alte Konfigurationen nichts Neues löschen):
+     Inserate 6 Monate, Verkaufsanfragen ohne Ankauf 12 Monate, abgelaufene Sitzungen 30 Tage, Audit 24 Monate, Kaufunterlagen 10 Jahre
+     ab Ende des Kalenderjahres (nur melden). Tippfehler-Schlüssel werden gemeldet.
+  2. **Ein Wartungsschritt** (`wmscout/aufbewahrung.py`): `bericht` (nur Anzahlen, ändert nichts) und `ausfuehren` (vorher Sicherung
+     der Datenbank in ihren Sicherungsordner, jede Kategorie für sich – ein Fehler hält die anderen nicht auf). Idempotent.
+  3. **Verkaufsanfragen** über denselben Weg wie der Widerruf (`grund="frist"`): Verkäufer, Freitexte, Fotos, Besichtigung; Status
+     bleibt; nie mit Ankaufsvorgang (auch storniert) oder offener Besichtigung.
+  4. **Audit** bleibt nur anfügbar; der Lösch-Trigger wird nur für die Frist in derselben Transaktion entfernt und wiederhergestellt.
+     Ein Nachweis-Eintrag nennt nur Anzahlen je Kategorie.
+  5. **Kaufunterlagen** werden nie automatisch gelöscht – Aufbewahrungspflichten (HGB/AO) und Einzelfälle (Gewährleistung,
+     Rechtsstreit) verlangen eine Prüfung.
+  6. **Aufrufer:** beim Start der App und nach Suchlauf/Import (`automatisch: ja`; ausgeliefert `nur_bericht`), Kommandozeile
+     `scout.py datenschutz [--ausfuehren --bestaetigt] [--json] [--alle-mandanten]`, App für den Inhaber (`/api/datenschutz`). Für den
+     Server ist kein Dauerprozess vorgesehen (Regel 13), sondern ein täglicher Aufruf per Aufgabenplanung je Mandant.
+* **Alternativen:** Fristen fest im Code (nicht anpassbar ohne Release); Löschen der Kaufunterlagen nach Fristablauf (zu riskant ohne
+  Prüfung); eigener Scheduler-Thread (Dauerprozess, Regel 13).
+  7. **Korrekturrunde (QA-Ablehnung):** Sicherung vor dem Löschen höchstens einmal je Tag mit eigener Rotation (die allgemeine Rotation
+     verdrängte manuelle Vollsicherungen und Migrationssicherungen, B1); Tests nutzen eigene Sicherungs- und Import-Ordner (B2);
+     Inserate mit Ankaufsvorgang sind nie fällig (B3); ausgeliefert `automatisch: nur_bericht` mit Bericht auf der Statusseite – der
+     Betreiber schaltet nach Prüfung auf `ja` (B4); abgelegte Seiten zählen ab dem Ablegen (B5); Audit-Nachweis auch im Automatikbetrieb
+     (B6); Mandanten einzeln geladen, Fehler isoliert (B7); nach der Löschung neu eingetragene Angaben werden wieder fällig (B8);
+     Storno und Verlauf zählen für die Kaufunterlagen-Frist (B9); Anfragen mit laufender oder unentschiedener Auktion nie fällig (B10).
+* **Folgen / offen:** Nach dem Update ändert sich ohne Zutun nichts (nur Bericht). Wird `automatisch: ja` gesetzt oder einmal ausgeführt,
+  werden Altbestände über der Frist anonymisiert (vorher Sicherung). Juristische Prüfung der Fristen und von Protokoll/E-Mail-Auswertung
+  bleibt offen (F10). Gelöschtes bleibt bis zur Rotation in Sicherungen.
 ## ADR-059 – Kunden-Zugänge: Einladungslink für den ersten Login, Händlerzugänge bei mobile.de/AutoScout24 ohne Geheimnisse · gilt (27.10.2026)
 
 * **Kontext:** F4 (Betreiber 27.10.2026): „Kunden sind als Händler registriert – soll vorbereitet sein zum Einpflegen und einfachen Login

@@ -6,7 +6,24 @@ Wert „–“.
 
 ---
 
-## F4 / P2-08a – Kunden-Zugänge: Einladungslink und Händlerzugänge mobile.de/AutoScout24 (27.10.2026) · Status: REVIEW
+## F10 / P1-14c – Aufbewahrungsfristen, vorbereitet für den Server (27.10.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 27.10.2026: „F10 Aufbewahrungsfristen nach DSGVO etablieren und vorbereiten für spätere Serveranbindung.“
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-data-engineer`); QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/aufbewahrung.py` (neu), `wmscout/datenrechte.py`, `wmscout/verkauf.py`, `wmscout/datenbank.py`,
+  `wmscout/eingang/seiten.py`, `wmscout/web/api.py`, `scout.py`, `config.yaml`, `vorlagen/status.html`; Tests `test_aufbewahrung.py` (neu),
+  `conftest.py` (Import- und Sicherungsordner der Tests im Temp-Ordner), `test_email_betrieb.py`; Doku ADR-058, `docs/DATENRECHTE.md`,
+  `docs/MANDANTEN.md`, `docs/PILOTBETRIEB.md`, ROADMAP (P1-14c), README.
+- **Implementierte Funktionen:** siehe ADR-058. Keine Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Ablehnung** wegen B1 (kritisch: Sicherung vor jedem Fristlauf über die allgemeine Rotation verdrängte manuelle
+  Vollsicherungen und Migrationssicherungen) und B2 (kritisch: Kommandozeilen-Tests legten Sicherungen im Projektordner an) – beide behoben;
+  B3–B10 behoben (u. a. ausgeliefert `nur_bericht` mit Bericht auf der Statusseite, B4); B11 beim Commit beachtet. Die von Tests angelegten
+  Dateien im Arbeitsbaum wurden entfernt. Regressionstests ergänzt; Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen:** Fristen (6/12 Monate, 30 Tage, 24 Monate, 10 Jahre) bestätigen bzw. mit Datenschutzbeauftragtem/Steuerberatung
+  abstimmen; nach Prüfung des ersten Berichts `automatisch: ja` setzen.
+- **Nächster sinnvoller Schritt:** F4 (Händlerzugänge der Kunden, einfacher Login).
+## F4 / P2-08a – Kunden-Zugänge: Einladungslink und Händlerzugänge mobile.de/AutoScout24 (27.10.2026) · Status: DONE (PR #49 gemergt)
 
 - **Auftrag:** Betreiber 27.10.2026: „F4 Kunden sind als Händler registriert (soll vorbereitet sein zum Einpflegen und einfachen Login
   für Kunden der fertigen Software. Test wird dann durchgeführt.“

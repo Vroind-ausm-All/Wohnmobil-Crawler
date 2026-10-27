@@ -4,6 +4,25 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## F10 / P1-14c – Aufbewahrungsfristen, vorbereitet für den Server (27.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2451 bestanden (vorher 2424), neu `test_aufbewahrung.py` (27). Angepasst: `test_email_betrieb.py` (ohne Eintrag keine Frist – config.yaml trägt jetzt 6 Monate ein), `conftest.py` (Import- und Sicherungsordner der Tests im Temp-Ordner). Lauf vor der Korrekturrunde: 2443 bestanden |
+| `ruff check .` | grün |
+| Einstellungen: Werte aus config.yaml, fehlende Einträge = aus, Fehleingaben (negativ, Text, bool, Tippfehler-Schlüssel, ungültiger Modus) verständlich, Wartung bricht nie ab | bestanden |
+| Verkaufsanfragen: nach 12 Monaten anonymisiert (Status bleibt, Verlauf „frist“), frische bleiben, idempotent; nie mit Ankauf (auch storniert), offener Besichtigung oder laufender/unentschiedener Auktion; nach neuen Angaben wieder fällig | bestanden |
+| Audit: alte Einträge gelöscht, Trigger danach wieder da, Nachweis ohne Inhalte (auch im Automatikbetrieb); Fehler beim Löschen → Rollback, andere Kategorien laufen weiter | bestanden |
+| Sitzungen gelöscht; Kaufunterlagen nur gemeldet (Frist ab Jahresende des letzten Vorgangs inkl. Storno/Verlauf), gesperrte Zugänge gemeldet | bestanden |
+| Abgelegte Seiten samt Begleitordner gelöscht, unverarbeitete, neue und Verknüpfungen nicht; Frist zählt ab dem Ablegen | bestanden |
+| Sicherung vor dem Löschen: nur wenn etwas fällig ist, höchstens eine je Tag, die letzten drei; manuelle Sicherungen mit Fotos und Migrationssicherungen bleiben | bestanden |
+| Inserat mit Ankaufsvorgang ohne Status „gekauft“: nie fällig, keine Sicherung | bestanden |
+| Automatik: `nur_bericht` meldet nur (Warnung mit Befehl), `ja` führt aus | bestanden |
+| Kommandozeile: Bericht, `--ausfuehren` nur mit `--bestaetigt`, `--json` (Protokoll auf stderr), `--alle-mandanten` (je Mandant getrennt, ein kaputter Mandant hält die anderen nicht auf, Exit-Code 1) | bestanden |
+| API: nur Inhaber (Mitarbeiter/Händler 403), Bestätigung nötig, im Audit protokolliert; Statusseite zeigt die Fristen, den Befehl nur dem Inhaber | bestanden |
+| Tests schreiben nicht in den Projektordner (keine Datei unter `daten/` nach der Suite) | bestanden |
+| QA (eine Runde, vor der Korrekturrunde: 102 gezielte Tests bestanden, fünf Nachstellskripte) | **Ablehnung** wegen B1/B2 (kritisch) – B1–B10 behoben, B11 beim Commit beachtet; Korrekturen **nicht** erneut von der QA geprüft |
+| Rechtliche Richtigkeit der Fristen, Windows (Junctions, gesperrte Dateien), echter Datenbestand, Windows-CI | nicht geprüft (CI folgt im PR) |
 ## F4 / P2-08a – Kunden-Zugänge: Einladungslink und Händlerzugänge (27.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

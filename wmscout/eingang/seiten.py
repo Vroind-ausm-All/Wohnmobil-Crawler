@@ -8,6 +8,7 @@ Kleinanzeigen wird nur erkannt, wenn die Seite nicht von mobile.de stammt.
 """
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from pathlib import Path
@@ -309,6 +310,7 @@ def verschiebe(datei: Path, ziel: Path) -> Path:
     name = _freier_name(ziel, datei.stem, datei.suffix)
     neu = ziel / f"{name}{datei.suffix}"
     shutil.move(str(datei), str(neu))
+    os.utime(neu)                    # ab dem Ablegen zählt die Datenschutz-Frist (wie bei Mails) – nicht ab dem Speichern im Browser
     for s in BEGLEITORDNER:
         begleiter = datei.with_name(f"{datei.stem}{s}")
         if begleiter.is_dir():
