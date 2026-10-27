@@ -9,6 +9,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from .anbieter import HERKUNFT_TEXT, einstufung
 from .bewertung.anschreiben import euro, tsd
+from .bewertung.kalkulation import stunden_text
 from .bearbeitung import IN_ARBEIT
 from .domaene import STATUS
 from .schalter import eingang_aktiv
@@ -21,6 +22,7 @@ def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None =
     env = Environment(loader=FileSystemLoader(str(basis / "vorlagen")), autoescape=True)
     env.filters["euro"] = euro
     env.filters["tsd"] = tsd
+    env.filters["stunden"] = stunden_text
     env.filters["prozent"] = lambda x: f"{x:+.1%}".replace(".", ",") if x is not None else "–"
     env.filters["anteil"] = lambda x: f"{x:.0%}" if x is not None else "–"
     zaehl = {

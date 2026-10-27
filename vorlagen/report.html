@@ -361,6 +361,13 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
           <p class="spanne">Marktniveau <b>{{ b.marktwert_angebote | euro }}</b>{% if b.spanne_von %} <span class="meta">(plausibel {{ b.spanne_von | euro }} – {{ b.spanne_bis | euro }})</span>{% endif %}</p>
           <p class="meta">Sicherheit: <span class="sicherheit s-{{ b.sicherheit }}">{{ b.sicherheit }}</span> · {{ b.vergleich_basis }}</p>
           {% if b.standzeit_monate %}<p class="meta" data-standzeit>Geplante Standzeit {{ b.standzeit_monate }} Monate (inkl. Saison nach Kaufmonat) – Standkosten, Kapitalbindung und Gewährleistungsrücklage nach Alter stehen in den Kosten.</p>{% endif %}
+          {% if b.abholung %}<div class="meta" data-abholung><b>Abholung</b> – grobe Schätzung, gerechnet wird der günstigere Weg:
+            <ul>{% for v in b.abholung.varianten %}<li>{% if v.art == 'auto' %}Auto ab Firmensitz (2 Personen): ca. {{ v.euro | euro }} – {{ v.km | tsd }} km,
+              zusammen ca. {{ v.stunden | stunden }}{% else %}Bahn ab {{ v.ab }}: ca. {{ v.euro | euro }} – {{ v.ticket_art }} ca. {{ v.ticket | euro }},
+              Anreise mit öffentlichen Verkehrsmitteln ca. {{ v.reise_stunden | stunden }}, Rückfahrt im Wohnmobil ca. {{ v.rueck_stunden | stunden }}{% endif %}
+              {%- if v.uebernachtungen %} · {{ v.uebernachtungen }} Übernachtung{{ 'en' if v.uebernachtungen > 1 }}{% endif %}
+              {%- if v.art == b.abholung.gewaehlt %} <b>✓ gerechnet</b>{% endif %}</li>{% endfor %}</ul>
+            {%- if b.abholung.hinweis %}<span data-abholhinweis>{{ b.abholung.hinweis }}</span>{% endif %}</div>{% endif %}
           {% if b.maengel %}<div class="maengel" data-maengel-liste><b>Im Inserat genannte Mängel</b> – bei der Besichtigung prüfen:
             <ul>{% for m in b.maengel %}<li>{{ m.name }} (−{{ (-m.wert * 100) | round | int }} % im Referenzwert)</li>{% endfor %}</ul>
             {%- if b.maengel_risiko %}<span data-maengelrisiko>Ausmaß unklar: untere Spanne um {{ (b.maengel_risiko * 100) | round | int }} % weiter.</span>{% endif %}</div>{% endif %}

@@ -46,6 +46,7 @@ from ..bearbeitung import (IN_ARBEIT, OFFEN, VORBEREITET, BearbeitungsKonflikt, 
                            darf_zuweisen, reservierung_tage)
 from ..benachrichtigung import WhatsAppCloud, whatsapp_link
 from ..bewertung.anschreiben import euro, tsd
+from ..bewertung.kalkulation import stunden_text
 from ..bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids
 from ..verfuegbarkeit import fahrzeug_von, offline_nach_tagen
 from ..anbieter import einstufung
@@ -160,6 +161,7 @@ class Kontext:
         self.env = Environment(loader=FileSystemLoader(str(basis / "vorlagen")), autoescape=True)
         self.env.filters["euro"] = euro
         self.env.filters["tsd"] = tsd
+        self.env.filters["stunden"] = stunden_text
 
     # Bewertung aller Inserate ist teuer → 30 s zwischenspeichern, bei Änderungen verwerfen
     def zeilen(self) -> list[dict]:

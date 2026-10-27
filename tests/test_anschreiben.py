@@ -133,7 +133,7 @@ def test_modell_hoechstens_einmal_danach_nur_marke():
     assert "Ihr Teilintegrierter von Knaus passt gut zu dem, was unsere Kunden suchen." in t
     assert f"gepflegtes Fahrzeug.\n\nBei einem Wohnmobil aus {EZ}" in t                  # eigener Absatz für die Prüfpunkte
     # Pflichtinhalte bleiben
-    for teil in ("gewerblicher Ankäufer (Muster Reisemobile GmbH, Stuttgart)", "Vorbehaltlich einer Besichtigung",
+    for teil in ("gewerblicher Ankäufer (Muster Reisemobile GmbH, Besigheim)", "Vorbehaltlich einer Besichtigung",
                  "unverbindlich", "Fahrzeugschein", "Viele Grüße\nMax Mustermann", "Markise und Rückfahrkamera"):
         assert teil in t, teil
 
