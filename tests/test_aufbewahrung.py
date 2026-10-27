@@ -311,8 +311,8 @@ def test_anfrage_wieder_faellig_und_auktion_und_storno(cfg, db, tmp_path):
     db.con.commit()
     assert aufbewahrung.anfragen_faellig(db, 12, datetime(2028, 1, 1)) == [aid]
     mit_auktion = _anfrage(db, tmp_path, ALT)
-    db.con.execute("INSERT INTO auktionen (anfrage_id, status, startpreis, schritt, start_utc, ende_utc) VALUES (?, 'beendet', 1, 1, '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z')",
-                   (mit_auktion,))
+    db.con.execute("INSERT INTO auktionen (anfrage_id, status, startpreis, schritt, start_utc, ende_utc) "
+                   "VALUES (?, 'beendet', 1, 1, '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z')", (mit_auktion,))
     db.con.execute("INSERT INTO besichtigungen (anzeige_id, status) VALUES ('s', 'abgeschlossen')")
     db.con.execute("INSERT INTO ankaeufe (id, referenz, herkunft, anzeige_id, besichtigung_id, kaufpreis, plan_json, status, erstellt_am) "
                    "VALUES (77, 'AK-S', 'anzeige', 's', last_insert_rowid(), 1000, '{}', 'storniert', '2014-01-01')")
