@@ -240,8 +240,9 @@ erhalten (Re-Import-Test).
 | P5-03 | P1 | Marktwertspannen und Unsicherheit statt Punktwerte bei dünner Datenlage – mit Betreiberwunsch 25.10.2026: Abschlag bei unbekannter Marke (nur Hinweis), Mängel als Liste beim Inserat | acquisition-analyst, scout-ui-engineer | DONE (PR #43 gemergt; ADR-054, Rechenstand E3) |
 | P5-04 | P2 | Angebotspreise vs. Transaktionspreise, Händler- vs. Privatpreise | acquisition-analyst | DONE (PR #44 gemergt; ADR-055, Rechenstand E4) |
 | P5-05 | P2 | Ausstattung und Mängel; Reparatur-, Gewährleistungs-, Standkostenrisiko – dazu Betreiberwunsch 25.10.2026: Spannen auf 100 € | acquisition-analyst | DONE (PR #45 gemergt; ADR-056, ohne Schemaänderung; Rechenstand E5) |
-| P5-06 | P2 | Transportkosten ab konfigurierbarer Standort-PLZ (Grundlage vorhanden: `anschreiben.plz`, `rechner.kosten.transport_*`) | acquisition-analyst | TODO (nächster Schritt, wartet auf Freigabe durch den Betreiber) |
-| P5-07 | P1 | Deal-Score 0–100 mit benannten Komponenten; Speicherung in `bewertungen` mit `modell_version` (braucht Migration auf Version 6, scout-data-engineer) | acquisition-analyst | TODO |
+| P5-06 | P2 | Transportkosten ab konfigurierbarer Standort-PLZ (Grundlage vorhanden: `anschreiben.plz`, `rechner.kosten.transport_*`) | acquisition-analyst | DONE (PR #47 gemergt; ADR-057, ohne Schemaänderung; Rechenstand E6) |
+| P5-06b | P3 | Abholvarianten (Auto/Bahn) auch in der Handy-App anzeigen (API liefert `bewertung.abholung` bereits; QA P5-06 B9) | scout-ui-engineer | TODO |
+| P5-07 | P1 | Deal-Score 0–100 mit benannten Komponenten; Speicherung in `bewertungen` mit `modell_version` (braucht eine Schemamigration – aktuell Version 20, scout-data-engineer) | acquisition-analyst | TODO |
 
 ## Phase 6 – Ankaufs-Dashboard
 
@@ -290,13 +291,13 @@ Optimiert wird auf **relevante, verfügbare Ankaufsgelegenheiten**, nicht auf ab
 | F1 | Soll es für Kleinanzeigen überhaupt eine lokale Ausnahme „auf eigene Verantwortung“ geben? Das erfordert, dass Sie Regel 12 in `CLAUDE.md` selbst ändern. Ohne Änderung wird der Abruf mit P1-01a abgeschaltet (Regeln 11/12 verlangen das bereits). | P1-01a/b |
 | F2 | entfällt: ehrlicher User-Agent ist nach Regel 11 Pflicht | – |
 | F3 | Postfach für Suchbenachrichtigungen: `.eml`-Upload oder IMAP? Anonymisierte Beispiel-E-Mails bereitstellen? | P2-06/07 |
-| F4 | Bei mobile.de/AutoScout24 als Händler registriert? Anfrage für API-Zugang stellen? | P2-08/09 |
+| F4 | ~~Bei mobile.de/AutoScout24 als Händler registriert?~~ **Beantwortet 27.10.2026:** Die Kunden der Software sind als Händler registriert – Zugänge je Kunde zum Einpflegen und ein einfacher Kunden-Login werden vorbereitet; der Test mit echten Zugängen erfolgt durch den Betreiber. | P2-08/09 |
 | F5 | Größe/Ort der produktiven Datenbank; vorhandene Sicherungen; Ziel und Aufbewahrung der Backups? | P1-02 |
-| F6 | Altdaten `gewerblich = 0`: als privat übernehmen (Suchen filtern auf privat) oder „unbekannt“? **Vorentschieden 23.10.2026 (P3-05, bitte bestätigen):** bleibt privat bzw. gewerblich, Herkunft „Altbestand“ sichtbar; kein neuer Hinweis, weiter in der Vergleichsbasis | P2-02/P3-05 |
-| F7 | Alte „kontaktiert“-Einträge als bestätigte Kontakte übernehmen? **Vorentschieden 23.10.2026 (P3-06, bitte bestätigen):** Status bleibt; im Verlauf als Kontakt mit Herkunft „Altbestand“ (Kanal unbekannt, „vor der Bestätigungspflicht übernommen“), offenes „Text kopiert“ und letztes Nachfassen als nicht bestätigt | P1-06/P3-06 |
+| F6 | Altdaten `gewerblich = 0`: als privat übernehmen (Suchen filtern auf privat) oder „unbekannt“? **Bestätigt 27.10.2026 (P3-05):** bleibt privat bzw. gewerblich, Herkunft „Altbestand“ sichtbar; kein neuer Hinweis, weiter in der Vergleichsbasis | P2-02/P3-05 |
+| F7 | Alte „kontaktiert“-Einträge als bestätigte Kontakte übernehmen? **Bestätigt 27.10.2026 (P3-06):** Status bleibt; im Verlauf als Kontakt mit Herkunft „Altbestand“ (Kanal unbekannt, „vor der Bestätigungspflicht übernommen“), offenes „Text kopiert“ und letztes Nachfassen als nicht bestätigt | P1-06/P3-06 |
 | F8 | Läuft `lauf.bat` per Aufgabenplanung parallel zur App? | P1-04 |
 | F9 | Nur Python 3.13 unterstützen oder auch 3.12? | P1-10 |
-| F10 | Aufbewahrungsfristen für Verkäuferdaten, Fotos, Unterschriften (DSGVO); juristische Prüfung von Protokoll und E-Mail-Auswertung | P1-14 |
+| F10 | Aufbewahrungsfristen für Verkäuferdaten, Fotos, Unterschriften (DSGVO); juristische Prüfung von Protokoll und E-Mail-Auswertung. **27.10.2026:** Fristen etablieren und für die spätere Serveranbindung vorbereiten (eigenes Paket); juristische Prüfung bleibt offen | P1-14 |
 | F11 | Rollenrechte: Was dürfen Mitarbeiter (Status „gekauft“, Suchläufe starten, Besichtigungen anderer sehen/zuweisen)? | P1-15 |
 | F12 | Dürfen eng gekoppelte Pakete desselben Agenten (z. B. P1-02 + P1-03) in einem PR gebündelt werden? Wie schnell können Sie PRs prüfen und mergen? | Durchgangsplanung |
 | F13 | Sollen Deny-Regeln in `.claude/settings.json` den Prüfagenten technisch am Schreiben hindern (z. B. `git commit`/`git push`)? Das ändert Berechtigungen und bleibt Ihnen vorbehalten. | ADR-018 |

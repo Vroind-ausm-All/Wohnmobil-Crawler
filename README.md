@@ -434,4 +434,5 @@ Die Zeilen „Phase 1“ unten beziehen sich auf den früheren Phasenplan; die n
 | Max-EK und Marktwert privat als Spanne, Abschlag bei unbekannter Marke (mit Hinweis), Mängelliste beim Inserat (P5-03) | umgesetzt | `test_spannen.py`, Klicktest Desktop und Handy |
 | Händlermarkt als Obergrenze für den Händler-VK; Marktbeobachtung der Preissenkungen privater Inserate im Kalibrierungsbericht (P5-04) | umgesetzt | `test_preisarten.py`, Klicktest |
 | Gewährleistungsrücklage nach Alter, Standzeit nach Saison, Kapitalbindung, Mängelrisiko in Spanne/Sicherheit, neue Mängel- und Ausstattungsbegriffe; Spannen auf 100 € (P5-05) | umgesetzt | `test_risiko.py` |
+| Abholung: Auto ab Firmensitz Besigheim oder Bahn ab Stuttgart Hbf (ICE-Ticket und Reisezeit grob), der günstigere Weg zählt (P5-06) | umgesetzt | `test_abholung.py` |
 | Deal-Score, Ankaufs-Dashboard | **geplant** – Phasen 4–6 in `docs/ROADMAP.md` | – |

@@ -51,7 +51,7 @@ Kalibrierung lohnt deshalb zuerst beim **Verkaufspreis** (Ist-VK gegen geplanten
 | S3 | Spanne nur aus Vergleichsstreuung, Punktwert in der Oberfläche dominiert; bei 1–4 Vergleichen Mischwert mit dem Modell | falsche Genauigkeit bei dünner Datenlage | P5-03 – **angegangen** (ADR-054: Max-EK und Marktwert privat als Spanne in der Oberfläche) |
 | S4 | Angebotspreise statt Abschlusspreisen; fester Abschlag 7 %; Händlerangebote fließen gar nicht ein | Marktwert privat systematisch verschoben | P5-04 – **angegangen** (ADR-055: Händlermarkt als Obergrenze für den Händler-VK, Marktbeobachtung der Preissenkungen; Abschlusspreise nur aus eigenen Ankäufen, ADR-052) |
 | S5 | Wertfaktoren nur aus Stichworten im Text, Deckel ±; Mängel aus der Besichtigung fließen nicht zurück | Zustand schlecht abgebildet | P5-05 – **teilweise** (ADR-056: Motor-/Getriebe-/Unfallschaden, Ausstattung, Mängelrisiko in Spanne und Sicherheit; Besichtigungsmängel weiter nur im Protokoll) |
-| S6 | Transport nur ab Firmensitz; Reparaturrisiko nur nach Alter | Standorte/Kostenrisiko ungenau | P5-06; P5-05 – Gewährleistung nach Alter, Standzeit nach Saison, Kapitalbindung (ADR-056) |
+| S6 | Transport nur ab Firmensitz; Reparaturrisiko nur nach Alter | Standorte/Kostenrisiko ungenau | P5-06 – Auto ab Firmensitz oder Bahn ab Stuttgart Hbf, Übergabe, Übernachtung (ADR-057); P5-05 – Gewährleistung nach Alter, Standzeit nach Saison, Kapitalbindung (ADR-056) |
 | S7 | Keine Gesamtbewertung (Deal-Score), keine gespeicherte Modellversion | Bewertungen nicht vergleichbar über die Zeit | P5-07 |
 | S8 | Restwertkurve und Neupreise gelten für alle Marken gleich (nur Klassenfaktor) | Marken mit stabilerem Wert unterbewertet | P5-02 / Kalibrierung |
 

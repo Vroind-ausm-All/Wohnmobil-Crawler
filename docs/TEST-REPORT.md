@@ -19,6 +19,20 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 | Browser (Orchestrator, Chromium über Playwright, Desktop 1280): Anna meldet sich an, „Zugänge“ zeigt mobile.de/AutoScout24 mit Variablenhinweis, Einladung „Kunde &lt;b&gt;“ als Inhaber → Link mit Hinweis zur fehlenden öffentlichen Adresse; Link im neuen Browser: Code aus der Adresszeile entfernt, Name als Text (escaped), Passwort gesetzt → angemeldet auf „/“; 0 JS-Fehler | bestanden |
 | QA (eine Runde, vor der Korrekturrunde: 118 gezielte Tests bestanden, 9 eigene Proben inkl. Wettlauf beim Einlösen und fremder Herkunft) | Freigabe mit Auflagen – B1–B3 (hoch), B4–B6, B8, B10 behoben, B7 dokumentiert, B9 beim Commit beachtet; Korrekturen **nicht** erneut von der QA geprüft |
 | Echter Aufruf der mobile.de Search-API (Pfad, Accept-Kopf, Antwortformat), Betrieb hinter einem Reverse-Proxy, Windows-CI | nicht geprüft (Test mit echtem API-Account durch den Betreiber; CI folgt im PR) |
+## P5-06 – Abholung: Auto ab Besigheim oder Bahn ab Stuttgart Hbf (27.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2473 bestanden (vorher 2424), neu `test_abholung.py` (49). Erster Lauf vor der Korrekturrunde: 3 fehlgeschlagen in `test_anschreiben.py`, `test_ausland.py`, `test_suchgebiete.py` – sie erwarteten den bisherigen Firmensitz Stuttgart (Ort im Anschreiben, Entfernung 0 km, Standort-PLZ); jetzt Besigheim 74354. Ebenso angepasst: `test_bewertung.py` (alte Formel ohne Abschnitt `abholung`), `test_risiko.py` (Rechenstand numerisch) |
+| `ruff check .` | grün |
+| Rechnung nachgerechnet (Auto 200 km, Bahn 220 km), günstigerer Weg (Nahbereich Auto, ab ~30 km Bahn), Ticket 12–160 €, Übernachtung ab 10 Std. je Person, Kosten steigen mit der Entfernung, ohne Entfernung Pauschale, Händlerstandort und `bahn: false` nur Auto | bestanden |
+| Konfiguration: ohne/leer/`false` alte Formel, `true` Standardwerte; Fehleingaben (negativ, Text, 0 km/h, NaN, ∞, Tippfehler-Schlüssel, unbekannte Bahnhofs-PLZ, `auto: false`, ticket_min > ticket_max) verständlich gemeldet | bestanden |
+| Kalkulation E6: Standardwerte und Abstand Firmensitz → Bahnhof eingefroren (auch gegen geänderte Code-Standards), Konfiguration nicht verändert, JSON-Rundlauf, Strecken auf 10 km gerundet, keine Verkäufer-PLZ; E5-Eingabe (ohne Abholung und Bahnstrecke) rechnet mit der alten Formel unverändert | bestanden |
+| Firmensitz weit vom Bahnhof (Mandant Hamburg): Bahn entfällt mit Hinweis (Rechner und Kalkulation) | bestanden |
+| Oberfläche: Detail mit beiden Wegen, „✓ gerechnet“, Kostenposten „Abholung (Bahn ab Stuttgart Hbf, … km zurück)“, API `bewertung.abholung`, Nahverkehrsticket unter 50 km, km mit Tausenderpunkt, „60 Min.“ ausgeschlossen | bestanden |
+| Browser (Orchestrator, Chromium über Playwright, Desktop 1280 und Breite 390): Verkäufer in München – „Auto ab Firmensitz (2 Personen): ca. 560 € – 253 km, zusammen ca. 14 Std.“, „Bahn ab Stuttgart Hbf: ca. 330 € – ICE-Ticket ca. 75 €, Anreise mit öffentlichen Verkehrsmitteln ca. 3 Std. 30 Min., Rückfahrt im Wohnmobil ca. 3 Std. 15 Min. ✓ gerechnet“; kein Querscrollen; 0 JS-Fehler | bestanden |
+| QA (eine Runde, vor der Korrekturrunde: 291 gezielte Tests bestanden, echte E5-Eingabe aus dem alten Code nachgerechnet, PLZ-Rückrechnung über alle 10.814 PLZ) | Freigabe mit Auflagen – B1 (hoch), B2–B6 behoben, B7/B8 beim Commit/PR beachtet, B9 ins Backlog (P5-06b); Korrekturen **nicht** erneut von der QA geprüft |
+| Echte ICE-Preise und Fahrzeiten (kein Netzabruf), Handy-App-Anzeige (P5-06b), Windows-CI | nicht geprüft (CI folgt im PR) |
 
 ## P5-05 – Ausstattung, Mängel und Kostenrisiken; Spannen auf 100 € (25.10.2026) · REVIEW
 

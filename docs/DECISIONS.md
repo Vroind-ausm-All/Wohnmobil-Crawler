@@ -1205,6 +1205,37 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   Alle Ampeln können zum 1. September, 1. Oktober, 1. Dezember und 1. Februar umspringen (Saisonwechsel) – gewollt.
   Betreiberfragen: Staffel, Saisonzuschläge, Zinssatz, Mängelrisiko-Deckel.
 
+## ADR-057 – Abholung: Auto ab Firmensitz oder Bahn ab Stuttgart Hbf, der günstigere Weg zählt · gilt (27.10.2026)
+
+* **Kontext:** P5-06 (Schwäche S6): Transport war Grundpauschale 80 € + 0,90 €/km ab `anschreiben.plz` (bisher Stuttgart). Betreiber
+  27.10.2026: „ausgehend von Besigheim (mit dem Auto) oder von Stuttgart Hbf mit dem Zug – ungefähre ICE-Ticketpreise und Reisezeit mit
+  öffentlichen Verkehrsmitteln“.
+* **Entscheidung:**
+  1. **Firmensitz Besigheim** (`anschreiben.plz: "74354"`; die genannte 74534 gibt es nicht) – gilt auch für die angezeigte Entfernung
+     und den Entfernungsfilter der Anschreiben.
+  2. **Zwei Wege** (`rechner.kosten.abholung`), der günstigere geht in die Kosten: **Auto** – zwei Personen im PKW hin, zurück eine im
+     Wohnmobil, eine im PKW (PKW 0,30 €/km hin und zurück, 90 km/h); **Bahn** – eine Person: Zubringer Firmensitz → Stuttgart Hbf
+     (6 €, ½ Std.), ICE-Ticket grob 0,30 €/km Schienenstrecke (mindestens 12 €, höchstens 160 € – Flexpreis 2. Klasse ohne BahnCard,
+     Sparpreise oft günstiger, aber nicht planbar), Reiseschnitt 110 km/h plus ¾ Std. für den Weg zum Verkäufer; zurück im Wohnmobil zum
+     Firmensitz. Beide: Wohnmobil 0,25 €/km bei 80 km/h, 1 Std. Übergabe je Person vor Ort, Zeit je Person × 25 €/h; mehr als 10 Std. je
+     Person → je weiterem Tag eine Übernachtung (90 € je Person).
+  3. **Strecken** aus PLZ geschätzt (Luftlinie × 1,25 wie bisher) – keine Abrufe bei Routen- oder Fahrplandiensten (Regel 12), keine
+     Preisauskunft. Anzeige gerundet: Euro auf 10 €, Ticket auf 5 € aufgerundet, Zeiten auf Viertelstunden, mit „ca.“.
+  4. **Händlerstandorte** (Deal-Kalkulation ab Standort): nur Auto ab dem Standort, keine Bahn ab Stuttgart.
+  5. **Kalkulation E6:** Abholwerte samt Standardwerten und der Entfernung Firmensitz → Bahnhof eingefroren; gespeichert werden die
+     Strecken auf 10 km gerundet (`entfernung_km`, `entfernung_bahn_km`), nicht die PLZ des Verkäufers – zwei genaue Entfernungen von
+     zwei bekannten Orten verrieten sie (QA B2). Ohne Abschnitt `abholung` (leer oder `false`) gilt die alte Formel – gespeicherte
+     E5-Kalkulationen rechnen unverändert. Fehleingaben (auch NaN, unbekannte Schlüssel als Tippfehler, unbekannte Bahnhofs-PLZ) melden
+     sich verständlich (QA B3).
+  6. **Firmensitz weit vom Bahnhof** (z. B. Mandant mit eigenem Sitz): mehr als 80 km (`bahn.zubringer_max_km`) → die Bahn-Variante
+     entfällt mit Hinweis „Bahn ab … nicht gerechnet“, statt die Anreise zum Bahnhof zu vergessen (QA B1). Im Nahbereich (unter 50 km
+     Bahnstrecke) heißt das Ticket „Nahverkehrsticket“ (QA B4).
+* **Alternativen:** Fahrplan-/Routen-API (Netzabruf, Nutzungsbedingungen ungeklärt – später über eine freigegebene Schnittstelle
+  möglich); Transport durch Dienstleister (Überführungsfirma) als dritter Weg – vorbereitet durch die Variantenliste, Preise fehlen.
+* **Folgen / offen:** Bis ~30 km ist das Auto günstiger, darüber meist die Bahn. Beispiele ab Besigheim: Bietigheim ca. 70 €, München
+  ca. 330 € (Bahn, Ticket ca. 75 €), Köln ca. 440 €, Hamburg ca. 820 € (Ticket ca. 160 €, eine Übernachtung) – im Nahbereich günstiger,
+  in der Ferne teurer als die alte Formel. Ticketpreise, Stundensatz, Übernachtung und Übergabezeit sind Annahmen; die Kalibrierung
+  vergleicht sie mit tatsächlichen Transportkosten.
 ## ADR-059 – Kunden-Zugänge: Einladungslink für den ersten Login, Händlerzugänge bei mobile.de/AutoScout24 ohne Geheimnisse · gilt (27.10.2026)
 
 * **Kontext:** F4 (Betreiber 27.10.2026): „Kunden sind als Händler registriert – soll vorbereitet sein zum Einpflegen und einfachen Login

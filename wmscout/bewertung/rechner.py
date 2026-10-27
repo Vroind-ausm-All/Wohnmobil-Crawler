@@ -15,6 +15,7 @@ Alle Parameter stehen in config.yaml → rechner.
 3. Marktwert privat       = Marktniveau × (1 − Abschlag Angebot→Abschluss)
    Händler-VK             = Marktwert privat × (1 + Händleraufschlag)
    Kosten                 = Aufbereitung + HU/Gas + Transport + Standzeit
+                            (Transport, P5-06: Auto ab Firmensitz oder Bahn ab Bahnhof + Rückfahrt im Wohnmobil, der günstigere Weg)
                             + Gewährleistungsrücklage (% vom VK) + Reparaturrisiko (Alter, km)
    Ziel-Marge             = max(Marge % × VK, Mindestmarge)
 4. §25a (Differenzbesteuerung):  Gewinn = (VK − EK) × 100/119 − Kosten
@@ -26,11 +27,13 @@ Alle Parameter stehen in config.yaml → rechner.
 """
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 
 from ..normalisierung.fahrzeug import MARKEN, art_schluessel, basisfahrzeug_aus_text, ist_basismarke, ist_werks_camper, laenge_aus_text
+from ..normalisierung.geo import entfernung_km, plz_bekannt
 
 # Fallbacks, falls config.yaml (ältere Version) den Abschnitt nicht enthält
 STANDARD_MARKTMODELL = {
@@ -131,6 +134,8 @@ class Bewertung:
     # P5-05 (ADR-056): Mängelrisiko – um so viel reicht die untere Spanne weiter nach unten (Ausmaß genannter Mängel unklar)
     maengel_risiko: float = 0.0
     standzeit_monate: int | None = None     # geplante Standzeit inkl. Saisonzuschlag
+    # P5-06 (ADR-057): Abholung – Auto- und Bahn-Variante mit Kosten (10 €), Ticket (5 €) und Zeiten (¼ Std.), ``gewaehlt`` = günstiger
+    abholung: dict | None = None
     wertfaktoren: dict = field(default_factory=dict)
     km_korrektur: float = 0.0
     sicherheit: str = "keine"               # hoch | mittel | niedrig | manuell | keine
@@ -160,6 +165,74 @@ def _saison(roh) -> dict[int, int]:
     if any(not 1 <= m <= 12 or not 0 <= z <= 12 for m, z in erg.items()):
         raise ValueError("config.yaml: rechner -> kosten -> standzeit_saison_zuschlag: Monat 1–12, Zuschlag 0–12 Monate")
     return erg
+
+
+# P5-06 (ADR-057): Abholung – Standardwerte für fehlende Einträge in ``kosten.abholung`` (grobe Annahmen, keine Preisauskunft)
+STANDARD_ABHOLUNG = {
+    "wohnmobil_pro_km": 0.25, "wohnmobil_kmh": 80, "stundensatz": 25, "uebergabe_stunden": 1.0, "tag_max_stunden": 10,
+    "uebernachtung_euro": 90,
+    "auto": {"pkw_pro_km": 0.30, "pkw_kmh": 90},
+    "bahn": {"ab_plz": "70173", "ab_name": "Stuttgart Hbf", "zubringer_euro": 6, "zubringer_stunden": 0.5, "zubringer_max_km": 80,
+             "ticket_pro_km": 0.30, "ticket_min": 12, "ticket_max": 160, "kmh": 110, "zuschlag_stunden": 0.75},
+}
+NAHVERKEHR_BIS_KM = 50          # kürzere Bahnstrecken: Nahverkehrsticket statt ICE (nur Beschriftung)
+_POSITIV = {"wohnmobil_kmh", "tag_max_stunden", "pkw_kmh", "kmh", "zubringer_max_km"}
+
+
+def abholung_einstellungen(roh) -> dict | None:
+    """``kosten.abholung`` mit Standardwerten ergänzt und geprüft; None ohne Abschnitt, leer oder ``false`` (dann gilt die alte Formel
+    Grundpauschale + €/km), ``true`` = Standardwerte. ``bahn: false`` (oder fehlend) schaltet die Bahn-Variante ab. Fehleingaben –
+    auch unbekannte Schlüssel (Tippfehler) – verständlich melden, statt still Standardwerte zu nehmen oder jede Bewertung scheitern zu
+    lassen (QA P5-06 B3). ``bahn.zubringer_km`` (Firmensitz → Bahnhof) trägt ``mit_firmensitz`` ein."""
+    if roh is None or roh is False:
+        return None
+    roh = {} if roh is True else roh
+    pfad = "config.yaml: rechner -> kosten -> abholung"
+    if not isinstance(roh, dict):
+        raise ValueError(f"{pfad} muss ein Abschnitt sein (oder fehlen)")
+    auto, bahn = roh.get("auto", {}), roh.get("bahn")
+    auto, bahn = ({} if auto is None else auto), ({} if bahn is True else bahn)
+    if not isinstance(auto, dict):
+        raise ValueError(f"{pfad} -> auto muss ein Abschnitt sein")
+    if bahn not in (None, False) and not isinstance(bahn, dict):
+        raise ValueError(f"{pfad} -> bahn muss ein Abschnitt sein oder false (ohne Bahn-Variante)")
+    bahn = bahn if isinstance(bahn, dict) else None
+    for teil, eintrag, erlaubt in (("", roh, set(STANDARD_ABHOLUNG)), ("auto -> ", auto, set(STANDARD_ABHOLUNG["auto"])),
+                                   ("bahn -> ", bahn or {}, {*STANDARD_ABHOLUNG["bahn"], "zubringer_km"})):
+        if fremd := sorted(set(eintrag) - erlaubt):
+            raise ValueError(f"{pfad} -> {teil}unbekannte Einträge {', '.join(map(str, fremd))} (Tippfehler?) – erlaubt: {', '.join(sorted(erlaubt))}")
+    erg = {**{k: v for k, v in STANDARD_ABHOLUNG.items() if k not in ("auto", "bahn")}, **{k: v for k, v in roh.items() if k not in ("auto", "bahn")}}
+    erg["auto"] = {**STANDARD_ABHOLUNG["auto"], **auto}
+    erg["bahn"] = {**STANDARD_ABHOLUNG["bahn"], **bahn} if bahn is not None else None
+    zahlen = [("", k) for k in STANDARD_ABHOLUNG if k not in ("auto", "bahn")] + [("auto", k) for k in STANDARD_ABHOLUNG["auto"]]
+    if erg["bahn"]:
+        zahlen += [("bahn", k) for k in STANDARD_ABHOLUNG["bahn"] if k not in ("ab_plz", "ab_name")]
+    for teil, k in zahlen:
+        w = (erg[teil] if teil else erg)[k]
+        if isinstance(w, bool) or not isinstance(w, (int, float)) or not math.isfinite(w) or w < 0 or k in _POSITIV and w <= 0:
+            raise ValueError(f"{pfad} -> {teil + ' -> ' if teil else ''}{k}: Zahl {'> 0' if k in _POSITIV else '≥ 0'} erwartet, nicht {w!r}")
+    if erg["bahn"]:
+        if not re.fullmatch(r"\d{5}", str(erg["bahn"]["ab_plz"])) or not plz_bekannt(str(erg["bahn"]["ab_plz"])):
+            raise ValueError(f"{pfad} -> bahn -> ab_plz: bekannte fünfstellige PLZ des Bahnhofs, z. B. \"70173\" (Stuttgart Hbf)")
+        if erg["bahn"]["ticket_min"] > erg["bahn"]["ticket_max"]:
+            raise ValueError(f"{pfad} -> bahn: ticket_min darf nicht über ticket_max liegen")
+        erg["bahn"]["ab_plz"] = str(erg["bahn"]["ab_plz"])
+    return erg
+
+
+def mit_firmensitz(ab: dict | None, firmensitz_plz) -> dict | None:
+    """Entfernung Firmensitz → Abfahrtsbahnhof als ``bahn.zubringer_km`` eintragen. Liegt der Firmensitz (z. B. eines Mandanten) weiter
+    als ``zubringer_max_km`` vom Bahnhof, entfällt die Bahn-Variante mit Hinweis – sonst fehlte die Anreise zum Bahnhof und die Abholung
+    wäre zu billig gerechnet (QA P5-06 B1)."""
+    if not ab or not ab["bahn"] or not firmensitz_plz:
+        return ab
+    return {**ab, "bahn": {**ab["bahn"], "zubringer_km": entfernung_km(str(firmensitz_plz), ab["bahn"]["ab_plz"])}}
+
+
+def bahn_entfernung(rechner_cfg: dict, plz: str | None) -> int | None:
+    """Geschätzte Strecke vom Abfahrtsbahnhof der Bahn-Abholung zum Verkäufer (P5-06); None ohne Bahn-Variante oder ohne PLZ."""
+    ab = abholung_einstellungen((rechner_cfg.get("kosten") or {}).get("abholung"))
+    return entfernung_km(ab["bahn"]["ab_plz"], plz) if ab and ab["bahn"] and plz else None
 
 
 def _schalter(wert) -> bool:
@@ -272,6 +345,8 @@ class Rechner:
                          for e in wf.get("liste", [])]
         self.wf_roh = {name: wert for name, wert, _ in self.wf_liste}
         self.saison = _saison((self.c.get("kosten") or {}).get("standzeit_saison_zuschlag"))
+        self.abhol = mit_firmensitz(abholung_einstellungen((self.c.get("kosten") or {}).get("abholung")),
+                                    (cfg.get("anschreiben") or {}).get("plz"))
         self.marken_faktor = {m.lower(): k["faktor"] for k in self.mm["markenklassen"] for m in k["marken"]}
         self.marken_klasse = {m.lower(): k["name"] for k in self.mm["markenklassen"] for m in k["marken"]}
         self.ae = {**STANDARD_AEHNLICHKEIT, **(self.c.get("vergleich_aehnlichkeit") or {})}
@@ -415,13 +490,69 @@ class Rechner:
         return [(e[0], g, *e[2:]) for e, g in zip(erg, gewichte, strict=True)]
 
     # ---------- Kosten ----------
+    def abholung(self, a: dict) -> dict | None:
+        """P5-06 (ADR-057): zwei Wege zur Abholung, der günstigere zählt (``gewaehlt``). Auto ab Firmensitz: zwei Personen im PKW hin,
+        zurück eine im Wohnmobil und eine im PKW. Bahn ab dem eingestellten Bahnhof: eine Person mit Zubringer und Fernzug (ICE-Ticket
+        grob nach Strecke), zurück im Wohnmobil zum Firmensitz. Zeit je Person (Fahrt + Übergabe vor Ort) × ``stundensatz``; dauert sie
+        länger als ``tag_max_stunden``, je weiterem Tag eine Übernachtung je Person. ``entfernung_km`` = Firmensitz →
+        Verkäufer, ``entfernung_bahn_km`` = Bahnhof → Verkäufer (fehlt der Schlüssel, aus der PLZ; None = keine Bahn-Variante, z. B. ab
+        einem Händlerstandort). None ohne Abschnitt ``kosten.abholung`` oder ohne bekannte Entfernung."""
+        ab, km = self.abhol, a.get("entfernung_km")
+        if not ab or km is None:
+            return None
+        satz, vor_ort = float(ab["stundensatz"]), float(ab["uebergabe_stunden"])
+        wm_euro, wm_h = km * float(ab["wohnmobil_pro_km"]), km / float(ab["wohnmobil_kmh"])
+
+        def naechte(je_person: float) -> int:
+            return max(0, math.ceil(je_person / float(ab["tag_max_stunden"])) - 1)
+        je_person = km / float(ab["auto"]["pkw_kmh"]) + vor_ort + wm_h
+        n = naechte(je_person)
+        varianten = [{"art": "auto", "km": km, "personen": 2, "stunden": 2 * je_person, "uebernachtungen": n,
+                      "euro": 2 * km * float(ab["auto"]["pkw_pro_km"]) + wm_euro + 2 * je_person * satz + 2 * n * float(ab["uebernachtung_euro"])}]
+        bahn, hinweis = ab["bahn"], None
+        if bahn and (zk := bahn.get("zubringer_km")) is not None and zk > bahn["zubringer_max_km"]:
+            hinweis = (f"Bahn ab {bahn['ab_name'] or bahn['ab_plz']} nicht gerechnet: Firmensitz rund {_runde(zk, 10)} km vom Bahnhof entfernt "
+                       "(config.yaml: abholung → bahn → ab_plz anpassen)")
+            bahn = None
+        bkm = a["entfernung_bahn_km"] if "entfernung_bahn_km" in a else bahn_entfernung(self.c, a.get("plz"))
+        if bahn and bkm is not None:
+            ticket = min(float(bahn["ticket_max"]), max(float(bahn["ticket_min"]), bkm * float(bahn["ticket_pro_km"])))
+            reise = float(bahn["zubringer_stunden"]) + bkm / float(bahn["kmh"]) + float(bahn["zuschlag_stunden"])
+            je_person = reise + vor_ort + wm_h
+            n = naechte(je_person)
+            varianten.append({"art": "bahn", "km": bkm, "ab": bahn["ab_name"] or bahn["ab_plz"], "personen": 1, "ticket": ticket,
+                              "ticket_art": "Nahverkehrsticket" if bkm < NAHVERKEHR_BIS_KM else "ICE-Ticket",
+                              "reise_stunden": reise, "rueck_stunden": wm_h, "stunden": je_person, "uebernachtungen": n,
+                              "euro": float(bahn["zubringer_euro"]) + ticket + wm_euro + je_person * satz + n * float(ab["uebernachtung_euro"])})
+        return {"varianten": varianten, "gewaehlt": min(varianten, key=lambda v: v["euro"])["art"], "hinweis": hinweis}
+
+    def abholung_gerundet(self, a: dict) -> dict | None:
+        """``abholung`` für die Anzeige: grobe Annahmen, daher Euro auf 10 €, Ticket auf 5 €, Zeiten auf Viertelstunden."""
+        if not (ab := self.abholung(a)):
+            return None
+        viertel = {"stunden", "reise_stunden", "rueck_stunden"}
+        return {"gewaehlt": ab["gewaehlt"], "hinweis": ab["hinweis"], "varianten": [
+            {k: (_runde(w, 10) if k == "euro" else math.ceil(w / 5) * 5 if k == "ticket" else round(w * 4) / 4 if k in viertel else w)
+             for k, w in v.items()} for v in ab["varianten"]]}
+
     def transport(self, a: dict) -> float:
-        """Abholung nach Entfernung (Grundpauschale + €/km), ohne bekannte Entfernung die Pauschale."""
+        """Abholung: mit ``kosten.abholung`` der günstigere Weg (Auto/Bahn, P5-06), sonst Grundpauschale + €/km; ohne bekannte Entfernung
+        die Pauschale."""
+        if ab := self.abholung(a):
+            return min(v["euro"] for v in ab["varianten"])
         k = self.c["kosten"]
         km = a.get("entfernung_km")
         if km is None or "transport_pro_km" not in k:
             return k["transport_pauschal"]
         return k.get("transport_grundpauschale", 0) + km * k["transport_pro_km"]
+
+    def _abhol_name(self, a: dict) -> str:
+        if a.get("entfernung_km") is None:
+            return "Transport"
+        ab = self.abholung(a)
+        if ab and ab["gewaehlt"] == "bahn":
+            return f"Abholung (Bahn ab {ab['varianten'][1]['ab']}, {a['entfernung_km']} km zurück)"
+        return f"Abholung ({'Auto, ' if ab else ''}{a['entfernung_km']} km)"
 
     def standzeit_monate(self) -> int:
         """Geplante Standzeit: ``kosten.standzeit_monate`` plus Saisonzuschlag nach Kaufmonat (``standzeit_saison_zuschlag``, P5-05) –
@@ -444,8 +575,7 @@ class Rechner:
         posten = {
             "Aufbereitung": k["aufbereitung"],
             "HU / Gasprüfung": k["hu_gasprüfung"],
-            (f"Abholung ({a['entfernung_km']} km)" if a.get("entfernung_km") is not None else "Transport"):
-                self.transport(a),
+            self._abhol_name(a): self.transport(a),
             "Standkosten": k["standkosten_pro_monat"] * monate,
             "Gewährleistungsrücklage": vk * self.gewaehrleistung_prozent(alter),
         }
@@ -563,6 +693,7 @@ class Rechner:
         b.haendler_anzahl, b.vk_gedeckelt, b.haendler_konflikt = hm["n"], k["gedeckelt"], hm["konflikt"]
         b.haendler_niveau = _runde(hm["niveau"], 100) if hm["niveau"] else None
         b.maengel, b.maengel_risiko, b.standzeit_monate = maengel, risiko, self.standzeit_monate()
+        b.abholung = self.abholung_gerundet(a)
         if mn["spanne"]:
             von = mn["spanne"][0] * (1 - risiko)
             b.spanne_von, b.spanne_bis = _runde(von, 100), _runde(mn["spanne"][1], 100)
