@@ -6,6 +6,29 @@ Wert „–“.
 
 ---
 
+## P5-06 – Abholung: Auto ab Besigheim oder Bahn ab Stuttgart Hbf (27.10.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 27.10.2026: „P5-06 ausarbeiten – ausgehend von Besigheim 74534 (mit dem Auto) oder von Stuttgart HBF mit dem
+  Zug (berechne hier ungefähre Ticketpreise mit dem ICE und Reisezeit mit öffentlichen Verkehrsmitteln). Die Werte aus P5-05 sollen
+  erstmal so beibehalten werden. … F6/F7 Vorschlag bestätigen.“ Besigheim hat die PLZ 74354 (74534 gibt es nicht) – verwendet 74354.
+  P5-05-Werte unverändert; F6/F7 in der ROADMAP als bestätigt eingetragen, F4/F10 mit der Antwort des Betreibers (eigene Pakete).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `acquisition-analyst`); QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/bewertung/rechner.py`, `bewertung/kalkulation.py` (E6), `wmscout/deal.py`, `wmscout/web/api.py`,
+  `wmscout/ausgabe.py` (Filter `stunden`), `config.yaml` (Firmensitz 74354, `rechner.kosten.abholung`), `vorlagen/report.html`; Tests
+  `test_abholung.py` (neu), `test_bewertung.py` (alte Formel ohne Abschnitt), `test_risiko.py` (Rechenstand numerisch),
+  `test_anschreiben.py`, `test_ausland.py`, `test_suchgebiete.py` (Firmensitz Besigheim); Doku ADR-057, `docs/RECHNER-ANALYSE.md` (S6),
+  ROADMAP (P5-06 REVIEW, F4/F6/F7/F10), README.
+- **Implementierte Funktionen:** siehe ADR-057. Keine Schemaänderung, keine Netzabrufe.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“. B1 (hoch: Firmensitz eines Mandanten weit weg von Stuttgart Hbf → Bahn zu billig)
+  → Bahn entfällt ab 80 km Abstand mit Hinweis; B2 (mittel: zwei genaue Entfernungen in gespeicherten Kalkulationen verrieten die PLZ)
+  → auf 10 km gerundet; B3 (mittel: NaN, Tippfehler, unbekannte Bahnhofs-PLZ still) → verständliche Fehler; B4 „Nahverkehrsticket“ unter
+  50 km; B5 „60 Min.“ behoben; B6 km mit Tausenderpunkt; B7 .venv-Link nicht committet; B8 Doku-Änderungen F4/F6/F7/F10 im PR genannt;
+  B9 Handy-Ansicht ohne Abholvarianten → Backlog. Regressionstests ergänzt; Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (vorbelegt, in `config.yaml` änderbar):** Stundensatz 25 €/h, Übergabe 1 Std., Übernachtung 90 € ab 10 Std. je
+  Person, PKW 0,30 €/km, Wohnmobil 0,25 €/km, ICE grob 0,30 €/km (12–160 €).
+- **Nächster sinnvoller Schritt:** F10 Aufbewahrungsfristen, danach F4 Händlerzugänge der Kunden (vom Betreiber am 27.10.2026 beauftragt).
+
 ## P5-05 – Ausstattung, Mängel und Kostenrisiken; Spannen auf 100 € (25.10.2026) · Status: DONE (PR #45 gemergt)
 
 - **Auftrag:** Betreiber 25.10.2026 nach dem Merge von PR #44: „1. Spannen sollen nur auf 100er gerundet werden. 2. Was ist mit der

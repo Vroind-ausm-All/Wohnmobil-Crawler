@@ -8,7 +8,7 @@ from wmscout.bewertung.anschreiben import HINWEIS_AUSLAND, kontext, sperrgrund
 from wmscout.bewertung.auswertung import bewerte_alle
 from wmscout.datenbank import Datenbank
 from wmscout.normalisierung.fahrzeug import ergaenze_fahrzeug
-from wmscout.normalisierung.geo import auslands_kuerzel, plz_aus_text
+from wmscout.normalisierung.geo import auslands_kuerzel, entfernung_km, plz_aus_text
 
 
 @pytest.mark.parametrize("ort, land, plz", [
@@ -56,8 +56,9 @@ def test_inland_bleibt_unveraendert(orte):
     for ort in ("70173 Stuttgart", "D-70191 Stuttgart", "Stuttgart"):
         z = orte[ort]
         assert z["a"]["ausland"] is None and z["hinweise"] == [] and z["b"].ampel == "gruen" and "€ an" in z["brief"], ort
-    assert orte["70173 Stuttgart"]["a"]["entfernung_km"] == 0 and orte["D-70191 Stuttgart"]["a"]["plz"] == "70191"
-    assert orte["D-70191 Stuttgart"]["a"]["entfernung_km"] == 3                      # „D-“ ist Inland: Entfernung wird berechnet
+    # Firmensitz Besigheim 74354 (P5-06): Entfernung ab dort
+    assert orte["70173 Stuttgart"]["a"]["entfernung_km"] == entfernung_km("74354", "70173") and orte["D-70191 Stuttgart"]["a"]["plz"] == "70191"
+    assert orte["D-70191 Stuttgart"]["a"]["entfernung_km"] == entfernung_km("74354", "70191")    # „D-“ ist Inland: Entfernung wird berechnet
     assert orte["Stuttgart"]["a"]["plz"] is None and orte["Stuttgart"]["a"]["entfernung_km"] is None
 
 

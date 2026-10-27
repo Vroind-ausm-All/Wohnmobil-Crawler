@@ -118,7 +118,7 @@ def test_kalkulation_e5_nachrechenbar():
     vorher = copy.deepcopy(cfg)
     e = kalk.eingabe(cfg, {**FZ, "entfernung_km": 50}, VGL, betrag=30000, stichtag=OKTOBER, abholung="Firmensitz")
     assert cfg == vorher                                                                    # Konfiguration nicht verändert
-    assert e["version"] == kalk.VERSION == "E5" and e["rechner"]["maengelrisiko_max"] == 0.0
+    assert e["version"] == kalk.VERSION and int(kalk.VERSION[1:]) >= 5 and e["rechner"]["maengelrisiko_max"] == 0.0
     assert e["rechner"]["kosten"]["standzeit_saison_zuschlag"] == {} and e["rechner"]["kosten"]["kapitalzins_jahr"] == 0.0
     voll = kalk.eingabe(lade_cfg(), {**FZ, "entfernung_km": 50}, VGL, betrag=30000, stichtag=OKTOBER, abholung="Firmensitz")
     gespeichert = json.loads(json.dumps(voll))                                              # Monatsschlüssel werden Text

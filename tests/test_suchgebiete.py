@@ -145,7 +145,7 @@ def test_api_umkreis_filtert_wie_die_entfernung(server, db, importiert, ads):
     assert set(treffer) == {f["id"] for f in alle if f["entfernung_km"] is not None and f["entfernung_km"] <= 100}
     assert 0 < len(treffer) < len(alle) and set(treffer.values()) == {"passt"}
     liste = c("GET", "/api/suchprofile")[1]
-    assert liste["gebiete"] == ["bundesweit", "umkreis", "regionen"] and liste["standort_plz"] == "70173"
+    assert liste["gebiete"] == ["bundesweit", "umkreis", "regionen"] and liste["standort_plz"] == "74354"
     assert liste["profile"][0]["gebiet_text"] == "100 km um 70173"
     assert c("POST", "/api/suchprofile", {"name": "x", "gebiet": "umkreis", "gebiet_plz": "12"})[0] == 400
     assert c("POST", f"/api/suchprofil/{pid}", {"name": "Nah", "gebiet": "regionen", "gebiet_regionen": ["8"]})[0] == 200
