@@ -31,13 +31,14 @@ class ApiAbruf:
     """JSON-Abruf gegen eine feste HTTPS-Basis mit Kontingent – ``session`` austauschbar für Tests (ohne Netz)."""
 
     def __init__(self, basis_url: str, kopfzeilen: dict, *, max_abrufe: int, pause_sek: float, timeout_sek: float = 20,
-                 name: str = "Die API", session=None, schlafen=time.sleep):
+                 name: str = "Die API", session=None, schlafen=time.sleep, versuche: int = 3):
         if not basis_url.startswith("https://"):
             raise QuellenFehler(f"{name}: nur HTTPS-Adressen sind erlaubt")
         self.basis, self.kopf, self.name = basis_url.rstrip("/"), kopfzeilen, name
         self.max_abrufe, self.pause, self.timeout = max_abrufe, pause_sek, timeout_sek
         self.session, self.schlafen = session or requests.Session(), schlafen
         self.abrufe = 0
+        self.versuche = max(1, versuche)          # Anfragen je Abruf (5xx wird bis dahin mit Pause wiederholt)
 
     def hole_json(self, pfad: str, parameter: dict | None = None) -> dict:
         if not pfad.startswith("/") or pfad.startswith("//") or "://" in pfad or ".." in pfad:
@@ -49,12 +50,12 @@ class ApiAbruf:
         self.abrufe += 1
         url = self.basis + pfad
         try:
-            for versuch in range(3):
+            for versuch in range(self.versuche):
                 r = self.session.get(url, params=parameter or {}, headers=self.kopf, timeout=self.timeout)
                 if r.status_code in (401, 403, 429):
                     raise QuelleGesperrt(f"HTTP {r.status_code} – {self.name} verweigert den Zugriff (Zugang, Rechte oder Kontingent "
                                          "beim Anbieter prüfen). Keine Wiederholung.")
-                if r.status_code >= 500 and versuch < 2:
+                if r.status_code >= 500 and versuch < self.versuche - 1:
                     self.schlafen(10 * (versuch + 1))
                     continue
                 if r.status_code >= 400:

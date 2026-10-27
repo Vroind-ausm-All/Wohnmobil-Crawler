@@ -29,7 +29,7 @@ nichts anderes sagt.
 
 ```bash
 python scout.py mandant anlegen firma-b --name "Firma B GmbH" --url https://firma-b.example.de
-python scout.py --mandant firma-b nutzer anlegen "Berta" --rolle inhaber
+python scout.py --mandant firma-b nutzer einladen "Berta" --rolle inhaber   # Link: Berta setzt ihr Passwort selbst (F4)
 python scout.py mandant liste
 python scout.py app --mandanten                 # alle Mandanten; Hostname wählt die Firma
 python scout.py app --mandanten --lokal firma-b # zusätzlich über http://127.0.0.1:8765 (Rechner des Betreibers)
@@ -43,6 +43,10 @@ python scout.py app --mandanten --lokal firma-b # zusätzlich über http://127.0
   wertlos.
 * Alle Befehle wirken mit `--mandant KENNUNG` auf diesen Mandanten, z. B. `sichern`, `wiederherstellen`, `audit`, `nutzung`,
   `anfrage widerruf`, `standort anlegen`.
+* **Kunden-Zugang (F4):** Die Einladung gibt einen Einmal-Link mit der Adresse des Mandanten aus (7 Tage gültig). Der Kunde legt dort
+  sein Passwort selbst fest und ist angemeldet; weitere Mitarbeiter lädt er unter „Zugänge“ selbst ein. Dort trägt er auch seine
+  Händlerzugänge bei mobile.de/AutoScout24 ein; das Passwort setzt der Betreiber als Umgebungsvariable
+  `WMSCOUT_<KENNUNG>_MOBILEDE_PASSWORT` auf dem Server.
 * Nutzung aller Mandanten eines Monats: `python scout.py mandant nutzung --monat 2026-10` (Grundlage für eine spätere,
   optionale Abrechnung; keine Preise).
 

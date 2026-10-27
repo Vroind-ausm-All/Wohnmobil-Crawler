@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#24524a">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="/static/icon-192.png">
+<title>Einladung – Wohnmobil-Scout</title>
+<link rel="stylesheet" href="/static/mobil.css">
+</head>
+<body class="login">
+<main class="login-box">
+  <img src="/static/icon-192.png" alt="" width="64" height="64">
+  <h1>Wohnmobil-Scout</h1>
+  <p class="leise">{{ firma }}</p>
+  <p id="willkommen" class="leise">Einladung wird geprüft …</p>
+  <form id="f" autocomplete="on" hidden>
+    <input name="name" autocomplete="username" hidden>
+    <label>Neues Passwort (mindestens 8 Zeichen)<input name="passwort" type="password" autocomplete="new-password" minlength="8" required></label>
+    <label>Passwort wiederholen<input name="wiederholt" type="password" autocomplete="new-password" minlength="8" required></label>
+    <button class="knopf primaer" type="submit">Passwort setzen und anmelden</button>
+  </form>
+  <p id="fehler" class="fehler" role="alert"></p>
+</main>
+<script>
+// Der Einmal-Code steht nach dem „#“ im Link: Er wird nie als Adresse an den Server geschickt (nicht im Protokoll, nicht im Verlauf)
+var code = decodeURIComponent(location.hash.replace(/^#/, ''));
+history.replaceState(null, '', location.pathname);
+var f = document.getElementById('f'), fehler = document.getElementById('fehler'), gruss = document.getElementById('willkommen');
+function senden(url, d){
+  return fetch(url, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify(d)})
+    .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(x){ if(!r.ok) throw new Error(x.fehler || ('Fehler ' + r.status)); return x; }); });
+}
+if(!code){ gruss.textContent = ''; fehler.textContent = 'Der Link ist unvollständig – bitte den ganzen Link aus der Einladung öffnen.'; }
+else senden('/api/einladung/pruefen', {token: code}).then(function(d){
+  gruss.textContent = 'Willkommen, ' + d.name + ' (' + d.rolle + ') – bitte ein eigenes Passwort festlegen.';
+  f.name.value = d.name;
+  f.hidden = false;
+}, function(e){ gruss.textContent = ''; fehler.textContent = e.message; });
+f.onsubmit = function(e){
+  e.preventDefault();
+  fehler.textContent = '';
+  if(f.passwort.value !== f.wiederholt.value){ fehler.textContent = 'Die Passwörter stimmen nicht überein.'; return; }
+  senden('/api/einladung', {token: code, passwort: f.passwort.value}).then(function(){ location.href = '/'; },
+    function(err){ fehler.textContent = err.message; });
+};
+</script>
+</body>
+</html>

@@ -75,7 +75,7 @@ from wmscout.normalisierung.fahrzeug import ergaenze_fahrzeug
 from wmscout.normalisierung.qualitaet import je_quelle
 from wmscout.sicherung import SicherungsFehler, einstellungen, sichere, sicherung_ordner, wiederherstellen
 from wmscout.bearbeitung import BearbeitungsKonflikt, ablauf_grenze, reservierung_tage
-from wmscout.team import ROLLEN, TeamSpeicher, lade_team_sicht
+from wmscout.team import EINLADUNG_TAGE, ROLLEN, TeamSpeicher, lade_team_sicht
 
 BASIS = Path(__file__).resolve().parent
 
@@ -414,7 +414,7 @@ def cmd_mandant(cfg, args):
             sys.exit("Aufruf: python scout.py mandant anlegen KENNUNG --name \"Firma\" --url https://firma.example.de")
         ziel = mandanten.anlegen(cfg, BASIS, args.kennung, args.name or args.kennung, args.url)
         print(f"Mandant „{args.kennung}“ angelegt: {ziel}/mandant.yaml\n"
-              f"Ersten Inhaber anlegen: python scout.py --mandant {args.kennung} nutzer anlegen NAME --rolle inhaber")
+              f"Ersten Inhaber einladen (Link, Passwort setzt der Kunde selbst): python scout.py --mandant {args.kennung} nutzer einladen NAME --rolle inhaber")
         return
     liste = mandanten.alle(cfg, BASIS)
     for m in liste:
@@ -508,6 +508,20 @@ def cmd_nutzer(cfg, db, args):
         except Exception as e:  # noqa: BLE001 – verständliche Meldung statt Traceback
             sys.exit(f"Nicht angelegt: {e}")
         print(f"{args.name} angelegt ({ROLLEN[args.rolle]}). Ab jetzt ist für die App eine Anmeldung nötig.")
+    elif args.aktion == "einladen":
+        standort_id = None
+        if args.standort:
+            s = HaendlerSpeicher(db).standort_nach_name(args.standort)
+            if not s:
+                sys.exit(f"Standort „{args.standort}“ unbekannt (python scout.py standort liste)")
+            standort_id = s["id"]
+        try:
+            _, token, rolle = team.einladen(args.name, args.rolle, args.telefon, standort_id, erneut=args.erneut)
+        except Exception as e:  # noqa: BLE001 – verständliche Meldung statt Traceback
+            sys.exit(f"Nicht eingeladen: {e}" + (" (mit --erneut bestätigen)" if "Erneut einladen?" in str(e) else ""))
+        basis = ((cfg.get("app") or {}).get("oeffentliche_url") or f"http://127.0.0.1:{(cfg.get('app') or {}).get('port', 8765)}").rstrip("/")
+        print(f"Einladung für {args.name} ({ROLLEN[rolle]}) – Link einmal gültig, {EINLADUNG_TAGE} Tage; über einen vertrauten Weg weitergeben:\n"
+              f"{basis}/einladung#{token}\nDer Eingeladene legt dort sein Passwort selbst fest. Ab jetzt ist für die App eine Anmeldung nötig.")
     elif args.aktion == "passwort":
         ok = team.passwort_setzen(args.name, _neues_passwort(args.name))
         print("Passwort geändert – bestehende Anmeldungen wurden beendet." if ok else f"{args.name} nicht gefunden")
@@ -779,11 +793,13 @@ def main():
     r.add_argument("--marktwert", type=int, help="eigener Marktwert (z. B. aus mobile.de/DAT) statt Vergleich")
     r.add_argument("--anschreiben", action="store_true", help="passendes Anschreiben mit ausgeben")
     n = sub.add_parser("nutzer", help="Team-Zugänge für die Handy-App verwalten")
-    n.add_argument("aktion", choices=["anlegen", "liste", "passwort", "sperren", "entsperren"])
+    n.add_argument("aktion", choices=["anlegen", "einladen", "liste", "passwort", "sperren", "entsperren"],
+                   help="einladen: Zugang mit Einmal-Link anlegen – das Passwort legt der Eingeladene selbst fest")
     n.add_argument("name", nargs="?")
     n.add_argument("--rolle", choices=list(ROLLEN), default="mitarbeiter")
     n.add_argument("--telefon", help="Handynummer international, z. B. +491701234567 (für WhatsApp)")
     n.add_argument("--standort", help="nur Rolle haendler: Name des Standorts (python scout.py standort anlegen …)")
+    n.add_argument("--erneut", action="store_true", help="nur einladen: vorhandenen Zugang erneut einladen (Passwort wird beim Einlösen neu gesetzt)")
     st = sub.add_parser("standort", help="Standorte/Händler für das Händlerportal verwalten (prüfen = Zugang frei)")
     st.add_argument("aktion", choices=["anlegen", "liste", "pruefen", "sperren"])
     st.add_argument("name", nargs="?")
