@@ -233,6 +233,17 @@ rechner:
     gelb_bis: 1.25
 
 # --- 5. Anschreiben -------------------------------------------
+# Deal-Score 0–100 (P5-07, ADR-060): wie lohnend ein Ankauf ist – aus Bestandteilen. Gewichte relativ (werden auf 100 umgerechnet).
+# Die Ampel bleibt unverändert daneben (Anschreiben, Filter). „Top-Deal“ = ab der Schwelle, privat und verfügbar.
+deal_score:
+  gewichte: {preisvorteil: 40, datensicherheit: 20, zustand: 15, abholung: 10, frische: 10, verkaeufer: 5}
+  schwelle: 70
+  preis_voll_bei: 0.85            # Wunschpreis ÷ Max-EK: bis hier volle Punkte für den Preisvorteil …
+  preis_null_bei: 1.15            # … ab hier keine
+  maengel_null_bei: 0.25          # Summe der Mängelabzüge (voller Wert), ab der es für den Zustand keine Punkte gibt
+  abholung_null_bei_euro: 1000    # Abholkosten (P5-06), ab denen es keine Punkte gibt
+  entfernung_null_bei_km: 600     # ohne Abholkosten: Entfernung, ab der es keine Punkte gibt
+
 anschreiben:
   vorlage: vorlagen/anschreiben.txt
   firma: "Muster Reisemobile GmbH"

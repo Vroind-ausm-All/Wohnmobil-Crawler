@@ -29,7 +29,7 @@ from .sicherung import sicherung_ordner
 from .team import lade_team_sicht
 from .web.api import Kontext, bearbeite
 from .web.sicherheit import SICHERHEITS_KOPF
-from . import datenrechte, mandanten
+from . import bewertungsverlauf, datenrechte, mandanten
 from .sicherung import sicherung_ordner as _sicherung_ordner
 
 log = logging.getLogger("scout")
@@ -86,6 +86,7 @@ class Suchlauf:
             datenrechte.frist_anwenden(db, self.cfg, self.basis, (self.basis / self.db_pfad).parent / "fotos")
             # wie „python scout.py lauf“: Report/CSV/Anschreiben-Dateien aktualisieren, ggf. Mail
             zeilen = bewerte_alle(self.cfg, db, self.basis, lauf_start=self.letzter_start)
+            bewertungsverlauf.merken(db, zeilen)                   # Verlauf von Bewertung und Deal-Score (P5-07)
             sende_mail(self.cfg, zeilen, schreibe_ausgaben(self.cfg, zeilen, self.basis, fehler=stat["fehler"],
                                                 team=lade_team_sicht(db, reservierung_tage(self.cfg))), seit=self.letzter_start)
             for rueckruf in self.bei_ende:

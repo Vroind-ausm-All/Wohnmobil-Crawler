@@ -13,6 +13,8 @@ from ..anbieter import einstufung
 from ..normalisierung.qualitaet import pruefe_fahrzeug, pruefe_inserat
 from ..normalisierung.fahrzeug import arten_im_text, ergaenze_fahrzeug
 from ..normalisierung.geo import entfernung_km
+from .deal_score import deal_score
+from .deal_score import einstellungen as deal_einstellungen
 from ..verfuegbarkeit import ergaenze as ergaenze_verfuegbarkeit
 from ..verfuegbarkeit import offline_nach_tagen
 from .anschreiben import Anschreiber, betrag_im_brief, euro, hinweise, sperrgrund
@@ -196,6 +198,7 @@ def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[d
     ``gruppenzeilen``: Zeilen der Gruppenmitglieder (auch ohne Preis oder lange nicht gesehen). Sperren und Markierungen berücksichtigen
     jedes Mitglied, das als ``mit_preis``-, ``aktive``- oder Gruppenzeile vorliegt; die Vergleichsbasis nur Inserate mit Preis."""
     rechner, schreiber = Rechner(cfg), Anschreiber(cfg, basis)
+    deal_e = deal_einstellungen(cfg)                  # ValueError mit verständlicher Meldung bei falscher Konfiguration
     jetzt = jetzt or datetime.now()
     standort = str(cfg["anschreiben"].get("plz") or "") or None
     tage = offline_nach_tagen(cfg)
@@ -257,12 +260,15 @@ def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[d
         ausblenden = (bool(a.get("nicht_verfuegbar")) and a.get("status") in (None, "neu", "gelöscht")
                       and not a.get("hat_arbeit") and not str(a.get("notiz") or "").strip())
         bereit = bool(brief) and schreiber.soll_schreiben(b.ampel)
+        neuig = neuigkeit(a, b, bereit, ausblenden, jetzt, neu_e, sperre)
         zeilen.append({
             "a": a, "b": b, "sperre": sperre, "ausblenden": ausblenden, "hinweise": hinweise(a, b), "brief": brief, "ust": round(ust / 10) * 10,
             "brief_betrag": betrag_im_brief(a, b),
             "bereit": bereit,
             # frisch eingegangen / Preis deutlich gesenkt / dadurch jetzt im Rahmen: Rang für „Neuigkeiten zuerst“, ohne Wirkung (P4-03)
-            "neuigkeit": neuigkeit(a, b, bereit, ausblenden, jetzt, neu_e, sperre),
+            "neuigkeit": neuig,
+            # Deal-Score 0–100 mit Bestandteilen (P5-07): Sperren vom Markt her, nicht durch den eigenen Ankaufsstatus (QA B4)
+            "deal": deal_score(a, b, neuig, sperre and sperrgrund({**a, "status": None}, cfg), cfg, deal_e),
             "neu": bool(lauf_start and (a.get("erstmals_gesehen") or "") >= lauf_start) and not ausblenden,
             "nachfassen": grund, "nachfass_text": nachfass_text, "nachfass_betrag": nachfass_betrag,
             "dubletten_ids": sorted(b["id"] for b in andere),       # Fahrzeuggruppe: Team-Reservierungen wirken auf alle

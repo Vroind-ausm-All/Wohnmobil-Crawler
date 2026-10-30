@@ -225,7 +225,7 @@ def test_report_und_csv(cfg, db, importiert, tmp_path):
     with open(erg["csv"], encoding="utf-8-sig", newline="") as f:
         reihen = list(csv.reader(f, delimiter=";"))
     i = reihen[0].index("Neuigkeit")
-    assert reihen[0][i - 1] == "Datenmarkierungen" and reihen[0][i + 1] == "Erstmals gesehen"
+    assert reihen[0][i - 1] == "Datenmarkierungen" and reihen[0][i + 1:i + 4] == ["Deal-Score", "Top-Deal", "Erstmals gesehen"]   # P5-07
     assert any(r[i].startswith("Preis gesenkt – jetzt im Rahmen") for r in reihen[1:])
 
 

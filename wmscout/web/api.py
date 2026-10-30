@@ -30,7 +30,7 @@ from ..verkauf import Eingabefehler, VerkaufSpeicher
 from ..haendler import STANDORT_STATUS, HaendlerSpeicher
 from ..auktion import STANDARD as MINDESTPREIS_STANDARD
 from ..auktion import AuktionSpeicher, AuktionsFehler
-from .. import aufbewahrung, datenrechte
+from .. import aufbewahrung, bewertungsverlauf, datenrechte
 from ..schalter import EingangDeaktiviert, eingang_pruefen, pruefe_eingaenge
 from ..audit import AuditSpeicher, einordnen
 from ..nutzung import nutzung
@@ -54,6 +54,7 @@ from .. import kontakte
 from .. import suchprofile as sp
 from .. import laufprotokoll as lp
 from .. import abdeckung
+from ..bewertung.deal_score import einstellungen as deal_einstellungen
 from ..zugaenge import PLATTFORMEN as ZUGANG_PLATTFORMEN
 from ..zugaenge import ZugangSpeicher
 from ..domaene import PLATTFORMEN
@@ -156,6 +157,7 @@ class Kontext:
         self.ankauf = AnkaufSpeicher(db, cfg, foto_ordner / "ankaeufe")    # im Fotoordner: mit gesichert
         self.reservierung_tage = reservierung_tage(cfg)     # ValueError mit verständlicher Meldung bei falscher Konfiguration
         pruefe_eingaenge(cfg)                               # ebenso „eingaenge“ (Einzel- und Mandantenbetrieb, P2-04)
+        deal_einstellungen(cfg)                             # ebenso „deal_score“ (P5-07)
         self.katalog_pfad = basis / "maengel.yaml"
         self.sperre = threading.Lock()          # Datenbankzugriffe nacheinander, Netzwerk parallel
         self._zeilen: tuple[float, list[dict]] | None = None
@@ -264,7 +266,9 @@ def fahrzeug_kurz(z: dict, team: dict | None = None) -> dict:
             # Anbieterart mit Herkunft der Einstufung (P3-05): {typ, herkunft, belegt, text}
             "anbieter": a.get("anbieter") or einstufung(a.get("gewerblich"), a.get("anbieter_herkunft")),
             # Datenqualität des Fahrzeugs (P3-08): {wert 0–100, stufe, markierungen[{code, art, text}], widersprueche} – nur Anzeige
-            "datenqualitaet": a.get("datenqualitaet")}
+            "datenqualitaet": a.get("datenqualitaet"),
+            # Deal-Score (P5-07): 0–100 oder None (gesperrt, keine Bewertung); priorisiert = ab Schwelle, privat, verfügbar
+            "deal_score": (z.get("deal") or {}).get("score"), "priorisiert": bool((z.get("deal") or {}).get("priorisiert"))}
 
 
 def ics(b: dict, cfg: dict, link: str | None) -> str:
@@ -1139,7 +1143,9 @@ class Anfrage:
                 "nachfass_betrag": z["nachfass_betrag"], "anschreiben_text": z["a"].get("anschreiben_text"),
                 "notiz": z["a"].get("notiz"), "besichtigungen": [self.besichtigung_kurz(b, sicht) for b in
                                                                  self.k.team.besichtigungen(offen=False, anzeige_id=anzeige_id)],
-                "verfuegbarkeit_fahrzeug": self.verfuegbarkeit_fahrzeug(anzeige_id), "kontakte": self.kontakte(anzeige_id)}
+                "verfuegbarkeit_fahrzeug": self.verfuegbarkeit_fahrzeug(anzeige_id), "kontakte": self.kontakte(anzeige_id),
+                "deal": z.get("deal"), "deal_verlauf": [{k: v[k] for k in ("zeitpunkt", "preis", "max_ek", "ampel", "deal_score")}
+                                                        for v in bewertungsverlauf.verlauf(self.k.db, anzeige_id, 10)]}
 
     def kontakte(self, anzeige_id: str) -> list[dict]:
         """Kontaktverlauf der Anzeige und ihres Fahrzeugs (P3-06): vorbereitete und bestätigte Anschreiben und Nachfassen, älteste zuerst."""
@@ -1598,6 +1604,8 @@ class Anfrage:
         datenrechte.frist_anwenden(k.db, k.cfg, k.basis, k.team.foto_ordner)   # Verkäufernamen kommen über den Seitenimport
         k.veraendert()
         k.dubletten_verwerfen()
+        if stat["dateien"]:
+            bewertungsverlauf.merken(k.db, k.zeilen())                           # Verlauf (P5-07); die Liste lädt danach ohnehin neu
         return {**stat, "ordner": relativ_zum_projekt(ordner)}
 
     def mails_einlesen(self) -> dict:
@@ -1616,6 +1624,8 @@ class Anfrage:
         datenrechte.frist_anwenden(k.db, k.cfg, k.basis, k.team.foto_ordner)     # abgelegte Mails nach der Frist löschen
         k.veraendert()
         k.dubletten_verwerfen()
+        if stat["dateien"]:
+            bewertungsverlauf.merken(k.db, k.zeilen())
         return {**stat, "ordner": relativ_zum_projekt(ordner), "unverarbeitet": offen}
 
     def text_einlesen(self, daten: dict) -> dict:

@@ -52,6 +52,7 @@ from wmscout.ausgabe import schreibe_ausgaben
 from wmscout.benachrichtigung import sende_mail
 from wmscout.bewertung.anschreiben import Anschreiber, euro
 from wmscout.bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids, vergleichsbasis_aus
+from wmscout.bewertung.deal_score import einstellungen as deal_einstellungen
 from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import STATUS, Datenbank, wal_aktiv
 from wmscout.laufsperre import Laufsperre
@@ -59,7 +60,7 @@ from wmscout.eingang import import_ordner
 from wmscout.eingang.email import mail_ordner
 from wmscout.auktion import STATUS as AUKTION_STATUS
 from wmscout.auktion import AuktionSpeicher
-from wmscout import abdeckung, aufbewahrung, datenrechte, laufprotokoll, mandanten
+from wmscout import abdeckung, aufbewahrung, bewertungsverlauf, datenrechte, laufprotokoll, mandanten
 from wmscout.bewertung import kalibrierung
 from wmscout.audit import AuditSpeicher
 from wmscout.nutzung import nutzung
@@ -145,6 +146,7 @@ def _lauf(cfg, db, sofort: bool = False):
     for u in stat["uebersprungen"]:
         logging.info("Übersprungen: Quelle %s (%s) – kein Fehler; Übersicht: python scout.py quellen liste", u["quelle"], u["grund"])
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
+    bewertungsverlauf.merken(db, zeilen)                                 # Verlauf von Bewertung und Deal-Score (P5-07)
     erg = schreibe_ausgaben(cfg, zeilen, BASIS, fehler=stat["fehler"], team=_team(cfg, db))
     logging.info("Report: %s  (%s)", erg["html"], erg["zaehl"])
     sende_mail(cfg, zeilen, erg, seit=start)
@@ -199,6 +201,7 @@ def cmd_import_mails(cfg, db, args):
     datenrechte.frist_anwenden(db, cfg, BASIS, foto_ordner(cfg))         # abgelegte Mails nach der Frist löschen (P2-06)
     if stat["dateien"]:
         zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
+        bewertungsverlauf.merken(db, zeilen)
         erg = schreibe_ausgaben(cfg, zeilen, BASIS, team=_team(cfg, db))
         print(f"Report: {erg['html']}  ({erg['zaehl']})")
 
@@ -236,6 +239,7 @@ def cmd_import(cfg, db, args):
         print("Bitte prüfen:\n" + "\n".join(f"  - {f}" for f in stat["fehler"]))
     datenrechte.frist_anwenden(db, cfg, BASIS, foto_ordner(cfg))         # Verkäufernamen kommen über den Seitenimport (P1-14a)
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
+    bewertungsverlauf.merken(db, zeilen)
     erg = schreibe_ausgaben(cfg, zeilen, BASIS, team=_team(cfg, db))
     print(f"Report: {erg['html']}  ({erg['zaehl']})")
 
@@ -358,6 +362,7 @@ def cmd_kalibrierung(cfg, db, args):
 
 def cmd_report(cfg, db, args):
     zeilen = bewerte_alle(cfg, db, BASIS)
+    bewertungsverlauf.merken(db, zeilen)
     erg = schreibe_ausgaben(cfg, zeilen, BASIS, team=_team(cfg, db))
     print(f"Report: {erg['html']}\nCSV:    {erg['csv']}\n{erg['zaehl']}")
 
@@ -885,6 +890,7 @@ def main():
         einstellungen(cfg, BASIS)           # ungültiges „sicherung“ in config.yaml sofort melden, nicht erst bei der Sicherung
         datenrechte.frist_aus(cfg)          # ebenso „datenschutz“
         pruefe_eingaenge(cfg)               # und „eingaenge“ (P2-04)
+        deal_einstellungen(cfg)             # und „deal_score“ (P5-07)
         db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]), str(sicherung_ordner(cfg, BASIS)), wal=wal_aktiv(cfg))
     except (MigrationsFehler, ValueError, sqlite3.Error) as e:
         sys.exit(f"Datenbank-Start abgebrochen: {e}")

@@ -48,8 +48,8 @@ def test_migration_v21_additiv_mit_sicherung(tmp_path, monkeypatch):
     con.execute("INSERT INTO nutzer (name, passwort_hash, erstellt_am) VALUES ('Alt', 'x', 'x')")
     con.commit()
     con.close()
-    assert migrationen.migriere(pfad, tmp_path / "s") == [21]
-    assert [p for p in (tmp_path / "s").iterdir() if "vor-v21" in p.name]                       # Sicherung vor der Migration
+    assert migrationen.migriere(pfad, tmp_path / "s") == list(range(21, migrationen.AKTUELLE_VERSION + 1))
+    assert [p for p in (tmp_path / "s").iterdir() if f"vor-v{migrationen.AKTUELLE_VERSION}" in p.name]   # Sicherung vor der Migration
     con = sqlite3.connect(pfad)
     tabellen = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"einladungen", "plattform_zugaenge"} <= tabellen and con.execute("SELECT name FROM nutzer").fetchone()[0] == "Alt"
