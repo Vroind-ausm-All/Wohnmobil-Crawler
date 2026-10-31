@@ -56,6 +56,8 @@ kbd{font:12px ui-monospace,monospace;padding:1px 5px;border:1px solid var(--line
 .tag{font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px;background:var(--line);color:var(--ink)}
 .tag.gruen{background:var(--gruen-bg);color:var(--gruen)} .tag.gelb{background:var(--gelb-bg);color:var(--gelb)}
 .tag.rot{background:var(--rot-bg);color:var(--rot)} .tag.neu{background:var(--akzent);color:var(--akzent-ink)}
+.tag.score{background:var(--card);border:1px solid var(--line)} .tag.score.top{background:var(--akzent);color:var(--akzent-ink);border-color:var(--akzent)}
+.deal td{padding:2px 6px;font-size:13px} .deal td.z{text-align:right;white-space:nowrap}
 .tag.senkung{background:var(--gruen-bg);color:var(--gruen)}
 .tag.status{background:var(--ink);color:var(--card)}
 .tag.anb.gewerblich{background:var(--rot-bg);color:var(--rot)} .tag.anb.unbekannt,.tag.anb.unbelegt{background:var(--gelb-bg);color:var(--gelb)}
@@ -238,6 +240,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
 
   <div class="bar" role="toolbar">
     <button data-f="anschreiben" class="an">Anschreiben bereit</button>
+    <button data-f="top" title="Deal-Score ab {{ deal_schwelle }}, offen, privat, verfügbar, Ampel grün, Bewertung mindestens „mittel“">Top-Deals{% if zaehl.top %} ({{ zaehl.top }}){% endif %}</button>
     <button data-f="gruen">Grün</button>
     <button data-f="gelb">Gelb</button>
     <button data-f="neu">Neu</button>
@@ -252,7 +255,8 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     </div>{% endif %}
     <label class="verfbox" title="Blendet verkaufte und nicht mehr online stehende Anzeigen aus, an denen noch nichts bearbeitet wurde"><input type="checkbox" id="nurverf" checked>nur verfügbare</label>
     <select id="sort" aria-label="Sortierung">
-      <option value="verh">Sortierung: beste Chance</option>
+      <option value="score">Sortierung: Deal-Score</option>
+      <option value="verh">beste Chance (Preis ÷ Max-EK)</option>
       <option value="pot">Gewinnpotenzial</option>
       <option value="prio">Neuigkeiten zuerst (im Rahmen, neu, gesenkt)</option>
       <option value="neu">Neueste zuerst</option>
@@ -269,6 +273,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
          data-neu="{{ 1 if z.neu else 0 }}" data-prio="{{ z.neuigkeit.stufe if z.neuigkeit else 9 }}" data-bereit="{{ 1 if z.bereit else 0 }}" data-status="{{ a.status or 'neu' }}"
          data-verf="{{ a.verfuegbarkeit }}" data-ausblenden="{{ 1 if z.ausblenden else 0 }}"
          data-verh="{{ b.verhaeltnis or 99 }}" data-pot="{{ b.potenzial or -999999 }}" data-preis="{{ a.preis or 0 }}"
+         data-score="{{ z.deal.score if z.deal and z.deal.score is not none else -1 }}" data-top="{{ 1 if z.deal and z.deal.priorisiert else 0 }}"
          data-zeit="{{ a.erstmals_gesehen }}" data-entf="{{ a.entfernung_km if a.entfernung_km is not none else 99999 }}"
          data-tage="{{ a.tage_online or 0 }}" data-nachfassen="{{ 1 if z.nachfassen else 0 }}" data-erst="{{ z.brief_betrag or 0 }}"
          {% if team %}{% set t = team.bearbeitung.get(a.id) %}data-zustand="{{ t.zustand if t else 'frei' }}" data-bearbeiter="{{ t.bearbeiter.kuerzel if t and t.bearbeiter else '' }}" data-mein="{{ 1 if t and t.mein else 0 }}" data-frei="{{ 1 if not t or (t.zustand in ['frei', 'ohne_zuordnung', 'verwaist'] and not t.dublette_von) else 0 }}"
@@ -279,6 +284,8 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
         {% if a.bild %}<img src="{{ a.bild }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}
         <div class="tags">
           <span class="tag {{ b.ampel }}">{{ AMPEL[b.ampel] }}</span>
+          {% if z.deal and z.deal.score is not none %}<span class="tag score{{ ' top' if z.deal.priorisiert }}" data-score-tag
+            title="Deal-Score {{ z.deal.score }}/100 – {% for t in z.deal.bestandteile %}{{ t.name }} {{ t.punkte | round | int }}/{{ t.gewicht | round | int }}{{ ', ' if not loop.last }}{% endfor %}">Deal {{ z.deal.score }}</span>{% endif %}
           {% if z.neu %}<span class="tag neu">neu</span>{% endif %}
           {% set n = z.neuigkeit %}{% if n and n.im_rahmen %}<span class="tag gruen" data-im-rahmen title="Die Preissenkung hat den Preis unter den Max-EK gebracht">jetzt im Rahmen</span>{% endif %}
           {% if n and n.senkung %}<span class="tag senkung" data-senkung title="{{ n.senkung.von | euro }} → {{ n.senkung.auf | euro }} ({{ ('%.1f' % n.senkung.prozent).replace('.', ',') }} %)">Preis −{{ n.senkung.euro | euro }} ({{ n.senkung.am[8:10] }}.{{ n.senkung.am[5:7] }}.)</span>
@@ -348,6 +355,13 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     </div>
     <div class="spalten">
       <div>
+        {% if z.deal %}<div data-deal>{% if z.deal.score is not none %}<h3>Deal-Score {{ z.deal.score }}/100{% if z.deal.priorisiert %} · Top-Deal{% endif %}</h3>
+          <table class="deal">{% for t in z.deal.bestandteile %}<tr><td>{{ t.name }}</td><td class="z">{{ t.punkte | round | int }} / {{ t.gewicht | round | int }}</td>
+            <td class="meta">{{ t.text }}</td></tr>{% endfor %}</table>
+          {% if z.deal.kein_top %}<p class="meta" data-kein-top>Kein Top-Deal: {{ z.deal.kein_top }}</p>{% endif %}
+          <p class="meta">Punkte gerundet · Top-Deal ab {{ z.deal.schwelle }} Punkten, offen, privat, verfügbar, Ampel grün und Bewertung
+            mindestens „mittel“ · Gewichte in <code>config.yaml → deal_score</code> · die Ampel bleibt daneben</p>
+          {% else %}<p class="meta">Kein Deal-Score – {{ z.deal.grund }}</p>{% endif %}</div>{% endif %}
         <h3>Faire Bewertung</h3>
         {% if b.sicherheit == 'keine' %}
           <p class="warn">{{ b.vergleich_basis }}. Ohne Erstzulassung kein belastbarer Einkaufspreis – im Anschreiben wird deshalb nach EZ/km gefragt.</p>
@@ -891,7 +905,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
       var s = k.dataset.status;
       var ok = filter === 'alle' || (filter === 'anschreiben' && ((k.dataset.bereit === '1' && s === 'neu') || s === 'vorbereitet'))
             || (filter === 'nachfassen' && k.dataset.nachfassen === '1') || (filter === 'arbeit' && ARBEIT[s])
-            || (filter === 'neu' && k.dataset.neu === '1') || (filter === 'neuigkeiten' && k.dataset.prio !== '9') || ((filter === 'gruen' || filter === 'gelb') && k.dataset.ampel === filter);
+            || (filter === 'neu' && k.dataset.neu === '1') || (filter === 'top' && k.dataset.top === '1') || (filter === 'neuigkeiten' && k.dataset.prio !== '9') || ((filter === 'gruen' || filter === 'gelb') && k.dataset.ampel === filter);
       if(q && q.split(/\s+/).some(function(w){ return k.dataset.text.indexOf(w) < 0; })) ok = false;
       if(nurVerf.checked && k.dataset.ausblenden === '1') ok = false;      // verkauft/offline ohne Ankaufsarbeit (P3-04)
       if(PROFIL_IDS && !PROFIL_IDS[k.dataset.id]) ok = false;              // Suchprofil als Filter (P4-01, suchprofile.js)
@@ -903,6 +917,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
   function sortiere(){
     var s = document.getElementById('sort').value;
     karten.sort(function(a, b){
+      if(s === 'score') return (b.dataset.score - a.dataset.score) || (a.dataset.verh - b.dataset.verh);      // P5-07
       if(s === 'verh') return a.dataset.verh - b.dataset.verh;
       if(s === 'prio') return (a.dataset.prio - b.dataset.prio) || (a.dataset.verh - b.dataset.verh);     // P4-03
       if(s === 'pot') return b.dataset.pot - a.dataset.pot;

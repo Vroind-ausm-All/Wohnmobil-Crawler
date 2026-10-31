@@ -6,7 +6,22 @@ Wert „–“.
 
 ---
 
-## F10 / P1-14c – Aufbewahrungsfristen, vorbereitet für den Server (27.10.2026) · Status: REVIEW
+## P5-07 – Deal-Score 0–100 und Bewertungsverlauf (30.10.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 30.10.2026: „Stelle P5-07 fertig“ (nach der Erklärung des Pakets; Vorschlag Gewichte 40/20/15/10/10/5, Ampel
+  bleibt, Schwelle 70 übernommen).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `acquisition-analyst` und `scout-data-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/bewertung/deal_score.py` und `wmscout/bewertungsverlauf.py` (neu), `wmscout/bewertung/auswertung.py`,
+  `wmscout/migrationen.py` (v22), `wmscout/ausgabe.py`, `wmscout/app.py`, `wmscout/web/api.py`, `scout.py`, `vorlagen/report.html`,
+  `config.yaml`; Tests `test_deal_score.py` (neu), `test_neuigkeiten.py` (CSV-Reihenfolge); Doku ADR-060, ARCHITECTURE, ROADMAP, README.
+- **Implementierte Funktionen:** siehe ADR-060. Schema v22 (additiv: `bewertungen`, Sicherung vor der Migration).
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Ablehnung** (keine kritischen Befunde) wegen B1–B4 (hoch: Ausland, unsichere Bewertung und „vermutlich
+  offline“/„reserviert“ wurden Top-Deal; Inserate in Bearbeitung verloren ihren Score) – behoben; B5–B11 behoben, B12 beim Commit
+  beachtet, B13 begründet (ADR-060 Nr. 5). Regressionstests ergänzt; Korrekturen nicht erneut von der QA geprüft.
+- **Nächster sinnvoller Schritt:** Phase 6 (Ankaufs-Dashboard) – neue Hauptphase, Freigabe des Betreibers nötig.
+
+## F10 / P1-14c – Aufbewahrungsfristen, vorbereitet für den Server (27.10.2026) · Status: DONE (PR #48 gemergt)
 
 - **Auftrag:** Betreiber 27.10.2026: „F10 Aufbewahrungsfristen nach DSGVO etablieren und vorbereiten für spätere Serveranbindung.“
 - **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-data-engineer`); QA `qa-security-reviewer`; Doku Orchestrator.

@@ -4,6 +4,22 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P5-07 – Deal-Score 0–100 und Bewertungsverlauf (30.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2548 bestanden (vorher 2519), neu `test_deal_score.py` (29). Angepasst: `test_neuigkeiten.py` (CSV: „Deal-Score“, „Top-Deal“ nach „Neuigkeit“), `test_zugaenge.py` (Migration bis zur aktuellen Version). Erster Lauf vor der Korrekturrunde: 2542 bestanden, 1 fehlgeschlagen (`test_zugaenge.py`, erwartete Migration nur bis v21) |
+| `ruff check .` | grün |
+| Einstellungen: Werte aus config.yaml, Standardwerte, Fehleingaben (Tippfehler, negative/unendliche Gewichte, alle 0, Preisgrenzen vertauscht, Schwelle > 100, Text) | bestanden |
+| Formel: guter Deal hoch, teurer niedrig, Summe der Teilpunkte = Score, Gewichte relativ, Preisvorteil linear (0,85 voll, 1,0 halb, 1,15 null), Zustand, Abholung (Kosten, Entfernung, unbekannt, Ausland), Frische, Verkäufer (vermutlich offline/reserviert halbieren) | bestanden |
+| Kein Score bei Sperre vom Markt her oder ohne belastbare Bewertung; eigener Ankaufsstatus behält den Score; Top-Deal nur offen, privat, sicher verfügbar, Inland, Ampel grün, Bewertung mindestens „mittel“ (Ausland, unsichere Bewertung, vermutlich offline, reserviert, Status vorbereitet → kein Top-Deal); Preisvorteil aus unsicherer Bewertung zählt weniger | bestanden |
+| Schema v22: additiv, Sicherung „vor-v22“, nur anfügbar (UPDATE/DELETE abgewiesen), Score 0–100 geprüft, idempotent | bestanden |
+| Verlauf: erste Bewertung alle, unverändert nichts, Preisänderung neue Zeile, Score-Bewegung unter 3 Punkten keine Zeile, Datenbankfehler blockiert nichts, ältere Datenbank ohne Tabelle | bestanden |
+| Desktop/API/CSV/Kommandozeile: Sortierung „Deal-Score“, Filter „Top-Deals“, Badge, Aufschlüsselung im Detail, `deal_score`/`priorisiert` in der Liste, `deal`/`deal_verlauf` im Detail; CSV-Spalten; `report` schreibt Verlauf, zweiter Report ohne Änderung nichts; ungültiges `deal_score` bricht den Start verständlich ab | bestanden |
+| Browser (Orchestrator, Chromium über Playwright, Desktop 1280 und Breite 390): Standardsortierung „Deal-Score“, Badge „Deal 66“, Detail mit sechs Bestandteilen, Punkten und Begründung, Top-Deals-Filter (0 Treffer bei diesen Daten), kein Querscrollen, 0 JS-Fehler | bestanden |
+| QA (eine Runde, vor der Korrekturrunde: 137 gezielte Tests bestanden, Probeskripte zu Grenzfällen, Verfügbarkeit, Status und Wachstum) | **Ablehnung** (keine kritischen Befunde) wegen B1–B4 (hoch) – behoben; B5–B11 behoben, B12 beim Commit beachtet, B13 begründet; Korrekturen **nicht** erneut von der QA geprüft |
+| Fachliche Eichung der Gewichte gegen echte Abschlüsse, Handy-App-Anzeige, Mandantenbetrieb im Detail, Leistung von `merken` über 50.000 Inserate, Windows-CI | nicht geprüft (CI folgt im PR) |
+
 ## F10 / P1-14c – Aufbewahrungsfristen, vorbereitet für den Server (27.10.2026) · REVIEW
 
 | Prüfung | Ergebnis |

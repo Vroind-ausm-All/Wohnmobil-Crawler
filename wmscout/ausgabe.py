@@ -9,6 +9,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from .anbieter import HERKUNFT_TEXT, einstufung
 from .bewertung.anschreiben import euro, tsd
+from .bewertung.deal_score import einstellungen as deal_einstellungen
 from .bewertung.kalkulation import stunden_text
 from .bearbeitung import IN_ARBEIT
 from .domaene import STATUS
@@ -34,6 +35,7 @@ def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None =
         "kontaktiert": sum(z["a"].get("status") == "kontaktiert" for z in zeilen),
         "arbeit": sum(z["a"].get("status") in IN_ARBEIT for z in zeilen),
         "nachfassen": sum(bool(z["nachfassen"]) for z in zeilen),
+        "top": sum(bool((z.get("deal") or {}).get("priorisiert")) and not z.get("ausblenden") for z in zeilen),      # P5-07
     }
     return env.get_template("report.html").render(
         stand=datetime.now().strftime("%d.%m.%Y %H:%M"), anzahl=len(zeilen), zeilen=zeilen, zaehl=zaehl,
@@ -41,7 +43,13 @@ def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None =
         ust_label="USt auf Marge (§25a, 19/119)" if cfg["rechner"]["differenzbesteuerung"] else "USt 19 % im Händler-VK",
         fair_untergrenze=cfg["rechner"].get("fair_untergrenze_privatwert", 0), status_liste=list(STATUS.items()),
         differenzbesteuerung=bool(cfg["rechner"]["differenzbesteuerung"]),
-        signatur={k: cfg["anschreiben"].get(k, "") for k in ("ansprechpartner", "firma", "telefon")}), zaehl
+        signatur={k: cfg["anschreiben"].get(k, "") for k in ("ansprechpartner", "firma", "telefon")},
+        deal_schwelle=deal_einstellungen(cfg)["schwelle"]), zaehl
+
+
+def _score_zelle(z: dict):
+    s = (z.get("deal") or {}).get("score")
+    return "" if s is None else s
 
 
 def _team_spalten(t: dict | None) -> list[str]:
@@ -83,7 +91,7 @@ def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | 
                     "Händler-VK", "Kosten", "Ziel-Marge", "Max-EK", "Erstangebot", "Erstangebot % Marktwert",
                     "Gewinn bei Angebotspreis", "Wertfaktoren", "Sperrgrund", "Hinweise", "Status", "Nachfassen", "Kontaktiert am",
                     "Verfügbarkeit", "Zuletzt bestätigt", "Anbieter", "Anbieter-Herkunft", "Datenqualität", "Datenmarkierungen",
-                    "Neuigkeit", "Erstmals gesehen", "URL", "Bearbeiter", "Übernommen am", "Kontaktiert von"])
+                    "Neuigkeit", "Deal-Score", "Top-Deal", "Erstmals gesehen", "URL", "Bearbeiter", "Übernommen am", "Kontaktiert von"])
         for z in sorted(zeilen, key=lambda z: z["b"].verhaeltnis or 99):
             a, b = z["a"], z["b"]
             t = team.objekt(z) if team else None
@@ -96,8 +104,8 @@ def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | 
                         ", ".join(f"{n} {w:+.1%}" for n, w in b.wertfaktoren.items()), z["sperre"] or "",
                         " | ".join(z.get("hinweise") or []), a["status"], z["nachfassen"] or "", a.get("kontaktiert_am") or "",
                         _verfuegbarkeit_zelle(a), a.get("zuletzt_bestaetigt") or "", *_anbieter_zellen(a), *_qualitaet_zellen(a),
-                        (z.get("neuigkeit") or {}).get("text", ""), a["erstmals_gesehen"], a["url"],
-                        *_team_spalten(t)])
+                        (z.get("neuigkeit") or {}).get("text", ""), _score_zelle(z), "ja" if (z.get("deal") or {}).get("priorisiert") else "",
+                        a["erstmals_gesehen"], a["url"], *_team_spalten(t)])
 
     # --- Anschreiben als Textdateien ---
     for z in zeilen:

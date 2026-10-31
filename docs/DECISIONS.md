@@ -1298,3 +1298,37 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
      werden aufgeräumt (B8). Die Bremse zählt je IP: hinter einem Proxy `vertrauter_proxy: true` setzen, sonst teilen sich alle eine Grenze (B7).
 * **Folgen / offen:** Für den Test braucht der Kunde einen freigeschalteten API-Account; der Betreiber setzt die Umgebungsvariable und gibt den
   Verbindungstest frei (SOURCES: PRÜFEN). Antwortformat und Pfad nicht gegen eine echte Antwort geprüft (Doku von hier nicht erreichbar).
+
+## ADR-060 – Deal-Score 0–100 aus benannten Bestandteilen, Bewertungsverlauf in `bewertungen` · gilt (30.10.2026)
+
+* **Kontext:** P5-07, letztes Paket der Phase 5; Grundlage für die Sortierung der Ankaufsliste (P6-01) und die Kennzahl „priorisierte
+  Ankaufsangebote“. Bisher ordneten nur die Ampel (Wunschpreis gegen Max-EK) und das Verhältnis Preis ÷ Max-EK; Bewertungen wurden nicht
+  gespeichert. Betreiber 30.10.2026: „Stelle P5-07 fertig“ – Vorschlag bestätigt (Gewichte 40/20/15/10/10/5, Ampel bleibt, Schwelle 70).
+* **Entscheidung:**
+  1. **Score 0–100** (`wmscout/bewertung/deal_score.py`, rein, quellenneutral) aus sechs Bestandteilen, je mit Anteil 0–1 und Kurztext:
+     Preisvorteil (Wunschpreis ÷ Max-EK: bis 0,85 voll, ab 1,15 null), Datensicherheit (hoch 1 · mittel 0,6 · manuell 0,5 · niedrig
+     0,25), Zustand (Summe der vollen Mängelabzüge, ab 25 % null), Abholung (Kosten aus P5-06, ab 1.000 € null; ohne Kosten Entfernung, ab
+     600 km null; unbekannt 0,5; Ausland null), Frische (im Rahmen oder frisch 1, deutlich gesenkt 0,8, sonst höchstens 0,5 und nach
+     120 Tagen null), Verkäufer und Verfügbarkeit (privat belegt 1, vermutet 0,8, unbekannt 0,4, gewerblich 0; offline, Dublette oder
+     lückenhafte Daten halbieren – nach der Korrekturrunde: vermutlich offline, reserviert, lückenhafte Daten). Gewichte relativ (`config.yaml → deal_score`), der Score wird auf 100 umgerechnet und ganzzahlig gerundet.
+  2. **Kein Score** bei gesperrten Inseraten (gewerblich, Ausschluss, doppelt eingestellt …) und ohne belastbare Bewertung (keine
+     Erstzulassung, kein Preis, Max-EK 0) – mit Grund. **Top-Deal** = Score ab Schwelle (70), privat, nicht offline.
+  3. **Ampel bleibt** unverändert (Anschreiben, Filter); der Score ergänzt sie. Desktop: Badge „Deal NN“ (Top-Deal hervorgehoben),
+     Sortierung „Deal-Score“ als Standard, Filter „Top-Deals“, Aufschlüsselung im Detail; API `deal_score`, `priorisiert`, `deal`,
+     `deal_verlauf`; CSV „Deal-Score“, „Top-Deal“.
+  4. **Bewertungsverlauf** (Schema v22, additiv, nur anfügbar): nach Suchlauf, Import und Report je Inserat eine Zeile – nur wenn sich
+     Preis, Marktwert, Spanne, Max-EK, Sicherheit, Ampel, Score oder Rechenstand (`modell_version` = Kalkulation/Deal-Score, z. B. „E6/D1“)
+     geändert haben. Keine Personendaten. Nie aus reinen Leseanfragen geschrieben.
+  5. **Korrekturrunde (QA-Ablehnung):** Top-Deal nur, wenn das Inserat offen, privat, sicher verfügbar (nicht vermutlich offline oder
+     reserviert), im Inland ist, die Ampel grün und die Bewertung mindestens „mittel“ (oder manuell) – die Ampel ist bei Ausland und
+     unbekannter Art bewusst höchstens gelb (B1/B2); der Grund steht im Detail („Kein Top-Deal: …“). Der Preisvorteil zählt bei unsicherer
+     Bewertung weniger (Faktor 0,5 + 0,5 × Sicherheit, B2). Ein eigener Ankaufsstatus (Text kopiert, kontaktiert …) nimmt den Score nicht
+     weg, nur Sperren vom Markt her (B4). Verfügbarkeit wertet „vermutlich offline“ und „reserviert“ aus (B3). Der Verlauf speichert erst
+     ab 3 Punkten Score-Unterschied (B6) und hält bei einem Fehler Report, Mail und Import nicht auf (B5); unendliche Werte in der
+     Konfiguration werden abgewiesen (B8); Teilpunkte als „gerundet“ gekennzeichnet (B9). Zeitpunkte in Ortszeit wie die übrigen
+     Zeitstempel der Inserate (B10). Der Einzel-Import per Text schreibt keinen Verlauf (sonst eine volle Bewertung je Klick) – er folgt
+     beim nächsten Lauf oder Report (B13).
+* **Alternativen:** Score ersetzt die Ampel (Anschreiben und Filter hängen an ihr); Speichern bei jeder Bewertung (Tabelle wüchse mit
+  jedem Seitenaufruf); maschinell gelernte Gewichte (zu wenige Abschlüsse – die Kalibrierung P5-01 kann sie später stützen).
+* **Folgen / offen:** Die Gewichte sind Annahmen; mit genug Ankäufen zeigt die Kalibrierung, ob hohe Scores tatsächlich bessere Abschlüsse
+  sind. Die Handy-App zeigt den Score noch nicht (API liefert ihn).

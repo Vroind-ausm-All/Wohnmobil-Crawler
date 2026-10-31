@@ -436,4 +436,5 @@ Die Zeilen „Phase 1“ unten beziehen sich auf den früheren Phasenplan; die n
 | Händlermarkt als Obergrenze für den Händler-VK; Marktbeobachtung der Preissenkungen privater Inserate im Kalibrierungsbericht (P5-04) | umgesetzt | `test_preisarten.py`, Klicktest |
 | Gewährleistungsrücklage nach Alter, Standzeit nach Saison, Kapitalbindung, Mängelrisiko in Spanne/Sicherheit, neue Mängel- und Ausstattungsbegriffe; Spannen auf 100 € (P5-05) | umgesetzt | `test_risiko.py` |
 | Abholung: Auto ab Firmensitz Besigheim oder Bahn ab Stuttgart Hbf (ICE-Ticket und Reisezeit grob), der günstigere Weg zählt (P5-06) | umgesetzt | `test_abholung.py` |
-| Deal-Score, Ankaufs-Dashboard | **geplant** – Phasen 4–6 in `docs/ROADMAP.md` | – |
+| Deal-Score 0–100 mit Bestandteilen (Preisvorteil, Datensicherheit, Zustand, Abholung, Frische, Verkäufer), Sortierung und Filter „Top-Deals“, Bewertungsverlauf (P5-07) | umgesetzt | `test_deal_score.py` |
+| Ankaufs-Dashboard | **geplant** – Phase 6 in `docs/ROADMAP.md` | – |
