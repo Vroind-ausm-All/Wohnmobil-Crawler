@@ -6,7 +6,27 @@ Wert „–“.
 
 ---
 
-## P5-07 – Deal-Score 0–100 und Bewertungsverlauf (30.10.2026) · Status: REVIEW
+## P6-01 – Kombinierte Ankaufsliste: alle Quellen, Deal-Score-Sortierung, Risikofaktoren (31.10.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 31.10.2026: „Starte P6-01“ (Freigabe Phase 6, erstes Paket).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/bewertung/risikofaktoren.py` (neu), `wmscout/bewertung/auswertung.py`, `wmscout/domaene.py`,
+  `wmscout/web/api.py`, `wmscout/ausgabe.py`, `vorlagen/report.html`, `wmscout/web/static/mobil.js`, `mobil.css`, `sw.js` (Version 19);
+  Tests `test_liste.py` (neu); Doku ADR-061, ROADMAP, README.
+- **Implementierte Funktionen:** siehe ADR-061 – Quelle als Abzeichen und Filter (Desktop, Handy, API `quelle`), API und Handy-App nach
+  Deal-Score sortiert, Liste „Top-Deals“ und Deal-Score-Abzeichen in der Handy-App, Risikofaktoren (Karte: bis zu drei, Detail: alle).
+  Keine Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Freigabe mit Auflagen** (keine kritischen Befunde). Korrekturrunde: B1 (unvollständige Strukturen ohne
+  Ausnahme), B2 (keine doppelten Warnungen auf der Karte: Mängel, Verfügbarkeit, Ausland, Anbieter nur im Detail, Feld `karte`), B3
+  (verkauft/offline und gewerblich als Risikofaktor), B4 (Entfernung gerundet), B5 (Kommentar) behoben; B6 Quellenliste der Handy-App per
+  Test an `domaene.PLATTFORM_TEXT` gebunden; B7 beim Commit beachtet; B8 diese Einträge. Fehlende Tests teilweise ergänzt (Grenzwert 400 km,
+  genau ein Faktor je Fall, Sortierung auch für „bereit“, Escaping im Desktop). Korrekturen nicht erneut von der QA geprüft.
+- **Beobachtet, nicht Teil des Pakets:** Im ersten Handy-Klicktest einmal „Cannot read properties of null (reading 'team')“ – Wechsel auf
+  `#/liste/…` unmittelbar nach dem Login, bevor `/api/ich` geladen war (bestehender Code); im zweiten Lauf nicht aufgetreten. Als Backlog-Punkt notiert.
+- **Nächster sinnvoller Schritt:** P6-02 (Dublettengruppen und Preisverläufe anzeigen) – nach Freigabe.
+
+## P5-07 – Deal-Score 0–100 und Bewertungsverlauf (30.10.2026) · Status: DONE (PR #50 gemergt)
 
 - **Auftrag:** Betreiber 30.10.2026: „Stelle P5-07 fertig“ (nach der Erklärung des Pakets; Vorschlag Gewichte 40/20/15/10/10/5, Ampel
   bleibt, Schwelle 70 übernommen).

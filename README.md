@@ -437,4 +437,5 @@ Die Zeilen „Phase 1“ unten beziehen sich auf den früheren Phasenplan; die n
 | Gewährleistungsrücklage nach Alter, Standzeit nach Saison, Kapitalbindung, Mängelrisiko in Spanne/Sicherheit, neue Mängel- und Ausstattungsbegriffe; Spannen auf 100 € (P5-05) | umgesetzt | `test_risiko.py` |
 | Abholung: Auto ab Firmensitz Besigheim oder Bahn ab Stuttgart Hbf (ICE-Ticket und Reisezeit grob), der günstigere Weg zählt (P5-06) | umgesetzt | `test_abholung.py` |
 | Deal-Score 0–100 mit Bestandteilen (Preisvorteil, Datensicherheit, Zustand, Abholung, Frische, Verkäufer), Sortierung und Filter „Top-Deals“, Bewertungsverlauf (P5-07) | umgesetzt | `test_deal_score.py` |
-| Ankaufs-Dashboard | **geplant** – Phase 6 in `docs/ROADMAP.md` | – |
+| Kombinierte Ankaufsliste: alle Quellen in einer Liste (Quelle als Abzeichen und Filter), nach Deal-Score sortiert, Risikofaktoren auf der Karte und im Detail, Liste „Top-Deals“ auch in der Handy-App (P6-01) | umgesetzt | `test_liste.py`, Klicktest Desktop und Handy |
+| Ankaufs-Dashboard (weitere Pakete) | **geplant** – Phase 6 in `docs/ROADMAP.md` | – |

@@ -12,6 +12,7 @@ from .bewertung.anschreiben import euro, tsd
 from .bewertung.deal_score import einstellungen as deal_einstellungen
 from .bewertung.kalkulation import stunden_text
 from .bearbeitung import IN_ARBEIT
+from .domaene import PLATTFORM_TEXT as QUELLE_TEXT
 from .domaene import STATUS
 from .schalter import eingang_aktiv
 
@@ -44,7 +45,8 @@ def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None =
         fair_untergrenze=cfg["rechner"].get("fair_untergrenze_privatwert", 0), status_liste=list(STATUS.items()),
         differenzbesteuerung=bool(cfg["rechner"]["differenzbesteuerung"]),
         signatur={k: cfg["anschreiben"].get(k, "") for k in ("ansprechpartner", "firma", "telefon")},
-        deal_schwelle=deal_einstellungen(cfg)["schwelle"]), zaehl
+        deal_schwelle=deal_einstellungen(cfg)["schwelle"], QUELLEN=QUELLE_TEXT,
+        quellen=sorted({z["a"].get("quelle") or "kleinanzeigen" for z in zeilen})), zaehl
 
 
 def _score_zelle(z: dict):

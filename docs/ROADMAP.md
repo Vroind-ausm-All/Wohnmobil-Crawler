@@ -243,7 +243,7 @@ erhalten (Re-Import-Test).
 | P5-05 | P2 | Ausstattung und Mängel; Reparatur-, Gewährleistungs-, Standkostenrisiko – dazu Betreiberwunsch 25.10.2026: Spannen auf 100 € | acquisition-analyst | DONE (PR #45 gemergt; ADR-056, ohne Schemaänderung; Rechenstand E5) |
 | P5-06 | P2 | Transportkosten ab konfigurierbarer Standort-PLZ (Grundlage vorhanden: `anschreiben.plz`, `rechner.kosten.transport_*`) | acquisition-analyst | DONE (PR #47 gemergt; ADR-057, ohne Schemaänderung; Rechenstand E6) |
 | P5-06b | P3 | Abholvarianten (Auto/Bahn) auch in der Handy-App anzeigen (API liefert `bewertung.abholung` bereits; QA P5-06 B9) | scout-ui-engineer | TODO |
-| P5-07 | P1 | Deal-Score 0–100 mit benannten Komponenten; Speicherung in `bewertungen` mit `modell_version` | acquisition-analyst, scout-data-engineer | REVIEW (ADR-060, Schema v22; Branch `claude/phase5-dealscore`) |
+| P5-07 | P1 | Deal-Score 0–100 mit benannten Komponenten; Speicherung in `bewertungen` mit `modell_version` | acquisition-analyst, scout-data-engineer | DONE (ADR-060, Schema v22; PR #50 gemergt) |
 
 ## Phase 6 – Ankaufs-Dashboard
 
@@ -255,11 +255,12 @@ Handy-App mit Besichtigung, Mängelabzug, Protokoll, Terminen, WhatsApp-Links.
 
 | ID | Prio | Paket | Agent | Status |
 |---|---|---|---|---|
-| P6-01 | P1 | Kombinierte Liste aller Quellen, Sortierung nach Deal-Score, Risikofaktoren sichtbar | scout-ui-engineer | TODO |
+| P6-01 | P1 | Kombinierte Liste aller Quellen, Sortierung nach Deal-Score, Risikofaktoren sichtbar | scout-ui-engineer | REVIEW (ADR-061; Branch `claude/phase6-liste`; Deal-Score jetzt auch in der Handy-App) |
 | P6-02 | P1 | Dublettengruppen und Preisverläufe anzeigen | scout-ui-engineer | TODO |
 | P6-03 | P2 | Kontaktstatus (vorbereitet/kontaktiert/Antwort), Verhandlungsnotizen, Besichtigungsstatus im Dashboard | scout-ui-engineer | TODO |
 | P6-04 | P2 | Benachrichtigungen im Dashboard (neu, Preissenkung, Antwort fällig) | scout-ui-engineer | TODO |
 | P6-05 | P2 | Kennzahlen-Ansicht (siehe unten) | scout-ui-engineer, scout-data-engineer | TODO |
+| P6-01b | P3 | Handy-App: Listenaufruf direkt nach dem Login abfangen, solange `/api/ich` noch lädt (einmal „reading 'team'“ im Klicktest P6-01, bestehender Code) | scout-ui-engineer | TODO |
 
 ---
 
