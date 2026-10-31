@@ -57,7 +57,7 @@ from .. import abdeckung
 from ..bewertung.deal_score import einstellungen as deal_einstellungen
 from ..zugaenge import PLATTFORMEN as ZUGANG_PLATTFORMEN
 from ..zugaenge import ZugangSpeicher
-from ..domaene import PLATTFORMEN
+from ..domaene import PLATTFORM_TEXT, PLATTFORMEN
 from ..normalisierung.qualitaet import je_quelle
 from ..bewertung import kalibrierung as kal
 from ..bewertung import kalkulation as kalk
@@ -245,6 +245,15 @@ def basis_fuer(z: dict, cfg: dict) -> dict:
     }
 
 
+QUELLE_TEXT = PLATTFORM_TEXT
+
+
+def nach_deal_score(z: dict) -> tuple:
+    """Sortierschlüssel der Ankaufsliste (P6-01): Deal-Score absteigend, ohne Score ans Ende, dann Preis ÷ Max-EK."""
+    s = (z.get("deal") or {}).get("score")
+    return (s is None, -(s or 0), z["b"].verhaeltnis or 99)
+
+
 def fahrzeug_kurz(z: dict, team: dict | None = None) -> dict:
     a, b = z["a"], z["b"]
     return {"id": a["id"], "fahrzeug": a["fahrzeug"], "titel": a["titel"], "ort": a.get("ort"), "url": a["url"],
@@ -268,7 +277,9 @@ def fahrzeug_kurz(z: dict, team: dict | None = None) -> dict:
             # Datenqualität des Fahrzeugs (P3-08): {wert 0–100, stufe, markierungen[{code, art, text}], widersprueche} – nur Anzeige
             "datenqualitaet": a.get("datenqualitaet"),
             # Deal-Score (P5-07): 0–100 oder None (gesperrt, keine Bewertung); priorisiert = ab Schwelle, privat, verfügbar
-            "deal_score": (z.get("deal") or {}).get("score"), "priorisiert": bool((z.get("deal") or {}).get("priorisiert"))}
+            "deal_score": (z.get("deal") or {}).get("score"), "priorisiert": bool((z.get("deal") or {}).get("priorisiert")),
+            # Risikofaktoren (P6-01): [{code, text, stufe hoch|mittel}] – hohe zuerst; Quelle als Anzeigename
+            "risiken": z.get("risiken") or [], "quelle_text": QUELLE_TEXT.get(a.get("quelle") or "kleinanzeigen", a.get("quelle"))}
 
 
 def ics(b: dict, cfg: dict, link: str | None) -> str:
@@ -1097,6 +1108,9 @@ class Anfrage:
         wer = (self.query.get("wer") or ["alle"])[0]
         if wer not in ("alle", "meine", "frei"):
             raise Antwort(400, "wer muss alle, meine oder frei sein")
+        quelle = (self.query.get("quelle") or [""])[0]
+        if quelle and quelle not in QUELLE_TEXT:
+            raise Antwort(400, f"quelle: {', '.join(QUELLE_TEXT)}")
         verfuegbar = (self.query.get("verfuegbar") or ["standard"])[0]
         if verfuegbar not in ("standard", "alle", "nur"):
             raise Antwort(400, "verfuegbar muss standard, alle oder nur sein")
@@ -1115,6 +1129,8 @@ class Anfrage:
         for z in self.k.zeilen():
             if profil_treffer is not None and z["a"]["id"] not in profil_treffer:
                 continue
+            if quelle and (z["a"].get("quelle") or "kleinanzeigen") != quelle:
+                continue
             # standard: verkaufte/offline Anzeigen ohne Ankaufsarbeit ausgeblendet; nur: alle nicht verfügbaren; alle: nichts ausgeblendet
             if (verfuegbar == "standard" and z["ausblenden"]) or (verfuegbar == "nur" and z["a"].get("nicht_verfuegbar")):
                 continue
@@ -1124,11 +1140,12 @@ class Anfrage:
                 continue
             # „Text kopiert“ bleibt unter „Anschreiben bereit“, bis „gesendet ✓“ bestätigt ist (ADR-012)
             ok = {"bereit": (z["bereit"] and s == "neu") or s == VORBEREITET, "nachfassen": bool(z["nachfassen"]),
-                  "arbeit": s in IN_ARBEIT, "offen": s in OFFEN, "alle": True, "neuigkeiten": bool(z.get("neuigkeit"))}.get(f, False)
+                  "arbeit": s in IN_ARBEIT, "offen": s in OFFEN, "alle": True, "neuigkeiten": bool(z.get("neuigkeit")),
+                  "top": bool((z.get("deal") or {}).get("priorisiert"))}.get(f, False)
             text = f"{z['a']['fahrzeug']} {z['a']['titel']} {z['a'].get('ort') or ''}".lower()
             if ok and all(w in text for w in q):
                 auswahl.append((z, t))
-        auswahl.sort(key=lambda zt: zt[0]["b"].verhaeltnis or 99)
+        auswahl.sort(key=lambda zt: nach_deal_score(zt[0]))       # Deal-Score zuerst wie in der Desktop-Liste (P6-01)
         if f == "neuigkeiten":                              # wichtigste zuerst: jetzt im Rahmen, neu und bereit, gesenkt, neu (P4-03)
             auswahl.sort(key=lambda zt: zt[0]["neuigkeit"]["stufe"])
         if profil_treffer is not None:

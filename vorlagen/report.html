@@ -80,6 +80,9 @@ kbd{font:12px ui-monospace,monospace;padding:1px 5px;border:1px solid var(--line
 .karte-fuss{display:flex;gap:8px;align-items:center;margin-top:auto;padding-top:6px}
 .sperre{color:var(--rot);font-size:13px;margin:0}
 .hinweiszeile{background:var(--gelb-bg);color:var(--gelb);font-size:13px;margin:0 0 6px;padding:4px 8px;border-radius:8px}
+.risiken{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 6px} .risk{font-size:12px;padding:1px 7px;border-radius:99px;background:var(--gelb-bg);color:var(--gelb)}
+.risk.hoch{background:var(--rot-bg);color:var(--rot);font-weight:600} .tag.quelle{background:var(--card);border:1px solid var(--line)}
+.risikoliste li.hoch{color:var(--rot)}
 .btn{font:inherit;font-size:14px;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);
   text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .btn:hover{border-color:var(--akzent)}
@@ -253,6 +256,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     {% if team %}<div class="wer" role="group" aria-label="Wer"><span>Wer:</span>
       <button type="button" data-wer="alle" class="an" aria-pressed="true">Alle</button><button type="button" data-wer="meine" aria-pressed="false">Meine</button><button type="button" data-wer="frei" aria-pressed="false">Frei</button>
     </div>{% endif %}
+    <select id="quelle" aria-label="Quelle"><option value="">alle Quellen</option>{% for q in quellen %}<option value="{{ q }}">{{ QUELLEN.get(q, q) }}</option>{% endfor %}</select>
     <label class="verfbox" title="Blendet verkaufte und nicht mehr online stehende Anzeigen aus, an denen noch nichts bearbeitet wurde"><input type="checkbox" id="nurverf" checked>nur verfügbare</label>
     <select id="sort" aria-label="Sortierung">
       <option value="score">Sortierung: Deal-Score</option>
@@ -284,6 +288,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
         {% if a.bild %}<img src="{{ a.bild }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}
         <div class="tags">
           <span class="tag {{ b.ampel }}">{{ AMPEL[b.ampel] }}</span>
+          <span class="tag quelle" data-quelle-tag>{{ QUELLEN.get(a.quelle or 'kleinanzeigen', a.quelle) }}</span>
           {% if z.deal and z.deal.score is not none %}<span class="tag score{{ ' top' if z.deal.priorisiert }}" data-score-tag
             title="Deal-Score {{ z.deal.score }}/100 – {% for t in z.deal.bestandteile %}{{ t.name }} {{ t.punkte | round | int }}/{{ t.gewicht | round | int }}{{ ', ' if not loop.last }}{% endfor %}">Deal {{ z.deal.score }}</span>{% endif %}
           {% if z.neu %}<span class="tag neu">neu</span>{% endif %}
@@ -311,6 +316,8 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
             {%- else %}<b>{{ b.max_ek | euro }}</b>{% endif %}</div>
         </div>
         {% if b.maengel %}<p class="maengel" data-maengel>Mängel laut Inserat: {{ b.maengel | map(attribute='name') | join(', ') }}</p>{% endif %}
+        {% set rk = z.risiken | selectattr('karte') | list %}{% if rk %}<p class="risiken" data-risiken title="Vor einem Angebot prüfen: {{ rk | map(attribute='text') | join(' · ') }}">
+          {%- for r in rk[:3] %}<span class="risk {{ r.stufe }}">{{ r.text }}</span>{% endfor %}{% if rk | length > 3 %}<span class="risk">+{{ rk | length - 3 }}</span>{% endif %}</p>{% endif %}
         {% for h in z.hinweise %}<p class="hinweiszeile">⚠ {{ h }}</p>{% endfor %}
         {% if z.nachfassen %}<p class="sperre" style="color:var(--gelb)">Nachfassen: {{ z.nachfassen }}</p>
         {% elif z.sperre and not a.anschreiben_text %}<p class="sperre">Kein Anschreiben: {{ z.sperre }}</p>{% endif %}
@@ -362,6 +369,8 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
           <p class="meta">Punkte gerundet · Top-Deal ab {{ z.deal.schwelle }} Punkten, offen, privat, verfügbar, Ampel grün und Bewertung
             mindestens „mittel“ · Gewichte in <code>config.yaml → deal_score</code> · die Ampel bleibt daneben</p>
           {% else %}<p class="meta">Kein Deal-Score – {{ z.deal.grund }}</p>{% endif %}</div>{% endif %}
+        {% if z.risiken %}<div data-risiken-detail><h3>Risikofaktoren – vor einem Angebot prüfen</h3>
+          <ul class="risikoliste">{% for r in z.risiken %}<li class="{{ r.stufe }}">{{ r.text }}{% if r.stufe == 'hoch' %} (klären){% endif %}</li>{% endfor %}</ul></div>{% endif %}
         <h3>Faire Bewertung</h3>
         {% if b.sicherheit == 'keine' %}
           <p class="warn">{{ b.vergleich_basis }}. Ohne Erstzulassung kein belastbarer Einkaufspreis – im Anschreiben wird deshalb nach EZ/km gefragt.</p>
@@ -896,7 +905,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
 {% endif %}
 
   // ---------- Filter & Sortierung ----------
-  var nurVerf = document.getElementById('nurverf'), PROFIL_IDS = null;
+  var nurVerf = document.getElementById('nurverf'), quelleWahl = document.getElementById('quelle'), PROFIL_IDS = null;
   window.scoutProfilFilter = function(ids){ PROFIL_IDS = ids; zeige(); };
   function zeige(){
     var q = document.getElementById('q').value.toLowerCase().trim(), sichtbar = 0;
@@ -908,6 +917,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
             || (filter === 'neu' && k.dataset.neu === '1') || (filter === 'top' && k.dataset.top === '1') || (filter === 'neuigkeiten' && k.dataset.prio !== '9') || ((filter === 'gruen' || filter === 'gelb') && k.dataset.ampel === filter);
       if(q && q.split(/\s+/).some(function(w){ return k.dataset.text.indexOf(w) < 0; })) ok = false;
       if(nurVerf.checked && k.dataset.ausblenden === '1') ok = false;      // verkauft/offline ohne Ankaufsarbeit (P3-04)
+      if(quelleWahl.value && k.dataset.quelle !== quelleWahl.value) ok = false;                // Quelle (P6-01)
       if(PROFIL_IDS && !PROFIL_IDS[k.dataset.id]) ok = false;              // Suchprofil als Filter (P4-01, suchprofile.js)
       if(TEAM_AN && ((wer === 'meine' && k.dataset.mein !== '1') || (wer === 'frei' && k.dataset.frei !== '1'))) ok = false;
       k.hidden = !ok; if(ok) sichtbar++;
@@ -935,6 +945,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
   });
   document.getElementById('q').oninput = zeige;
   nurVerf.onchange = zeige;
+  quelleWahl.onchange = zeige;
   document.getElementById('sort').onchange = sortiere;
 
   // Status beim Laden: Datenbank (App) bzw. Browser-Speicher (Datei)

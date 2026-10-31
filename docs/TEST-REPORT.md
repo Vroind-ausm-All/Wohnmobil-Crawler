@@ -4,7 +4,24 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
-## P5-07 – Deal-Score 0–100 und Bewertungsverlauf (30.10.2026) · REVIEW
+## P6-01 – Kombinierte Ankaufsliste: alle Quellen, Deal-Score-Sortierung, Risikofaktoren (31.10.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2579 bestanden (vorher 2548), neu `test_liste.py` (31); keine bestehenden Tests angepasst |
+| `ruff check .` | grün |
+| Risikofaktoren je Fall (Bewertung fehlt/unsicher, schwerer/leichter Mangel, vermutlich offline, reserviert, Widerspruch, lückenhafte Daten, Ausland, Abholkosten > 500 €, Entfernung > 400 km ohne Kosten, Anbieter unbekannt, > 60 Tage online) – jeweils genau ein Faktor; Grenzen (500 €, 400 km, 60 Tage), Reihenfolge hohe zuerst, Rundung auf 10 € bzw. ganze km | bestanden |
+| Korrekturrunde: unvollständige Strukturen (unbekannte Abholvariante, Betrag fehlt, leere Varianten, Mangel ohne Wert, Markierung ohne Text, `b` = None, Zahlen als Text) ohne Ausnahme; `karte` = False für Mängel, Verfügbarkeit, Ausland, Anbieter; verkauft und gewerblich als Faktor | bestanden |
+| API: Sortierung nach Deal-Score (ohne Score am Ende) für „alle“ und „bereit“, `filter=top` = genau die priorisierten, `quelle` filtert (Kleinanzeigen/mobile.de/AutoScout24), unbekannte Quelle → 400, Felder `risiken` und `quelle_text` | bestanden |
+| Desktop-HTML: Quellen-Auswahl nur mit vorhandenen Quellen, Quellen-Abzeichen, Risiko-Chips (höchstens 3 + „+n“, ohne Mängel), Risikoliste im Detail, Risikotexte in Chip, `title` und Liste escaped | bestanden |
+| Handy-App (statisch): Liste „Top-Deals“, Parameter `quelle`, Risikozeile Karte/Detail, Deal-Abzeichen, Texte über `esc()`, Quellenliste gleich `domaene.PLATTFORM_TEXT`, CSS, Service-Worker-Version ≥ 19 | bestanden |
+| Klicktest Chromium (Playwright), Desktop 1280 px und 390 px, angemeldet: Reihenfolge nach Score (66, 50 …, ohne Score am Ende), Abzeichen „Kleinanzeigen“/„mobile.de“, Quelle „mobile.de“ zeigt genau die 2 umgestellten Inserate, Risikoliste im Detail („reserviert“), kein Querscrollen | bestanden (nach der Korrekturrunde wiederholt) |
+| Klicktest Handy-App `/m` (390 px): Knopf „Top-Deals“, Deal-Abzeichen und Quelle auf den Karten, Quellenfilter (2 Fahrzeuge), Liste „Top-Deals (0)“, Detail mit Deal-Abzeichen und Risikoliste, kein Querscrollen, keine JS-Fehler | bestanden im zweiten Lauf; im ersten Lauf einmal JS-Fehler „reading 'team'“ beim Listenwechsel direkt nach dem Login (bestehender Code, ROADMAP P6-01b) |
+| QA-Review (`qa-security-reviewer`, eine Runde, gezielte Tests 52 + 273 bestanden, XSS-Aufrufe der mobil.js-Funktionen in Node) | Freigabe mit Auflagen; B1–B5 behoben, B6 per Test abgesichert, B7/B8 erledigt |
+
+**Nicht geprüft:** CI (läuft nach dem Push), Windows, echtes Handy und Service-Worker-Wechsel auf Version 19, echte Inserate von mobile.de/AutoScout24 in der Liste (nur umgestellte Testdaten), Häufigkeit roter Risiko-Chips auf echten Daten; Korrekturen nicht erneut von der QA geprüft.
+
+## P5-07 – Deal-Score 0–100 und Bewertungsverlauf (30.10.2026) · DONE (PR #50 gemergt)
 
 | Prüfung | Ergebnis |
 |---|---|

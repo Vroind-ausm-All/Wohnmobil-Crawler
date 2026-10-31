@@ -102,3 +102,7 @@ body.login{display:grid;place-items:center;min-height:100vh;padding:16px}
 
 /* Neuigkeit (P4-03) */
 .tag.neu{background:var(--akzent);color:var(--akzent-ink)}
+/* P6-01: Deal-Score, Quelle, Risikofaktoren */
+.tag.deal{background:var(--line)} .tag.deal.top{background:var(--gruen-bg);color:var(--gruen)} .tag.quelle{font-weight:500}
+.risiken{margin:4px 0;display:flex;flex-wrap:wrap;gap:4px} .risk{font-size:12px;padding:1px 8px;border-radius:99px;background:var(--gelb-bg);color:var(--gelb)}
+.risk.hoch{background:var(--rot-bg);color:var(--rot)} .risikoliste{margin:6px 0 0;padding-left:20px} .risikoliste li.hoch{color:var(--rot)}
