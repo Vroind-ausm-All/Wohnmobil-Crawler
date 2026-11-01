@@ -17,6 +17,19 @@ from .domaene import STATUS
 from .schalter import eingang_aktiv
 
 
+def euro_diff(d) -> str:
+    """Preisänderung mit Vorzeichen: „−3.500 €“, „+500 €“, „±0 €“ (P6-02)."""
+    return "–" if d is None else ("+" if d > 0 else "−" if d < 0 else "±") + euro(abs(d))
+
+
+def datum_lokal(iso: str | None) -> str:
+    """Zeitpunkt (ISO, UTC aus dem Preisverlauf) als lokales Datum „TT.MM.JJJJ“; nicht lesbar: „–“."""
+    try:
+        return datetime.fromisoformat(iso).astimezone().strftime("%d.%m.%Y") if iso else "–"
+    except (TypeError, ValueError):
+        return "–"
+
+
 def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None = None, app: dict | None = None,
                 team: dict | None = None) -> tuple[str, dict]:
     """app = {"token": …} im Browser-Modus (python scout.py app), sonst statische Datei.
@@ -27,6 +40,8 @@ def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None =
     env.filters["stunden"] = stunden_text
     env.filters["prozent"] = lambda x: f"{x:+.1%}".replace(".", ",") if x is not None else "–"
     env.filters["anteil"] = lambda x: f"{x:.0%}" if x is not None else "–"
+    env.filters["euro_diff"] = euro_diff
+    env.filters["datum"] = datum_lokal
     zaehl = {
         "gruen": sum(z["b"].ampel == "gruen" and not z.get("ausblenden") for z in zeilen),
         "gelb": sum(z["b"].ampel == "gelb" and not z.get("ausblenden") for z in zeilen),
@@ -45,7 +60,7 @@ def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None =
         fair_untergrenze=cfg["rechner"].get("fair_untergrenze_privatwert", 0), status_liste=list(STATUS.items()),
         differenzbesteuerung=bool(cfg["rechner"]["differenzbesteuerung"]),
         signatur={k: cfg["anschreiben"].get(k, "") for k in ("ansprechpartner", "firma", "telefon")},
-        deal_schwelle=deal_einstellungen(cfg)["schwelle"], QUELLEN=QUELLE_TEXT,
+        deal_schwelle=deal_einstellungen(cfg)["schwelle"], QUELLEN=QUELLE_TEXT, STATUS_NAMEN=STATUS,
         quellen=sorted({z["a"].get("quelle") or "kleinanzeigen" for z in zeilen})), zaehl
 
 

@@ -7,8 +7,10 @@ sind nicht untereinander vergleichbar – „vorher“, „aenderung“ und „d
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
-from .datenbank import Datenbank
+if TYPE_CHECKING:                    # nur für Typen: die Bewertung importiert ``kurz`` ohne Datenbank und sqlite3 (P1-08)
+    from .datenbank import Datenbank
 
 _ZEIT_MIN = datetime.min.replace(tzinfo=timezone.utc)
 # Abfrage in Teilen, damit der Test den Abfrageplan (Indizes) prüfen kann
@@ -56,7 +58,10 @@ def preisverlauf(db: Datenbank, anzeigen_id: str | None = None, *, fahrzeug_id: 
         if not db.con.execute("SELECT 1 FROM fahrzeuge WHERE id = ?", (fahrzeug_id,)).fetchone():
             raise LookupError(f"Fahrzeug {fahrzeug_id} unbekannt")
         bedingung, wert = BEDINGUNG_FAHRZEUG, fahrzeug_id
-    zeilen = db.con.execute(SQL_VERLAUF + bedingung, (wert,)).fetchall()
+    return _ordne(db.con.execute(SQL_VERLAUF + bedingung, (wert,)).fetchall())
+
+
+def _ordne(zeilen) -> list[dict]:
     geordnet = sorted(((_utc(z["zeitpunkt"]), z) for z in zeilen), key=lambda e: (e[0] or _ZEIT_MIN, e[1]["id"]))
     letzter: dict[int, int] = {}
     verlauf = []
@@ -69,3 +74,33 @@ def preisverlauf(db: Datenbank, anzeigen_id: str | None = None, *, fahrzeug_id: 
             "aenderung": ("erstpreis" if vorher is None else "gesenkt" if z["preis"] < vorher else "erhoeht" if z["preis"] > vorher else "gleich"),
             "differenz": None if vorher is None else z["preis"] - vorher})
     return verlauf
+
+
+# ---------------------------------------------------------------- Anzeige in der Liste (P6-02, ADR-062)
+PUNKTE_MAX = 12                 # Detail: höchstens so viele Preisstände (die jüngsten), damit Karte und Fenster klein bleiben
+SQL_ALLE = ("SELECT p.id, p.inserat_id, p.zeitpunkt, p.preis, p.kanal, i.plattform, i.anzeigen_id, a.id AS anzeige "
+            "FROM preis_historie p JOIN inserate i ON i.id = p.inserat_id "
+            "JOIN anzeigen a ON a.id = i.anzeigen_id AND COALESCE(NULLIF(a.quelle, ''), ?) = i.plattform")
+
+
+def verlaeufe(db: Datenbank) -> dict[str, list[dict]]:
+    """Preisverlauf aller Inserate mit Anzeige in einer Abfrage: Anzeigen-ID → Einträge wie ``preisverlauf`` (älteste zuerst)."""
+    from .datenbank import STANDARD_PLATTFORM
+    je: dict[str, list] = {}
+    for z in db.con.execute(SQL_ALLE, (STANDARD_PLATTFORM,)):
+        je.setdefault(z["anzeige"], []).append(z)
+    return {aid: _ordne(zeilen) for aid, zeilen in je.items()}
+
+
+def kurz(verlauf: list[dict] | None) -> dict | None:
+    """Kurzfassung für Karte und Detail: nur echte Preisstände (Erstpreis und Änderungen, wiederholte gleiche Preise zählen nicht).
+    ``erstpreis``, ``aktuell``, ``differenz`` (aktuell − erst), ``prozent`` (ganzzahlig), ``senkungen``, ``erhoehungen``, ``seit``, ``zuletzt``
+    (UTC, ISO) und ``punkte`` [{zeitpunkt, preis, differenz}] (die jüngsten ``PUNKTE_MAX``, ``gekuerzt`` wenn mehr). None ohne Eintrag."""
+    punkte = [e for e in verlauf or [] if e.get("aenderung") != "gleich" and isinstance(e.get("preis"), (int, float))]
+    if not punkte:
+        return None
+    erst, aktuell = punkte[0]["preis"], punkte[-1]["preis"]
+    return {"erstpreis": erst, "aktuell": aktuell, "differenz": aktuell - erst, "prozent": round(100 * (aktuell - erst) / erst) if erst else None,
+            "senkungen": sum(e["aenderung"] == "gesenkt" for e in punkte), "erhoehungen": sum(e["aenderung"] == "erhoeht" for e in punkte),
+            "seit": punkte[0]["zeitpunkt"], "zuletzt": punkte[-1]["zeitpunkt"], "gekuerzt": len(punkte) > PUNKTE_MAX,
+            "punkte": [{"zeitpunkt": e["zeitpunkt"], "preis": e["preis"], "differenz": e["differenz"]} for e in punkte[-PUNKTE_MAX:]]}

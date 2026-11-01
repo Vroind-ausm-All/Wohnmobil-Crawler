@@ -106,3 +106,6 @@ body.login{display:grid;place-items:center;min-height:100vh;padding:16px}
 .tag.deal{background:var(--line)} .tag.deal.top{background:var(--gruen-bg);color:var(--gruen)} .tag.quelle{font-weight:500}
 .risiken{margin:4px 0;display:flex;flex-wrap:wrap;gap:4px} .risk{font-size:12px;padding:1px 8px;border-radius:99px;background:var(--gelb-bg);color:var(--gelb)}
 .risk.hoch{background:var(--rot-bg);color:var(--rot)} .risikoliste{margin:6px 0 0;padding-left:20px} .risikoliste li.hoch{color:var(--rot)}
+/* P6-02: Dublettengruppe und Preisverlauf */
+.tag.dub{background:var(--card);border:1px dashed var(--line)} table.verlauf{border-collapse:collapse;width:100%} table.verlauf td{padding:3px 6px 3px 0}
+.zeile.gruppe{flex-wrap:wrap;gap:6px;padding:6px 0;border-bottom:1px solid var(--line)}

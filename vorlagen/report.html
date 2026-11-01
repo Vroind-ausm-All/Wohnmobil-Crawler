@@ -83,6 +83,9 @@ kbd{font:12px ui-monospace,monospace;padding:1px 5px;border:1px solid var(--line
 .risiken{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 6px} .risk{font-size:12px;padding:1px 7px;border-radius:99px;background:var(--gelb-bg);color:var(--gelb)}
 .risk.hoch{background:var(--rot-bg);color:var(--rot);font-weight:600} .tag.quelle{background:var(--card);border:1px solid var(--line)}
 .risikoliste li.hoch{color:var(--rot)}
+.tag.dub{background:var(--card);border:1px dashed var(--line)} .preiszeile{margin:0 0 6px;font-size:13px}
+table.verlauf td{padding:2px 8px 2px 0} .gruppenliste{list-style:none;padding:0;margin:0} .gruppenliste li{padding:6px 0;border-bottom:1px solid var(--line)}
+.gruppenliste .btn{padding:2px 8px;font-size:12px}
 .btn{font:inherit;font-size:14px;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);
   text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .btn:hover{border-color:var(--akzent)}
@@ -258,6 +261,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     </div>{% endif %}
     <select id="quelle" aria-label="Quelle"><option value="">alle Quellen</option>{% for q in quellen %}<option value="{{ q }}">{{ QUELLEN.get(q, q) }}</option>{% endfor %}</select>
     <label class="verfbox" title="Blendet verkaufte und nicht mehr online stehende Anzeigen aus, an denen noch nichts bearbeitet wurde"><input type="checkbox" id="nurverf" checked>nur verfügbare</label>
+    <label class="verfbox" title="Inserate desselben Fahrzeugs (auf mehreren Plattformen oder doppelt eingestellt) nur einmal zeigen – die übrigen stehen im Fahrzeugfenster unter „Gleiches Fahrzeug“"><input type="checkbox" id="einmal" checked>gleiches Fahrzeug nur einmal</label>
     <select id="sort" aria-label="Sortierung">
       <option value="score">Sortierung: Deal-Score</option>
       <option value="verh">beste Chance (Preis ÷ Max-EK)</option>
@@ -273,7 +277,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
 
   <div class="raster" id="liste">
   {% for z in zeilen %}{% set a = z.a %}{% set b = z.b %}
-    <article class="karte {{ b.ampel }}" tabindex="0" data-id="{{ a.id }}" data-url="{{ a.url }}" data-quelle="{{ a.quelle or 'kleinanzeigen' }}" data-ampel="{{ b.ampel }}"
+    <article class="karte {{ b.ampel }}" tabindex="0" data-id="{{ a.id }}" data-url="{{ a.url }}" data-quelle="{{ a.quelle or 'kleinanzeigen' }}" data-dub="{{ z.dubletten_ids | join(' ') }}" data-grang="{{ z.gruppe_rang or 0 }}" data-garbeit="{{ 1 if z.gruppe_arbeit else 0 }}" data-ampel="{{ b.ampel }}"
          data-neu="{{ 1 if z.neu else 0 }}" data-prio="{{ z.neuigkeit.stufe if z.neuigkeit else 9 }}" data-bereit="{{ 1 if z.bereit else 0 }}" data-status="{{ a.status or 'neu' }}"
          data-verf="{{ a.verfuegbarkeit }}" data-ausblenden="{{ 1 if z.ausblenden else 0 }}"
          data-verh="{{ b.verhaeltnis or 99 }}" data-pot="{{ b.potenzial or -999999 }}" data-preis="{{ a.preis or 0 }}"
@@ -296,6 +300,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
           {% if n and n.senkung %}<span class="tag senkung" data-senkung title="{{ n.senkung.von | euro }} → {{ n.senkung.auf | euro }} ({{ ('%.1f' % n.senkung.prozent).replace('.', ',') }} %)">Preis −{{ n.senkung.euro | euro }} ({{ n.senkung.am[8:10] }}.{{ n.senkung.am[5:7] }}.)</span>
           {% elif a.preis_vorher and a.preis and a.preis < a.preis_vorher %}<span class="tag">Preis gesenkt</span>{% endif %}
           {% if a.neu_eingestellt %}<span class="tag">neu eingestellt</span>{% endif %}
+          {% if z.gruppe %}<span class="tag dub" data-gruppe-tag title="Gleiches Fahrzeug: {% for m in z.gruppe %}{{ m.quelle_text }} {{ m.preis | euro }}{{ ' (bestätigt)' if m.bestaetigt }}{{ ' · ' if not loop.last }}{% endfor %}">⧉ {{ z.gruppe | length + 1 }} Inserate</span>{% endif %}
           {% if a.verfuegbarkeit_text %}<span class="tag verf {{ 'vermutlich' if a.vermutlich_offline else a.verfuegbarkeit }}" data-verfuegbarkeit>{{ a.verfuegbarkeit_text }}</span>{% endif %}
           {% if a.datenqualitaet and a.datenqualitaet.stufe == 'schwach' %}<span class="tag dq" title="Datenqualität {{ a.datenqualitaet.wert }}/100" data-dq>Daten lückenhaft</span>{% endif %}
           {% if z.nachfassen %}<span class="tag nachfassen">nachfassen</span>{% endif %}
@@ -315,6 +320,8 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
             {%- elif b.max_ek_bis %}<b>{{ b.max_ek_von | tsd }}–{{ b.max_ek_bis | euro }}</b><small>Mitte {{ b.max_ek | euro }}</small>
             {%- else %}<b>{{ b.max_ek | euro }}</b>{% endif %}</div>
         </div>
+        {% set pvk = z.preisverlauf %}{% if pvk and (pvk.senkungen or pvk.erhoehungen) %}<p class="meta preiszeile" data-preisverlauf
+          title="Preisverlauf seit {{ pvk.seit | datum }}">Preis {{ pvk.erstpreis | euro }} → {{ pvk.aktuell | euro }} ({{ pvk.differenz | euro_diff }}{% if pvk.senkungen %}, {{ pvk.senkungen }}× gesenkt{% endif %}{% if pvk.erhoehungen %}, {{ pvk.erhoehungen }}× erhöht{% endif %})</p>{% endif %}
         {% if b.maengel %}<p class="maengel" data-maengel>Mängel laut Inserat: {{ b.maengel | map(attribute='name') | join(', ') }}</p>{% endif %}
         {% set rk = z.risiken | selectattr('karte') | list %}{% if rk %}<p class="risiken" data-risiken title="Vor einem Angebot prüfen: {{ rk | map(attribute='text') | join(' · ') }}">
           {%- for r in rk[:3] %}<span class="risk {{ r.stufe }}">{{ r.text }}</span>{% endfor %}{% if rk | length > 3 %}<span class="risk">+{{ rk | length - 3 }}</span>{% endif %}</p>{% endif %}
@@ -371,6 +378,19 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
           {% else %}<p class="meta">Kein Deal-Score – {{ z.deal.grund }}</p>{% endif %}</div>{% endif %}
         {% if z.risiken %}<div data-risiken-detail><h3>Risikofaktoren – vor einem Angebot prüfen</h3>
           <ul class="risikoliste">{% for r in z.risiken %}<li class="{{ r.stufe }}">{{ r.text }}{% if r.stufe == 'hoch' %} (klären){% endif %}</li>{% endfor %}</ul></div>{% endif %}
+        {% set pvk = z.preisverlauf %}{% if pvk and pvk.punkte | length > 1 %}<div data-preisverlauf-detail><h3>Preisverlauf</h3>
+          <table class="verlauf">{% for p in pvk.punkte %}<tr><td>{{ p.zeitpunkt | datum }}</td><td class="z">{{ p.preis | euro }}</td>
+            <td class="meta">{{ p.differenz | euro_diff if p.differenz is not none else 'Erstpreis' }}</td></tr>{% endfor %}</table>
+          <p class="meta">Seit {{ pvk.seit | datum }}: {{ pvk.erstpreis | euro }} → {{ pvk.aktuell | euro }} ({{ pvk.differenz | euro_diff }}{% if pvk.prozent is not none %}, {{ pvk.prozent | string | replace('-', '−') }} %{% endif %}){% if pvk.gekuerzt %} · nur die letzten {{ pvk.punkte | length }} Preisstände{% endif %}</p></div>{% endif %}
+        {% if z.gruppe %}<div data-gruppe-detail><h3>Gleiches Fahrzeug – {{ z.gruppe | length }} {{ 'weiteres Inserat' if z.gruppe | length == 1 else 'weitere Inserate' }}</h3>
+          <p class="meta" data-fahrzeug-status>Fahrzeugstatus (höchster aller Inserate): {{ STATUS_NAMEN.get(z.fahrzeug_status, z.fahrzeug_status) }}</p>
+          <ul class="gruppenliste">{% for m in z.gruppe %}<li data-gruppe-mitglied="{{ m.id }}"><b>{{ m.quelle_text }}</b> · {{ m.preis | euro }} · {{ STATUS_NAMEN.get(m.status, m.status) }}
+            {%- if m.verfuegbarkeit_text %} · {{ m.verfuegbarkeit_text }}{% endif %} · {{ 'bestätigt' if m.bestaetigt else 'vermutet' }}
+            {%- set mp = m.preisverlauf %}{% if mp and (mp.senkungen or mp.erhoehungen) %} · Preis {{ mp.erstpreis | euro }} → {{ mp.aktuell | euro }}{% endif %}
+            <button class="btn" type="button" data-gruppe-oeffnen="{{ m.id }}">Details</button>
+            {% if (m.url or '').lower().startswith(('http://', 'https://')) %}<a class="btn" href="{{ m.url }}" target="_blank" rel="noopener noreferrer">Anzeige ↗</a>{% endif %}</li>{% endfor %}</ul>
+          <p class="meta">„bestätigt“ = als gleiches Fahrzeug entschieden, „vermutet“ = automatisch erkannt (prüfen unter „Dublettenvorschläge“). Preise verschiedener
+            Plattformen sind nicht direkt vergleichbar.</p></div>{% endif %}
         <h3>Faire Bewertung</h3>
         {% if b.sicherheit == 'keine' %}
           <p class="warn">{{ b.vergleich_basis }}. Ohne Erstzulassung kein belastbarer Einkaufspreis – im Anschreiben wird deshalb nach EZ/km gefragt.</p>
@@ -705,7 +725,8 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     var d = abschnitt(id); if(!d) return;
     if(dlg.firstElementChild) ablage.appendChild(dlg.firstElementChild);
     dlg.appendChild(d); zeigeStatus(id, karte(id).dataset.status);
-    dlg.showModal(); dlg.scrollTop = 0;
+    if(!dlg.open) dlg.showModal();
+    dlg.scrollTop = 0;
     if(window.dubGruppe) window.dubGruppe(d);
     ladeKontakte(d);
   }
@@ -734,7 +755,12 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
   dlg.addEventListener('click', function(e){
     if(e.target === dlg || e.target.closest('[data-schliessen]')){ dlg.close(); return; }
     var d = e.target.closest('section'); if(!d) return;
-    var id = d.dataset.id;
+    var id = d.dataset.id, mitglied = e.target.closest('[data-gruppe-oeffnen]');
+    if(mitglied){                                                           // anderes Inserat derselben Gruppe öffnen (P6-02)
+      var ziel = mitglied.getAttribute('data-gruppe-oeffnen');
+      if(karte(ziel)) oeffne(ziel); else toast('Dieses Inserat steht nicht in der Liste – bitte über „Anzeige ↗“ ansehen.');   // ohne dlg.close(): dessen verzögertes close-Ereignis leerte das Fenster
+      return;
+    }
     if(e.target.closest('[data-schreiben]')) anschreiben(id);
     else if(e.target.closest('[data-nachfassen-senden]')) nachfassen(id);
     else if(e.target.closest('[data-antwort-kopieren]')) antwortSenden(d);
@@ -905,7 +931,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
 {% endif %}
 
   // ---------- Filter & Sortierung ----------
-  var nurVerf = document.getElementById('nurverf'), quelleWahl = document.getElementById('quelle'), PROFIL_IDS = null;
+  var nurVerf = document.getElementById('nurverf'), einmal = document.getElementById('einmal'), quelleWahl = document.getElementById('quelle'), PROFIL_IDS = null;
   window.scoutProfilFilter = function(ids){ PROFIL_IDS = ids; zeige(); };
   function zeige(){
     var q = document.getElementById('q').value.toLowerCase().trim(), sichtbar = 0;
@@ -922,6 +948,16 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
       if(TEAM_AN && ((wer === 'meine' && k.dataset.mein !== '1') || (wer === 'frei' && k.dataset.frei !== '1'))) ok = false;
       k.hidden = !ok; if(ok) sichtbar++;
     });
+    // gleiches Fahrzeug nur einmal (P6-02, wie gruppen.nur_einmal): unter den nach allen Filtern sichtbaren Karten nach Rang; eine Karte
+    // entfällt nur, wenn schon eine gezeigte zu ihren Dubletten gehört – Karten mit offener Arbeit nie
+    if(einmal.checked){
+      var gezeigt = {};
+      karten.filter(function(k){ return !k.hidden; }).sort(function(x, y){ return x.dataset.grang - y.dataset.grang; }).forEach(function(k){
+        var dub = k.dataset.dub ? k.dataset.dub.split(' ') : [];
+        if(k.dataset.garbeit === '1' || !dub.some(function(i){ return gezeigt[i]; })) gezeigt[k.dataset.id] = true;
+        else { k.hidden = true; sichtbar--; }
+      });
+    }
     document.getElementById('leer').hidden = sichtbar > 0;
   }
   function sortiere(){
@@ -944,7 +980,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     };
   });
   document.getElementById('q').oninput = zeige;
-  nurVerf.onchange = zeige;
+  nurVerf.onchange = zeige; einmal.onchange = zeige;
   quelleWahl.onchange = zeige;
   document.getElementById('sort').onchange = sortiere;
 
@@ -1014,9 +1050,10 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
       var zeige = function(){
         return dubGet('/api/dubletten/entscheidungen?anzeige=' + encodeURIComponent(id)).then(function(d){
           platz.textContent = '';
-          var box = Dubletten.gruppeBox(d, {
+          // die Mitglieder zeigt „Gleiches Fahrzeug“ im Fenster (P6-02) – hier nur Entscheidungsverlauf und Aufheben
+          var box = Dubletten.gruppeBox(Object.assign({}, d, {gruppe: []}), {
             aktuell: id, verlauf: true, statusText: function(s){ return STATUS_TEXT[s] || s; },
-            oeffnen: function(anzeige){ if(karte(anzeige)){ dlg.close(); oeffne(anzeige); } else toast('Dieses Inserat steht nicht in der Liste – bitte über „Anzeige öffnen ↗“ ansehen.'); },
+            oeffnen: function(anzeige){ if(karte(anzeige)){ oeffne(anzeige); } else toast('Dieses Inserat steht nicht in der Liste – bitte über „Anzeige öffnen ↗“ ansehen.'); },
             aufheben: function(e, knopf){
               if(!Dubletten.aufhebenFrage(e)) return;
               knopf.disabled = true;

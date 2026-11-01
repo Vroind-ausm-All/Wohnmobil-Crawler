@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ..domaene import STATUS, UNBEKANNT, import_art
+from ..domaene import STATUS, UNBEKANNT, fahrzeug_status, import_art
 from ..dubletten import Wirkung, lade_wirkung, wende_an
 from ..anbieter import einstufung
 from ..normalisierung.qualitaet import pruefe_fahrzeug, pruefe_inserat
@@ -15,6 +15,8 @@ from ..normalisierung.fahrzeug import arten_im_text, ergaenze_fahrzeug
 from ..normalisierung.geo import entfernung_km
 from .deal_score import deal_score
 from .risikofaktoren import risikofaktoren
+from . import gruppen
+from .. import preisverlauf as pv
 from .deal_score import einstellungen as deal_einstellungen
 from ..verfuegbarkeit import ergaenze as ergaenze_verfuegbarkeit
 from ..verfuegbarkeit import offline_nach_tagen
@@ -188,16 +190,18 @@ def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None =
         return {**dict(r), **roh.get(r["id"], {}), "hat_arbeit": r["id"] in arbeit}
     zu_bewerten = db.erstmals_seit(erstmals_seit) if erstmals_seit else db.aktive()
     return bewerte_zeilen(cfg, basis, [zeile(r) for r in db.alle_mit_preis()], [zeile(r) for r in zu_bewerten], lauf_start,
-                          wirkung=wirkung, gruppenzeilen=[zeile(r) for r in db.anzeigen_zu(mitglieder)])
+                          wirkung=wirkung, gruppenzeilen=[zeile(r) for r in db.anzeigen_zu(mitglieder)], preise=pv.verlaeufe(db))
 
 
 def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[dict], lauf_start: str | None = None,
-                   jetzt: datetime | None = None, wirkung: Wirkung | None = None, gruppenzeilen: list[dict] = ()) -> list[dict]:
+                   jetzt: datetime | None = None, wirkung: Wirkung | None = None, gruppenzeilen: list[dict] = (),
+                   preise: dict[str, list[dict]] | None = None) -> list[dict]:
     """Bewertung ohne Datenbank (P1-08, ADR-015): ``mit_preis`` = alle Inserate mit Preis (Vergleichsbasis, Dubletten),
     ``aktive`` = die zu bewertenden Inserate – beide als einfache Dicts mit den Spalten der Tabelle ``anzeigen``.
     ``wirkung``: geltende Dublettenentscheidungen (bestätigte Fahrzeuggruppen, „verschieden“-Paare); ohne sie gilt nur die Heuristik.
     ``gruppenzeilen``: Zeilen der Gruppenmitglieder (auch ohne Preis oder lange nicht gesehen). Sperren und Markierungen berücksichtigen
-    jedes Mitglied, das als ``mit_preis``-, ``aktive``- oder Gruppenzeile vorliegt; die Vergleichsbasis nur Inserate mit Preis."""
+    jedes Mitglied, das als ``mit_preis``-, ``aktive``- oder Gruppenzeile vorliegt; die Vergleichsbasis nur Inserate mit Preis.
+    ``preise``: Preisverläufe je Anzeigen-ID (``preisverlauf.verlaeufe``) – nur Anzeige (P6-02)."""
     rechner, schreiber = Rechner(cfg), Anschreiber(cfg, basis)
     deal_e = deal_einstellungen(cfg)                  # ValueError mit verständlicher Meldung bei falscher Konfiguration
     jetzt = jetzt or datetime.now()
@@ -213,6 +217,7 @@ def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[d
     nach_id = {a["id"]: a for a in alle}
     heuristisch = finde_duplikate(alle)
     vergleich = vergleichsbasis(alle, wende_an(heuristisch, wirkung, nach_id.get, lambda a: a["id"]))
+    sonst: dict[str, dict] = {}
     if wirkung is None or wirkung.leer:
         duplikate = heuristisch
     else:                                   # Mitglieder ohne Preis zählen für Sperren und Markierungen, nicht für die Vergleichsbasis
@@ -274,5 +279,16 @@ def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[d
             "neu": bool(lauf_start and (a.get("erstmals_gesehen") or "") >= lauf_start) and not ausblenden,
             "nachfassen": grund, "nachfass_text": nachfass_text, "nachfass_betrag": nachfass_betrag,
             "dubletten_ids": sorted(b["id"] for b in andere),       # Fahrzeuggruppe: Team-Reservierungen wirken auf alle
+            "preisverlauf": pv.kurz((preise or {}).get(a["id"])),        # Preisstände dieses Inserats (P6-02)
         })
+    # Dublettengruppe für die Anzeige (P6-02): die anderen Inserate desselben Fahrzeugs (eine Stufe wie Sperren und Team, ADR-040)
+    # mit Preis, Status und Preisverlauf; Rang für „gleiches Fahrzeug nur einmal“
+    bekannt = {**sonst, **nach_id, **{z["a"]["id"]: z["a"] for z in zeilen}}
+    bestaetigt = wirkung.karte() if wirkung else {}
+    gruppen.ordne(zeilen)
+    for z in zeilen:
+        eigen = z["a"]["id"]
+        z["gruppe"] = sorted((gruppen.mitglied(bekannt[i], i in bestaetigt.get(eigen, ()), pv.kurz((preise or {}).get(i)))
+                              for i in z["dubletten_ids"] if i in bekannt), key=lambda m: (m["preis"] is None, m["preis"] or 0, m["id"]))
+        z["fahrzeug_status"] = fahrzeug_status([z["a"].get("status"), *(m["status"] for m in z["gruppe"])])     # höchster Status (QA B5)
     return zeilen
