@@ -438,4 +438,5 @@ Die Zeilen „Phase 1“ unten beziehen sich auf den früheren Phasenplan; die n
 | Abholung: Auto ab Firmensitz Besigheim oder Bahn ab Stuttgart Hbf (ICE-Ticket und Reisezeit grob), der günstigere Weg zählt (P5-06) | umgesetzt | `test_abholung.py` |
 | Deal-Score 0–100 mit Bestandteilen (Preisvorteil, Datensicherheit, Zustand, Abholung, Frische, Verkäufer), Sortierung und Filter „Top-Deals“, Bewertungsverlauf (P5-07) | umgesetzt | `test_deal_score.py` |
 | Kombinierte Ankaufsliste: alle Quellen in einer Liste (Quelle als Abzeichen und Filter), nach Deal-Score sortiert, Risikofaktoren auf der Karte und im Detail, Liste „Top-Deals“ auch in der Handy-App (P6-01) | umgesetzt | `test_liste.py`, Klicktest Desktop und Handy |
+| Dublettengruppen in der Liste (Abzeichen, „gleiches Fahrzeug nur einmal“, alle Inserate des Fahrzeugs mit Quelle, Preis, Status, bestätigt/vermutet) und Preisverlauf auf Karte und im Detail, Desktop und Handy (P6-02) | umgesetzt | `test_gruppen_preise.py`, Klicktest Desktop und Handy |
 | Ankaufs-Dashboard (weitere Pakete) | **geplant** – Phase 6 in `docs/ROADMAP.md` | – |

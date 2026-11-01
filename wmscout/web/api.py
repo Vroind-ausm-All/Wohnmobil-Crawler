@@ -55,6 +55,7 @@ from .. import suchprofile as sp
 from .. import laufprotokoll as lp
 from .. import abdeckung
 from ..bewertung.deal_score import einstellungen as deal_einstellungen
+from ..bewertung.gruppen import nur_einmal
 from ..zugaenge import PLATTFORMEN as ZUGANG_PLATTFORMEN
 from ..zugaenge import ZugangSpeicher
 from ..domaene import PLATTFORM_TEXT, PLATTFORMEN
@@ -279,7 +280,10 @@ def fahrzeug_kurz(z: dict, team: dict | None = None) -> dict:
             # Deal-Score (P5-07): 0–100 oder None (gesperrt, keine Bewertung); priorisiert = ab Schwelle, privat, verfügbar
             "deal_score": (z.get("deal") or {}).get("score"), "priorisiert": bool((z.get("deal") or {}).get("priorisiert")),
             # Risikofaktoren (P6-01): [{code, text, stufe hoch|mittel}] – hohe zuerst; Quelle als Anzeigename
-            "risiken": z.get("risiken") or [], "quelle_text": QUELLE_TEXT.get(a.get("quelle") or "kleinanzeigen", a.get("quelle"))}
+            "risiken": z.get("risiken") or [], "quelle_text": QUELLE_TEXT.get(a.get("quelle") or "kleinanzeigen", a.get("quelle")),
+            # Dublettengruppe und Preisverlauf (P6-02): andere Inserate desselben Fahrzeugs (Quelle, Preis, Status, bestätigt) und Preisstände
+            "gruppe": z.get("gruppe") or [], "fahrzeug_status": z.get("fahrzeug_status") or a.get("status") or "neu",
+            "preisverlauf": z.get("preisverlauf")}
 
 
 def ics(b: dict, cfg: dict, link: str | None) -> str:
@@ -1114,6 +1118,9 @@ class Anfrage:
         verfuegbar = (self.query.get("verfuegbar") or ["standard"])[0]
         if verfuegbar not in ("standard", "alle", "nur"):
             raise Antwort(400, "verfuegbar muss standard, alle oder nur sein")
+        einmal = (self.query.get("einmal") or ["nein"])[0]
+        if einmal not in ("ja", "nein"):
+            raise Antwort(400, "einmal muss ja oder nein sein")
         sicht = self.team_sicht()
         if wer != "alle" and not sicht:
             raise Antwort(400, "Team nicht aktiv (keine Nutzer angelegt) – „wer“ gibt es nur im Team")
@@ -1148,6 +1155,9 @@ class Anfrage:
         auswahl.sort(key=lambda zt: nach_deal_score(zt[0]))       # Deal-Score zuerst wie in der Desktop-Liste (P6-01)
         if f == "neuigkeiten":                              # wichtigste zuerst: jetzt im Rahmen, neu und bereit, gesenkt, neu (P4-03)
             auswahl.sort(key=lambda zt: zt[0]["neuigkeit"]["stufe"])
+        if einmal == "ja":                                  # gleiches Fahrzeug nur einmal – unter den Treffern, Bearbeitetes bleibt (P6-02)
+            gezeigt = nur_einmal([z for z, _ in auswahl])
+            auswahl = [(z, t) for z, t in auswahl if z["a"]["id"] in gezeigt]
         if profil_treffer is not None:
             return [{**fahrzeug_kurz(z, t), "profil_treffer": profil_treffer[z["a"]["id"]]} for z, t in auswahl[:200]]
         return [fahrzeug_kurz(z, t) for z, t in auswahl[:200]]

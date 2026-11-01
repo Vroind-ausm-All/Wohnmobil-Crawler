@@ -4,7 +4,21 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
-## P6-01 – Kombinierte Ankaufsliste: alle Quellen, Deal-Score-Sortierung, Risikofaktoren (31.10.2026) · REVIEW
+## P6-02 – Dublettengruppen und Preisverläufe in der Ankaufsliste (01.11.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2590 bestanden, 1 fehlgeschlagen: `test_aufbewahrung.py::test_anfrage_wieder_faellig_und_auktion_und_storno` – schlägt ebenso auf dem unveränderten Integrationszweig fehl (fester Zeitpunkt „2026-11-01T10:00:00“ im Test, der Löscheintrag trägt die echte Uhrzeit; seit dem 01.11.2026 10 Uhr rot). Im Test korrigiert (Zeitpunkt relativ zum Löscheintrag), danach `test_aufbewahrung.py` 27 bestanden; Vollsuite danach nicht erneut |
+| `ruff check .` | grün |
+| Neu `test_gruppen_preise.py` (12): Kurzfassung Preisverlauf (gleiche Preise zählen nicht, Senkungen/Erhöhungen, Prozent ganzzahlig, Kürzung auf 12), Filter `euro_diff`/`datum`, Rangfolge (ausgeblendet, Arbeit, verworfen, Score), „nur einmal“ ohne Ketten-Hülle (A~B~C, A/C verschieden) und ohne Arbeit zu verstecken, Bewertung mit Gruppe (bestätigt/vermutet) und Preisverlauf, API (`einmal`, 400, Suche lässt das passende Mitglied, Arbeit bleibt sichtbar, Fahrzeugstatus), Desktop-HTML (Abzeichen, Preiszeile, Preisverlauf-Tabelle, Gruppe, nur http(s)-Links, Titel escaped), Handy-App statisch, `verlaeufe` = `preisverlauf` je Quelle und Altbestand | bestanden |
+| Angepasst `test_dubletten_oberflaeche.py` (Handy zeigt die Gruppe aus den Fahrzeugdaten, Texte über `esc`, Links über `link`) | bestanden |
+| Klicktest Chromium (Playwright), Desktop 1280 px und 390 px, angemeldet: „nur einmal“ an → p1 + x1, aus → alle 4; Abzeichen „⧉ 3 Inserate“, Preiszeile „40.000 € → 37.900 € (−2.100 €, 2× gesenkt)“, Preisverlauf-Tabelle, Gruppe mit Fahrzeugstatus und bestätigt/vermutet, Entscheidungsbox nur mit Verlauf, Wechsel ins Fenster von p3, kein Querscrollen | bestanden (erster Lauf: Wechsel ließ das Fenster leer – behoben, wiederholt) |
+| Klicktest Handy-App `/m` (390 px): Abzeichen und Preiszeile, „nur einmal“ aus → 4 Karten, Preisverlauf und Gruppe im Detail, „Ansehen“ wechselt zu p3, kein Querscrollen, keine JS-Fehler | bestanden |
+| QA-Review (`qa-security-reviewer`, eine Runde; gezielte Tests 69 bestanden; Abfrageplan und Laufzeit `verlaeufe` mit 55.000 Preis-Einträgen 0,64 s) | Freigabe mit Auflagen; B1–B3, B5, B6 behoben, B4/B7 → P6-02b, B8 beim Commit beachtet |
+
+**Nicht geprüft:** CI (läuft nach dem Push), Windows, echtes Handy und Service-Worker-Wechsel auf Version 20, echte Mehrfach-Inserate über mobile.de/AutoScout24, Vollsuite nach der Testkorrektur in `test_aufbewahrung.py`; Korrekturen nicht erneut von der QA geprüft.
+
+## P6-01 – Kombinierte Ankaufsliste: alle Quellen, Deal-Score-Sortierung, Risikofaktoren (31.10.2026) · DONE (PR #51 gemergt)
 
 | Prüfung | Ergebnis |
 |---|---|

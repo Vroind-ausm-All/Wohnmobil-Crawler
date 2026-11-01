@@ -6,7 +6,30 @@ Wert „–“.
 
 ---
 
-## P6-01 – Kombinierte Ankaufsliste: alle Quellen, Deal-Score-Sortierung, Risikofaktoren (31.10.2026) · Status: REVIEW
+## P6-02 – Dublettengruppen und Preisverläufe in der Ankaufsliste (01.11.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 01.11.2026: „Starte P6-02“.
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/bewertung/gruppen.py` (neu), `wmscout/preisverlauf.py` (`verlaeufe`, `kurz`; Datenbank nur für Typen),
+  `wmscout/bewertung/auswertung.py`, `wmscout/web/api.py`, `wmscout/ausgabe.py`, `vorlagen/report.html`, `wmscout/web/static/mobil.js`,
+  `mobil.css`, `sw.js` (Version 20); Tests `test_gruppen_preise.py` (neu), `test_dubletten_oberflaeche.py` (Handy zeigt die Gruppe aus den
+  Fahrzeugdaten); Doku ADR-062, ROADMAP (P6-01 DONE, P6-02 REVIEW, P6-02b), README.
+- **Implementierte Funktionen:** siehe ADR-062 – Abzeichen „⧉ n Inserate“, „gleiches Fahrzeug nur einmal“ (Desktop, Handy, API `einmal`),
+  Fenster „Gleiches Fahrzeug“ mit Quelle, Preis, Status, bestätigt/vermutet, Fahrzeugstatus und Wechsel zum Mitglied; Preiszeile auf der
+  Karte, Preisverlauf-Tabelle im Detail. Keine Schemaänderung.
+- **Klicktest-Fund behoben:** Der Wechsel zu einem anderen Inserat der Gruppe ließ das Fenster leer (verzögertes `close`-Ereignis nach
+  `dlg.close()`); betraf auch den bestehenden Knopf „Details“ der Entscheidungsbox – beide öffnen jetzt ohne Schließen.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Freigabe mit Auflagen**. Korrekturrunde: B1 (hoch: Gruppen über Heuristik-Ketten hinweg trotz „verschieden“)
+  – jetzt eine Stufe wie ADR-040 und Auswahl „nur einmal“ nur gegen gezeigte Karten; B2 (Arbeit nie versteckt), B3 (abgesagt/uninteressant
+  keine Arbeit), B5 (Fahrzeugstatus wieder sichtbar), B6 (Handy-Link nur bei http/https) behoben; B4/B7 als P6-02b ins Backlog; B8 beim
+  Commit beachtet. Fehlende Tests ergänzt (Kette mit „verschieden“, zwei Mitglieder mit Arbeit, `verlaeufe` = `preisverlauf` je Quelle
+  und Altbestand). Korrekturen nicht erneut von der QA geprüft.
+- **Nebenbei behoben:** `test_aufbewahrung.py::test_anfrage_wieder_faellig_und_auktion_und_storno` lief am 01.11.2026 ab (fester
+  Zeitpunkt im Test, auch auf dem Integrationszweig rot) – Testdaten relativ zum Löscheintrag, Fachcode unverändert.
+- **Nächster sinnvoller Schritt:** P6-03 (Kontaktstatus, Verhandlungsnotizen, Besichtigungsstatus im Dashboard) – nach Freigabe.
+
+## P6-01 – Kombinierte Ankaufsliste: alle Quellen, Deal-Score-Sortierung, Risikofaktoren (31.10.2026) · Status: DONE (PR #51 gemergt)
 
 - **Auftrag:** Betreiber 31.10.2026: „Starte P6-01“ (Freigabe Phase 6, erstes Paket).
 - **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer`); QA `qa-security-reviewer`.

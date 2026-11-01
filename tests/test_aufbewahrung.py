@@ -307,9 +307,12 @@ def test_anfrage_wieder_faellig_und_auktion_und_storno(cfg, db, tmp_path):
     aid = _anfrage(db, tmp_path, ALT)
     aufbewahrung.ausfuehren(db, cfg, tmp_path, tmp_path / "fotos", JETZT)
     assert aufbewahrung.anfragen_faellig(db, 12, JETZT) == []
-    db.con.execute("UPDATE verkaufsanfragen SET notiz='Rückruf 0170 1234567', aktualisiert_am=? WHERE id=?", ("2026-11-01T10:00:00", aid))
+    # neue Angabe nach der Löschung: Zeitpunkt nach dem Löscheintrag (der trägt die echte Uhrzeit – ein fester Wert lief am 01.11.2026 ab)
+    geloescht = datetime.fromisoformat(db.con.execute("SELECT MAX(zeitpunkt) FROM anfrage_verlauf WHERE anfrage_id=?", (aid,)).fetchone()[0])
+    neu = (geloescht.replace(tzinfo=None) + timedelta(minutes=1)).isoformat(timespec="seconds")
+    db.con.execute("UPDATE verkaufsanfragen SET notiz='Rückruf 0170 1234567', aktualisiert_am=? WHERE id=?", (neu, aid))
     db.con.commit()
-    assert aufbewahrung.anfragen_faellig(db, 12, datetime(2028, 1, 1)) == [aid]
+    assert aufbewahrung.anfragen_faellig(db, 12, geloescht.replace(tzinfo=None) + timedelta(days=400)) == [aid]
     mit_auktion = _anfrage(db, tmp_path, ALT)
     db.con.execute("INSERT INTO auktionen (anfrage_id, status, startpreis, schritt, start_utc, ende_utc) "
                    "VALUES (?, 'beendet', 1, 1, '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z')", (mit_auktion,))

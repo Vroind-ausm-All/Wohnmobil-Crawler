@@ -67,8 +67,7 @@ def test_handy_zeigt_nur_an_und_hat_keine_entscheidungsknoepfe(team_api):
     assert "/static/dubletten.js" in html and "/static/dubletten.css" in html
     assert html.index("dubletten.js") < html.index("mobil.js")
     js = c("GET", "/static/mobil.js")[1]
-    assert 'id="dub-gruppe"' in js and "dublettenAnzeigen" in js and "textDarf()" in js          # nur Inhaber und Mitarbeiter
-    assert "verlauf: false" in js
+    assert "function gruppeKarte" in js and "gruppeKarte(f)" in js                # Gruppe aus den Fahrzeugdaten (P6-02), keine Entscheidung
     for verboten in ("/api/dubletten/bestaetigen", "/api/dubletten/ablehnen", "/api/dubletten/aufheben", "Dubletten.vorschlaege", "aufheben:"):
         assert verboten not in js
 
@@ -122,10 +121,12 @@ def test_skript_gibt_fremde_daten_nur_als_text_aus_und_speichert_nichts():
     assert "textContent" in js
 
 
-def test_dublettenanzeige_in_mobil_js_ohne_innerhtml_fuer_fremddaten():
+def test_dublettenanzeige_in_mobil_js_nur_escaped():
+    """Seit P6-02 kommt die Gruppe mit den Fahrzeugdaten: Inseratstexte nur über esc(), Links nur über link() (http/https)."""
     js = _code("mobil.js")
-    block = js[js.index("function dublettenAnzeigen"):js.index("function fahrzeug(")]
-    assert "innerHTML" not in block and "appendChild(box)" in block
+    block = js[js.index("function gruppeKarte"):js.index("function einmalAuswahl")]
+    assert "esc(m.quelle_text)" in block and "link(m.url)" in block and "encodeURIComponent(m.id)" in block
+    assert "m.titel" not in block
 
 
 def test_service_worker_cached_dubletten_und_version_erhoeht():

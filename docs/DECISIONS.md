@@ -1359,3 +1359,39 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   Listen je Quelle (Dubletten und Vergleich über Quellen hinweg gingen verloren).
 * **Folgen / offen:** Die Schwellen (500 €, 400 km, 60 Tage) sind Annahmen und im Code als Konstanten benannt; bei Bedarf in die
   Konfiguration verschieben. AutoScout24 erscheint im Filter, liefert aber erst mit einem freigegebenen Zugang Inserate.
+
+## ADR-062 – Dublettengruppen und Preisverlauf in der Ankaufsliste, „gleiches Fahrzeug nur einmal“ · gilt (01.11.2026)
+
+* **Kontext:** P6-02 verlangt, Dublettengruppen und Preisverläufe in der Liste zu zeigen. Vorhanden waren die Gruppierung für Sperren und
+  Team (`dubletten_ids`: Heuristik ∪ bestätigte Fahrzeuggruppe, ADR-040), die Entscheidungsbox im Fahrzeugfenster (nur bestätigte
+  Mitglieder, nur App mit Recht) und der Preisverlauf als API (`/api/preisverlauf`, P3-03) – in der Liste sichtbar war davon nur „Preis
+  gesenkt“. In der kombinierten Liste (ADR-061) erscheint dasselbe Fahrzeug von mehreren Plattformen mehrfach.
+* **Entscheidung:**
+  1. **Gruppe = `dubletten_ids` der Zeile** (Heuristik ∪ bestätigte Fahrzeuggruppe, ohne „verschieden“-Paare) – **eine Stufe, keine
+     Hülle über Heuristik-Ketten** wie bei Sperren und Team (ADR-040; QA B1: eine erste Fassung mit Zusammenhangskomponenten fasste
+     A~B~C trotz „A und C verschieden“ zusammen). Je Zeile `gruppe` = die anderen Inserate mit Quelle, Preis, Status, Verfügbarkeit,
+     Preisverlauf und **bestätigt/vermutet** (bestätigt = geltende Entscheidung „gleich“) sowie `fahrzeug_status` (höchster Status aller
+     Inserate, wie die Entscheidungsbox ihn zeigte, QA B5).
+  2. **„Gleiches Fahrzeug nur einmal“** (Desktop und Handy Standard an, API `einmal=ja`, Standard `nein` für bestehende Aufrufer;
+     `gruppen.nur_einmal`, im Desktop-JS gleich): unter den **nach allen Filtern verbliebenen** Karten in Rangfolge – sichtbar vor
+     ausgeblendet, offene Ankaufsarbeit zuerst, verworfene (abgesagt, uninteressant) zuletzt (QA B3), dann Deal-Score, Preis ÷ Max-EK, ID.
+     Eine Karte entfällt nur, wenn schon eine **gezeigte** Karte zu ihren Dubletten gehört; Karten mit offener Arbeit (Status, Reservierung,
+     Besichtigung, Ankauf) entfallen nie (QA B2). Ein Quellen- oder Suchfilter lässt das passende Inserat also nicht verschwinden, und in
+     einer Kette bleibt das Ende sichtbar, wenn die Mitte entfällt.
+  3. **Preisverlauf** (`preisverlauf.verlaeufe`: eine Abfrage für alle Inserate; `kurz`: nur echte Preisstände, wiederholt gleiche Preise
+     zählen nicht): Karte „Preis 40.000 € → 37.900 € (−2.100 €, 2× gesenkt)“, sobald sich der Preis geändert hat; Detail als Tabelle
+     (Datum, Preis, Änderung; die jüngsten 12 Stände), Prozent ganzzahlig. Je Inserat – Preise verschiedener Plattformen werden nicht
+     verrechnet (ADR P3-03), in der Gruppe steht je Mitglied sein eigener Verlauf.
+  4. **Anzeige:** Karte „⧉ n Inserate“, Fenster „Gleiches Fahrzeug – n weitere Inserate“ mit Wechsel ins Fenster des Mitglieds und Link
+     zur Anzeige (nur http/https). Die Entscheidungsbox der App zeigt nur noch Entscheidungsverlauf und „Aufheben“ (keine doppelte
+     Mitgliederliste). In der Handy-App ersetzt der Abschnitt aus den Fahrzeugdaten das bisherige Nachladen über
+     `/api/dubletten/entscheidungen`; damit sehen alle, die die Liste sehen, auch die Gruppe – es sind dieselben Inserate, die sie in der
+     Liste ohnehin sehen; Entscheidungen bleiben am Büro-PC.
+  5. Nur Anzeige: Sperren, Bewertung, Vergleichsbasis und Team-Wirkung unverändert. Keine Schemaänderung.
+* **Alternativen:** Dubletten serverseitig fest zusammenfassen (der Quellenfilter könnte das passende Inserat verlieren; Arbeit an einem
+  Mitglied wäre versteckt); Preisverlauf je Fahrzeug über Plattformen hinweg (Preise nicht vergleichbar); Diagramm statt Tabelle (für wenige
+  Preisstände ohne Mehrwert, schlechter zugänglich).
+* **Folgen / offen:** `verlaeufe` liest die ganze Preishistorie bei jeder Bewertung (eine Abfrage, Join über die Inseratschlüssel; QA:
+  0,6 s bei 55.000 Einträgen, unter 1 % der Bewertungszeit) – bei sehr großen Beständen auf aktive Inserate begrenzen (ROADMAP P6-02b).
+  Die Zähler an den Filtern („Top-Deals (n)“ …) zählen Inserate, nicht Fahrzeuge; mit „nur einmal“ zeigt die Liste ggf. weniger Karten
+  (QA B4, P6-02b). Die Handy-App lädt `dubletten.js` weiter (Gerüst des Service Workers), nutzt es aber nicht mehr.
