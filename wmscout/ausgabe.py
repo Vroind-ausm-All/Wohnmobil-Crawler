@@ -15,6 +15,10 @@ from .bearbeitung import IN_ARBEIT
 from .domaene import PLATTFORM_TEXT as QUELLE_TEXT
 from .domaene import STATUS
 from .schalter import eingang_aktiv
+from . import verhandlung as vh
+from .kontakte import KANAELE
+
+PIPELINE_MAX = 60               # Zeilen im Bereich „Ankauf in Arbeit“; der Rest steht in der Liste (Filter „In Arbeit“)
 
 
 def euro_diff(d) -> str:
@@ -53,6 +57,11 @@ def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None =
         "nachfassen": sum(bool(z["nachfassen"]) for z in zeilen),
         "top": sum(bool((z.get("deal") or {}).get("priorisiert")) and not z.get("ausblenden") for z in zeilen),      # P5-07
     }
+    # Ankauf in Arbeit (P6-03): Inserate mit Kontaktlage, wichtigste Stufe zuerst; innerhalb „wartet“ die längste Wartezeit oben
+    pipeline = sorted((z for z in zeilen if (z.get("kontakt") or {}).get("stufe")),
+                      key=lambda z: (vh.REIHENFOLGE[z["kontakt"]["stufe"]], (z["kontakt"]["besichtigung"] or {}).get("termin") or "",
+                                     -(z["kontakt"]["tage"] or 0), z["a"]["id"]))
+    pipeline_zaehl = {s: sum(z["kontakt"]["stufe"] == s for z in pipeline) for s in vh.STUFEN}
     return env.get_template("report.html").render(
         stand=datetime.now().strftime("%d.%m.%Y %H:%M"), anzahl=len(zeilen), zeilen=zeilen, zaehl=zaehl,
         fehler=fehler, app=app or {}, mails_aktiv=eingang_aktiv(cfg, "email"), team=team if team and team.get("aktiv") else None,
@@ -61,6 +70,8 @@ def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None =
         differenzbesteuerung=bool(cfg["rechner"]["differenzbesteuerung"]),
         signatur={k: cfg["anschreiben"].get(k, "") for k in ("ansprechpartner", "firma", "telefon")},
         deal_schwelle=deal_einstellungen(cfg)["schwelle"], QUELLEN=QUELLE_TEXT, STATUS_NAMEN=STATUS,
+        pipeline=pipeline[:PIPELINE_MAX], pipeline_mehr=max(0, len(pipeline) - PIPELINE_MAX), pipeline_zaehl=pipeline_zaehl, STUFEN=vh.STUFEN,
+        VH_ARTEN=vh.ARTEN, KANAELE=KANAELE,
         quellen=sorted({z["a"].get("quelle") or "kleinanzeigen" for z in zeilen})), zaehl
 
 

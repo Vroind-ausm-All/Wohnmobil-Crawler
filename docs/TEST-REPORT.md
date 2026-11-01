@@ -4,7 +4,27 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
-## P6-02 – Dublettengruppen und Preisverläufe in der Ankaufsliste (01.11.2026) · REVIEW
+## P6-03 – Kontaktstatus, Verhandlungsnotizen und Besichtigungsstatus im Dashboard (01.11.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2615 bestanden (vorher 2591), neu `test_verhandlung.py` (24). Angepasst: `test_deal_score.py` (Migration bis zur aktuellen Version statt fest v22) |
+| `ruff check .` | grün |
+| Eingabe: gültig, Kürzung auf 2.000 Zeichen, Fehler (Art, leerer Text, Betrag negativ/Bool/NaN/Text/zu groß, Kanal bei Notiz, unbekannter Kanal) | bestanden |
+| Kontaktlage: Text kopiert, wartet (heute, 1 Tag, n Tage), Antwort nur nach dem letzten Kontakt, Besichtigung mit/ohne Termin und laufend, abgeschlossene Besichtigung/Notiz ohne Stufe, abgesagt/uninteressant/gekauft ohne Stufe außer offener Besichtigung; Listenform ohne Volltexte | bestanden |
+| Schema v23 mit Altbestand: Sicherung „vor-v23“, `anzeigen` unverändert, CHECKs (Art, Betrag > 0), zweiter Lauf ohne Schritt | bestanden |
+| Datenbank: Eintragen (unbekanntes Inserat → Fehler), Verlauf, `lage` aus Kontakten, Einträgen und Besichtigungen, Bewertung setzt `kontakt` | bestanden |
+| Datenschutz: Anonymisieren leert Texte (Betrag bleibt); Inserat nur mit Verhandlungstext wird nach Frist fällig, junger Eintrag zählt als Aktivität; nach Anonymisierung neu eingetragener Text wird wieder fällig | bestanden |
+| API: Eintragen (200/400/404), Lesen, kein Statuswechsel, Listenfelder ohne Volltexte, abgesagt → keine Stufe, Detail mit Verlauf | bestanden |
+| Desktop-HTML: Bereich „Ankauf in Arbeit“ (Reihenfolge Besichtigung → Antwort → Text kopiert, Zähler, Termin, jüngster Eintrag), Karten-Abzeichen, Detail mit Formular nur in der App, statischer Bericht ohne Eintragstexte, Escaping (`<img …>` als Text), kein `{#` im CSS; ohne Kontakte kein Bereich | bestanden |
+| Handy-App statisch (Funktionen, `esc`, Aufruf `/api/verhandlung`, CSS, Service Worker ≥ 21) | bestanden |
+| Klicktest Chromium (Playwright), Desktop 1280 px und 390 px, angemeldet: Bereich mit 4 Stufen und Zählern, Abzeichen „↩ Antwort“, „✉ 5 T. ohne Antwort“, „📅 Besichtigung“, „öffnen“ öffnet das Fenster, Antwort mit Kanal und Betrag eintragen, Text escaped, kein Querscrollen | bestanden (vor und nach der Korrekturrunde) |
+| Klicktest Handy-App `/m`: Lage auf den Karten „In Arbeit“, Verlauf im Detail, Notiz eintragen, kein Querscrollen, keine JS-Fehler | bestanden |
+| QA-Review (`qa-security-reviewer`, eine Runde; gezielte Tests 111 bestanden; CSRF 403, Händler 403, ohne Login 401 manuell geprüft) | Freigabe mit Auflagen; B1–B4, B8, B9 behoben, B5/B6 → P6-03b, B7 angenommen |
+
+**Nicht geprüft:** CI (läuft nach dem Push), Windows, echtes Handy und Service-Worker-Wechsel auf Version 21, Laufzeit von `verhandlung.lage` bei großen Beständen, Desktop-JS nur per Klicktest (keine JS-Unit-Tests); Korrekturen nicht erneut von der QA geprüft.
+
+## P6-02 – Dublettengruppen und Preisverläufe in der Ankaufsliste (01.11.2026) · DONE (PR #52 gemergt)
 
 | Prüfung | Ergebnis |
 |---|---|

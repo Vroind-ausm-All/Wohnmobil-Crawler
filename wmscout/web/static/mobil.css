@@ -109,3 +109,6 @@ body.login{display:grid;place-items:center;min-height:100vh;padding:16px}
 /* P6-02: Dublettengruppe und Preisverlauf */
 .tag.dub{background:var(--card);border:1px dashed var(--line)} table.verlauf{border-collapse:collapse;width:100%} table.verlauf td{padding:3px 6px 3px 0}
 .zeile.gruppe{flex-wrap:wrap;gap:6px;padding:6px 0;border-bottom:1px solid var(--line)}
+/* P6-03: Kontaktlage und Verhandlung */
+.kontaktlage{margin:4px 0;font-size:13px;color:var(--mute)} .kontaktlage.wartet{color:var(--gelb)} .kontaktlage.antwort{color:var(--gruen)} .kontaktlage.besichtigung{color:var(--akzent)}
+.vh{margin:6px 0;font-size:14px}
