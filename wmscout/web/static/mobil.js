@@ -202,7 +202,7 @@
     });
   }
 
-  var LISTEN = { bereit: "Anschreiben bereit", nachfassen: "Nachfassen", neuigkeiten: "Neu & gesenkt", arbeit: "In Arbeit", alle: "Alle Fahrzeuge" };
+  var LISTEN = { top: "Top-Deals", bereit: "Anschreiben bereit", nachfassen: "Nachfassen", neuigkeiten: "Neu & gesenkt", arbeit: "In Arbeit", alle: "Alle Fahrzeuge" };
   var WER = { alle: "Alle", meine: "Meine", frei: "Frei" };
   // Suchprofile (P4-01): aktive Profile als Filter über die eingegangenen Inserate; einmal je Sitzung geladen
   function profile() {
@@ -216,12 +216,35 @@
       return '<option value="' + esc(p.id) + '"' + (String(p.id) === String(S.profil || "") ? " selected" : "") + ">" + esc(p.name) + "</option>";
     }).join("") + "</select></label>";
   }
+  // Kombinierte Liste (P6-01): alle Quellen, nach Deal-Score sortiert (Server); Quelle wählbar, Risikofaktoren als Chips
+  // feste Liste wie domaene.PLATTFORM_TEXT (test_liste prüft den Gleichlauf); AutoScout24 bleibt leer, bis ein Zugang freigegeben ist
+  var QUELLEN = { kleinanzeigen: "Kleinanzeigen", "mobile.de": "mobile.de", autoscout24: "AutoScout24" };
+  function quelleAuswahl() {
+    return '<label class="leise">Quelle <select id="quelle"><option value="">alle Quellen</option>' + Object.keys(QUELLEN).map(function (q) {
+      return '<option value="' + q + '"' + (q === (S.quelle || "") ? " selected" : "") + ">" + QUELLEN[q] + "</option>";
+    }).join("") + "</select></label>";
+  }
+  function dealTag(f) {
+    if (f.deal_score === null || f.deal_score === undefined) return "";
+    return '<span class="tag deal' + (f.priorisiert ? " top" : "") + '" data-deal="" title="Deal-Score 0–100' + (f.priorisiert ? ", Top-Deal" : "") + '">' +
+      (f.priorisiert ? "★ " : "") + esc(f.deal_score) + "</span>";
+  }
+  function quelleTag(f) { return f.quelle_text ? '<span class="tag quelle" data-quelle-tag="">' + esc(f.quelle_text) + "</span>" : ""; }
+  // Karte: höchstens drei Risiken ohne die, die dort schon eigens stehen (karte=false: Mängel, Hinweise, Abzeichen), Detail: alle
+  function risikoZeile(f, detail) {
+    var r = (f.risiken || []).filter(function (x) { return detail || x.karte; });
+    if (!r.length) return "";
+    if (detail) return '<div class="karte" data-risiken-detail=""><b>Risikofaktoren</b> – vor einem Angebot prüfen:<ul class="risikoliste">' +
+      r.map(function (x) { return '<li class="' + esc(x.stufe) + '">' + esc(x.text) + (x.stufe === "hoch" ? " (klären)" : "") + "</li>"; }).join("") + "</ul></div>";
+    return '<p class="risiken" data-risiken="">' + r.slice(0, 3).map(function (x) { return '<span class="risk ' + esc(x.stufe) + '">' + esc(x.text) + "</span>"; }).join("") +
+      (r.length > 3 ? '<span class="risk">+' + (r.length - 3) + "</span>" : "") + "</p>";
+  }
   function liste(filter, suche) {
     var wer = S.ich.team ? (S.wer || "alle") : "alle";
     return profile().then(function () {
       if (S.profil && !S.profile.some(function (p) { return String(p.id) === String(S.profil); })) S.profil = "";
       return api("/api/fahrzeuge?filter=" + encodeURIComponent(filter) + "&q=" + encodeURIComponent(suche || "") + (wer !== "alle" ? "&wer=" + wer : "") +
-                 (S.profil ? "&profil=" + encodeURIComponent(S.profil) : ""));
+                 (S.profil ? "&profil=" + encodeURIComponent(S.profil) : "") + (S.quelle ? "&quelle=" + encodeURIComponent(S.quelle) : ""));
     }).then(function (l) {
       inhalt.innerHTML = "<h1>" + esc(LISTEN[filter] || "Fahrzeuge") + " (" + l.length + ")</h1>" +
         '<input type="search" id="suche" placeholder="Marke, Modell, Ort …" value="' + esc(suche || "") + '">' +
@@ -230,12 +253,12 @@
         }).join("") + "</div>" +
         (S.ich.team ? '<div class="reihe" role="group" aria-label="Wer">' + Object.keys(WER).map(function (w) {
           return '<button class="knopf klein' + (w === wer ? " primaer" : "") + '" data-aktion="wer" data-wer="' + w + '" aria-pressed="' + (w === wer) + '">' + WER[w] + "</button>";
-        }).join("") + "</div>" : "") + profilAuswahl() +
+        }).join("") + "</div>" : "") + profilAuswahl() + quelleAuswahl() +
         (l.length ? l.map(function (f) {
-          return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + teamBadge(f.team) + neuTag(f) + verfTag(f) + dqTag(f) +
+          return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + dealTag(f) + teamBadge(f.team) + neuTag(f) + verfTag(f) + dqTag(f) +
             (f.profil_treffer === "unklar" ? '<span class="tag dq" data-profil-unklar="">Profil unklar</span>' : "") + ampelTag(f.ampel) + "</div>" +
-            '<p class="leise">EZ ' + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") + (f.entfernung_km !== null ? " · " + tsd(f.entfernung_km) + " km entfernt" : "") + "</p>" +
-            maengelZeile(f) + hinweisZeilen(f) +
+            '<p class="leise">' + quelleTag(f) + " EZ " + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") + (f.entfernung_km !== null ? " · " + tsd(f.entfernung_km) + " km entfernt" : "") + "</p>" +
+            risikoZeile(f) + maengelZeile(f) + hinweisZeilen(f) +
             (f.neuigkeit && f.neuigkeit.senkung ? '<p class="leise" data-senkung="">' + esc(f.neuigkeit.text) + "</p>" : "") +
             (f.nachfassen ? '<p class="leise" style="color:var(--gelb)">Nachfassen: ' + esc(f.nachfassen) + "</p>" : "") +
             '<div class="zahlen"><div><span>Wunschpreis</span>' + eur(f.preis) + "</div><div><span>Erstangebot</span><b>" + eur(f.erstangebot) +
@@ -243,6 +266,8 @@
         }).join("") : '<p class="leise">Nichts gefunden.</p>');
       var pw = document.getElementById("profil");
       if (pw) pw.onchange = function () { S.profil = pw.value; liste(filter, document.getElementById("suche").value); };
+      var qw = document.getElementById("quelle");
+      qw.onchange = function () { S.quelle = qw.value; liste(filter, document.getElementById("suche").value); };
       var feld = document.getElementById("suche"), uhr;
       feld.oninput = function () { clearTimeout(uhr); uhr = setTimeout(function () { liste(filter, feld.value).then(function () { var f = document.getElementById("suche"); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }); }, 400); };
     });
@@ -327,7 +352,7 @@
       var fremd = !!t && !t.mein && !teamFrei(t), sperr = fremd ? " disabled" : "";
       inhalt.innerHTML =
         "<h1>" + esc(f.fahrzeug) + "</h1>" +
-        '<p class="leise">' + ampelTag(f.ampel) + verfTag(f) + " EZ " + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") +
+        '<p class="leise">' + dealTag(f) + ampelTag(f.ampel) + verfTag(f) + quelleTag(f) + " EZ " + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") +
         (f.entfernung_km !== null ? " · " + tsd(f.entfernung_km) + " km entfernt" : "") + "</p>" +
         '<div class="karte"><div class="zahlen"><div><span>Wunschpreis</span>' + eur(f.preis) + "</div><div><span>Erstangebot</span><b>" + eur(f.erstangebot) +
         "</b></div>" + maxEkZelle(f) + "</div>" +
@@ -336,7 +361,7 @@
         (b.haendler_anzahl ? '<p class="leise" data-haendlermarkt="">Händlermarkt: ' + b.haendler_anzahl + " Händlerangebote" +
           (b.haendler_niveau ? ", Niveau " + eur(b.haendler_niveau) + (b.vk_gedeckelt ? " – Händler-VK darauf begrenzt" : "") + (b.haendler_konflikt ? " – billiger als privat (Datenkonflikt), keine Obergrenze" : "") : " – zu wenige für eine Obergrenze") + "</p>" : "") +
         '<a class="knopf klein" href="' + link(f.url) + '" target="_blank" rel="noopener">Anzeige öffnen ↗</a></div>' +
-        maengelZeile(f, true) + hinweisZeilen(f) +
+        risikoZeile(f, true) + maengelZeile(f, true) + hinweisZeilen(f) +
         (f.anbieter ? '<div class="karte"><div class="zeile"><span class="leise">Anbieter</span>' + anbTag(f) + "</div>" +
           '<label>Anbieter korrigieren<select id="anbieter"><option value="">–</option><option value="privat">privat</option>' +
           '<option value="gewerblich">gewerblich</option><option value="unbekannt">unbekannt</option></select></label></div>' : "") +

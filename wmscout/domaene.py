@@ -71,6 +71,7 @@ def import_art(suche: str | None) -> tuple[str | None, str | None]:
 KLEINANZEIGEN, MOBILEDE, AUTOSCOUT24 = "kleinanzeigen", "mobile.de", "autoscout24"
 ID_PRAEFIX = {KLEINANZEIGEN: "", MOBILEDE: "md-", AUTOSCOUT24: "as-"}
 PLATTFORMEN = tuple(ID_PRAEFIX)
+PLATTFORM_TEXT = {KLEINANZEIGEN: "Kleinanzeigen", MOBILEDE: "mobile.de", AUTOSCOUT24: "AutoScout24"}     # Anzeigename (P6-01)
 # Eingangskanäle von außen: „stream“/„api“ nur mit Quellenfreigabe, „email“/„manuell“ liefert der Nutzer selbst (Push). Intern
 # schreibt der Suchlauf zusätzlich „suche“ (`beobachtungen.kanal`) und der v4-Abgleich „abgleich“ (`preis_historie.kanal`).
 KANAELE = ("stream", "api", "email", "manuell")

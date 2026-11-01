@@ -1332,3 +1332,30 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   jedem Seitenaufruf); maschinell gelernte Gewichte (zu wenige Abschlüsse – die Kalibrierung P5-01 kann sie später stützen).
 * **Folgen / offen:** Die Gewichte sind Annahmen; mit genug Ankäufen zeigt die Kalibrierung, ob hohe Scores tatsächlich bessere Abschlüsse
   sind. Die Handy-App zeigt den Score noch nicht (API liefert ihn).
+
+## ADR-061 – Kombinierte Ankaufsliste: Deal-Score als Sortierung, Quelle als Filter, Risikofaktoren als Anzeige · gilt (31.10.2026)
+
+* **Kontext:** P6-01 verlangt eine Liste aller Quellen, sortiert nach Deal-Score, mit sichtbaren Risikofaktoren. Die Inserate aller
+  Quellen liegen schon in einer Tabelle (`anzeigen.quelle`, leer = Kleinanzeigen); der Deal-Score (ADR-060) war nur in der Desktop-Liste
+  Standardsortierung, die API und die Handy-App sortierten nach Preis ÷ Max-EK. Warnungen standen verstreut (Mängel, Hinweise,
+  Datenqualität, Verfügbarkeit, Anbieter).
+* **Entscheidung:**
+  1. **Eine Liste, Quelle als Merkmal:** jede Karte trägt die Quelle als Abzeichen; Desktop und Handy filtern optional nach Quelle
+     (`/api/fahrzeuge?quelle=kleinanzeigen|mobile.de|autoscout24`, sonst 400). Anzeigenamen zentral in `domaene.PLATTFORM_TEXT`.
+  2. **Sortierung:** API und Handy-App wie die Desktop-Liste nach Deal-Score absteigend, Inserate ohne Score ans Ende, bei gleichem
+     Score Preis ÷ Max-EK. Die Liste „Neu & gesenkt“ behält ihre eigene Reihenfolge, Suchprofile ihre Filter. Neue Liste „Top-Deals“
+     (`filter=top`) auch in der Handy-App.
+  3. **Risikofaktoren** (`bewertung/risikofaktoren.py`, rein, quellenneutral): Bewertung fehlt oder unsicher, schwerer Mangel / Mängel,
+     vermutlich offline / reserviert, widersprüchliche oder lückenhafte Daten, Ausland, aufwendige Abholung (über 500 €, ohne Kosten über
+     400 km), Anbieter nicht sicher privat, länger als 60 Tage online. Zwei Stufen: „hoch“ (vor einem Angebot klären) und „mittel“
+     (beachten). Beträge auf 10 € gerundet. Karte: bis zu drei (Mängel stehen dort schon eigens), Detail: alle.
+  4. **Nur Anzeige:** Risikofaktoren ändern weder Score, Ampel noch Max-EK – sie fassen zusammen, was die Bewertung bereits berücksichtigt,
+     damit es vor einem Angebot geklärt wird. Keine Schema-Änderung.
+  5. **Korrekturrunde (QA):** Unvollständige Strukturen führen nie zu einer Ausnahme (sonst fiele die ganze Liste aus, B1). Jeder Faktor
+     trägt `karte`: was die Karte schon als Mängelzeile, Hinweiszeile oder Abzeichen zeigt (Mängel, Verfügbarkeit, Ausland, Anbieter),
+     steht nur im Detail (B2). Auch „nicht mehr verfügbar“ (hoch) und „gewerblicher Anbieter“ (mittel) zählen (B3). Die feste Quellenliste
+     der Handy-App ist per Test an `domaene.PLATTFORM_TEXT` gebunden (B6).
+* **Alternativen:** Risikofaktoren als weiterer Score-Abzug (doppelte Wirkung, Mängel und Sicherheit stecken schon im Score); getrennte
+  Listen je Quelle (Dubletten und Vergleich über Quellen hinweg gingen verloren).
+* **Folgen / offen:** Die Schwellen (500 €, 400 km, 60 Tage) sind Annahmen und im Code als Konstanten benannt; bei Bedarf in die
+  Konfiguration verschieben. AutoScout24 erscheint im Filter, liefert aber erst mit einem freigegebenen Zugang Inserate.

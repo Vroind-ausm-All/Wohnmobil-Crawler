@@ -14,6 +14,7 @@ from ..normalisierung.qualitaet import pruefe_fahrzeug, pruefe_inserat
 from ..normalisierung.fahrzeug import arten_im_text, ergaenze_fahrzeug
 from ..normalisierung.geo import entfernung_km
 from .deal_score import deal_score
+from .risikofaktoren import risikofaktoren
 from .deal_score import einstellungen as deal_einstellungen
 from ..verfuegbarkeit import ergaenze as ergaenze_verfuegbarkeit
 from ..verfuegbarkeit import offline_nach_tagen
@@ -269,6 +270,7 @@ def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[d
             "neuigkeit": neuig,
             # Deal-Score 0–100 mit Bestandteilen (P5-07): Sperren vom Markt her, nicht durch den eigenen Ankaufsstatus (QA B4)
             "deal": deal_score(a, b, neuig, sperre and sperrgrund({**a, "status": None}, cfg), cfg, deal_e),
+            "risiken": risikofaktoren(a, b),                                  # vor einem Angebot zu prüfen – nur Anzeige (P6-01)
             "neu": bool(lauf_start and (a.get("erstmals_gesehen") or "") >= lauf_start) and not ausblenden,
             "nachfassen": grund, "nachfass_text": nachfass_text, "nachfass_betrag": nachfass_betrag,
             "dubletten_ids": sorted(b["id"] for b in andere),       # Fahrzeuggruppe: Team-Reservierungen wirken auf alle
