@@ -83,7 +83,11 @@ kbd{font:12px ui-monospace,monospace;padding:1px 5px;border:1px solid var(--line
 .risiken{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 6px} .risk{font-size:12px;padding:1px 7px;border-radius:99px;background:var(--gelb-bg);color:var(--gelb)}
 .risk.hoch{background:var(--rot-bg);color:var(--rot);font-weight:600} .tag.quelle{background:var(--card);border:1px solid var(--line)}
 .risikoliste li.hoch{color:var(--rot)}
-.tag.dub{background:var(--card);border:1px dashed var(--line)} .preiszeile{margin:0 0 6px;font-size:13px}
+.tag.dub{background:var(--card);border:1px dashed var(--line)}
+.tag.kontakt.wartet{background:var(--gelb-bg);color:var(--gelb)} .tag.kontakt.antwort{background:var(--gruen-bg);color:var(--gruen)} .tag.kontakt.besichtigung{background:var(--akzent);color:var(--akzent-ink)}
+#ankauf-arbeit table{width:100%;border-collapse:collapse;font-size:13px} #ankauf-arbeit td,#ankauf-arbeit th{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+#ankauf-arbeit .stufen{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px} .vh-liste p{margin:4px 0} .vh-form{display:grid;gap:6px;margin-top:6px}
+.vh-form .zeile{display:flex;flex-wrap:wrap;gap:6px;align-items:center} @media (max-width:640px){ #ankauf-arbeit .weg{display:none} } .preiszeile{margin:0 0 6px;font-size:13px}
 table.verlauf td{padding:2px 8px 2px 0} .gruppenliste{list-style:none;padding:0;margin:0} .gruppenliste li{padding:6px 0;border-bottom:1px solid var(--line)}
 .gruppenliste .btn{padding:2px 8px;font-size:12px}
 .btn{font:inherit;font-size:14px;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);
@@ -235,6 +239,22 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <div class="kpi"><b>{{ zaehl.arbeit }}</b><span>In Arbeit (Text kopiert, kontaktiert, Verhandlung, Besichtigung)</span></div>
   </div>
 
+  {% if pipeline %}
+  <section class="kasten" id="ankauf-arbeit" aria-labelledby="aa-titel">
+    <h2 id="aa-titel" style="margin:0 0 8px;font-size:17px">Ankauf in Arbeit</h2>
+    <div class="stufen">{% for s, name in STUFEN.items() %}{% if pipeline_zaehl[s] %}<span class="tag kontakt {{ s }}" data-stufe-zaehl="{{ s }}">{{ name }}: {{ pipeline_zaehl[s] }}</span>{% endif %}{% endfor %}</div>
+    <table><thead><tr><th>Fahrzeug</th><th>Lage</th><th class="weg">Status</th>{% if app %}<th class="weg">Letzte Antwort / Notiz</th>{% endif %}<th></th></tr></thead><tbody>
+    {% for z in pipeline %}{% set kl = z.kontakt %}{% set letzte = kl.antwort if kl.antwort and (not kl.notiz or kl.antwort.zeitpunkt >= kl.notiz.zeitpunkt) else kl.notiz %}
+      <tr data-pipeline="{{ z.a.id }}" data-stufe="{{ kl.stufe }}"><td>{{ z.a.fahrzeug }}<br><span class="meta">{{ QUELLEN.get(z.a.quelle or 'kleinanzeigen', z.a.quelle) }} · {{ z.a.preis | euro }}</span></td>
+        <td><span class="tag kontakt {{ kl.stufe }}">{{ STUFEN[kl.stufe] }}</span><br><span class="meta">{{ kl.text }}</span></td>
+        <td class="weg">{{ STATUS_NAMEN.get(z.a.status or 'neu', z.a.status) }}</td>
+        {% if app %}<td class="weg meta">{% if letzte %}{{ letzte.zeitpunkt[8:10] }}.{{ letzte.zeitpunkt[5:7] }}.: {{ (letzte.text or '(Text entfernt)') | truncate(90) }}{% if letzte.betrag %} · {{ letzte.betrag | euro }}{% endif %}{% else %}–{% endif %}</td>{% endif %}
+        <td><button class="btn" type="button" data-pipeline-oeffnen="{{ z.a.id }}">öffnen</button></td></tr>
+    {% endfor %}</tbody></table>
+    {% if pipeline_mehr %}<p class="meta">… und {{ pipeline_mehr }} weitere – Filter „In Arbeit“.</p>{% endif %}
+  </section>
+  {% endif %}
+
   {% if team %}
   <div class="zaehlerleiste" id="zaehler" role="region" aria-label="Team-Übersicht">
     <span class="zl-titel">Team (angemeldet: {{ team.ich.name }}, {{ team.ich.kuerzel }}):</span>
@@ -300,6 +320,8 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
           {% if n and n.senkung %}<span class="tag senkung" data-senkung title="{{ n.senkung.von | euro }} → {{ n.senkung.auf | euro }} ({{ ('%.1f' % n.senkung.prozent).replace('.', ',') }} %)">Preis −{{ n.senkung.euro | euro }} ({{ n.senkung.am[8:10] }}.{{ n.senkung.am[5:7] }}.)</span>
           {% elif a.preis_vorher and a.preis and a.preis < a.preis_vorher %}<span class="tag">Preis gesenkt</span>{% endif %}
           {% if a.neu_eingestellt %}<span class="tag">neu eingestellt</span>{% endif %}
+          {% if z.kontakt and z.kontakt.stufe and z.kontakt.stufe != 'vorbereitet' %}<span class="tag kontakt {{ z.kontakt.stufe }}" data-kontakt-tag title="{{ z.kontakt.text }}">
+            {{- {'besichtigung': '📅 Besichtigung', 'antwort': '↩ Antwort'}.get(z.kontakt.stufe) or ('✉ ' ~ (z.kontakt.tage or 0) ~ ' T. ohne Antwort') }}</span>{% endif %}
           {% if z.gruppe %}<span class="tag dub" data-gruppe-tag title="Gleiches Fahrzeug: {% for m in z.gruppe %}{{ m.quelle_text }} {{ m.preis | euro }}{{ ' (bestätigt)' if m.bestaetigt }}{{ ' · ' if not loop.last }}{% endfor %}">⧉ {{ z.gruppe | length + 1 }} Inserate</span>{% endif %}
           {% if a.verfuegbarkeit_text %}<span class="tag verf {{ 'vermutlich' if a.vermutlich_offline else a.verfuegbarkeit }}" data-verfuegbarkeit>{{ a.verfuegbarkeit_text }}</span>{% endif %}
           {% if a.datenqualitaet and a.datenqualitaet.stufe == 'schwach' %}<span class="tag dq" title="Datenqualität {{ a.datenqualitaet.wert }}/100" data-dq>Daten lückenhaft</span>{% endif %}
@@ -485,9 +507,19 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
           </div>
         </div>
         {% endif %}
+        {% if z.kontakt and z.kontakt.text %}<p class="meta" data-kontakt-detail><b>{{ STUFEN.get(z.kontakt.stufe, 'Kontakt') }}:</b> {{ z.kontakt.text }}</p>{% endif %}
         {% if app %}
           <label class="notiz">Notiz (wird gespeichert)<textarea data-notiz rows="2">{{ a.notiz or '' }}</textarea></label>
           <div class="kontaktverlauf" data-kontakte hidden></div>
+          <div class="kasten" data-verhandlung><h4 style="margin:0 0 6px">Verhandlung – Antworten und Notizen</h4>
+            <div class="vh-liste" data-vh-liste><p class="meta">Noch nichts eingetragen.</p></div>
+            <div class="vh-form">
+              <div class="zeile"><select data-vh-art aria-label="Art">{% for vs, vn in VH_ARTEN.items() %}<option value="{{ vs }}">{{ vn }}</option>{% endfor %}</select>
+                <select data-vh-kanal aria-label="Kanal"><option value="">Kanal …</option>{% for ks, kn in KANAELE.items() %}<option value="{{ ks }}">{{ kn }}</option>{% endfor %}</select>
+                <input data-vh-betrag type="number" inputmode="numeric" step="100" min="1" placeholder="genannter Betrag €" aria-label="genannter Betrag" style="width:150px"></div>
+              <textarea data-vh-text rows="2" maxlength="2000" aria-label="Text" placeholder="z. B. „Verkäufer will 34.500 €, Besichtigung Samstag möglich“"></textarea>
+              <div><button class="btn primaer" type="button" data-vh-eintragen>Eintragen</button> <span class="meta">nur von Hand – es wird nichts gesendet</span></div>
+            </div></div>
         {% else %}
           <p class="hinweis">Status wird nur in diesem Browser gemerkt. Dauerhaft: <code>python scout.py app</code> verwenden oder <code>python scout.py status {{ a.id }} kontaktiert</code>.</p>
         {% endif %}
@@ -728,7 +760,35 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     if(!dlg.open) dlg.showModal();
     dlg.scrollTop = 0;
     if(window.dubGruppe) window.dubGruppe(d);
-    ladeKontakte(d);
+    ladeKontakte(d); ladeVerhandlung(d);
+  }
+  // Verhandlung (P6-03): Antworten und Notizen von Hand, aufgebaut mit textContent (Texte stammen aus Eingaben)
+  function zeigeVerhandlung(d, liste){
+    var box = d.querySelector('[data-vh-liste]'); if(!box) return;
+    box.textContent = '';
+    if(!liste.length){ var leer = document.createElement('p'); leer.className = 'meta'; leer.textContent = 'Noch nichts eingetragen.'; box.appendChild(leer); return; }
+    liste.forEach(function(x){
+      var p = document.createElement('p'), b = document.createElement('b');
+      b.textContent = x.art_text + (x.anzeige_id !== d.dataset.id ? ' (anderes Inserat)' : '') + ' · ' + (x.zeit_text || '') + (x.von ? ' · ' + x.von : '') +
+        (x.kanal_text ? ' · ' + x.kanal_text : '') + (x.betrag ? ' · ' + x.betrag.toLocaleString('de-DE') + ' €' : '') + ': ';
+      p.appendChild(b); p.appendChild(document.createTextNode(x.text === null ? '(Text entfernt)' : x.text)); box.appendChild(p);
+    });
+  }
+  function ladeVerhandlung(d){
+    if(!APP || !d.querySelector('[data-verhandlung]')) return;
+    fetch('/api/verhandlung/' + encodeURIComponent(d.dataset.id), {credentials:'same-origin'}).then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(l){ zeigeVerhandlung(d, l); }).catch(function(){});
+  }
+  function verhandlungEintragen(d){
+    var art = d.querySelector('[data-vh-art]').value, text = d.querySelector('[data-vh-text]'), betrag = d.querySelector('[data-vh-betrag]').value;
+    var kanal = art === 'antwort' ? d.querySelector('[data-vh-kanal]').value : '';
+    if(!text.value.trim()){ toast('Bitte einen Text eintragen'); text.focus(); return; }
+    var knopf = d.querySelector('[data-vh-eintragen]'); if(knopf.disabled) return;
+    knopf.disabled = true;                                                    // kein Doppel-Eintrag per Doppelklick
+    post('/api/verhandlung', {id: d.dataset.id, art: art, text: text.value, betrag: betrag ? Number(betrag) : null, kanal: kanal || null}).then(function(r){
+      knopf.disabled = false; text.value = ''; d.querySelector('[data-vh-betrag]').value = ''; zeigeVerhandlung(d, r.verlauf);
+      toast(art === 'antwort' ? 'Antwort eingetragen ✓ – Status bei Bedarf selbst setzen' : 'Notiz eingetragen ✓');
+    }, function(err){ knopf.disabled = false; toast(err.message, null, 8000, true); });
   }
   // Kontaktverlauf (P3-06) nur mit laufender App; aufgebaut mit textContent (Texte stammen aus Eingaben)
   function ladeKontakte(d){
@@ -756,6 +816,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     if(e.target === dlg || e.target.closest('[data-schliessen]')){ dlg.close(); return; }
     var d = e.target.closest('section'); if(!d) return;
     var id = d.dataset.id, mitglied = e.target.closest('[data-gruppe-oeffnen]');
+    if(e.target.closest('[data-vh-eintragen]')){ verhandlungEintragen(d); return; }
     if(mitglied){                                                           // anderes Inserat derselben Gruppe öffnen (P6-02)
       var ziel = mitglied.getAttribute('data-gruppe-oeffnen');
       if(karte(ziel)) oeffne(ziel); else toast('Dieses Inserat steht nicht in der Liste – bitte über „Anzeige ↗“ ansehen.');   // ohne dlg.close(): dessen verzögertes close-Ereignis leerte das Fenster
@@ -782,6 +843,13 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
       .then(function(){ toast('Notiz gespeichert'); }, function(){ toast('Notiz konnte nicht gespeichert werden'); });
   });
 
+  // Ankauf in Arbeit (P6-03): Zeile öffnet das Fahrzeugfenster
+  var ankaufArbeit = document.getElementById('ankauf-arbeit');
+  if(ankaufArbeit) ankaufArbeit.addEventListener('click', function(e){
+    var b = e.target.closest('[data-pipeline-oeffnen]'); if(!b) return;
+    var id = b.getAttribute('data-pipeline-oeffnen');
+    if(karte(id)) oeffne(id); else toast('Dieses Inserat steht nicht in der Liste.');
+  });
   liste.addEventListener('click', function(e){
     var k = e.target.closest('.karte'); if(!k) return;
     if(e.target.closest('[data-schreiben]')) anschreiben(k.dataset.id);

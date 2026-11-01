@@ -1395,3 +1395,36 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   0,6 s bei 55.000 Einträgen, unter 1 % der Bewertungszeit) – bei sehr großen Beständen auf aktive Inserate begrenzen (ROADMAP P6-02b).
   Die Zähler an den Filtern („Top-Deals (n)“ …) zählen Inserate, nicht Fahrzeuge; mit „nur einmal“ zeigt die Liste ggf. weniger Karten
   (QA B4, P6-02b). Die Handy-App lädt `dubletten.js` weiter (Gerüst des Service Workers), nutzt es aber nicht mehr.
+
+## ADR-063 – Verhandlung im Dashboard: Antworten und Notizen als Einträge, Kontaktlage je Inserat · gilt (01.11.2026)
+
+* **Kontext:** P6-03 verlangt Kontaktstatus (vorbereitet/kontaktiert/Antwort), Verhandlungsnotizen und Besichtigungsstatus im Dashboard.
+  Vorhanden: Kontakte als Ereignisse (vorbereitet → gesendet, ADR-044), eine einzelne Team-Notiz je Inserat, Besichtigungen mit Status und
+  Termin. Eine **Antwort des Verkäufers** gab es nicht – „kontaktiert“ ließ offen, ob er geantwortet hat; Verhandlungsschritte standen
+  höchstens in der überschriebenen Notiz.
+* **Entscheidung:**
+  1. **Tabelle `verhandlung`** (Schema v23, additiv, Sicherung vor der Migration): Einträge `antwort` (was der Verkäufer geantwortet hat,
+     optional Kanal und genannter Betrag) und `notiz` (Verhandlungsschritt), mit Zeitpunkt und Nutzer. **Nur von Hand** – nichts wird
+     gesendet oder automatisch gelesen; ein Eintrag ändert keinen Status (das Team setzt „in Verhandlung“ selbst). Eigene Tabelle statt einer
+     neuen Art in `kontakte`: deren CHECK erlaubt nur ausgehende Nachrichten, ein Umbau wäre eine riskante Migration. Die bisherige Team-Notiz
+     bleibt.
+  2. **Kontaktlage** (`verhandlung.zustand`, rein): **Besichtigung** (geplant/läuft, mit Termin) vor **Antwort erhalten** (nur, wenn nach
+     dem letzten gesendeten Kontakt) vor **wartet auf Antwort** (seit n Tagen) vor **Text kopiert** (noch nicht bestätigt). Gebildet
+     je Inserat aus `kontakte`, `verhandlung` und `besichtigungen` in wenigen Abfragen (`verhandlung.lage`).
+  3. **Anzeige:** Desktop-Bereich **„Ankauf in Arbeit“** über der Liste (Zähler je Stufe, Tabelle mit Lage, Status und letztem Eintrag,
+     höchstens 60 Zeilen, „öffnen“ führt ins Fahrzeugfenster; auch im statischen Bericht); Abzeichen auf der Karte („↩ Antwort“,
+     „✉ n T. ohne Antwort“, „📅 Besichtigung“); im Fenster Lage, Verlauf der Einträge (auch der bestätigten Dubletten) und Formular
+     (nur App). Handy-App: Lage auf der Karte, Verlauf und Formular im Detail.
+  4. **Datenschutz:** Einträge können Namen und Telefonnummern enthalten. Das Anonymisieren eines Inserats (einzeln oder nach Frist, F10)
+     leert ihre Texte; ein Eintrag zählt als Aktivität für die Frist. Nur Inhaber und Mitarbeiter (Standort-Zugänge per Positivliste
+     ausgeschlossen).
+  5. **Korrekturrunde (QA):** Abgesagte, uninteressante und gekaufte Inserate bekommen keine Stufe mehr (außer bei noch offener
+     Besichtigung, B1). Listen (`/api/fahrzeuge`, Gerätespeicher der Handy-App) tragen nur die Lage ohne Eintragstexte (`verhandlung.kurz`,
+     B3); der statische Bericht auf der Platte zeigt keine Auszüge (nur die App, B8). Ein anonymisiertes Inserat wird wieder fällig, wenn
+     danach neue Verhandlungstexte eingetragen wurden (B2). „Eintragen“ ist gegen Doppelklick gesperrt (B9).
+* **Alternativen:** Antwort automatisch aus Plattform-Postfächern lesen (keine freigegebene Schnittstelle, Regel 11/12); Antwort als
+  Status (verlöre den Verlauf und den Betrag); Freitext-Notiz mit Zeitstempel im bestehenden Feld (nicht auswertbar).
+* **Folgen / offen:** „Antwort fällig“-Hinweise und Benachrichtigungen folgen mit P6-04. Die Kontaktlage gilt je Inserat; Kontakte an
+  einem anderen Inserat desselben Fahrzeugs stehen im Verlauf, bestimmen die Lage aber nicht (QA B5, P6-03b). Zeitpunkte sind lokale Zeit
+  wie in `kontakte`; in der doppelten Stunde der Zeitumstellung kann die Reihenfolge Kontakt/Antwort kippen (B7, angenommen). Das
+  Audit-Protokoll nennt bei Einträgen kein Objekt, wie bei `/api/notiz` (B6, P6-03b).

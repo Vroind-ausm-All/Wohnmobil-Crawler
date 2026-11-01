@@ -6,7 +6,27 @@ Wert „–“.
 
 ---
 
-## P6-02 – Dublettengruppen und Preisverläufe in der Ankaufsliste (01.11.2026) · Status: REVIEW
+## P6-03 – Kontaktstatus, Verhandlungsnotizen und Besichtigungsstatus im Dashboard (01.11.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 01.11.2026: „P6-03 fertigstellen“.
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer` und `scout-data-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/verhandlung.py` (neu), `wmscout/migrationen.py` (v23 `verhandlung`), `wmscout/datenrechte.py`,
+  `wmscout/bewertung/auswertung.py`, `wmscout/web/api.py`, `wmscout/ausgabe.py`, `vorlagen/report.html`, `wmscout/web/static/mobil.js`,
+  `mobil.css`, `sw.js` (Version 21); Tests `test_verhandlung.py` (neu), `test_deal_score.py` (Migrationserwartung bis zur aktuellen Version);
+  Doku ADR-063, ARCHITECTURE, DATENRECHTE, ROADMAP (P6-02 DONE, P6-03 REVIEW, P6-03b), README.
+- **Implementierte Funktionen:** siehe ADR-063 – Antworten des Verkäufers und Verhandlungsnotizen von Hand eintragen (Desktop und Handy,
+  nichts wird gesendet, kein Statuswechsel); Kontaktlage je Inserat (Text kopiert, wartet seit n Tagen, Antwort erhalten, Besichtigung mit
+  Termin); Desktop-Bereich „Ankauf in Arbeit“, Abzeichen auf den Karten, Verlauf im Fenster. Schema v23 additiv mit Sicherung.
+- **Eigener Fund:** Das CSS enthielt `{#ankauf-arbeit` – Jinja las es als Kommentaranfang und verschluckte die Vorlage bis zum nächsten `#}`
+  (`AMPEL` undefiniert). Leerzeichen eingefügt, Test prüft das CSS auf `{#`.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Freigabe mit Auflagen** (keine kritischen Befunde). Korrekturrunde: B1 (hoch: abgesagte/gekaufte Inserate
+  weiter als „wartet“ im Dashboard), B2 (nach Anonymisierung neue Texte nie wieder fällig), B3 (Volltexte in Listen und Gerätespeicher),
+  B4 (wirkungslose Escape-Prüfung), B8 (Auszüge im statischen Bericht), B9 (Doppelklick) behoben; B5/B6 als P6-03b ins Backlog, B7
+  angenommen (ADR-063). Korrekturen nicht erneut von der QA geprüft.
+- **Nächster sinnvoller Schritt:** P6-04 (Benachrichtigungen im Dashboard: neu, Preissenkung, Antwort fällig) – nach Freigabe.
+
+## P6-02 – Dublettengruppen und Preisverläufe in der Ankaufsliste (01.11.2026) · Status: DONE (PR #52 gemergt)
 
 - **Auftrag:** Betreiber 01.11.2026: „Starte P6-02“.
 - **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer`); QA `qa-security-reviewer`.

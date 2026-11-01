@@ -56,6 +56,7 @@ from .. import laufprotokoll as lp
 from .. import abdeckung
 from ..bewertung.deal_score import einstellungen as deal_einstellungen
 from ..bewertung.gruppen import nur_einmal
+from .. import verhandlung
 from ..zugaenge import PLATTFORMEN as ZUGANG_PLATTFORMEN
 from ..zugaenge import ZugangSpeicher
 from ..domaene import PLATTFORM_TEXT, PLATTFORMEN
@@ -283,7 +284,9 @@ def fahrzeug_kurz(z: dict, team: dict | None = None) -> dict:
             "risiken": z.get("risiken") or [], "quelle_text": QUELLE_TEXT.get(a.get("quelle") or "kleinanzeigen", a.get("quelle")),
             # Dublettengruppe und Preisverlauf (P6-02): andere Inserate desselben Fahrzeugs (Quelle, Preis, Status, bestätigt) und Preisstände
             "gruppe": z.get("gruppe") or [], "fahrzeug_status": z.get("fahrzeug_status") or a.get("status") or "neu",
-            "preisverlauf": z.get("preisverlauf")}
+            "preisverlauf": z.get("preisverlauf"),
+            # Kontaktlage (P6-03): stufe (besichtigung, antwort, wartet, vorbereitet), text, tage, letzte Antwort/Notiz, Besichtigung
+            "kontakt": verhandlung.kurz(z.get("kontakt"))}
 
 
 def ics(b: dict, cfg: dict, link: str | None) -> str:
@@ -586,6 +589,10 @@ class Anfrage:
             if k.db.status_von(m.group(1)) is None:
                 raise Antwort(404, "Anzeige nicht gefunden")
             return self.json(200, self.kontakte(m.group(1)))
+        if m := re.fullmatch(r"/api/verhandlung/([\w-]+)", p):
+            if k.db.status_von(m.group(1)) is None:
+                raise Antwort(404, "Anzeige nicht gefunden")
+            return self.json(200, self.verhandlung(m.group(1)))
         if m := re.fullmatch(r"/api/besichtigung/(\d+)", p):
             b = self.besichtigung(m.group(1))
             # abgeschlossene Besichtigungen braucht niemand offline – nicht im Speicher des Geräts ablegen (P1-14b)
@@ -1171,6 +1178,7 @@ class Anfrage:
                 "notiz": z["a"].get("notiz"), "besichtigungen": [self.besichtigung_kurz(b, sicht) for b in
                                                                  self.k.team.besichtigungen(offen=False, anzeige_id=anzeige_id)],
                 "verfuegbarkeit_fahrzeug": self.verfuegbarkeit_fahrzeug(anzeige_id), "kontakte": self.kontakte(anzeige_id),
+                "verhandlung": self.verhandlung(anzeige_id),
                 "deal": z.get("deal"), "deal_verlauf": [{k: v[k] for k in ("zeitpunkt", "preis", "max_ek", "ampel", "deal_score")}
                                                         for v in bewertungsverlauf.verlauf(self.k.db, anzeige_id, 10)]}
 
@@ -1178,6 +1186,11 @@ class Anfrage:
         """Kontaktverlauf der Anzeige und ihres Fahrzeugs (P3-06): vorbereitete und bestätigte Anschreiben und Nachfassen, älteste zuerst."""
         namen = {n["id"]: n["name"] for n in self.k.team.nutzer_liste(nur_aktive=False)} if self.team_aktiv else {}
         return [kontakte.als_json(z, namen) for z in self.k.db.kontakte_zu(anzeige_id)]
+
+    def verhandlung(self, anzeige_id: str) -> list[dict]:
+        """Antworten und Verhandlungsnotizen der Anzeige und ihres Fahrzeugs (P6-03), älteste zuerst."""
+        namen = {n["id"]: n["name"] for n in self.k.team.nutzer_liste(nur_aktive=False)} if self.team_aktiv else {}
+        return [verhandlung.als_json(z, namen) for z in verhandlung.verlauf(self.k.db, anzeige_id)]
 
     @staticmethod
     def kanal(daten: dict) -> str | None:
@@ -1300,6 +1313,17 @@ class Anfrage:
             ok = k.db.setze_notiz(str(daten.get("id")), str(daten.get("notiz") or "")[:2000])
             k.veraendert()
             return self.json(200 if ok else 404, {"ok": ok})
+        if p == "/api/verhandlung":
+            # Antwort des Verkäufers oder Verhandlungsnotiz von Hand eintragen (P6-03) – ändert keinen Status, sendet nichts
+            try:
+                eingabe = verhandlung.pruefe(daten)
+                eid = verhandlung.eintragen(k.db, str(daten.get("id") or ""), eingabe, self.nutzer.get("id"))
+            except ValueError as e:
+                raise Antwort(400, str(e)) from e
+            except LookupError as e:
+                raise Antwort(404, "Anzeige nicht gefunden") from e
+            k.veraendert()
+            return self.json(200, {"ok": True, "id": eid, "verlauf": self.verhandlung(str(daten["id"]))})
         if m := re.fullmatch(r"/api/anzeige/([\w-]+)/anbieter", p):
             # Korrektur der Anbieterart durch das Team (P3-05): ersetzt jede Einstufung, Herkunft „vom Team angegeben“; protokolliert (Audit)
             wert = daten.get("anbieter")

@@ -125,8 +125,8 @@ def test_migration_v22_additiv_nur_anfuegbar(tmp_path, monkeypatch):
     with monkeypatch.context() as m:
         m.setattr(migrationen, "AKTUELLE_VERSION", 21)
         migrationen.migriere(pfad, tmp_path / "s")
-    assert migrationen.migriere(pfad, tmp_path / "s") == [22]
-    assert [p for p in (tmp_path / "s").iterdir() if "vor-v22" in p.name]
+    assert migrationen.migriere(pfad, tmp_path / "s") == list(range(22, migrationen.AKTUELLE_VERSION + 1))
+    assert [p for p in (tmp_path / "s").iterdir() if f"vor-v{migrationen.AKTUELLE_VERSION}" in p.name]
     con = sqlite3.connect(pfad)
     con.execute("INSERT INTO bewertungen (anzeige_id, zeitpunkt, modell_version, deal_score) VALUES ('a', 'z', 'E6/D1', 50)")
     con.commit()

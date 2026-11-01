@@ -292,7 +292,7 @@
           return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + dealTag(f) + gruppeTag(f) + teamBadge(f.team) + neuTag(f) + verfTag(f) + dqTag(f) +
             (f.profil_treffer === "unklar" ? '<span class="tag dq" data-profil-unklar="">Profil unklar</span>' : "") + ampelTag(f.ampel) + "</div>" +
             '<p class="leise">' + quelleTag(f) + " EZ " + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") + (f.entfernung_km !== null ? " · " + tsd(f.entfernung_km) + " km entfernt" : "") + "</p>" +
-            preisZeile(f) + risikoZeile(f) + maengelZeile(f) + hinweisZeilen(f) +
+            kontaktZeile(f) + preisZeile(f) + risikoZeile(f) + maengelZeile(f) + hinweisZeilen(f) +
             (f.neuigkeit && f.neuigkeit.senkung ? '<p class="leise" data-senkung="">' + esc(f.neuigkeit.text) + "</p>" : "") +
             (f.nachfassen ? '<p class="leise" style="color:var(--gelb)">Nachfassen: ' + esc(f.nachfassen) + "</p>" : "") +
             '<div class="zahlen"><div><span>Wunschpreis</span>' + eur(f.preis) + "</div><div><span>Erstangebot</span><b>" + eur(f.erstangebot) +
@@ -320,6 +320,26 @@
         " · " + esc(x.kanal_text) + (x.betrag ? " · " + eur(x.betrag) : "") + "</span>" +
         (!x.bestaetigt && !x.verworfen && x.art === "nachfassen" ? '<button class="knopf klein" data-aktion="kontakt-gesendet" data-kontakt="' + esc(x.id) + '">gesendet ✓</button>' : "") + "</div>";
     }).join("") + "</div>";
+  }
+  // Verhandlung (P6-03): Kontaktlage auf der Karte, Antworten und Notizen im Detail – von Hand eingetragen, nichts wird gesendet; Texte nur über esc()
+  var VH_ARTEN = { antwort: "Antwort des Verkäufers", notiz: "Notiz" };
+  var VH_KANAELE = { telefon: "Telefon", plattform: "Nachricht über die Plattform", email: "E-Mail", whatsapp: "WhatsApp", persoenlich: "persönlich" };
+  function kontaktZeile(f) {
+    var k = f.kontakt;
+    return k && k.stufe ? '<p class="kontaktlage ' + esc(k.stufe) + '" data-kontakt="">' + esc(k.text) + "</p>" : "";
+  }
+  function verhandlungKarte(f) {
+    var l = f.verhandlung || [];
+    return "<h2>Verhandlung</h2>" + '<div class="karte" data-verhandlung="">' + (l.length ? l.map(function (x) {
+      return '<p class="vh"><b>' + esc(x.art_text) + (x.anzeige_id !== f.id ? " (anderes Inserat)" : "") + " · " + esc(x.zeit_text || "") + (x.von ? " · " + esc(x.von) : "") +
+        (x.kanal_text ? " · " + esc(x.kanal_text) : "") + (x.betrag ? " · " + eur(x.betrag) : "") + ":</b> " + (x.text === null ? "(Text entfernt)" : esc(x.text)) + "</p>";
+    }).join("") : '<p class="leise">Noch nichts eingetragen.</p>') +
+      '<label>Eintragen<select id="vh-art">' + Object.keys(VH_ARTEN).map(function (k) { return '<option value="' + k + '">' + VH_ARTEN[k] + "</option>"; }).join("") + "</select></label>" +
+      '<div class="reihe"><select id="vh-kanal" aria-label="Kanal"><option value="">Kanal …</option>' +
+      Object.keys(VH_KANAELE).map(function (k) { return '<option value="' + k + '">' + VH_KANAELE[k] + "</option>"; }).join("") + "</select>" +
+      '<input id="vh-betrag" type="number" inputmode="numeric" min="1" step="100" placeholder="genannter Betrag €" aria-label="genannter Betrag"></div>' +
+      '<textarea id="vh-text" maxlength="2000" style="min-height:60px" placeholder="z. B. „will 34.500 €, Besichtigung Samstag möglich“"></textarea>' +
+      '<button class="knopf primaer voll" data-aktion="vh-eintragen">Eintragen</button><p class="leise">Nur von Hand – es wird nichts gesendet.</p></div>';
   }
   function hinweisZeilen(f) {
     return (f.hinweise || []).map(function (h) { return '<p class="hinweis info">⚠ ' + esc(h) + "</p>"; }).join("");
@@ -405,7 +425,7 @@
         "<h2>Status</h2><div class=\"reihe\">" + Object.keys(status).map(function (k) {
           return '<button class="knopf klein' + (k === f.status ? " primaer" : "") + '" data-status="' + esc(k) + '">' + esc(status[k]) + "</button>";
         }).join("") + "</div>" +
-        '<label>Notiz<textarea id="notiz" style="min-height:70px">' + esc(f.notiz || "") + "</textarea></label>" + kontaktZeilen(f) +
+        '<label>Notiz<textarea id="notiz" style="min-height:70px">' + esc(f.notiz || "") + "</textarea></label>" + kontaktZeilen(f) + verhandlungKarte(f) +
         "<h2>Besichtigung</h2>" + f.besichtigungen.map(terminKarte).join("") +
         '<div class="karte"><label>Termin<input type="datetime-local" id="b-termin"></label>' +
         '<label>Adresse beim Verkäufer<input id="b-adresse" placeholder="Straße, Ort" value="' + esc(f.ort || "") + '"></label>' +
@@ -729,6 +749,14 @@
         toast(ok ? "Text kopiert ✓ – in " + (inhalt.dataset.quelle === "mobile.de" ? "mobile.de im „E-Mail“/„Nachricht“-Formular" : inhalt.dataset.quelle === "kleinanzeigen" ? "Kleinanzeigen" : "der Anzeige") + " einfügen, senden, dann „gesendet ✓“" : "Bitte Text markieren und kopieren");
         fahrzeug(id);
       }, function (err) { if (fenster) fenster.close(); teamFehler(err, id); });
+    } else if (a === "vh-eintragen") {
+      var art = document.getElementById("vh-art").value, txt = document.getElementById("vh-text").value, bet = document.getElementById("vh-betrag").value;
+      if (!txt.trim()) { toast("Bitte einen Text eintragen"); return; }
+      if (t.disabled) return;
+      t.disabled = true;                                                       // kein Doppel-Eintrag per Doppelklick
+      api("/api/verhandlung", { id: id, art: art, text: txt, betrag: bet ? Number(bet) : null, kanal: art === "antwort" ? (document.getElementById("vh-kanal").value || null) : null })
+        .then(function () { toast(art === "antwort" ? "Antwort eingetragen ✓ – Status bei Bedarf selbst setzen" : "Notiz eingetragen ✓"); fahrzeug(id); },
+              function (err) { t.disabled = false; toast(err.message || "Konnte nicht gespeichert werden"); });
     } else if (a === "kontakt-gesendet") {
       api("/api/kontakt/" + encodeURIComponent(t.getAttribute("data-kontakt")) + "/bestaetigen", {})
         .then(function () { toast("Nachfassen als gesendet gespeichert ✓"); fahrzeug(id); }, function (err) { toast(err.message); });
