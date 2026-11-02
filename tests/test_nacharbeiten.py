@@ -47,6 +47,9 @@ def test_filterzaehler_als_fahrzeuge(cfg, db):
     for i in ("p1", "p2"):                                                                # gleiches Fahrzeug, zweimal frisch eingestellt
         db.speichere_treffer(treffer(i), "Alkoven")
     db.speichere_treffer(treffer("x1", titel="Hymer B 544", marke="Hymer", ez_jahr=2012, ort="80331 München"), "Alkoven")
+    # gleicher Zeitpunkt: sonst gilt das spätere Inserat als „doppelt eingestellt“ (gesperrt) – auf langsamen Rechnern lag eine Sekunde dazwischen
+    db.con.execute("UPDATE anzeigen SET erstmals_gesehen=(SELECT erstmals_gesehen FROM anzeigen WHERE id='p1') WHERE id='p2'")
+    db.con.commit()
     zeilen = bewerte_alle(cfg, db, BASIS)
     assert {z["a"]["id"]: z["dubletten_ids"] for z in zeilen}["p1"] == ["p2"]
     html = render_html(cfg, zeilen, BASIS)[0]
