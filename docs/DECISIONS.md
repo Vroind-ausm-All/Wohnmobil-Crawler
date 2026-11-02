@@ -1457,3 +1457,27 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   (dauerhafter Dienst und Schlüssel – Freigabe nötig, Regel 13).
 * **Folgen / offen:** Wer an zwei Geräten arbeitet, markiert an jedem gelesen. Die Schwelle „dringend nach 24 Stunden“ ist eine Annahme
   (Konstante `ANTWORT_DRINGEND_STUNDEN`).
+
+## ADR-065 – Kennzahlen-Ansicht: eine Seite für die Erfolgskennzahlen, Ankaufstrichter ohne Preise · gilt (02.11.2026)
+
+* **Kontext:** P6-05 verlangt die Kennzahlen aus `docs/ROADMAP.md`. Die Eingangszahlen misst schon die Abdeckung (P4-05), Ankaufspreise und
+  Abweichungen die Kalibrierung (P5-01, nur Inhaber). Es fehlten Bewertungs- und Ankaufszahlen und eine Stelle, an der alles zusammensteht.
+* **Entscheidung:**
+  1. **Seite `/kennzahlen`** (und `/api/kennzahlen?tage=7|30|90`, Grenzen wie die Abdeckung): **Eingang** aus der zwischengespeicherten
+     Abdeckungsmessung desselben Zeitraums (keine zweite Rechnung), **Bewertung** des aktuellen Bestands (Median der relativen Spannenbreite
+     als Marktwertunsicherheit, Top-Deal-Fahrzeuge, Sicherheit, Ampel) und **Ankaufstrichter**: Inserate, deren *erster* bestätigter Kontakt
+     im Zeitraum liegt, und was daraus wurde – Antwort eingetragen (nach dem Kontakt), Besichtigung angelegt, Ankauf (Ankaufsvorgang ohne
+     Storno oder abgeschlossene Besichtigung mit Endpreis) – mit Quoten und Median der Antwortzeit. Dazu die Ereignisse im Zeitraum.
+  2. **Keine falsche Genauigkeit:** Quoten und Mediane erst ab 5 Fällen, sonst „zu wenige Fälle“. „Zeit Sichtung → Import“ steht als
+     „nicht messbar“ – keine angebundene Quelle liefert den Einstellzeitpunkt.
+  3. **Keine Preise, keine Personendaten:** nur Anzahlen und Quoten; Kauf- und Verkaufspreise bleiben in der Kalibrierung (Inhaber).
+     Sichtbar für Inhaber und Mitarbeiter, nie für Standort-Zugänge (Positivliste). Links von Ankaufsliste, Statusseite, Abdeckung und
+     Handy-Startseite. Keine Schemaänderung.
+  4. **Korrekturrunde (QA):** Der Trichter zählt **je Fahrzeug** (bestätigte Dubletten zusammen; eine Antwort an der Dublette zählt, B2);
+     eine Besichtigung mit storniertem Ankaufsvorgang ist kein Ankauf (B1); abgebrochene Besichtigungen zählen nicht (B6); „Kontaktierte
+     Verkäufer“ zählt Fahrzeuge, die Zahl der Kontakte steht daneben (B4); Eingangsanteile aus der Abdeckung erscheinen unter 5 Fällen als
+     „n von m“ (B3).
+* **Alternativen:** Kennzahlen in die Abdeckungsseite mischen (deren Zweck sind Lücken der Suche); Zeitreihen und Diagramme (mit wenigen
+  Fällen ohne Aussage – bei mehr Ankäufen sinnvoll); Kennzahlen speichern (alles ist aus den Ursprungsdaten ableitbar).
+* **Folgen / offen:** Verkaufsanfragen (eigener Weg über `/anfragen`) zählen bei den Ereignissen
+  im Zeitraum mit, im Trichter nicht. Die Abdeckungsmessung kann bei großen Beständen einige Sekunden dauern (5 Minuten zwischengespeichert).

@@ -6,7 +6,25 @@ Wert „–“.
 
 ---
 
-## P6-04 – Meldungen im Dashboard: Antwort fällig, Besichtigung, Nachfassen, Preissenkung, neu (02.11.2026) · Status: REVIEW
+## P6-05 – Kennzahlen-Ansicht (02.11.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 02.11.2026: „Entwickle P6-05 fertig“.
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer` und `scout-data-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/kennzahlen.py` (neu), `vorlagen/kennzahlen.html` (neu), `wmscout/web/api.py` (`/kennzahlen`,
+  `/api/kennzahlen`), `vorlagen/report.html`, `vorlagen/status.html`, `vorlagen/abdeckung.html` (Links), `wmscout/web/static/mobil.js`
+  (Link), `sw.js` (Version 23); Tests `test_kennzahlen.py` (neu); Doku ADR-065, ARCHITECTURE, ROADMAP (P6-04 DONE, P6-05 REVIEW, Kennzahlen,
+  P6-05b), README.
+- **Implementierte Funktionen:** siehe ADR-065 – eine Seite mit allen Kennzahlen der ROADMAP (7/30/90 Tage): Eingang (aus der Abdeckung),
+  Bewertungslage, Ankaufstrichter je Fahrzeug mit Quoten und Median-Antwortzeit ab 5 Fällen; ohne Preise und Personendaten. Keine
+  Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Freigabe mit Auflagen** (keine kritischen Befunde). Korrekturrunde: B1 (hoch: stornierter Ankauf zählte als
+  gekauft), B2 (Trichter je Fahrzeug), B3 (Anteile unter 5 Fällen als „n von m“), B4 (Verkäufer statt Kontakte), B6 (abgebrochene
+  Besichtigungen) behoben; B5 diese Einträge; B7 beim Commit beachtet; B8 und der Rechte-HTTP-Test als P6-05b ins Backlog. Korrekturen nicht
+  erneut von der QA geprüft.
+- **Nächster sinnvoller Schritt:** Phase 6 ist damit inhaltlich abgeschlossen; nächste Hauptphase nach Freigabe des Betreibers.
+
+## P6-04 – Meldungen im Dashboard: Antwort fällig, Besichtigung, Nachfassen, Preissenkung, neu (02.11.2026) · Status: DONE (PR #54 gemergt)
 
 - **Auftrag:** Betreiber 02.11.2026: „P6-04 fertigstellen“.
 - **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer`); QA `qa-security-reviewer`.
