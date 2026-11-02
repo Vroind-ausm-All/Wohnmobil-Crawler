@@ -258,11 +258,12 @@ Handy-App mit Besichtigung, Mängelabzug, Protokoll, Terminen, WhatsApp-Links.
 | P6-01 | P1 | Kombinierte Liste aller Quellen, Sortierung nach Deal-Score, Risikofaktoren sichtbar | scout-ui-engineer | DONE (ADR-061; PR #51 gemergt; Deal-Score jetzt auch in der Handy-App) |
 | P6-02 | P1 | Dublettengruppen und Preisverläufe anzeigen | scout-ui-engineer | DONE (ADR-062; PR #52 gemergt; „gleiches Fahrzeug nur einmal“) |
 | P6-03 | P2 | Kontaktstatus (vorbereitet/kontaktiert/Antwort), Verhandlungsnotizen, Besichtigungsstatus im Dashboard | scout-ui-engineer | DONE (ADR-063, Schema v23; PR #53 gemergt) |
-| P6-04 | P2 | Benachrichtigungen im Dashboard (neu, Preissenkung, Antwort fällig) | scout-ui-engineer | REVIEW (ADR-064; Branch `claude/phase6-benachrichtigungen`) |
-| P6-05 | P2 | Kennzahlen-Ansicht (siehe unten) | scout-ui-engineer, scout-data-engineer | TODO |
+| P6-04 | P2 | Benachrichtigungen im Dashboard (neu, Preissenkung, Antwort fällig) | scout-ui-engineer | DONE (ADR-064; PR #54 gemergt) |
+| P6-05 | P2 | Kennzahlen-Ansicht (siehe unten) | scout-ui-engineer, scout-data-engineer | REVIEW (ADR-065; Branch `claude/phase6-kennzahlen`; Seite `/kennzahlen`) |
 | P6-01b | P3 | Handy-App: Listenaufruf direkt nach dem Login abfangen, solange `/api/ich` noch lädt (einmal „reading 'team'“ im Klicktest P6-01, bestehender Code) | scout-ui-engineer | TODO |
 | P6-02b | P3 | Preisverlauf nur für aktive Inserate und Gruppenmitglieder lesen (große Bestände); Filterzähler mit „gleiches Fahrzeug nur einmal“ als Fahrzeuge zählen (QA P6-02 B4/B7) | scout-data-engineer, scout-ui-engineer | TODO |
 | P6-03b | P3 | Kontaktlage je Fahrzeug statt je Inserat (bestätigte Dubletten); Audit-Objekt für `/api/verhandlung` und `/api/notiz`; nach dem Anonymisieren neu eingetragene Notiz-/Kontakttexte wieder fällig (wie Verhandlung) (QA P6-03 B2/B5/B6) | scout-data-engineer, scout-ui-engineer | TODO |
+| P6-05b | P3 | „Zeit Sichtung → Import“ aus dem Zeitstempel der Suchagent-Mails messen (ROADMAP-Ersatzdefinition); Rechte-HTTP-Test für Standort-Zugänge auf `/kennzahlen` (QA P6-05 B8) | scout-data-engineer | TODO |
 
 ---
 
@@ -279,12 +280,15 @@ Optimiert wird auf **relevante, verfügbare Ankaufsgelegenheiten**, nicht auf ab
 | Importerfolgsquote | Läufe ohne Fehler / alle Läufe je Art (Suchlauf, Seiten, Mails) – verarbeitete je angelieferte Datensätze liefert keine Quelle (ADR-051) | `suchlaeufe` | Phase 4 (P4-05) |
 | Nicht verfügbare Inserate | Anteil `verfuegbarkeit ∈ {offline, verkauft}` | `inserate` | Phase 3 |
 | Erkannte Preisänderungen | Einträge in `preis_historie` mit Änderung im Zeitraum | `preis_historie` | Phase 3 |
-| Zeit Sichtung → Import | `erstmals_gesehen` − Einstellzeitpunkt laut Quelle (sofern geliefert) bzw. E-Mail-Zeitstempel | `beobachtungen` | Phase 3 |
+| Zeit Sichtung → Import | `erstmals_gesehen` − Einstellzeitpunkt laut Quelle (sofern geliefert) bzw. E-Mail-Zeitstempel | `beobachtungen` | **nicht messbar** (keine angebundene Quelle liefert den Einstellzeitpunkt; P6-05) |
 | Vollständig beschriebene Fahrzeuge | Anteil mit Preis, EZ, km, PLZ, Art, Anbieterart | `fahrzeuge`, `inserate` | Phase 3 |
 | Mittlere Marktwertunsicherheit | Median der relativen Spannenbreite (`spanne_bis − spanne_von`) / Marktwert | `bewertungen` | Phase 5 |
 | Priorisierte Ankaufsangebote | Fahrzeuge mit Deal-Score ≥ Schwelle, verfügbar, privat | `bewertungen` | Phase 5 |
 | Kontaktierte Verkäufer | **bestätigte** Kontakte (ADR-012) | `kontakte` | Phase 1 (UI) / 3 |
-| Tatsächliche Ankäufe | manuell eingetragen (Besichtigung „gekauft“ mit Endpreis) | `besichtigungen` | heute |
+| Ankaufstrichter | erster bestätigter Kontakt im Zeitraum → Antwort eingetragen → Besichtigung → Ankauf; Quoten und Median-Antwortzeit ab 5 Fällen | `kontakte`, `verhandlung`, `besichtigungen`, `ankaeufe` | Phase 6 (P6-05) |
+| Tatsächliche Ankäufe | manuell eingetragen (Besichtigung „gekauft“ mit Endpreis) bzw. Ankaufsvorgang ohne Storno | `besichtigungen`, `ankaeufe` | heute |
+
+Alle Kennzahlen stehen auf der Seite **`/kennzahlen`** (7/30/90 Tage, P6-05); Eingangszahlen und Lücken ausführlich unter `/abdeckung`.
 
 ---
 

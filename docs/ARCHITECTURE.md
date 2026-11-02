@@ -39,6 +39,7 @@ stichprobenartig nachgeprüft (R1, R2, R3, R5, R14). Entscheidungen: `docs/DECIS
 | `wmscout/normalisierung/` | Marke/Serie/Modell/Art, PLZ-Entfernung | reine Funktionen |
 | `wmscout/bewertung/rechner.py` | Marktwert, Max-EK, Erstangebot (§25a) | rein; Cache-Schlüssel ohne Quelle |
 | `wmscout/bewertung/auswertung.py` | Dubletten, Vergleichsbasis, Nachfassen | liest direkt aus der DB (R15) |
+| `wmscout/kennzahlen.py` | Kennzahlen-Ansicht `/kennzahlen` (P6-05, ADR-065): Eingang aus der Abdeckung, Bewertungslage, Ankaufstrichter je Fahrzeug | Fachlogik rein, Einsammeln unten im Modul; nur lesen, keine Preise |
 | `wmscout/bewertung/kalibrierung.py` | Kalibrierung mit tatsächlichen Ankäufen (P5-01, ADR-052): Bericht, Vorschläge, Tabelle `kalibrierung_faelle` (v20) | Fachlogik rein, Speicher unten im Modul; ändert keine Parameter |
 | `wmscout/bewertung/anschreiben.py`, `ausgabe.py` | Texte, CSV, HTML | importieren `STATUS` aus `datenbank` |
 | `wmscout/bewertung/besichtigung.py` + `web/static/besichtigung.js` | Mängelabzug (Python verbindlich, JS offline) | Paritätstest |

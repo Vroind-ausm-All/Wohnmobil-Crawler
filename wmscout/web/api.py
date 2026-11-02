@@ -54,6 +54,7 @@ from .. import kontakte
 from .. import suchprofile as sp
 from .. import laufprotokoll as lp
 from .. import abdeckung
+from .. import kennzahlen
 from ..bewertung.deal_score import einstellungen as deal_einstellungen
 from ..bewertung.gruppen import nur_einmal
 from .. import verhandlung
@@ -654,6 +655,15 @@ class Anfrage:
             if p == "/api/abdeckung":
                 return self.json(200, erg)
             return self.html(k.env.get_template("abdeckung.html").render(firma=k.cfg["anschreiben"]["firma"], m=erg))
+        if p in ("/api/kennzahlen", "/kennzahlen"):         # Kennzahlen (P6-05): Eingang, Bewertung, Ankaufstrichter – nur Anzahlen, ohne Preise
+            try:
+                tage = abdeckung.tage_aus((self.query.get("tage") or [""])[0], abdeckung.MAX_TAGE_APP)
+            except ValueError as e:
+                raise Antwort(400, str(e)) from e
+            erg = kennzahlen.messe(k.cfg, k.db, k.abdeckung(tage), k.zeilen(), tage)
+            if p == "/api/kennzahlen":
+                return self.json(200, erg)
+            return self.html(k.env.get_template("kennzahlen.html").render(firma=k.cfg["anschreiben"]["firma"], m=erg))
         if p in ("/api/kalibrierung", "/kalibrierung"):     # Kalibrierung (P5-01): Kaufpreise und Vorschläge – im Team nur der Inhaber
             if self.team_aktiv:
                 self.nur_inhaber()

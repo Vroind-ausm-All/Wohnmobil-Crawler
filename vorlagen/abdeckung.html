@@ -21,7 +21,7 @@ td.z{text-align:right;white-space:nowrap}
   {% set k = m.kennzahlen %}
   {% macro prozent(x) %}{{ ((x * 100) | round(0) | int ~ ' %') if x is not none else '–' }}{% endmacro %}
   {% macro tag(iso) %}{{ iso[8:10] }}.{{ iso[5:7] }}.{% endmacro %}
-  <nav class="oben"><a href="/">Ankaufsliste</a><a href="/status">Status</a>
+  <nav class="oben"><a href="/">Ankaufsliste</a><a href="/status">Status</a><a href="/kennzahlen?tage={{ m.tage }}">Kennzahlen</a>
     {% for t in [7, 30, 90] %}<a href="/abdeckung?tage={{ t }}"{% if t == m.tage %} aria-current="page"{% endif %}>{{ t }} Tage</a>{% endfor %}</nav>
   <h1>Abdeckung und Suchlücken</h1>
   <p class="leise">Zeitraum: {{ m.tage }} Tage einschließlich heute ({{ tag(m.von) }}–{{ tag(m.bis) }}). Gezählt werden Inserate, die in diesem

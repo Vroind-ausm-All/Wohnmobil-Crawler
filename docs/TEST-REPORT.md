@@ -4,7 +4,23 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
-## P6-04 – Meldungen im Dashboard: Antwort fällig, Besichtigung, Nachfassen, Preissenkung, neu (02.11.2026) · REVIEW
+## P6-05 – Kennzahlen-Ansicht (02.11.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2634 bestanden (vorher 2627), neu `test_kennzahlen.py` (7) |
+| `ruff check .` | grün |
+| Trichter (rein): nur erster Kontakt im Zeitraum, Antwort nur danach, Quoten und Median-Antwortzeit erst ab 5 Fällen, Zeiten mit Zeitzone | bestanden |
+| Bewertungslage (rein): Median der relativen Spannenbreite ohne „keine“ und Ausgeblendete, Top-Deal-Fahrzeuge mit Dubletten einmal, Sicherheit/Ampel | bestanden |
+| API und Seite: Trichter 6 → 3 → 2 → 1 aus echten Kontakten, Antworten, Besichtigungen; Ereignisse im Zeitraum; keine Preise, Beträge oder Namen; `tage` 0/500 → 400; Seite mit 7-Tage-Auswahl, „zu wenige Fälle“, „nicht messbar“ | bestanden |
+| Korrekturrunde: stornierter Ankauf zählt nicht; bestätigte Dubletten als ein Fahrzeug (Antwort an der Dublette zählt); abgebrochene Besichtigung zählt nicht; Verkäufer statt Kontakte; ohne Tabellen `verhandlung`/`ankaeufe` keine Ausnahme; Eingangsanteile unter 5 Fällen als „n von m“ | bestanden |
+| Rechte und Links: Standort-Zugänge per Positivliste ausgeschlossen (Funktionstest), Links in Ankaufsliste, Statusseite, Abdeckung, Handy-App; SW ≥ 23; kein `{#` im CSS | bestanden |
+| Klicktest Chromium (Playwright), Desktop 1280 px und 390 px: Link „Kennzahlen“, Trichter, 15 Tabellenzeilen, 7-Tage-Auswahl, kein Querscrollen; Handy-App: Link von der Startseite; keine JS-Fehler | bestanden (vor und nach der Korrekturrunde) |
+| QA-Review (`qa-security-reviewer`, eine Runde; gezielte Tests 50 bestanden; Storno nachgestellt) | Freigabe mit Auflagen; B1–B4, B6 behoben, B5 Doku, B7 beim Commit beachtet, B8 → P6-05b |
+
+**Nicht geprüft:** CI (läuft nach dem Push), Windows, echtes Handy, Laufzeit mit großem Bestand, Rechte per HTTP mit echtem Standort-Zugang (nur Funktionstest der Positivliste); Korrekturen nicht erneut von der QA geprüft.
+
+## P6-04 – Meldungen im Dashboard: Antwort fällig, Besichtigung, Nachfassen, Preissenkung, neu (02.11.2026) · DONE (PR #54 gemergt)
 
 | Prüfung | Ergebnis |
 |---|---|
