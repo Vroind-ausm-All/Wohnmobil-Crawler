@@ -41,7 +41,10 @@ def _jetzt() -> str:
 
 
 def _text(daten: dict, feld: str, laenge: int) -> str | None:
-    wert = str(daten.get(feld) or "").strip()
+    wert = daten.get(feld)
+    if isinstance(wert, bool) or not isinstance(wert, (str, int, float)):      # Listen/Objekte nicht als Text speichern (QA P7-03 B10)
+        return None
+    wert = str(wert).strip()
     return wert[:laenge] or None
 
 

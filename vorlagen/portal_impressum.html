@@ -1,0 +1,19 @@
+{% set titel = "Impressum" %}{% include "portal_seite_kopf.html" %}
+<h1>Impressum</h1>
+<p class="leise">Angaben gemäß § 5 DDG</p>
+<p>{{ impressum.name or "[Name/Firma – config.yaml → portal → impressum → name]" }}<br>
+{% for zeile in (impressum.anschrift or "[Anschrift – portal → impressum → anschrift]").split("\n") %}{{ zeile }}<br>{% endfor %}</p>
+{% if impressum.vertreten_durch %}<p>Vertreten durch: {{ impressum.vertreten_durch }}</p>{% endif %}
+<dl>
+  <dt>Kontakt</dt>
+  <dd>{% if impressum.telefon %}Telefon: {{ impressum.telefon }}<br>{% endif %}E-Mail: {{ impressum.email or "[E-Mail – portal → impressum → email]" }}</dd>
+  {% if impressum.register %}<dt>Registereintrag</dt><dd>{{ impressum.register }}</dd>{% endif %}
+  {% if impressum.ust_id %}<dt>Umsatzsteuer-Identifikationsnummer</dt><dd>{{ impressum.ust_id }}</dd>{% endif %}
+  {% if impressum.verantwortlich_inhalt %}<dt>Verantwortlich für den Inhalt</dt><dd>{{ impressum.verantwortlich_inhalt }}</dd>{% endif %}
+</dl>
+<p class="leise klein">Dieses Portal nimmt Verkaufsangebote für Wohnmobile entgegen. Eine Anfrage ist unverbindlich; ein Kaufvertrag kommt nur persönlich und
+schriftlich zustande.</p>
+{% include "portal_fuss.html" %}
+</main>
+</body>
+</html>

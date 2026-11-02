@@ -412,6 +412,17 @@ def cmd_app(cfg, db, args):
     starte(cfg, db, BASIS, port=args.port, browser=not args.kein_browser)
 
 
+def cmd_portal(cfg, db, args):
+    """Öffentliches Ankaufsportal (P7-03): startet nur mit Freigabe (portal → aktiv) und vollständiger Konfiguration."""
+    from wmscout.web.portal import PortalFehler, starte_portal
+    try:
+        starte_portal(cfg, db, BASIS, port=args.port)
+    except PortalFehler as e:
+        sys.exit(str(e))
+    except OSError as e:
+        sys.exit(f"Portal-Port belegt oder nicht verfügbar: {e}")
+
+
 def cmd_mandant(cfg, args):
     """Mandanten (G2): anlegen, auflisten, Nutzung je Mandant. Arbeiten in einem Mandanten: scout.py --mandant KENNUNG <befehl>."""
     if args.aktion == "anlegen":
@@ -774,6 +785,8 @@ def main():
     a.add_argument("--kein-browser", action="store_true", help="Browser nicht automatisch öffnen")
     a.add_argument("--mandanten", action="store_true", help="alle Mandanten aus mandanten/ bedienen (Hostname wählt den Mandanten)")
     a.add_argument("--lokal", help="mit --mandanten: dieser Mandant ist zusätzlich über 127.0.0.1 erreichbar")
+    po = sub.add_parser("portal", help="öffentliches Ankaufsportal starten (nur Formular/Status/Impressum; config.yaml → portal)")
+    po.add_argument("--port", type=int, help="Standard: config.yaml → portal → port (8770)")
     la = sub.add_parser("lauf", help="crawlen, bewerten, Report erzeugen")
     la.add_argument("--sofort", action="store_true",
                     help="Intervalle je Quelle und die Pause nach einer Sperre nicht abwarten (config.yaml → app)")
@@ -898,7 +911,7 @@ def main():
      "nutzer": cmd_nutzer, "status": cmd_status, "standort": cmd_standort,
      "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage, "audit": cmd_audit, "nutzung": cmd_nutzung,
      "inserat": cmd_inserat, "dubletten": cmd_dubletten, "qualitaet": cmd_qualitaet, "abdeckung": cmd_abdeckung,
-     "kalibrierung": cmd_kalibrierung, "datenschutz": cmd_datenschutz}[args.cmd](cfg, db, args)
+     "kalibrierung": cmd_kalibrierung, "datenschutz": cmd_datenschutz, "portal": cmd_portal}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":

@@ -1481,3 +1481,42 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   Fällen ohne Aussage – bei mehr Ankäufen sinnvoll); Kennzahlen speichern (alles ist aus den Ursprungsdaten ableitbar).
 * **Folgen / offen:** Verkaufsanfragen (eigener Weg über `/anfragen`) zählen bei den Ereignissen
   im Zeitraum mit, im Trichter nicht. Die Abdeckungsmessung kann bei großen Beständen einige Sekunden dauern (5 Minuten zwischengespeichert).
+
+## ADR-068 – Öffentliches Ankaufsportal: eigener Prozess, nur vier Seiten, signierte Links statt Konten · gilt (02.11.2026)
+
+* **Kontext:** B4 (Phase 7): Verkäufer sollen ihr Wohnmobil selbst über das Internet anbieten können. Bisher gab es `/verkaufen` nur in der
+  Team-App hinter Anmeldung (ADR-025). Die Team-App ins Internet zu stellen, hieße jede Team-Route dem offenen Netz auszusetzen.
+* **Entscheidung:**
+  1. **Eigener Prozess `scout.py portal`** (eigener Port, Standard 8770, nur 127.0.0.1; öffentlich nur über den HTTPS-Reverse-Proxy) mit
+     einem eigenen, kleinen Router (`wmscout/web/portal.py`) und **nur** diesen Wegen: `/verkaufen`, `/status`, `/impressum`, `/datenschutz`,
+     `/gesund` und eine Positivliste statischer Dateien; Schreibwege `/api/portal/anfrage|foto|status|loeschen`. Kein Login, keine
+     Team-Routen, keine Team-Skripte. Gleiche Datenbank und gleicher Schreibweg (`VerkaufSpeicher.anlegen`, `datenrechte.widerruf`) – die
+     Anfrage erscheint sofort in `/anfragen` und (P7-02) in den Meldungen. Der Eingangsweg ist immer „formular“, `erfasst_von` leer.
+  2. **Start nur mit Freigabe:** `portal → aktiv: true`, `oeffentliche_url` (https), Impressum (Name, Anschrift, E-Mail) und die
+     Umgebungsvariable `SCOUT_PORTAL_SCHLUESSEL` (≥ 32 Zeichen); sonst bricht der Start mit allen Gründen ab. Ausgeliefert: aus.
+  3. **Signierte Links statt Verkäuferkonten:** Statuslink (`/status#<token>`, 365 Tage) und Foto-Upload (60 Minuten) sind HMAC-SHA256-Tokens
+     über Zweck, Anfrage-ID und Ablauf. **Keine Schemaänderung**, nichts Geheimes in der Datenbank. Der Status-Token steht im #-Teil und
+     erreicht den Server nie per GET (nicht in Proxy-Protokollen). Die Statusseite zeigt nur Referenz, Fahrzeug, verkäufergerechten Status
+     und Daten – keine Kontaktdaten, Bearbeiter, Beträge. „Meine Daten löschen“ = derselbe Widerruf wie durch den Inhaber (bei Ankauf 409
+     mit Bitte um persönlichen Kontakt).
+  4. **Spamschutz ohne Fremddienste (kein Captcha-Dienst, keine Cookies):** verstecktes Feld (scheinbarer Erfolg, nichts gespeichert),
+     signierte Mindest-Ausfüllzeit (Prozessschlüssel, 3 s bis 24 h), Grenzen im Speicher (5 gültige Anfragen je IP und Stunde, 60 gesamt,
+     60 Seitenabrufe und 30 Sendungen je IP und Minute, 300 Fotos je Stunde), Größengrenzen (20 KB Formular, Foto wie in der App), nur `application/json`, Host- und Origin-Prüfung,
+     `X-Forwarded-For` nur bei `vertrauter_proxy`. IP-Adressen werden nicht gespeichert und nicht protokolliert.
+  5. **Rechtstexte als Vorlagen:** Impressum und Datenschutzhinweise kommen aus `config.yaml → portal → impressum`; solange
+     `texte_geprueft` nicht true ist, steht auf jeder Seite ein Entwurfshinweis. Die rechtliche Prüfung bleibt beim Betreiber.
+  6. **Keine automatische Nachricht** an Verkäufer (Regel 10): Die Bestätigung erscheint nur im Browser; das Team meldet sich persönlich.
+  7. **Korrekturrunde (QA):** Rollback nach einem Fehler nur unter der Sperre – nie in die Transaktion einer parallelen Anfrage (B1);
+     Tokens nur ASCII, tiefe Verschachtelung → 400 statt 500 (B2); Grenze für alle POST je IP **vor** dem Lesen des Inhalts, Upload-Token im
+     Kopf `X-Portal-Upload` vor dem Lesen von bis zu 12 MB, Fotos gesamt je Stunde begrenzt (B3); die Bremse vergisst IP-Adressen nach
+     einem Fenster (B4); Start nur mit `vertrauter_proxy: true`, statische Dateien zählen nicht (B5); Prüffeld neutral benannt (B6);
+     Origin mit Schema (B7); scheitert die Spanne, gilt die gespeicherte Anfrage trotzdem als angenommen (B8); defekter #-Teil bleibt
+     nicht hängen (B9); Listen/Objekte werden nie als Text gespeichert (B10).
+* **Alternativen:** Team-App öffentlich mit Positivliste (eine fehlerhafte Regel öffnet Team-Daten; der Portal-Prozess kann sie gar nicht
+  ausliefern); eigene Software/Datenbank (doppelte Pflege, Abgleich nötig); Verkäuferkonten mit Passwort (mehr Personendaten, mehr
+  Angriffsfläche); Token-Hashes in einer neuen Tabelle (Migration; nur nötig, wenn einzelne Links widerrufbar sein müssen); Captcha-Dienst
+  (Drittanbieter, Datenschutz).
+* **Folgen / offen:** Ein Statuslink lässt sich nicht einzeln sperren – nur alle zusammen über einen neuen Schlüssel (dann gelten alte Links
+  nicht mehr). Grenzen im Speicher gelten je Prozess und beginnen nach einem Neustart neu; zusätzlich Grenzen im Reverse-Proxy (P7-04).
+  Kein Live-Ereignis an die laufende Team-App (sie liest bei der nächsten Abfrage). Rechtliche Prüfung von Impressum, Datenschutz und
+  Einwilligungstext steht aus.

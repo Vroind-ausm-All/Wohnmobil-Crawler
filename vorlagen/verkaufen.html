@@ -17,11 +17,13 @@ fieldset{border:0;padding:0;margin:0} legend{font-weight:700;font-size:18px;marg
 .knopfreihe{display:flex;gap:8px;margin-top:16px} .knopfreihe .knopf{flex:1}
 .spanne{font-size:24px;font-weight:700;margin:6px 0} .klein{font-size:13px}
 nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px}
+.pruef{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.statuslink{word-break:break-all;background:var(--feld);border:1px solid var(--line);border-radius:8px;padding:8px}
 </style>
 </head>
 <body>
 <main>
-  <nav class="oben"><a href="/anfragen">Verkaufsanfragen</a><a href="/">Ankaufsliste</a></nav>
+  {% if portal %}{% include "portal_kopf.html" %}{% else %}<nav class="oben"><a href="/anfragen">Verkaufsanfragen</a><a href="/">Ankaufsliste</a></nav>{% endif %}
   <h1>Wohnmobil verkaufen</h1>
   <p class="leise">{{ firma }} kauft Wohnmobile von privat. Angaben eintragen – wir melden uns persönlich. Unverbindlich und kostenlos.</p>
   <div class="schritte" aria-hidden="true"><span data-s="1" class="an">1 Fahrzeug</span><span data-s="2">2 Zustand &amp; Fotos</span><span data-s="3">3 Kontakt</span></div>
@@ -55,8 +57,9 @@ nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px}
       <label>PLZ des Standorts *<input name="plz" inputmode="numeric" required maxlength="5" autocomplete="postal-code"></label>
       <label>Ort<input name="ort" maxlength="80" autocomplete="address-level2"></label>
       {% if team or ich %}<label>Eingang<select name="kanal">{% for key, text in kanaele.items() %}<option value="{{ key }}"{{ ' selected' if key == 'telefon' }}>{{ text }}</option>{% endfor %}</select></label>{% endif %}
+      {% if portal %}<div class="pruef" aria-hidden="true"><label>Bitte leer lassen<input name="feld_leer" tabindex="-1" autocomplete="off"></label></div>{% endif %}
       <label style="display:flex;gap:8px;align-items:flex-start;font-weight:400;margin-top:12px"><input type="checkbox" name="einwilligung" style="width:auto;margin-top:4px">
-        <span>Ich bin damit einverstanden, dass {{ firma }} meine Angaben und Fotos speichert, um mein Fahrzeug zu bewerten und mich wegen eines möglichen Ankaufs zu kontaktieren. Die Einwilligung kann ich jederzeit widerrufen; dann werden die Angaben gelöscht. *</span></label>
+        <span>Ich bin damit einverstanden, dass {{ firma }} meine Angaben und Fotos speichert, um mein Fahrzeug zu bewerten und mich wegen eines möglichen Ankaufs zu kontaktieren. Die Einwilligung kann ich jederzeit widerrufen; dann werden die Angaben gelöscht.{% if portal %} Einzelheiten: <a href="/datenschutz" target="_blank">Datenschutzhinweise</a>.{% endif %} *</span></label>
       <label style="display:flex;gap:8px;align-items:flex-start;font-weight:400;margin-top:8px"><input type="checkbox" name="weitergabe" style="width:auto;margin-top:4px">
         <span>Freiwillig: Mein Fahrzeug darf – ohne Namen, Telefon, E-Mail und genaue Adresse – auch den geprüften Standorten von {{ firma }} angeboten werden (mit Fahrzeugdaten, Fotos, Region und Preisvorstellung).</span></label>
     </fieldset>
@@ -78,11 +81,19 @@ nav.oben{display:flex;gap:12px;justify-content:flex-end;font-size:14px}
       <p class="leise klein">Grobe, unverbindliche Einschätzung aus Marktdaten – kein Kaufangebot. Ein Angebot bekommen Sie nach Prüfung von uns persönlich.</p>
     </div>
     <p id="fotostatus" class="leise"></p>
-    <div class="knopfreihe"><a class="knopf primaer" href="/verkaufen">Weitere Anfrage erfassen</a><a class="knopf" href="/anfragen">Zu den Anfragen</a></div>
+    {% if portal %}<div id="status-box" hidden>
+      <h3>Ihr persönlicher Statuslink</h3>
+      <p class="leise klein">Bitte speichern (z. B. als Lesezeichen). Damit sehen Sie den Stand Ihrer Anfrage und können Ihre Angaben jederzeit selbst löschen. Wer den Link kennt, sieht den Stand – nicht weitergeben.</p>
+      <p class="statuslink"><a id="statuslink" href="#"></a></p>
+    </div>
+    <p class="leise">Wir melden uns persönlich bei Ihnen – es gibt keine automatischen Nachrichten.</p>
+    <div class="knopfreihe"><a class="knopf" href="/verkaufen">Weiteres Fahrzeug anbieten</a></div>
+    {% else %}<div class="knopfreihe"><a class="knopf primaer" href="/verkaufen">Weitere Anfrage erfassen</a><a class="knopf" href="/anfragen">Zu den Anfragen</a></div>{% endif %}
   </section>
+  {% if portal %}{% include "portal_fuss.html" %}{% endif %}
 </main>
 <script>
-var TOKEN = {{ token | tojson }};
+var TOKEN = {{ token | tojson }}, PORTAL = {{ (portal or false) | tojson }}, FORMULAR = {{ (formular or "") | tojson }};
 (function(){
   var f = document.getElementById('f'), schritt = 1, fotos = [];
   var fehler = document.getElementById('fehler');
@@ -118,6 +129,7 @@ var TOKEN = {{ token | tojson }};
     d.maengel = [].slice.call(f.querySelectorAll('[name=maengel]:checked')).map(function(x){ return x.value; });
     d.einwilligung = f.elements.einwilligung.checked;
     d.weitergabe = f.elements.weitergabe.checked;
+    if(PORTAL){ d.formular = FORMULAR; d.feld_leer = f.elements.feld_leer.value; }
     return d;
   }
   document.getElementById('weiter').onclick = function(){ if(pruefe(schritt)) zeige(schritt + 1); };
@@ -147,8 +159,9 @@ var TOKEN = {{ token | tojson }};
     e.target.value = '';
   };
 
-  function post(url, d){
-    return fetch(url, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','X-Scout-Token':TOKEN}, body:JSON.stringify(d)})
+  function post(url, d, upload){
+    var kopf = {'Content-Type':'application/json'}; if(!PORTAL) kopf['X-Scout-Token'] = TOKEN; if(upload) kopf['X-Portal-Upload'] = upload;
+    return fetch(url, {method:'POST', credentials:'same-origin', headers:kopf, body:JSON.stringify(d)})
       .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(x){ if(!r.ok) throw new Error(x.fehler || ('Fehler ' + r.status)); return x; }); });
   }
   function euro(x){ return x.toLocaleString('de-DE') + ' €'; }
@@ -156,15 +169,16 @@ var TOKEN = {{ token | tojson }};
     e.preventDefault();
     if(!pruefe(3)) return;
     var knopf = document.getElementById('senden'); knopf.disabled = true; knopf.textContent = 'Wird gesendet …';
-    post('/api/verkaufsanfrage', daten()).then(function(r){
+    post(PORTAL ? '/api/portal/anfrage' : '/api/verkaufsanfrage', daten()).then(function(r){
       document.getElementById('referenz').textContent = r.referenz;
       if(r.spanne){ document.getElementById('spanne').textContent = euro(r.spanne[0]) + ' – ' + euro(r.spanne[1]); document.getElementById('spanne-box').hidden = false; }
       f.hidden = true; document.querySelector('.schritte').hidden = true; document.getElementById('fertig').hidden = false;
       var st = document.getElementById('fotostatus'), fertig = 0;
-      if(!fotos.length) return;
+      if(PORTAL && r.status_link){ var l = document.getElementById('statuslink'); l.href = r.status_link; l.textContent = r.status_link; document.getElementById('status-box').hidden = false; }
+      if(!fotos.length || (PORTAL && !r.upload)) return;
       st.textContent = 'Fotos werden übertragen …';
       return fotos.reduce(function(p, bild){
-        return p.then(function(){ return post('/api/verkaufsanfrage/' + r.id + '/foto', {bild:bild}).then(function(){ fertig++; st.textContent = fertig + ' von ' + fotos.length + ' Fotos übertragen'; }); });
+        return p.then(function(){ return post(PORTAL ? '/api/portal/foto' : '/api/verkaufsanfrage/' + r.id + '/foto', {bild:bild}, PORTAL ? r.upload : null).then(function(){ fertig++; st.textContent = fertig + ' von ' + fotos.length + ' Fotos übertragen'; }); });
       }, Promise.resolve()).then(function(){ st.textContent = 'Alle ' + fotos.length + ' Fotos übertragen ✓'; },
                                 function(err){ st.textContent = fertig + ' von ' + fotos.length + ' Fotos übertragen – ' + err.message; });
     }, function(err){ meldung(err.message); knopf.disabled = false; knopf.textContent = 'Anfrage senden'; });

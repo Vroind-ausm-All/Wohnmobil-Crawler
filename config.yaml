@@ -387,6 +387,36 @@ verkaeuferportal:
   spanne_mindest_sicherheit: mittel  # nur bei Datenlage „mittel“ oder „hoch“
   einwilligung_version: "2026-10-entwurf-2" # Stand des Einwilligungstexts (2: + freiwillige Weitergabe an Standorte); bei jeder Textänderung erhöhen
 
+# Öffentliches Ankaufsportal (P7-03, ADR-068): eigener Prozess „python scout.py portal“ mit NUR Formular, Statusseite, Impressum und
+# Datenschutz – die Team-App bleibt getrennt hinter Anmeldung. Startet erst, wenn aktiv: true, oeffentliche_url und impressum gesetzt sind
+# und die Umgebungsvariable SCOUT_PORTAL_SCHLUESSEL (mind. 32 Zeichen) existiert. Nie ins Repository: der Schlüssel.
+# Öffentlich nur über den HTTPS-Reverse-Proxy (docs/SERVERBETRIEB.md). Texte vor dem Start rechtlich prüfen lassen.
+portal:
+  aktiv: false                    # Freigabe durch den Betreiber
+  port: 8770                      # lauscht nur auf 127.0.0.1
+  oeffentliche_url: ""            # z. B. https://verkaufen.firma.de
+  vertrauter_proxy: false         # Pflicht zum Start: true (Portal läuft nur hinter dem eigenen Reverse-Proxy, der X-Forwarded-For setzt)
+  texte_geprueft: false           # true erst nach rechtlicher Prüfung von Impressum, Datenschutz und Einwilligung (blendet den Entwurfshinweis aus)
+  status_tage: 365                # Gültigkeit des persönlichen Statuslinks
+  upload_minuten: 60              # Fotos hochladen nach dem Absenden (höchstens 12 je Anfrage)
+  min_sekunden: 3                 # Mindest-Ausfüllzeit gegen Programme
+  anfragen_je_ip_stunde: 5        # Grenzen im Speicher (0 = aus); zusätzlich Grenzen im Reverse-Proxy empfohlen
+  anfragen_je_stunde: 60
+  abrufe_je_ip_minute: 60        # Seitenabrufe (statische Dateien zählen nicht)
+  sendungen_je_ip_minute: 30      # alle POST, geprüft vor dem Lesen des Inhalts
+  fotos_je_stunde: 300            # Fotos insgesamt (Plattenplatz)
+  impressum:                      # Anbieterkennzeichnung (§ 5 DDG): name, anschrift, email sind Pflicht für den Start
+    name: ""
+    anschrift: ""                 # mehrzeilig mit \n
+    telefon: ""
+    email: ""
+    vertreten_durch: ""
+    register: ""
+    ust_id: ""
+    hoster: ""                    # für die Datenschutzhinweise
+    aufsicht: ""                  # zuständige Datenschutz-Aufsichtsbehörde
+    server_protokolle: ""         # was Reverse-Proxy/Hoster protokolliert und wie lange
+
 # Demo-Auktionen (Phase D, ADR-027): nur Demo, nichts ist verbindlich; einen Zuschlag bestätigt ausschließlich der Inhaber.
 # Bieten dürfen nur geprüfte Standorte auf Anfragen mit Zustimmung des Verkäufers und Freigabe durch den Inhaber.
 auktion:
