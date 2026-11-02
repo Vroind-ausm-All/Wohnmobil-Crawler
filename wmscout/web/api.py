@@ -57,6 +57,7 @@ from .. import abdeckung
 from ..bewertung.deal_score import einstellungen as deal_einstellungen
 from ..bewertung.gruppen import nur_einmal
 from .. import verhandlung
+from ..bewertung.meldungen import meldungen
 from ..zugaenge import PLATTFORMEN as ZUGANG_PLATTFORMEN
 from ..zugaenge import ZugangSpeicher
 from ..domaene import PLATTFORM_TEXT, PLATTFORMEN
@@ -558,6 +559,9 @@ class Anfrage:
             return self.json(200, k.katalog())
         if p == "/api/heute":
             return self.json(200, self.heute())
+        if p == "/api/meldungen":
+            # was jetzt Aufmerksamkeit braucht (P6-04): Antwort fällig, Besichtigung, Nachfassen, Preissenkung, neu – „gelesen“ merkt das Gerät
+            return self.json(200, {"meldungen": meldungen(k.zeilen(), datetime.now(), self.k.cfg), "jetzt": datetime.now().isoformat(timespec="seconds")})
         if p == "/api/dubletten-vorschlaege":
             if self.nutzer.get("rolle") not in TEXT_IMPORT_ROLLEN:       # Inhaber und Mitarbeiter; Standort-Zugänge nie
                 raise Antwort(403, "Nur für Inhaber und Mitarbeiter", grund="recht")

@@ -16,6 +16,8 @@ from .domaene import PLATTFORM_TEXT as QUELLE_TEXT
 from .domaene import STATUS
 from .schalter import eingang_aktiv
 from . import verhandlung as vh
+from .bewertung.meldungen import ARTEN as MELDUNG_ARTEN
+from .bewertung.meldungen import meldungen
 from .kontakte import KANAELE
 
 PIPELINE_MAX = 60               # Zeilen im Bereich „Ankauf in Arbeit“; der Rest steht in der Liste (Filter „In Arbeit“)
@@ -71,7 +73,8 @@ def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None =
         signatur={k: cfg["anschreiben"].get(k, "") for k in ("ansprechpartner", "firma", "telefon")},
         deal_schwelle=deal_einstellungen(cfg)["schwelle"], QUELLEN=QUELLE_TEXT, STATUS_NAMEN=STATUS,
         pipeline=pipeline[:PIPELINE_MAX], pipeline_mehr=max(0, len(pipeline) - PIPELINE_MAX), pipeline_zaehl=pipeline_zaehl, STUFEN=vh.STUFEN,
-        VH_ARTEN=vh.ARTEN, KANAELE=KANAELE,
+        VH_ARTEN=vh.ARTEN, KANAELE=KANAELE, meldungen=meldungen(zeilen, datetime.now(), cfg), MELDUNG_ARTEN=MELDUNG_ARTEN,
+        jetzt_iso=datetime.now().isoformat(timespec="seconds"),
         quellen=sorted({z["a"].get("quelle") or "kleinanzeigen" for z in zeilen})), zaehl
 
 

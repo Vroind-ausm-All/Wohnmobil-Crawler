@@ -4,7 +4,20 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
-## P6-03 – Kontaktstatus, Verhandlungsnotizen und Besichtigungsstatus im Dashboard (01.11.2026) · REVIEW
+## P6-04 – Meldungen im Dashboard: Antwort fällig, Besichtigung, Nachfassen, Preissenkung, neu (02.11.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2626 bestanden, 1 fehlgeschlagen: `test_team_bearbeitung.py::test_statischer_report_ohne_team_unveraendert` (vergleicht zwei Berichte byte-genau; der neue Zeitstempel `data-jetzt` der Meldungen unterschied sich) – Hilfsfunktion blendet ihn wie den „Stand“ aus; danach `test_team_bearbeitung.py` + `test_meldungen.py` 57 bestanden; Vollsuite danach nicht erneut |
+| `ruff check .` | grün |
+| Neu `test_meldungen.py` (12): Antwort fällig (dringend nach 24 h), Besichtigung heute/morgen (nicht übermorgen, nicht vorbei, nicht Vortag), Nachfassen, Preis (im Rahmen dringend), Neu (nur bereit oder Top-Deal), Reihenfolge, je Fahrzeug eine Meldung, Grenze 100; Termin mit Zeitzone und unlesbar; Notiz nach Antwort erledigt sie; Zeitpunkt der Preissenkung beim Nachfassen; `nachfass_grund(beantwortet)`; Bewertung: Antwort ersetzt Nachfassen, auch bei geplanter Besichtigung; API (Felder, keine Eintragstexte); Startseite und `/api/meldungen` mit Zeitzonen-Termin erreichbar; Desktop-HTML (App und Bericht); ohne Meldungen kein Bereich; Handy-App statisch, nicht im Gerätespeicher | bestanden |
+| Klicktest Chromium (Playwright), Desktop 1280 px und 390 px, angemeldet: 4 Meldungen (Antwort, Besichtigung morgen, Preis, Neu) ungelesen markiert, „alle gelesen“ → 0 ungelesen, „öffnen“ öffnet das Fenster, kein Querscrollen | bestanden (erster Lauf: 2 Meldungen mit Zukunftszeitpunkt blieben ungelesen – behoben, wiederholt) |
+| Klicktest Handy-App `/m`: Abschnitt „Meldungen“ mit „4 neu“, „alle gelesen“ → 0, Tipp öffnet das Fahrzeug, keine JS-Fehler | bestanden |
+| QA-Review (`qa-security-reviewer`, eine Runde; gezielte Tests 82 + 436 bestanden; Händler 403 über Positivliste) | Freigabe mit Auflagen; B1–B7 behoben, B8 beim Commit beachtet |
+
+**Nicht geprüft:** CI (läuft nach dem Push), Windows, echtes Handy und Service-Worker-Wechsel auf Version 22, Vollsuite nach der Testanpassung in `test_team_bearbeitung.py`; Korrekturen nicht erneut von der QA geprüft.
+
+## P6-03 – Kontaktstatus, Verhandlungsnotizen und Besichtigungsstatus im Dashboard (01.11.2026) · DONE (PR #53 gemergt)
 
 | Prüfung | Ergebnis |
 |---|---|

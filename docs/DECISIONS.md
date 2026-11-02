@@ -1428,3 +1428,32 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   einem anderen Inserat desselben Fahrzeugs stehen im Verlauf, bestimmen die Lage aber nicht (QA B5, P6-03b). Zeitpunkte sind lokale Zeit
   wie in `kontakte`; in der doppelten Stunde der Zeitumstellung kann die Reihenfolge Kontakt/Antwort kippen (B7, angenommen). Das
   Audit-Protokoll nennt bei Einträgen kein Objekt, wie bei `/api/notiz` (B6, P6-03b).
+
+## ADR-064 – Meldungen im Dashboard: aus den bewerteten Zeilen, „ungelesen“ je Gerät · gilt (02.11.2026)
+
+* **Kontext:** P6-04 verlangt Benachrichtigungen im Dashboard für Neues, Preissenkungen und fällige Antworten. Vorhanden: Browser-Hinweis und
+  Mail nach einem Suchlauf (neue Treffer, Preissenkungen, Nachfassen), Liste „Neu & gesenkt“ (P4-03), Filter „Nachfassen“, Kontaktlage
+  (P6-03). Es fehlte eine Stelle, an der alles steht, was **jetzt** zu tun ist – auch zwischen zwei Suchläufen und auf dem Handy.
+* **Entscheidung:**
+  1. **Meldungen** (`bewertung/meldungen.py`, rein) aus den bewerteten Zeilen: **Antwort fällig** (Verkäufer hat nach dem letzten Kontakt
+     geantwortet – unsere Rückmeldung; dringend nach 24 Stunden), **Besichtigung** heute/morgen (heute dringend), **Nachfassen** (wie der
+     Filter), **Preis gesenkt** (deutliche Senkung wie P4-03; dringend, wenn sie den Preis in den Rahmen bringt), **Neu** (frisch und
+     Anschreiben bereit oder Top-Deal). Je Art und Fahrzeug (mit Dubletten) eine Meldung; dringende zuerst, dann nach Art, jüngste zuerst;
+     höchstens 100. Keine Eintragstexte, keine Personendaten.
+  2. **„Nachfassen“ nach einer Antwort:** Hat der Verkäufer nach dem letzten Kontakt geantwortet (P6-03), gilt „seit n Tagen keine Antwort“
+     nicht mehr – weder als Meldung noch im Filter, in den Zählern, in Mail und Hinweis (`nachfass_grund(beantwortet=…)`). Ein gesenkter
+     Preis bleibt ein Anlass zum Nachfassen.
+  3. **Anzeige:** Desktop `<details id="meldungen">` über „Ankauf in Arbeit“ (auch im statischen Bericht), Handy-Startseite Abschnitt
+     „Meldungen“ (`/api/meldungen`, nicht im Gerätespeicher). **„Ungelesen“** = Zeitpunkt der Meldung nach „alle gelesen“ – gemerkt **je
+     Browser/Gerät** in `localStorage`; „alle gelesen“ gilt bis zur **Serverzeit** und mindestens bis zur jüngsten gezeigten Meldung
+     (eine Besichtigung morgen trägt einen Zeitpunkt in der Zukunft). Keine Schemaänderung.
+  4. Es wird nichts versendet; Browser-Hinweis und Mail nach dem Suchlauf bleiben wie bisher.
+  5. **Korrekturrunde (QA):** Zeiten mit Zeitzone (ein Termin „…+01:00“) werden in Ortszeit umgerechnet – sie legten sonst Startseite und
+     Meldungen lahm (B1). „Antwort fällig“ ist erledigt durch einen neuen Kontakt, eine Notiz nach der Antwort, eine Besichtigung oder einen
+     Erledigt-Status (B4). Ein Termin vom Vortag heißt nicht „morgen“ (B5). „Beantwortet“ hängt an der Antwort selbst, nicht an der Stufe –
+     auch bei geplanter Besichtigung kein „keine Antwort“ (B6). Nachfassen wegen Preissenkung trägt den Zeitpunkt der Senkung (B2).
+* **Alternativen:** „gelesen“ je Nutzer in der Datenbank (Schemaänderung, im Einzelplatz ohne Nutzer nicht sinnvoll); Meldungen als
+  gespeicherte Ereignisse (doppelt zu den Ursprungsdaten, müssten bei Statuswechsel nachgeführt werden); Push-Benachrichtigungen aufs Handy
+  (dauerhafter Dienst und Schlüssel – Freigabe nötig, Regel 13).
+* **Folgen / offen:** Wer an zwei Geräten arbeitet, markiert an jedem gelesen. Die Schwelle „dringend nach 24 Stunden“ ist eine Annahme
+  (Konstante `ANTWORT_DRINGEND_STUNDEN`).
