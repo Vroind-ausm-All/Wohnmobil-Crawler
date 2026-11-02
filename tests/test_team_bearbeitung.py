@@ -888,6 +888,7 @@ def test_csv_team_spalten_am_ende_ohne_team_leer(cfg, db, importiert, team, tmp_
 
 
 def _ohne_zeit(html: str) -> str:
+    html = re.sub(r'data-jetzt="[^"]*"', 'data-jetzt="<ZEIT>"', html)               # Serverzeit der Meldungen (P6-04)
     return re.sub(r"\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}", "<ZEIT>", html)           # „Stand“ des Reports
 
 

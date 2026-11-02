@@ -87,6 +87,8 @@ kbd{font:12px ui-monospace,monospace;padding:1px 5px;border:1px solid var(--line
 .tag.kontakt.wartet{background:var(--gelb-bg);color:var(--gelb)} .tag.kontakt.antwort{background:var(--gruen-bg);color:var(--gruen)} .tag.kontakt.besichtigung{background:var(--akzent);color:var(--akzent-ink)}
 #ankauf-arbeit table{width:100%;border-collapse:collapse;font-size:13px} #ankauf-arbeit td,#ankauf-arbeit th{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 #ankauf-arbeit .stufen{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px} .vh-liste p{margin:4px 0} .vh-form{display:grid;gap:6px;margin-top:6px}
+#meldungen summary{cursor:pointer} .meldungsliste{list-style:none;margin:8px 0 0;padding:0} .meldungsliste li{padding:6px 0;border-bottom:1px solid var(--line)}
+.meldungsliste li.ungelesen{border-left:3px solid var(--akzent);padding-left:8px} .meldungsliste li.dringend .tag.meldung{background:var(--rot-bg);color:var(--rot)}
 .vh-form .zeile{display:flex;flex-wrap:wrap;gap:6px;align-items:center} @media (max-width:640px){ #ankauf-arbeit .weg{display:none} } .preiszeile{margin:0 0 6px;font-size:13px}
 table.verlauf td{padding:2px 8px 2px 0} .gruppenliste{list-style:none;padding:0;margin:0} .gruppenliste li{padding:6px 0;border-bottom:1px solid var(--line)}
 .gruppenliste .btn{padding:2px 8px;font-size:12px}
@@ -238,6 +240,18 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <div class="kpi"><b>{{ zaehl.nachfassen }}</b><span>Nachfassen fällig</span></div>
     <div class="kpi"><b>{{ zaehl.arbeit }}</b><span>In Arbeit (Text kopiert, kontaktiert, Verhandlung, Besichtigung)</span></div>
   </div>
+
+  {% if meldungen %}
+  <details class="kasten" id="meldungen" open data-jetzt="{{ jetzt_iso }}">
+    <summary><b>🔔 Meldungen</b> <span id="meldungen-zahl">({{ meldungen | length }})</span>
+      <button class="btn" type="button" id="meldungen-gelesen" style="margin-left:8px">alle gelesen</button></summary>
+    <ul class="meldungsliste">{% for m in meldungen %}
+      <li data-meldung="{{ m.art }}" data-zeit="{{ m.zeit }}" data-id="{{ m.id }}"{% if m.dringend %} class="dringend"{% endif %}>
+        <span class="tag meldung {{ m.art }}">{{ m.art_text }}</span> <b>{{ m.fahrzeug or 'Fahrzeug' }}</b> <span class="meta">{{ QUELLEN.get(m.quelle, m.quelle) }}</span><br>
+        <span>{{ m.text }}</span> <button class="btn" type="button" data-meldung-oeffnen="{{ m.id }}">öffnen</button></li>{% endfor %}</ul>
+    <p class="meta">„gelesen“ merkt sich dieser Browser; es wird nichts versendet.</p>
+  </details>
+  {% endif %}
 
   {% if pipeline %}
   <section class="kasten" id="ankauf-arbeit" aria-labelledby="aa-titel">
@@ -843,6 +857,28 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
       .then(function(){ toast('Notiz gespeichert'); }, function(){ toast('Notiz konnte nicht gespeichert werden'); });
   });
 
+  // Meldungen (P6-04): ungelesen = jünger als „alle gelesen“ (je Browser, localStorage); „öffnen“ führt ins Fahrzeugfenster
+  var meldungsBox = document.getElementById('meldungen');
+  if(meldungsBox){
+    var gelesenBis = function(){ try{ return localStorage.getItem('scout-meldungen-gelesen') || ''; }catch(e){ return ''; } };
+    var markiere = function(){
+      var bis = gelesenBis(), neu = 0;
+      meldungsBox.querySelectorAll('[data-meldung]').forEach(function(li){ var u = li.dataset.zeit > bis; li.classList.toggle('ungelesen', u); if(u) neu++; });
+      document.getElementById('meldungen-zahl').textContent = '(' + (neu ? neu + ' neu von ' : '') + meldungsBox.querySelectorAll('[data-meldung]').length + ')';
+    };
+    document.getElementById('meldungen-gelesen').addEventListener('click', function(e){
+      // bis jetzt – und mindestens bis zur jüngsten gezeigten Meldung (eine Besichtigung morgen trägt einen Zeitpunkt in der Zukunft)
+      var bis = meldungsBox.dataset.jetzt || jetztLokal();                      // maßgeblich ist die Zeit des Servers, nicht die Geräteuhr (QA B3)
+      meldungsBox.querySelectorAll('[data-meldung]').forEach(function(li){ if(li.dataset.zeit > bis) bis = li.dataset.zeit; });
+      e.preventDefault(); try{ localStorage.setItem('scout-meldungen-gelesen', bis); }catch(err){} markiere();
+    });
+    meldungsBox.addEventListener('click', function(e){
+      var b = e.target.closest('[data-meldung-oeffnen]'); if(!b) return;
+      var id = b.getAttribute('data-meldung-oeffnen');
+      if(karte(id)) oeffne(id); else toast('Dieses Inserat steht nicht in der Liste.');
+    });
+    markiere();
+  }
   // Ankauf in Arbeit (P6-03): Zeile öffnet das Fahrzeugfenster
   var ankaufArbeit = document.getElementById('ankauf-arbeit');
   if(ankaufArbeit) ankaufArbeit.addEventListener('click', function(e){

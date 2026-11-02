@@ -6,7 +6,24 @@ Wert „–“.
 
 ---
 
-## P6-03 – Kontaktstatus, Verhandlungsnotizen und Besichtigungsstatus im Dashboard (01.11.2026) · Status: REVIEW
+## P6-04 – Meldungen im Dashboard: Antwort fällig, Besichtigung, Nachfassen, Preissenkung, neu (02.11.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 02.11.2026: „P6-04 fertigstellen“.
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/bewertung/meldungen.py` (neu), `wmscout/bewertung/auswertung.py` (`nachfass_grund(beantwortet=…)`),
+  `wmscout/web/api.py` (`/api/meldungen`), `wmscout/ausgabe.py`, `vorlagen/report.html`, `wmscout/web/static/mobil.js`, `mobil.css`,
+  `sw.js` (Version 22); Tests `test_meldungen.py` (neu); Doku ADR-064, ROADMAP (P6-03 DONE, P6-04 REVIEW), README.
+- **Implementierte Funktionen:** siehe ADR-064 – Meldungsliste im Dashboard (aufklappbar, „ungelesen“ markiert, „alle gelesen“, „öffnen“)
+  und auf der Handy-Startseite; kein „seit n Tagen keine Antwort“ mehr, wenn eine Antwort eingetragen ist. Keine Schemaänderung.
+- **Klicktest-Fund behoben:** „alle gelesen“ ließ Meldungen mit Zeitpunkt in der Zukunft (Besichtigung morgen) ungelesen.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Freigabe mit Auflagen**. Korrekturrunde: B1 (hoch: Termin mit Zeitzone → Startseite 500), B2 (hoch: „alle
+  gelesen“ bei Zukunftszeitpunkten – schon nach dem Klicktest behoben, zusätzlich Zeitpunkt der Preissenkung), B3 (Serverzeit statt
+  Geräteuhr), B4 (Notiz nach der Antwort erledigt „Antwort fällig“), B5 (Vortag nicht „morgen“), B6 (beantwortet unabhängig von der Stufe),
+  B7 (fehlender Fahrzeugname) behoben; B8 beim Commit beachtet; B9 diese Einträge. Korrekturen nicht erneut von der QA geprüft.
+- **Nächster sinnvoller Schritt:** P6-05 (Kennzahlen-Ansicht) – nach Freigabe.
+
+## P6-03 – Kontaktstatus, Verhandlungsnotizen und Besichtigungsstatus im Dashboard (01.11.2026) · Status: DONE (PR #53 gemergt)
 
 - **Auftrag:** Betreiber 01.11.2026: „P6-03 fertigstellen“.
 - **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer` und `scout-data-engineer`); QA `qa-security-reviewer`.

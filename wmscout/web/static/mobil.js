@@ -145,8 +145,23 @@
   window.addEventListener("offline", syncAnzeige);
 
   // ---------------------------------------------------------------- Seiten
+  // Meldungen (P6-04): Antwort fällig, Besichtigung, Nachfassen, Preissenkung, neu; „gelesen“ merkt dieses Gerät (localStorage), Texte nur über esc()
+  var MELDUNG_GELESEN = "scout-meldungen-gelesen";
+  function meldungenGelesen() { try { return localStorage.getItem(MELDUNG_GELESEN) || ""; } catch (e) { return ""; } }
+  function meldungenAbschnitt(l) {
+    if (!l.length) return "";
+    var bis = meldungenGelesen(), neu = l.filter(function (m) { return m.zeit > bis; }).length;
+    return '<h2>Meldungen' + (neu ? ' <span class="tag neu" data-meldungen-neu="">' + neu + " neu</span>" : "") + "</h2>" +
+      '<div class="karte" data-meldungen="">' + l.slice(0, 12).map(function (m) {
+        return '<a class="zeile meldung' + (m.zeit > bis ? " ungelesen" : "") + (m.dringend ? " dringend" : "") + '" href="#/fahrzeug/' + encodeURIComponent(m.id) + '">' +
+          '<span><span class="tag">' + esc(m.art_text) + "</span> <b>" + esc(m.fahrzeug || "Fahrzeug") + '</b><br><span class="leise">' + esc(m.text) + "</span></span></a>";
+      }).join("") + (l.length > 12 ? '<p class="leise">… und ' + (l.length - 12) + " weitere am Büro-PC</p>" : "") +
+      '<button class="knopf klein" data-aktion="meldungen-gelesen">alle gelesen</button></div>';
+  }
   function heute() {
-    return api("/api/heute").then(function (d) {
+    return Promise.all([api("/api/heute"), api("/api/meldungen").catch(function () { return { meldungen: [] }; })]).then(function (r) {
+      var d = r[0], meldungenListe = r[1].meldungen || [];
+      S.meldungen = meldungenListe; S.meldungenJetzt = r[1].jetzt || "";
       var t = heuteIso(), ich = S.ich.nutzer;
       var heutige = d.termine.filter(function (b) { return (b.termin || "").slice(0, 10) === t; });
       inhalt.innerHTML =
@@ -157,6 +172,7 @@
         '<a class="kachel" href="#/liste/nachfassen"><b>' + d.nachfassen + "</b><span>Nachfassen</span></a>" +
         '<a class="kachel" href="#/liste/arbeit"><b>' + d.arbeit + "</b><span>In Arbeit</span></a>" +
         '<a class="kachel" href="#/liste/neuigkeiten"><b>' + (d.neuigkeiten || 0) + "</b><span>Neu &amp; gesenkt</span></a></div>" +
+        meldungenAbschnitt(meldungenListe) +
         (textDarf() ? '<div class="reihe"><a class="knopf primaer" href="#/einlesen">＋ Inserat einlesen (Link + Text)</a></div>' : "") +
         '<p><a class="knopf klein" href="/anfragen">Verkaufsanfragen</a> <a class="knopf klein" href="/verkaufen">+ Anfrage erfassen</a></p>' +
         "<h2>Besichtigungen heute</h2>" + (heutige.length ? heutige.map(terminKarte).join("") : '<p class="leise">Keine Termine für heute.</p>') +
@@ -749,6 +765,12 @@
         toast(ok ? "Text kopiert ✓ – in " + (inhalt.dataset.quelle === "mobile.de" ? "mobile.de im „E-Mail“/„Nachricht“-Formular" : inhalt.dataset.quelle === "kleinanzeigen" ? "Kleinanzeigen" : "der Anzeige") + " einfügen, senden, dann „gesendet ✓“" : "Bitte Text markieren und kopieren");
         fahrzeug(id);
       }, function (err) { if (fenster) fenster.close(); teamFehler(err, id); });
+    } else if (a === "meldungen-gelesen") {
+      // bis jetzt – und mindestens bis zur jüngsten gezeigten Meldung (eine Besichtigung morgen trägt einen Zeitpunkt in der Zukunft)
+      var bis = S.meldungenJetzt || "";                                        // maßgeblich ist die Zeit des Servers, nicht die Geräteuhr (QA B3)
+      (S.meldungen || []).forEach(function (m) { if (m.zeit > bis) bis = m.zeit; });
+      try { localStorage.setItem(MELDUNG_GELESEN, bis); } catch (x) { /* privat */ }
+      heute();
     } else if (a === "vh-eintragen") {
       var art = document.getElementById("vh-art").value, txt = document.getElementById("vh-text").value, bet = document.getElementById("vh-betrag").value;
       if (!txt.trim()) { toast("Bitte einen Text eintragen"); return; }

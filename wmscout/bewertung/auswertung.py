@@ -164,8 +164,9 @@ def _datum(iso: str | None) -> str:
     return f"{iso[8:10]}.{iso[5:7]}." if iso and len(iso) >= 10 else "?"
 
 
-def nachfass_grund(a: dict, cfg: dict, jetzt: datetime) -> str | None:
-    """Warum jetzt nachgefasst werden sollte (oder None)."""
+def nachfass_grund(a: dict, cfg: dict, jetzt: datetime, beantwortet: bool = False) -> str | None:
+    """Warum jetzt nachgefasst werden sollte (oder None). ``beantwortet``: der Verkäufer hat nach dem letzten Kontakt geantwortet (P6-03) –
+    dann ist „keine Antwort“ falsch, die Rückmeldung liegt bei uns (Meldung „Antwort fällig“, P6-04)."""
     nf = cfg.get("nachfassen") or {}
     letzter = max(a.get("kontaktiert_am") or "", a.get("nachgefasst_am") or "")
     if a.get("status") not in ("kontaktiert", "verhandlung", "abgesagt") or not letzter:
@@ -173,6 +174,8 @@ def nachfass_grund(a: dict, cfg: dict, jetzt: datetime) -> str | None:
     if a.get("preis_geaendert_am") and a["preis_geaendert_am"] > letzter:
         return f"Preis gesenkt auf {euro(a['preis'])}"
     tage = (jetzt - datetime.fromisoformat(letzter)).days
+    if beantwortet:
+        return None
     if (a["status"] == "kontaktiert" and tage >= nf.get("nach_tagen", 3)
             and (a.get("nachfass_anzahl") or 0) < nf.get("max_anzahl", 1)):
         return f"seit {tage} Tagen keine Antwort"
@@ -258,7 +261,11 @@ def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[d
         # Text gibt es für jede nicht gesperrte Anzeige; „bereit“ sind nur die, deren Ampel passt.
         # `hinweise` (z. B. Fahrzeugart nicht bestätigt) sperren nichts, sie stehen sichtbar am Fahrzeug
         brief = schreiber.text(a, b) if not sperre else None
-        grund = nachfass_grund(a, cfg, jetzt)
+        lage_a = (kontaktlage or {}).get(a["id"]) or {}
+        kontakt = verhandlung.zustand(a.get("status"), lage_a, jetzt)
+        antwort = lage_a.get("antwort")                 # beantwortet unabhängig von der Stufe (auch bei geplanter Besichtigung, QA B6)
+        beantwortet = bool(antwort) and (not lage_a.get("kontakt_am") or antwort["zeitpunkt"] >= lage_a["kontakt_am"])
+        grund = nachfass_grund(a, cfg, jetzt, beantwortet=beantwortet)
         nachfass_text, nachfass_betrag = schreiber.nachfass(a, b) if grund else (None, None)
         if cfg["rechner"]["differenzbesteuerung"]:
             ust = (b.haendler_vk - b.max_ek) * 19 / 119
@@ -284,7 +291,7 @@ def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[d
             "dubletten_ids": sorted(b["id"] for b in andere),       # Fahrzeuggruppe: Team-Reservierungen wirken auf alle
             "preisverlauf": pv.kurz((preise or {}).get(a["id"])),        # Preisstände dieses Inserats (P6-02)
             # Kontaktlage (P6-03): Text kopiert, wartet auf Antwort, Antwort erhalten, Besichtigung – mit letzter Notiz
-            "kontakt": verhandlung.zustand(a.get("status"), (kontaktlage or {}).get(a["id"]), jetzt),
+            "kontakt": kontakt,
         })
     # Dublettengruppe für die Anzeige (P6-02): die anderen Inserate desselben Fahrzeugs (eine Stufe wie Sperren und Team, ADR-040)
     # mit Preis, Status und Preisverlauf; Rang für „gleiches Fahrzeug nur einmal“

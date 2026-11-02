@@ -112,3 +112,6 @@ body.login{display:grid;place-items:center;min-height:100vh;padding:16px}
 /* P6-03: Kontaktlage und Verhandlung */
 .kontaktlage{margin:4px 0;font-size:13px;color:var(--mute)} .kontaktlage.wartet{color:var(--gelb)} .kontaktlage.antwort{color:var(--gruen)} .kontaktlage.besichtigung{color:var(--akzent)}
 .vh{margin:6px 0;font-size:14px}
+/* P6-04: Meldungen */
+.zeile.meldung{display:block;padding:8px 0;border-bottom:1px solid var(--line);color:inherit;text-decoration:none}
+.zeile.meldung.ungelesen{border-left:3px solid var(--akzent);padding-left:8px} .zeile.meldung.dringend .tag{background:var(--rot-bg);color:var(--rot)}

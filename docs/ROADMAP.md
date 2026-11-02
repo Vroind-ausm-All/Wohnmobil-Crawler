@@ -257,8 +257,8 @@ Handy-App mit Besichtigung, Mängelabzug, Protokoll, Terminen, WhatsApp-Links.
 |---|---|---|---|---|
 | P6-01 | P1 | Kombinierte Liste aller Quellen, Sortierung nach Deal-Score, Risikofaktoren sichtbar | scout-ui-engineer | DONE (ADR-061; PR #51 gemergt; Deal-Score jetzt auch in der Handy-App) |
 | P6-02 | P1 | Dublettengruppen und Preisverläufe anzeigen | scout-ui-engineer | DONE (ADR-062; PR #52 gemergt; „gleiches Fahrzeug nur einmal“) |
-| P6-03 | P2 | Kontaktstatus (vorbereitet/kontaktiert/Antwort), Verhandlungsnotizen, Besichtigungsstatus im Dashboard | scout-ui-engineer | REVIEW (ADR-063, Schema v23; Branch `claude/phase6-kontakt-dashboard`) |
-| P6-04 | P2 | Benachrichtigungen im Dashboard (neu, Preissenkung, Antwort fällig) | scout-ui-engineer | TODO |
+| P6-03 | P2 | Kontaktstatus (vorbereitet/kontaktiert/Antwort), Verhandlungsnotizen, Besichtigungsstatus im Dashboard | scout-ui-engineer | DONE (ADR-063, Schema v23; PR #53 gemergt) |
+| P6-04 | P2 | Benachrichtigungen im Dashboard (neu, Preissenkung, Antwort fällig) | scout-ui-engineer | REVIEW (ADR-064; Branch `claude/phase6-benachrichtigungen`) |
 | P6-05 | P2 | Kennzahlen-Ansicht (siehe unten) | scout-ui-engineer, scout-data-engineer | TODO |
 | P6-01b | P3 | Handy-App: Listenaufruf direkt nach dem Login abfangen, solange `/api/ich` noch lädt (einmal „reading 'team'“ im Klicktest P6-01, bestehender Code) | scout-ui-engineer | TODO |
 | P6-02b | P3 | Preisverlauf nur für aktive Inserate und Gruppenmitglieder lesen (große Bestände); Filterzähler mit „gleiches Fahrzeug nur einmal“ als Fahrzeuge zählen (QA P6-02 B4/B7) | scout-data-engineer, scout-ui-engineer | TODO |
