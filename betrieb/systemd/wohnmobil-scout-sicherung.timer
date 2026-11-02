@@ -1,0 +1,12 @@
+# Startet die Sicherung täglich nachts (verpasste Läufe nach einem Neustart nachholen).
+# systemctl enable --now wohnmobil-scout-sicherung.timer ; prüfen: systemctl list-timers
+[Unit]
+Description=Wohnmobil-Scout Sicherung täglich
+
+[Timer]
+OnCalendar=*-*-* 03:20:00
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

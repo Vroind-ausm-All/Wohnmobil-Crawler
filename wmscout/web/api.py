@@ -82,7 +82,7 @@ log = logging.getLogger("scout")
 STATIC = Path(__file__).with_name("static")
 COOKIE = "scout_sitzung"
 OFFENE_PFADE = {"/login", "/api/login", "/einladung", "/api/einladung", "/api/einladung/pruefen", "/manifest.webmanifest", "/sw.js",
-                "/favicon.ico"}
+                "/favicon.ico", "/gesund"}
 MAX_JSON = 1_000_000
 MAX_FOTO = 12_000_000          # Base64-kodiert, entspricht ca. 8 MB Bild
 MAX_IMPORT_DATEIEN = 25        # gespeicherte Seiten je Klick, der Rest beim nächsten Mal
@@ -530,6 +530,9 @@ class Anfrage:
     # ----- GET
     def get(self):
         k, p = self.k, self.pfad
+        if p == "/gesund":                                # Health-Check für Überwachung/Reverse-Proxy (P7-04): ohne Anmeldung, ohne Daten
+            k.db.con.execute("SELECT 1 FROM schema_version LIMIT 1").fetchone()
+            return self.json(200, {"ok": True})
         if p == "/login":
             ziel = sicheres_ziel((self.query.get("weiter") or [None])[0])
             return self.html(k.env.get_template("login.html").render(firma=k.cfg["anschreiben"]["firma"], ziel=ziel))

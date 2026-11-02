@@ -6,6 +6,21 @@ Wert „–“.
 
 ---
 
+## P7-04 – Serverbetrieb vorbereitet (02.11.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 02.11.2026: „Stelle bitte alles soweit fertig“ (Phase 7) – vorbereiten, nichts ausführen (Regel 13).
+- **Verantwortlicher Agent:** Orchestrator (im Stil von `windows-bootstrap`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `docs/SERVERBETRIEB.md` (neu), `betrieb/` (neu: systemd-Dienste für App, Portal, Sicherung, Aufbewahrungsfristen
+  mit Timern; `Caddyfile`; `logrotate-caddy-portal`; `umgebung.beispiel`; `config.local.beispiel.yaml`), `wmscout/web/api.py` (`GET /gesund`);
+  Tests `test_serverbetrieb.py` (neu); Doku ADR-069, README, PILOTBETRIEB (Verweis), ROADMAP (P7-04 REVIEW, P7-04b).
+- **Implementierte Funktionen:** siehe ADR-069 – Schritt-für-Schritt-Anleitung (Debian 13, Dienstbenutzer, Caddy für das Portal, Tailscale
+  fürs Team, Sicherung, Überwachung, Updates), gehärtete Dienste, Geheimnisse nur in der Umgebungsdatei, Health-Check ohne Daten.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Freigabe mit Auflagen** (keine kritischen Befunde). Korrekturrunde: B1 (hoch: Befehle als root → Datenbank
+  nicht mehr beschreibbar), B2–B9 behoben; B10 als P7-04b ins Backlog. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiber:** Server mieten, Domain/DNS, AV-Vertrag, Tailscale, Sicherung außer Haus, Freischaltung des Portals und des Fristen-Timers.
+- **Nächster sinnvoller Schritt:** Phase 7 ist damit vorbereitet; Inbetriebnahme durch den Betreiber.
+
 ## P7-01 – Nacharbeiten aus Phase 5/6 (02.11.2026) · Status: REVIEW
 
 - **Auftrag:** Betreiber 02.11.2026: „Stelle bitte alles soweit fertig“ – Phase 7 (ADR-066), erstes Paket.

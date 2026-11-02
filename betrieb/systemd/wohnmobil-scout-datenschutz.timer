@@ -1,0 +1,12 @@
+# Wöchentlich die Aufbewahrungsfristen anwenden. Vorbereitet, NICHT automatisch aktiv:
+# nach Freigabe durch den Betreiber: systemctl enable --now wohnmobil-scout-datenschutz.timer
+[Unit]
+Description=Wohnmobil-Scout Aufbewahrungsfristen wöchentlich
+
+[Timer]
+OnCalendar=Mon *-*-* 04:10:00
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

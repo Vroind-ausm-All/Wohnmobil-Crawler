@@ -1,0 +1,53 @@
+# Caddy als HTTPS-Reverse-Proxy (P7-04, docs/SERVERBETRIEB.md). Zertifikate holt Caddy selbst (Let's Encrypt), HTTP leitet auf HTTPS um.
+# Platzhalter ersetzen (verkaufen.example.de, app.example.de), dann: caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
+
+# Öffentliches Ankaufsportal → 127.0.0.1:8770 (nur Formular, Status, Impressum, Datenschutz)
+verkaufen.example.de {
+	request_body {
+		max_size 15MB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	# Caddy setzt X-Forwarded-For selbst (eingehende Werte von außen ignoriert er); dafür portal → vertrauter_proxy: true
+	reverse_proxy 127.0.0.1:8770
+	log {
+		# Rotation täglich durch logrotate (betrieb/logrotate-caddy-portal, 14 Tage) – Caddys eigene Rotation nur nach Größe
+		output file /var/log/caddy/portal.log {
+			roll_disabled
+		}
+		# IP-Adressen nur gekürzt, keine Kopfzeilen (Upload-Token, Cookies, Browser) und keine Inhalte
+		format filter {
+			wrap json
+			fields {
+				request>remote_ip ip_mask {
+					ipv4 24
+					ipv6 32
+				}
+				request>client_ip ip_mask {
+					ipv4 24
+					ipv6 32
+				}
+				request>headers delete
+				resp_headers delete
+			}
+		}
+	}
+}
+
+# Team-App – nur Variante B (empfohlen ist Variante A: Team-App ausschließlich über Tailscale, docs/HANDY-APP.md).
+# Vorher in config.local.yaml: app → oeffentliche_url: https://app.example.de, vertrauter_proxy: true, nur_https: true.
+#app.example.de {
+#	request_body {
+#		max_size 15MB
+#	}
+#	header {
+#		Strict-Transport-Security "max-age=31536000"
+#		-Server
+#	}
+#	reverse_proxy 127.0.0.1:8765 {
+#		# Live-Aktualisierung (SSE, /api/ereignisse) ohne Pufferung weiterreichen
+#		flush_interval -1
+#	}
+#}
