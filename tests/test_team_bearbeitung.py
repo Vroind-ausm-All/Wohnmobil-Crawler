@@ -264,7 +264,10 @@ def test_setze_status_kontaktiert_setzt_kontaktiert_von_und_rollback_bei_fremdem
         db.setze_status(a, "kontaktiert", nutzer_id=anna, inhaber=True)
     # Bearbeiter nachfassen: erster Kontakt bleibt, Zähler läuft
     assert db.nachgefasst(a, "Nachfrage", nutzer_id=ben)
-    assert bearbeitung(db, a) == vorher_bearb and db.con.execute("SELECT nachfass_anzahl FROM anzeigen WHERE id=?", (a,)).fetchone()[0] == 1
+    nachher = bearbeitung(db, a)
+    # Bearbeiter und erster Kontakt bleiben; uebernommen_am verlängert die eigene Reservierung (kann eine Sekunde später liegen)
+    assert (nachher[0], nachher[2], nachher[3]) == (vorher_bearb[0], vorher_bearb[2], vorher_bearb[3]) and nachher[1] >= vorher_bearb[1]
+    assert db.con.execute("SELECT nachfass_anzahl FROM anzeigen WHERE id=?", (a,)).fetchone()[0] == 1
 
 
 def test_fehler_mitten_in_der_transaktion_rollt_uebernahme_und_status_zurueck(db, team, importiert, monkeypatch):
