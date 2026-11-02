@@ -71,12 +71,25 @@ def trichter(erste_kontakte: dict[str, str], antworten: dict[str, list[str]], be
             "antwortzeit_tage": round(median(zeiten), 1) if len(zeiten) >= MIN_FAELLE else None, "antwortzeit_faelle": len(zeiten)}
 
 
-def auswerten(abdeckung_erg: dict, zeilen: list[dict], trichter_erg: dict, im_zeitraum: dict, jetzt: datetime, tage: int) -> dict:
+def anfragen_trichter(anfragen: list[dict]) -> dict:
+    """Verkaufsanfragen, die im Zeitraum eingingen (P7-02): ``anfragen`` = [{status, angebot, besichtigt, gekauft}] – angebot = je den Status
+    „Angebot gemacht“ erreicht (laut Verlauf) oder gekauft; besichtigt = Besichtigung angelegt und nicht abgebrochen; gekauft = Status
+    „gekauft“ oder Ankaufsvorgang ohne Storno. Quoten ab ``MIN_FAELLE``."""
+    n = len(anfragen)
+    angebot, bes, kauf = (sum(bool(a[k]) for a in anfragen) for k in ("angebot", "besichtigt", "gekauft"))
+    offen = sum(a["status"] in ("eingegangen", "in_pruefung", "angebot") for a in anfragen)
+    return {"eingegangen": n, "offen": offen, "angebot": angebot, "besichtigt": bes, "gekauft": kauf,
+            "angebotsquote": _anteil(angebot, n), "besichtigungsquote": _anteil(bes, n), "ankaufsquote": _anteil(kauf, n),
+            "abgelehnt": sum(a["status"] == "abgelehnt" for a in anfragen), "zurueckgezogen": sum(a["status"] == "zurueckgezogen" for a in anfragen)}
+
+
+def auswerten(abdeckung_erg: dict, zeilen: list[dict], trichter_erg: dict, im_zeitraum: dict, jetzt: datetime, tage: int,
+              anfragen_erg: dict | None = None) -> dict:
     """Alles zusammen. ``abdeckung_erg``: Ergebnis von ``abdeckung.messe`` für denselben Zeitraum; ``im_zeitraum``: Ereignisse im Zeitraum
     (bestätigte Kontakte, Antworten, Besichtigungen, Ankäufe – unabhängig vom Kontaktzeitpunkt)."""
     return {"tage": tage, "von": beginn(jetzt, tage).isoformat(timespec="seconds"), "bis": jetzt.isoformat(timespec="seconds"),
             "eingang": abdeckung_erg["kennzahlen"], "bewertung": bewertungslage(zeilen), "trichter": trichter_erg, "im_zeitraum": im_zeitraum,
-            "min_faelle": MIN_FAELLE}
+            "anfragen": anfragen_erg or anfragen_trichter([]), "min_faelle": MIN_FAELLE}
 
 
 # ---------------------------------------------------------------- Daten einsammeln
@@ -128,4 +141,14 @@ def messe(cfg: dict, db, abdeckung_erg: dict, zeilen: list[dict], tage: int, jet
         "ankaeufe": db.con.execute("SELECT COUNT(*) FROM ankaeufe WHERE status <> 'storniert' AND erstellt_am >= ?", (seit_iso,)).fetchone()[0]
         if "ankaeufe" in t else 0,
     }
-    return auswerten(abdeckung_erg, zeilen, trichter(erste, antworten, besichtigt, gekauft, seit), im, jetzt, tage)
+    anfragen = []
+    if "verkaufsanfragen" in t:
+        storno = " AND status <> 'storniert'" if "ankaeufe" in t else ""
+        ankauf = (f"OR EXISTS (SELECT 1 FROM ankaeufe k WHERE k.anfrage_id = v.id{storno})" if "ankaeufe" in t else "")
+        verlauf = ("OR EXISTS (SELECT 1 FROM anfrage_verlauf h WHERE h.anfrage_id = v.id AND h.ereignis = 'status' AND h.neu = 'angebot')"
+                   if "anfrage_verlauf" in t else "")
+        anfragen = [dict(r) for r in db.con.execute(
+            "SELECT v.status, (v.status IN ('angebot', 'gekauft') " + verlauf + " " + ankauf + ") AS angebot, "
+            "EXISTS (SELECT 1 FROM besichtigungen b WHERE b.anzeige_id = 'anfrage-' || v.id AND b.status <> 'abgebrochen') AS besichtigt, "
+            "(v.status = 'gekauft' " + ankauf + ") AS gekauft FROM verkaufsanfragen v WHERE v.erstellt_am >= ?", (seit_iso,))]
+    return auswerten(abdeckung_erg, zeilen, trichter(erste, antworten, besichtigt, gekauft, seit), im, jetzt, tage, anfragen_trichter(anfragen))
