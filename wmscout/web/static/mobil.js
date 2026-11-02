@@ -153,7 +153,9 @@
     var bis = meldungenGelesen(), neu = l.filter(function (m) { return m.zeit > bis; }).length;
     return '<h2>Meldungen' + (neu ? ' <span class="tag neu" data-meldungen-neu="">' + neu + " neu</span>" : "") + "</h2>" +
       '<div class="karte" data-meldungen="">' + l.slice(0, 12).map(function (m) {
-        return '<a class="zeile meldung' + (m.zeit > bis ? " ungelesen" : "") + (m.dringend ? " dringend" : "") + '" href="#/fahrzeug/' + encodeURIComponent(m.id) + '">' +
+        // Verkaufsanfragen (P7-02) öffnen die Anfragenseite (nur Pfade dieses Servers), Inserate das Fahrzeugdetail
+        var ziel = m.link && /^\/(?!\/)[\w#/-]*$/.test(m.link) ? esc(m.link) : "#/fahrzeug/" + encodeURIComponent(m.id);
+        return '<a class="zeile meldung' + (m.zeit > bis ? " ungelesen" : "") + (m.dringend ? " dringend" : "") + '" href="' + ziel + '">' +
           '<span><span class="tag">' + esc(m.art_text) + "</span> <b>" + esc(m.fahrzeug || "Fahrzeug") + '</b><br><span class="leise">' + esc(m.text) + "</span></span></a>";
       }).join("") + (l.length > 12 ? '<p class="leise">… und ' + (l.length - 12) + " weitere am Büro-PC</p>" : "") +
       '<button class="knopf klein" data-aktion="meldungen-gelesen">alle gelesen</button></div>';

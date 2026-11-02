@@ -549,7 +549,8 @@ class Anfrage:
         if p == "/":
             zeilen = k.zeilen()
             team = self.team_uebersicht() if self.team_aktiv else None
-            html, _ = render_html(k.cfg, zeilen, k.basis, fehler=k.suchlauf.stand["fehler"], app={"token": k.token}, team=team)
+            html, _ = render_html(k.cfg, zeilen, k.basis, fehler=k.suchlauf.stand["fehler"], app={"token": k.token}, team=team,
+                                  anfragen=self.offene_anfragen())
             return self.html(html)
         if p == "/m":
             return self.html(k.env.get_template("mobil.html").render(firma=k.cfg["anschreiben"]["firma"]))
@@ -571,7 +572,8 @@ class Anfrage:
             return self.json(200, self.heute())
         if p == "/api/meldungen":
             # was jetzt Aufmerksamkeit braucht (P6-04): Antwort fällig, Besichtigung, Nachfassen, Preissenkung, neu – „gelesen“ merkt das Gerät
-            return self.json(200, {"meldungen": meldungen(k.zeilen(), datetime.now(), self.k.cfg), "jetzt": datetime.now().isoformat(timespec="seconds")})
+            return self.json(200, {"meldungen": meldungen(k.zeilen(), datetime.now(), self.k.cfg, self.offene_anfragen()),
+                                   "jetzt": datetime.now().isoformat(timespec="seconds")})
         if p == "/api/dubletten-vorschlaege":
             if self.nutzer.get("rolle") not in TEXT_IMPORT_ROLLEN:       # Inhaber und Mitarbeiter; Standort-Zugänge nie
                 raise Antwort(403, "Nur für Inhaber und Mitarbeiter", grund="recht")
@@ -991,6 +993,12 @@ class Anfrage:
 
     def _nutzer_namen(self) -> dict:
         return {n["id"]: n["name"] for n in self.k.team.nutzer_mit_kuerzel(False)} if self.team_aktiv else {}
+
+    def offene_anfragen(self) -> list[dict] | None:
+        """Offene Verkaufsanfragen für Meldungen und Dashboard (P7-02) – nur für Inhaber und Mitarbeiter, nur Fahrzeugangaben (keine Namen)."""
+        if self.nutzer.get("rolle") not in TEXT_IMPORT_ROLLEN:
+            return None
+        return self.k.verkauf.offene_kurz()
 
     def verkaufsanfragen(self) -> list[dict]:
         k = self.k

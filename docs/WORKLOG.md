@@ -21,7 +21,23 @@ Wert „–“.
 - **Betreiber:** Server mieten, Domain/DNS, AV-Vertrag, Tailscale, Sicherung außer Haus, Freischaltung des Portals und des Fristen-Timers.
 - **Nächster sinnvoller Schritt:** Phase 7 ist damit vorbereitet; Inbetriebnahme durch den Betreiber.
 
-## P7-01 – Nacharbeiten aus Phase 5/6 (02.11.2026) · Status: REVIEW
+## P7-02 – Verkaufsanfragen im Dashboard (02.11.2026) · Status: DONE (PR #57 gemergt)
+
+- **Auftrag:** Betreiber 02.11.2026: „Stelle bitte alles soweit fertig“ (Phase 7 „Inbetriebnahme vorbereiten“).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/bewertung/meldungen.py` (Art „Verkaufsanfrage“), `wmscout/verkauf.py` (`offene_kurz`), `wmscout/web/api.py`
+  (`offene_anfragen`, `/api/meldungen`, Startseite), `wmscout/ausgabe.py`, `vorlagen/report.html` (Kachel, Link „öffnen“), `wmscout/kennzahlen.py`
+  und `vorlagen/kennzahlen.html` (Anfragen-Trichter), `wmscout/web/static/mobil.js`, `sw.js` (Version 24); Tests `test_anfragen_dashboard.py`
+  (neu); Doku ADR-067, README.
+- **Implementierte Funktionen:** siehe ADR-067 – Meldung je eingegangener Anfrage (ohne Personendaten, dringend nach 24 h, Link zur
+  Anfrage), Kachel „Verkaufsanfragen offen“, Anfragen-Trichter in den Kennzahlen. Keine Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Freigabe mit Auflagen** (keine kritischen Befunde). Korrekturrunde: B4 (schlanke Abfrage ohne Verkäuferdaten),
+  B5 (`//`-Links), B6 (Ankauf zählt als Angebot), B7 (fristgelöschte/widerrufene Anfragen), B8 (Quellenbezeichnung), B9 (Konstante) behoben.
+  Korrekturen nicht erneut von der QA geprüft.
+- **Nächster sinnvoller Schritt:** P7-03 Öffentliches Ankaufsportal.
+
+## P7-01 – Nacharbeiten aus Phase 5/6 (02.11.2026) · Status: DONE (PR #56 gemergt)
 
 - **Auftrag:** Betreiber 02.11.2026: „Stelle bitte alles soweit fertig“ – Phase 7 (ADR-066), erstes Paket.
 - **Verantwortlicher Agent:** Orchestrator; QA `qa-security-reviewer`.
