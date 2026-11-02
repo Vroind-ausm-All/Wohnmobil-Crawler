@@ -1481,3 +1481,25 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   Fällen ohne Aussage – bei mehr Ankäufen sinnvoll); Kennzahlen speichern (alles ist aus den Ursprungsdaten ableitbar).
 * **Folgen / offen:** Verkaufsanfragen (eigener Weg über `/anfragen`) zählen bei den Ereignissen
   im Zeitraum mit, im Trichter nicht. Die Abdeckungsmessung kann bei großen Beständen einige Sekunden dauern (5 Minuten zwischengespeichert).
+
+## ADR-066 – Phase 7 „Inbetriebnahme vorbereiten“; Nacharbeiten P7-01 · gilt (02.11.2026)
+
+* **Kontext:** Phase 6 ist abgeschlossen. Der Betreiber fragte, wie eine Verkaufsplattform integriert werden kann, und beauftragte „alles soweit
+  fertig“. Empfehlung (im Gespräch): das Verkäuferportal (Phase B) **in derselben Software** lassen – gleiche Bewertung, Dublettenerkennung
+  gegen gefundene Inserate, ein Arbeitsablauf bis zum Ankauf – aber **öffentlich getrennt** betreiben (eigener Zugang, nur `/verkaufen`).
+* **Entscheidung:**
+  1. Phase 7 in vier Paketen (ROADMAP): P7-01 Nacharbeiten, P7-02 Anfragen im Dashboard, P7-03 öffentliches Ankaufsportal (B4), P7-04
+     Serverbetrieb vorbereitet. Was Konten, Kosten oder Rechtsprüfung braucht, wird vorbereitet und dokumentiert, nicht ausgeführt (Regel 13).
+  2. **P7-01:** Kontaktlage über die **bestätigte Fahrzeuggruppe** (`verhandlung.zusammen`: letzter Kontakt, letzte Antwort/Notiz, offene
+     Besichtigung vor abgeschlossener) – ersetzt die Einschränkung „je Inserat“ aus ADR-063. Preisverlauf nur für die aktiven Inserate und
+     ihre Dubletten (in Blöcken). Filterzähler zeigen mit „gleiches Fahrzeug nur einmal“ Fahrzeuge. Notiz und Verhandlung werden mit dem
+     Inserat als Objekt protokolliert, das Lesen des Verhandlungsverlaufs ebenfalls. Ein anonymisiertes Inserat mit **neuer Notiz** wird
+     wieder fällig (Kontakt- und Anschreibentexte bleiben nach dem Anonymisieren ohne Namen stehen und lösen nichts aus). Handy-App:
+     Abholvarianten im Detail; Seiten erst nach dem Laden von `/api/ich`.
+  3. „Zeit Sichtung → Import“ bleibt **nicht messbar**: bei Suchagent-Mails ist das Mail-Datum schon „erstmals gesehen“, der Abstand bis zum
+     Einlesen wird nicht gespeichert (dafür wäre eine Schemaänderung nötig – nur bei Bedarf).
+  4. **Korrekturrunde (QA, Ablehnung wegen eines roten Tests):** „Ankauf in Arbeit“ zeigt jedes Fahrzeug einmal (B2); der Vorgang gilt über
+     das Fahrzeug – gekauft an einem Inserat beendet ihn auch an der Dublette, ein Inserat ohne eigenen Status übernimmt den höchsten
+     Status der Gruppe (B3); Fahrzeugdetail und Kontaktverlauf werden als Lesezugriff protokolliert (B4); eine leere Notiz löst keine
+     Frist aus (B5); das Audit-Objekt übernimmt nur eine gültige Anzeigen-ID (B7).
+* **Folgen / offen:** P7-02 bis P7-04 folgen als eigene PRs; P7-01b (neu angelegte Besichtigungen/Kontakttexte nach dem Anonymisieren).

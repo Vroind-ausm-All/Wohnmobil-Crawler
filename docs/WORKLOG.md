@@ -6,7 +6,22 @@ Wert „–“.
 
 ---
 
-## P6-05 – Kennzahlen-Ansicht (02.11.2026) · Status: REVIEW
+## P7-01 – Nacharbeiten aus Phase 5/6 (02.11.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 02.11.2026: „Stelle bitte alles soweit fertig“ – Phase 7 (ADR-066), erstes Paket.
+- **Verantwortlicher Agent:** Orchestrator; QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/bewertung/auswertung.py`, `wmscout/verhandlung.py` (`zusammen`), `wmscout/preisverlauf.py`
+  (`verlaeufe(ids)`), `wmscout/ausgabe.py`, `vorlagen/report.html`, `vorlagen/kennzahlen.html`, `wmscout/audit.py`, `wmscout/web/api.py`,
+  `wmscout/datenrechte.py`, `wmscout/web/static/mobil.js`, `sw.js` (Version 24); Tests `test_nacharbeiten.py` (neu), `test_kennzahlen.py`;
+  Doku ADR-066, ROADMAP (Phase 7, P5-06b/P6-0xb DONE, P6-05 DONE, P7-01b), README.
+- **Implementierte Funktionen:** siehe ADR-066 Nr. 2–4.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Ablehnung** (B1 kritisch: `test_kennzahlen.py` rot nach Textänderung; B2/B3 hoch: Fahrzeug doppelt bzw. gekauftes
+  Fahrzeug über die Dublette wieder offen) – B1–B5, B7, B8 behoben, B6 → P7-01b, B9 beim Commit beachtet, B10 diese Einträge. Korrekturen nicht
+  erneut von der QA geprüft.
+- **Nächster sinnvoller Schritt:** P7-02 (Anfragen im Dashboard).
+
+## P6-05 – Kennzahlen-Ansicht (02.11.2026) · Status: DONE (PR #55 gemergt)
 
 - **Auftrag:** Betreiber 02.11.2026: „Entwickle P6-05 fertig“.
 - **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer` und `scout-data-engineer`); QA `qa-security-reviewer`.

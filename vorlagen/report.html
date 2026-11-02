@@ -281,12 +281,12 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
 
   <div class="bar" role="toolbar">
     <button data-f="anschreiben" class="an">Anschreiben bereit</button>
-    <button data-f="top" title="Deal-Score ab {{ deal_schwelle }}, offen, privat, verfügbar, Ampel grün, Bewertung mindestens „mittel“">Top-Deals{% if zaehl.top %} ({{ zaehl.top }}){% endif %}</button>
+    <button data-f="top" title="Deal-Score ab {{ deal_schwelle }}, offen, privat, verfügbar, Ampel grün, Bewertung mindestens „mittel“">Top-Deals{% if zaehl.top %} <span data-zahl data-inserate="{{ zaehl.top }}" data-fahrzeuge="{{ zaehl_fz.top }}">({{ zaehl.top }})</span>{% endif %}</button>
     <button data-f="gruen">Grün</button>
     <button data-f="gelb">Gelb</button>
     <button data-f="neu">Neu</button>
-    <button data-f="neuigkeiten" title="Frisch eingegangen oder Preis deutlich gesenkt – wichtigste zuerst">Neu &amp; gesenkt{% if zaehl.neuigkeiten %} ({{ zaehl.neuigkeiten }}){% endif %}</button>
-    <button data-f="nachfassen">Nachfassen{% if zaehl.nachfassen %} ({{ zaehl.nachfassen }}){% endif %}</button>
+    <button data-f="neuigkeiten" title="Frisch eingegangen oder Preis deutlich gesenkt – wichtigste zuerst">Neu &amp; gesenkt{% if zaehl.neuigkeiten %} <span data-zahl data-inserate="{{ zaehl.neuigkeiten }}" data-fahrzeuge="{{ zaehl_fz.neuigkeiten }}">({{ zaehl.neuigkeiten }})</span>{% endif %}</button>
+    <button data-f="nachfassen">Nachfassen{% if zaehl.nachfassen %} <span data-zahl data-inserate="{{ zaehl.nachfassen }}" data-fahrzeuge="{{ zaehl_fz.nachfassen }}">({{ zaehl.nachfassen }})</span>{% endif %}</button>
     <button data-f="arbeit">In Arbeit</button>
     <button data-f="alle">Alle</button>
     {% if app %}<select id="profil-filter" aria-label="Suchprofil" hidden></select><button type="button" id="profil-knopf" aria-expanded="false" aria-controls="suchprofile" title="Gesuchte Fahrzeuge als Filter über die eingegangenen Inserate, mit Abdeckungscheckliste je Plattform">Suchprofile</button>{% endif %}
@@ -1085,7 +1085,10 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     };
   });
   document.getElementById('q').oninput = zeige;
-  nurVerf.onchange = zeige; einmal.onchange = zeige;
+  // Zähler an den Filtern: mit „gleiches Fahrzeug nur einmal“ Fahrzeuge, sonst Inserate (P6-02b)
+  var zaehler = function(){ document.querySelectorAll('.bar [data-zahl]').forEach(function(s){
+    s.textContent = '(' + (einmal.checked ? s.dataset.fahrzeuge : s.dataset.inserate) + ')'; }); };
+  nurVerf.onchange = zeige; einmal.onchange = function(){ zaehler(); zeige(); }; zaehler();
   quelleWahl.onchange = zeige;
   document.getElementById('sort').onchange = sortiere;
 

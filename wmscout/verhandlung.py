@@ -95,6 +95,26 @@ def zustand(status: str | None, lage: dict | None, jetzt: datetime) -> dict | No
     return erg
 
 
+def zusammen(lagen) -> dict:
+    """Lage mehrerer Inserate desselben Fahrzeugs (bestätigte Dubletten, P6-03b): letzter Kontakt, letzte Antwort/Notiz, offene Besichtigung
+    vor abgeschlossener (frühester Termin – anders als ``lage``, das je Inserat die zuletzt geänderte nimmt; nur Anzeige), Einträge
+    zusammengezählt. Leere Einträge (None) werden übersprungen."""
+    lagen = [x for x in lagen if x]
+    if len(lagen) <= 1:
+        return lagen[0] if lagen else {}
+    erg: dict = {"eintraege": sum(x.get("eintraege", 0) for x in lagen), "vorbereitet": any(x.get("vorbereitet") for x in lagen)}
+    kontakte = [x["kontakt_am"] for x in lagen if x.get("kontakt_am")]
+    erg["kontakt_am"] = max(kontakte) if kontakte else None
+    for art in (ANTWORT, NOTIZ):
+        e = [x[art] for x in lagen if x.get(art)]
+        if e:
+            erg[art] = max(e, key=lambda v: v["zeitpunkt"] or "")
+    bes = [x["besichtigung"] for x in lagen if x.get("besichtigung")]
+    if bes:
+        erg["besichtigung"] = sorted(bes, key=lambda b: (b["status"] not in ("geplant", "laeuft"), b.get("termin") or "9"))[0]
+    return erg
+
+
 # ---------------------------------------------------------------- Datenbank (Verbindung von außen)
 def eintragen(db, anzeige_id: str, eingabe: dict, nutzer_id: int | None, jetzt: datetime | None = None) -> int:
     """Eintrag anfügen (``eingabe`` aus ``pruefe``); ``LookupError``, wenn es das Inserat nicht gibt."""
