@@ -163,7 +163,9 @@ def inserate_faellig(db: Datenbank, monate: int, jetzt: datetime | None = None) 
         "     OR id IN (SELECT anzeige_id FROM besichtigungen WHERE anzeige_id IS NOT NULL)) "
         "AND id NOT IN (SELECT anzeige_id FROM besichtigungen WHERE anzeige_id IS NOT NULL AND status IN ('geplant', 'laeuft')) "
         # schon anonymisiert: nur wieder fällig, wenn danach neue Verhandlungstexte eingetragen wurden (QA P6-03 B2)
-        "AND (COALESCE(details_json, '') NOT LIKE '%anonymisiert_am%'"
+        # Anonymisieren leert Notiz und Verhandlungstexte; steht danach wieder etwas darin, ist es wieder fällig (P6-03b). Kontakt- und
+        # Anschreibentexte bleiben nach dem Anonymisieren (ohne Namen) stehen und lösen deshalb nichts aus.
+        "AND (COALESCE(details_json, '') NOT LIKE '%anonymisiert_am%' OR NULLIF(TRIM(notiz), '') IS NOT NULL"
         + (" OR id IN (SELECT anzeige_id FROM verhandlung WHERE text IS NOT NULL)" if vh else "") + ")" + ankauf, (grenze,))]
 
 

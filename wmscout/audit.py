@@ -25,6 +25,9 @@ _LESEN = (
     (re.compile(r"/ankauf/(\d+)/vertrag"), "ankauf"),
     (re.compile(r"/ankauf-dokumente/(\d+)/.+"), "ankauf"),
     (re.compile(r"/api/audit"), "audit"),
+    (re.compile(r"/api/verhandlung/([\w-]+)"), "anzeige"),     # Antworten und Notizen können Namen/Telefon enthalten (P6-03b)
+    (re.compile(r"/api/kontakte/([\w-]+)"), "anzeige"),         # Kontakttexte (P7-01, QA B4)
+    (re.compile(r"/api/fahrzeug/([\w-]+)"), "anzeige"),         # Fahrzeugdetail mit Notiz, Kontakten und Verhandlung (nach anfrage-…)
 )
 _OBJEKT = re.compile(r"/(verkaufsanfrage|besichtigung|ankauf|auktion|anzeige|bearbeitung|nutzer|standorte|kalkulation|dubletten|kontakt|suchprofil"
                      r"|kalibrierung)/([\w-]+)")
