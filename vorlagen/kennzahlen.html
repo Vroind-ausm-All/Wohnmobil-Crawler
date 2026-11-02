@@ -43,6 +43,17 @@ td.z{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
   <p class="leise" data-t="antwortzeit">Antwortzeit (Median, Kontakt bis erste eingetragene Antwort):
     {% if t.antwortzeit_tage is not none %}{{ t.antwortzeit_tage | string | replace('.', ',') }} Tage ({{ t.antwortzeit_faelle }} Fälle){% else %}zu wenige Fälle ({{ t.antwortzeit_faelle }}){% endif %}</p>
 
+  {% set a = m.anfragen %}
+  <h2>Verkaufsanfragen</h2>
+  <p class="leise">Anfragen über <a href="/anfragen">/anfragen</a> (Formular, Telefon, vor Ort), die im Zeitraum eingingen – und was daraus wurde.</p>
+  <div class="trichter" id="anfragen-trichter">
+    <div class="stufe" data-a="eingegangen"><b>{{ a.eingegangen }}</b>eingegangen · {{ a.offen }} offen</div>
+    <div class="stufe" data-a="angebot"><b>{{ a.angebot }}</b>Angebot gemacht · {{ prozent(a.angebotsquote) }}</div>
+    <div class="stufe" data-a="besichtigt"><b>{{ a.besichtigt }}</b>Besichtigung angelegt · {{ prozent(a.besichtigungsquote) }}</div>
+    <div class="stufe" data-a="gekauft"><b>{{ a.gekauft }}</b>gekauft · {{ prozent(a.ankaufsquote) }}</div>
+  </div>
+  <p class="leise">{{ a.abgelehnt }} abgelehnt · {{ a.zurueckgezogen }} vom Verkäufer zurückgezogen</p>
+
   <h2>Kennzahlen im Überblick</h2>
   <div class="tabelle"><table id="kennzahlen">
     <tr><th>Kennzahl</th><th class="z">Wert</th><th>Erläuterung</th></tr>

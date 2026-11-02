@@ -4,6 +4,20 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P7-02 – Verkaufsanfragen im Dashboard (02.11.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2641 bestanden, neu `test_anfragen_dashboard.py` (7) |
+| `ruff check .` | grün |
+| Meldung (rein): nur eingegangene Anfragen, dringend nach 24 h zuerst, Text mit Referenz/EZ/km/Preisvorstellung, ohne Fahrzeugangaben „Wohnmobil“, kein Name | bestanden |
+| API und Startseite: `/api/meldungen` mit Anfrage-Meldungen ohne Personendaten (Inhaber, Mitarbeiter), Standort-Zugang 403; Kachel „Verkaufsanfragen offen (n neu, n in Prüfung, n mit Angebot)“; Link „öffnen“ auf `/anfragen#<id>`; statischer Bericht ohne Anfragen | bestanden |
+| Korrekturrunde: `offene_kurz` liefert genau die Fahrzeugfelder; fristgelöschte und widerrufene Anfragen fehlen in Meldungen und Kachel; Handy-Link-Regex lässt `//…`, `javascript:` und fremde Adressen nicht zu | bestanden |
+| Kennzahlen: Anfragen-Trichter 6 → Angebot 2 → Besichtigt 1 → Gekauft 1, Quoten, abgelehnt/zurückgezogen; außerhalb des Zeitraums 0; abgebrochene Besichtigung und Storno zählen nicht, Ankauf zählt als Angebot | bestanden |
+| QA-Review (`qa-security-reviewer`, eine Runde) | Freigabe mit Auflagen; B4–B9 behoben |
+
+**Nicht geprüft:** CI (läuft nach dem Push), Windows, echtes Handy, Klicktest im Browser; Korrekturen nicht erneut von der QA geprüft.
+
 ## P6-05 – Kennzahlen-Ansicht (02.11.2026) · REVIEW
 
 | Prüfung | Ergebnis |

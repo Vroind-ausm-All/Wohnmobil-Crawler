@@ -6,8 +6,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-ANTWORT, BESICHTIGUNG, NACHFASSEN, PREIS, NEU = "antwort", "besichtigung", "nachfassen", "preis", "neu"
-ARTEN = {ANTWORT: "Antwort fällig", BESICHTIGUNG: "Besichtigung", NACHFASSEN: "Nachfassen", PREIS: "Preis gesenkt", NEU: "Neu"}
+ANTWORT, ANFRAGE, BESICHTIGUNG, NACHFASSEN, PREIS, NEU = "antwort", "anfrage", "besichtigung", "nachfassen", "preis", "neu"
+ARTEN = {ANTWORT: "Antwort fällig", ANFRAGE: "Verkaufsanfrage", BESICHTIGUNG: "Besichtigung", NACHFASSEN: "Nachfassen", PREIS: "Preis gesenkt",
+         NEU: "Neu"}
+ANFRAGE_DRINGEND_STUNDEN = 24   # eine eingegangene Verkaufsanfrage, die so lange niemand angesehen hat, ist dringend (P7-02)
 RANG = {a: i for i, a in enumerate(ARTEN)}
 ANTWORT_DRINGEND_STUNDEN = 24   # so lange darf eine Antwort des Verkäufers liegen, dann ist sie dringend
 MAX = 100
@@ -37,9 +39,24 @@ def _meldung(z: dict, art: str, text: str, zeit: str, dringend: bool) -> dict:
             "text": text, "zeit": zeit, "dringend": dringend, "_gruppe": {a["id"], *z.get("dubletten_ids", ())}}
 
 
-def meldungen(zeilen: list[dict], jetzt: datetime, cfg: dict | None = None) -> list[dict]:
+def _anfrage(v: dict, jetzt: datetime) -> dict:
+    """Eingegangene Verkaufsanfrage (P7-02): nur Fahrzeugangaben und Referenz – kein Name, keine Kontaktdaten."""
+    seit = _zeit(v.get("erstellt_am"))
+    stunden = (jetzt - seit).total_seconds() / 3600 if seit else 0
+    teile = [f"EZ {v['ez_jahr']}" if v.get("ez_jahr") else None, f"{v['km']:,} km".replace(",", ".") if v.get("km") is not None else None,
+             f"Preisvorstellung {v['preisvorstellung']:,} €".replace(",", ".") if v.get("preisvorstellung") else None]
+    text = " · ".join(t for t in teile if t) or "ohne Fahrzeugangaben"
+    if stunden >= ANFRAGE_DRINGEND_STUNDEN:
+        text += f" – unbearbeitet seit {int(stunden // 24)} {'Tag' if stunden < 48 else 'Tagen'}"
+    return {"art": ANFRAGE, "art_text": ARTEN[ANFRAGE], "id": f"anfrage-{v['id']}", "fahrzeug": " ".join(x for x in (v.get("marke"), v.get("modell")) if x)
+            or "Wohnmobil", "quelle": "anfrage", "text": f"{v.get('referenz') or ''} {text}".strip(), "zeit": (v.get("erstellt_am") or "")[:19],
+            "dringend": stunden >= ANFRAGE_DRINGEND_STUNDEN, "link": f"/anfragen#{v['id']}", "_gruppe": {f"anfrage-{v['id']}"}}
+
+
+def meldungen(zeilen: list[dict], jetzt: datetime, cfg: dict | None = None, anfragen: list[dict] | None = None) -> list[dict]:
     """[{art, art_text, id, fahrzeug, quelle, text, zeit, dringend}] – dringende zuerst, dann nach Art und jüngste zuerst; höchstens ``MAX``.
-    Je Art und Fahrzeug (Inserat mit seinen Dubletten) eine Meldung: die wichtigere bzw. jüngere."""
+    Je Art und Fahrzeug (Inserat mit seinen Dubletten) eine Meldung: die wichtigere bzw. jüngere. ``anfragen``: eingegangene
+    Verkaufsanfragen (P7-02) – je eine Meldung mit ``link`` zur Anfragenseite; nur übergeben, wer Anfragen sehen darf."""
     nach_tagen = ((cfg or {}).get("nachfassen") or {}).get("nach_tagen", 3)
     morgen_ende = (jetzt + timedelta(days=2)).replace(hour=0, minute=0, second=0, microsecond=0)
     erg: list[dict] = []
@@ -73,6 +90,7 @@ def meldungen(zeilen: list[dict], jetzt: datetime, cfg: dict | None = None) -> l
         top = bool((z.get("deal") or {}).get("priorisiert"))
         if n.get("frisch") and (z.get("bereit") or top) and a.get("erstmals_gesehen"):
             m(NEU, ("Top-Deal" if top else "Anschreiben bereit") + f" – seit {_datum(a['erstmals_gesehen'])} online", a["erstmals_gesehen"], top)
+    erg += [_anfrage(v, jetzt) for v in anfragen or () if v.get("status") == "eingegangen"]
     erg.sort(key=lambda x: x["zeit"] or "", reverse=True)                     # jüngste zuerst …
     erg.sort(key=lambda x: (not x["dringend"], RANG[x["art"]]))               # … innerhalb von Dringlichkeit und Art (stabil)
     ergebnis, gesehen = [], {art: set() for art in ARTEN}

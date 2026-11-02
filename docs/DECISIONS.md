@@ -1481,3 +1481,21 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   Fällen ohne Aussage – bei mehr Ankäufen sinnvoll); Kennzahlen speichern (alles ist aus den Ursprungsdaten ableitbar).
 * **Folgen / offen:** Verkaufsanfragen (eigener Weg über `/anfragen`) zählen bei den Ereignissen
   im Zeitraum mit, im Trichter nicht. Die Abdeckungsmessung kann bei großen Beständen einige Sekunden dauern (5 Minuten zwischengespeichert).
+
+## ADR-067 – Verkaufsanfragen im Dashboard: Meldung, Kachel, Trichter – ohne Personendaten · gilt (02.11.2026)
+
+* **Kontext:** Verkaufsanfragen (Phase B, `/verkaufen` → `/anfragen`) liefen neben dem Dashboard her: keine Meldung bei einer neuen Anfrage,
+  keine Zahl auf der Startseite, nicht in den Kennzahlen. Mit dem öffentlichen Ankaufsportal (P7-03) werden sie häufiger.
+* **Entscheidung:**
+  1. **Meldung „Verkaufsanfrage“** für jede *eingegangene* (noch nicht bearbeitete) Anfrage: Fahrzeugangaben und Referenz, **kein Name,
+     keine Kontaktdaten**; dringend nach 24 Stunden; „öffnen“ führt zu `/anfragen#<id>` (Handy-App: nur Pfade dieses Servers als Link).
+  2. **Kachel „Verkaufsanfragen offen“** (neu, in Prüfung, mit Angebot) auf der Startseite der App, Link zu `/anfragen`.
+  3. **Anfragen-Trichter** in `/kennzahlen`: im Zeitraum eingegangen → Angebot gemacht (laut Verlauf oder gekauft) → Besichtigung angelegt
+     (nicht abgebrochen) → gekauft (Status oder Ankaufsvorgang ohne Storno); Quoten ab 5 Fällen; abgelehnt/zurückgezogen daneben.
+  4. Nur für Inhaber und Mitarbeiter (Standort-Zugänge per Positivliste ausgeschlossen); der statische Bericht zeigt keine Anfragen.
+     Keine Schemaänderung.
+  5. **Korrekturrunde (QA):** offene Anfragen über eine eigene schlanke Abfrage (Status-Index, ohne Verkäuferdaten, B4); fristgelöschte oder
+     widerrufene Anfragen fallen aus Meldungen und Kachel (B7); Links nur auf Pfade dieses Servers, nie `//…` (B5); ein Ankaufsvorgang
+     zählt im Trichter auch als Angebot (B6).
+* **Alternativen:** Anfragen als Karten in der Ankaufsliste (andere Datenlage – kein Inserat, keine Quelle, eigener Status; die Anfragenseite
+  bleibt der Arbeitsort); Namen in der Meldung (unnötige Personendaten auf jedem Gerät).
