@@ -189,6 +189,15 @@ class VerkaufSpeicher:
             sql, p = sql + " WHERE v.status=?", (status,)
         return [dict(r) for r in self.con.execute(sql + " ORDER BY v.erstellt_am DESC, v.id DESC", p)]
 
+    def offene_kurz(self) -> list[dict]:
+        """Offene Anfragen für Meldungen und Dashboard (P7-02): nur Fahrzeugangaben, ohne Verkäuferdaten, ohne fristgelöschte/widerrufene
+        (deren Personendaten sind weg, ein Vorgang ist es nicht mehr) – über den Status-Index statt über die ganze Liste."""
+        offen = ",".join("?" * len(OFFEN))
+        return [dict(r) for r in self.con.execute(
+            "SELECT id, referenz, marke, modell, ez_jahr, km, preisvorstellung, status, erstellt_am, bearbeiter_id FROM verkaufsanfragen v "
+            f"WHERE status IN ({offen}) AND NOT EXISTS (SELECT 1 FROM anfrage_verlauf h WHERE h.anfrage_id = v.id "
+            "AND h.ereignis IN ('frist', 'widerruf')) ORDER BY erstellt_am DESC, id DESC", OFFEN)]
+
     def lade(self, anfrage_id: int) -> dict | None:
         r = self.con.execute(self._SPALTEN + " WHERE v.id=?", (anfrage_id,)).fetchone()
         if not r:

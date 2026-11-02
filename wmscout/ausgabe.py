@@ -38,9 +38,10 @@ def datum_lokal(iso: str | None) -> str:
 
 
 def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None = None, app: dict | None = None,
-                team: dict | None = None) -> tuple[str, dict]:
+                team: dict | None = None, anfragen: list[dict] | None = None) -> tuple[str, dict]:
     """app = {"token": …} im Browser-Modus (python scout.py app), sonst statische Datei.
-    team = Antwort von ``/api/team`` (nur mit angelegten Nutzern, sonst None): dann zeigt die Seite Bearbeiter-Badges, Zähler und Filter."""
+    team = Antwort von ``/api/team`` (nur mit angelegten Nutzern, sonst None): dann zeigt die Seite Bearbeiter-Badges, Zähler und Filter.
+    anfragen = offene Verkaufsanfragen (nur Fahrzeugangaben, P7-02) für Meldungen und Kachel; None = nicht anzeigen (Bericht, ohne Recht)."""
     env = Environment(loader=FileSystemLoader(str(basis / "vorlagen")), autoescape=True)
     env.filters["euro"] = euro
     env.filters["tsd"] = tsd
@@ -84,7 +85,8 @@ def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None =
         signatur={k: cfg["anschreiben"].get(k, "") for k in ("ansprechpartner", "firma", "telefon")},
         deal_schwelle=deal_einstellungen(cfg)["schwelle"], QUELLEN=QUELLE_TEXT, STATUS_NAMEN=STATUS,
         pipeline=pipeline[:PIPELINE_MAX], pipeline_mehr=max(0, len(pipeline) - PIPELINE_MAX), pipeline_zaehl=pipeline_zaehl, STUFEN=vh.STUFEN,
-        VH_ARTEN=vh.ARTEN, KANAELE=KANAELE, meldungen=meldungen(zeilen, datetime.now(), cfg), MELDUNG_ARTEN=MELDUNG_ARTEN,
+        VH_ARTEN=vh.ARTEN, KANAELE=KANAELE, meldungen=meldungen(zeilen, datetime.now(), cfg, anfragen), MELDUNG_ARTEN=MELDUNG_ARTEN,
+        anfragen_offen=None if anfragen is None else {s: sum(a["status"] == s for a in anfragen) for s in ("eingegangen", "in_pruefung", "angebot")},
         jetzt_iso=datetime.now().isoformat(timespec="seconds"), zaehl_fz=zaehl_fz,
         quellen=sorted({z["a"].get("quelle") or "kleinanzeigen" for z in zeilen})), zaehl
 

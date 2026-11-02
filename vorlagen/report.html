@@ -37,7 +37,7 @@ h2,h3{margin:0}
   border-radius:50%;background:var(--akzent);color:var(--akzent-ink);font-size:12px;font-weight:700}
 kbd{font:12px ui-monospace,monospace;padding:1px 5px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;background:var(--feld)}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px}
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px} a.kpi{color:inherit;text-decoration:none}
 .kpi b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
 .kpi span{color:var(--mute);font-size:13px}
 .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}
@@ -240,6 +240,8 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <div class="kpi"><b>{{ zaehl.neuigkeiten }}</b><span>Neu &amp; Preis gesenkt (Neuigkeiten)</span></div>
     <div class="kpi"><b>{{ zaehl.nachfassen }}</b><span>Nachfassen fällig</span></div>
     <div class="kpi"><b>{{ zaehl.arbeit }}</b><span>In Arbeit (Text kopiert, kontaktiert, Verhandlung, Besichtigung)</span></div>
+    {% if anfragen_offen is not none %}<a class="kpi" href="/anfragen" data-kpi-anfragen><b>{{ anfragen_offen.eingegangen + anfragen_offen.in_pruefung + anfragen_offen.angebot }}</b>
+      <span>Verkaufsanfragen offen ({{ anfragen_offen.eingegangen }} neu, {{ anfragen_offen.in_pruefung }} in Prüfung, {{ anfragen_offen.angebot }} mit Angebot)</span></a>{% endif %}
   </div>
 
   {% if meldungen %}
@@ -248,8 +250,8 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
       <button class="btn" type="button" id="meldungen-gelesen" style="margin-left:8px">alle gelesen</button></summary>
     <ul class="meldungsliste">{% for m in meldungen %}
       <li data-meldung="{{ m.art }}" data-zeit="{{ m.zeit }}" data-id="{{ m.id }}"{% if m.dringend %} class="dringend"{% endif %}>
-        <span class="tag meldung {{ m.art }}">{{ m.art_text }}</span> <b>{{ m.fahrzeug or 'Fahrzeug' }}</b> <span class="meta">{{ QUELLEN.get(m.quelle, m.quelle) }}</span><br>
-        <span>{{ m.text }}</span> <button class="btn" type="button" data-meldung-oeffnen="{{ m.id }}">öffnen</button></li>{% endfor %}</ul>
+        <span class="tag meldung {{ m.art }}">{{ m.art_text }}</span> <b>{{ m.fahrzeug or 'Fahrzeug' }}</b> <span class="meta">{{ 'Verkaufsanfrage' if m.quelle == 'anfrage' else QUELLEN.get(m.quelle, m.quelle) }}</span><br>
+        <span>{{ m.text }}</span> {% if m.link and m.link.startswith('/') and not m.link.startswith('//') %}<a class="btn" href="{{ m.link }}" data-meldung-link>öffnen</a>{% else %}<button class="btn" type="button" data-meldung-oeffnen="{{ m.id }}">öffnen</button>{% endif %}</li>{% endfor %}</ul>
     <p class="meta">„gelesen“ merkt sich dieser Browser; es wird nichts versendet.</p>
   </details>
   {% endif %}
