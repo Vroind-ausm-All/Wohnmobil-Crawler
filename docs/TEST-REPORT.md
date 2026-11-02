@@ -18,7 +18,24 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 **Nicht geprüft:** CI (läuft nach dem Push), Windows, echtes Handy, Klicktest im Browser; Korrekturen nicht erneut von der QA geprüft.
 
-## P6-05 – Kennzahlen-Ansicht (02.11.2026) · REVIEW
+## P7-01 – Nacharbeiten aus Phase 5/6 (02.11.2026) · DONE (PR #56 gemergt)
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2644 bestanden (vorher 2634), neu `test_nacharbeiten.py` (10); angepasst `test_kennzahlen.py` (neuer Hinweistext) |
+| `ruff check .` | grün |
+| Handy-App statisch: Abholvarianten im Detail (über `esc`), `route()` erst nach `/api/ich`, SW ≥ 24 | bestanden |
+| `verlaeufe(ids)` in Blöcken = Gesamtabfrage für dieselben Inserate; Filterzähler „Neu & gesenkt“ 3 Inserate / 2 Fahrzeuge | bestanden |
+| Kontaktlage über die bestätigte Gruppe (Antwort an der Dublette), `zusammen()`; „Ankauf in Arbeit“ je Fahrzeug einmal; gekauft an einem Inserat beendet den Vorgang an der Dublette | bestanden |
+| Audit: Notiz und Verhandlung mit Objekt `anzeige:<id>`, Lesen von Verhandlung, Fahrzeugdetail und Kontakten protokolliert, ungültige ID → kein Objekt | bestanden |
+| Frist: anonymisiertes Inserat mit neuer Notiz wieder fällig, danach nicht dauerhaft; leere Notiz löst nichts aus | bestanden |
+| Kennzahlen per HTTP: Mitarbeiter 200, Standort-Zugang 403 | bestanden |
+| Klicktest Chromium: Filterzähler wechseln ohne Fehler, Handy: schneller Listenwechsel direkt nach dem Login ohne JS-Fehler, Abholvarianten im Detail, kein Querscrollen | bestanden (vor der Korrekturrunde) |
+| QA-Review (`qa-security-reviewer`, eine Runde; gezielte Tests 285 bestanden, 1 rot) | **Ablehnung** (B1 roter Test, B2/B3 hoch) – B1–B5, B7, B8 behoben, B6 → P7-01b |
+
+**Nicht geprüft:** CI (läuft nach dem Push), Windows, echtes Handy, Klicktest nach der Korrekturrunde; Korrekturen nicht erneut von der QA geprüft.
+
+## P6-05 – Kennzahlen-Ansicht (02.11.2026) · DONE (PR #55 gemergt)
 
 | Prüfung | Ergebnis |
 |---|---|

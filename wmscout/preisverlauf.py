@@ -83,11 +83,22 @@ SQL_ALLE = ("SELECT p.id, p.inserat_id, p.zeitpunkt, p.preis, p.kanal, i.plattfo
             "JOIN anzeigen a ON a.id = i.anzeigen_id AND COALESCE(NULLIF(a.quelle, ''), ?) = i.plattform")
 
 
-def verlaeufe(db: Datenbank) -> dict[str, list[dict]]:
-    """Preisverlauf aller Inserate mit Anzeige in einer Abfrage: Anzeigen-ID → Einträge wie ``preisverlauf`` (älteste zuerst)."""
+BLOCK = 500                     # IDs je Abfrage (SQLite-Grenze für Parameter)
+
+
+def verlaeufe(db: Datenbank, ids=None) -> dict[str, list[dict]]:
+    """Preisverlauf je Anzeigen-ID (Einträge wie ``preisverlauf``, älteste zuerst) – ohne ``ids`` aller Inserate in einer Abfrage, sonst nur
+    dieser (in Blöcken; bei großen Beständen liest die Bewertung so nur aktive Inserate und ihre Gruppen, P6-02b)."""
     from .datenbank import STANDARD_PLATTFORM
     je: dict[str, list] = {}
-    for z in db.con.execute(SQL_ALLE, (STANDARD_PLATTFORM,)):
+    if ids is None:
+        zeilen = db.con.execute(SQL_ALLE, (STANDARD_PLATTFORM,)).fetchall()
+    else:
+        liste, zeilen = sorted(set(ids)), []
+        for i in range(0, len(liste), BLOCK):
+            teil = liste[i:i + BLOCK]
+            zeilen += db.con.execute(SQL_ALLE + f" WHERE a.id IN ({','.join('?' * len(teil))})", (STANDARD_PLATTFORM, *teil)).fetchall()
+    for z in zeilen:
         je.setdefault(z["anzeige"], []).append(z)
     return {aid: _ordne(zeilen) for aid, zeilen in je.items()}
 

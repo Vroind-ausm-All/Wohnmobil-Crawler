@@ -359,6 +359,20 @@
       '<textarea id="vh-text" maxlength="2000" style="min-height:60px" placeholder="z. B. „will 34.500 €, Besichtigung Samstag möglich“"></textarea>' +
       '<button class="knopf primaer voll" data-aktion="vh-eintragen">Eintragen</button><p class="leise">Nur von Hand – es wird nichts gesendet.</p></div>';
   }
+  // Abholung (P5-06b): Auto ab Firmensitz bzw. Bahn ab Bahnhof – grobe Schätzung wie am Büro-PC, gerechnet wird der günstigere Weg
+  function stundenText(h) { var m = Math.round(h * 60), s = Math.floor(m / 60); m = m % 60; return s ? s + " Std." + (m ? " " + m + " Min." : "") : m + " Min."; }
+  function abholZeile(b) {
+    var ab = b && b.abholung;
+    if (!ab || !(ab.varianten || []).length) return "";
+    return '<div class="leise" data-abholung=""><b>Abholung</b> – grobe Schätzung, gerechnet wird der günstigere Weg:<ul>' + ab.varianten.map(function (v) {
+      var t = v.art === "auto"
+        ? "Auto ab Firmensitz (2 Personen): ca. " + eur(v.euro) + " – " + tsd(v.km) + " km, zusammen ca. " + stundenText(v.stunden || 0)
+        : "Bahn ab " + esc(v.ab) + ": ca. " + eur(v.euro) + " – " + esc(v.ticket_art || "Ticket") + " ca. " + eur(v.ticket) + ", Anreise ca. " +
+          stundenText(v.reise_stunden || 0) + ", Rückfahrt im Wohnmobil ca. " + stundenText(v.rueck_stunden || 0);
+      return "<li>" + t + (v.uebernachtungen ? " · " + v.uebernachtungen + " Übernachtung" + (v.uebernachtungen > 1 ? "en" : "") : "") +
+        (v.art === ab.gewaehlt ? " <b>✓ gerechnet</b>" : "") + "</li>";
+    }).join("") + "</ul>" + (ab.hinweis ? "<span>" + esc(ab.hinweis) + "</span>" : "") + "</div>";
+  }
   function hinweisZeilen(f) {
     return (f.hinweise || []).map(function (h) { return '<p class="hinweis info">⚠ ' + esc(h) + "</p>"; }).join("");
   }
@@ -422,6 +436,7 @@
         '<p class="leise">Marktniveau ' + eur(b.marktwert_angebote) + " · Sicherheit " + esc(b.sicherheit) + "</p>" +
         (b.haendler_anzahl ? '<p class="leise" data-haendlermarkt="">Händlermarkt: ' + b.haendler_anzahl + " Händlerangebote" +
           (b.haendler_niveau ? ", Niveau " + eur(b.haendler_niveau) + (b.vk_gedeckelt ? " – Händler-VK darauf begrenzt" : "") + (b.haendler_konflikt ? " – billiger als privat (Datenkonflikt), keine Obergrenze" : "") : " – zu wenige für eine Obergrenze") + "</p>" : "") +
+        abholZeile(b) +
         '<a class="knopf klein" href="' + link(f.url) + '" target="_blank" rel="noopener">Anzeige öffnen ↗</a></div>' +
         risikoZeile(f, true) + maengelZeile(f, true) + hinweisZeilen(f) + preisverlaufKarte(f) + gruppeKarte(f) +
         (f.anbieter ? '<div class="karte"><div class="zeile"><span class="leise">Anbieter</span>' + anbTag(f) + "</div>" +
@@ -867,6 +882,7 @@
 
   // ---------------------------------------------------------------- Router
   function route() {
+    if (!S.ich) return;                                 // Hash-Wechsel vor dem Laden von /api/ich: der Start ruft route() danach selbst (P6-01b)
     var teile = (location.hash.replace(/^#\/?/, "") || "heute").split("/");
     inhalt.classList.remove("mit-leiste"); inhalt.removeAttribute("data-id");
     if (teile[0] !== "besichtigung") { if (B) speichern(); B = null; }

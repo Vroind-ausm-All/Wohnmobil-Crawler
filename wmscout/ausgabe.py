@@ -18,6 +18,7 @@ from .schalter import eingang_aktiv
 from . import verhandlung as vh
 from .bewertung.meldungen import ARTEN as MELDUNG_ARTEN
 from .bewertung.meldungen import meldungen
+from .bewertung.gruppen import nur_einmal
 from .kontakte import KANAELE
 
 PIPELINE_MAX = 60               # Zeilen im Bereich „Ankauf in Arbeit“; der Rest steht in der Liste (Filter „In Arbeit“)
@@ -60,10 +61,20 @@ def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None =
         "nachfassen": sum(bool(z["nachfassen"]) for z in zeilen),
         "top": sum(bool((z.get("deal") or {}).get("priorisiert")) and not z.get("ausblenden") for z in zeilen),      # P5-07
     }
+    # Filterzähler als Fahrzeuge für „gleiches Fahrzeug nur einmal“ (P6-02b): dieselbe Auswahl wie die Liste (gruppen.nur_einmal)
+    teilmengen = {"top": [z for z in zeilen if (z.get("deal") or {}).get("priorisiert") and not z.get("ausblenden")],
+                  "neuigkeiten": [z for z in zeilen if z.get("neuigkeit")], "nachfassen": [z for z in zeilen if z["nachfassen"]]}
+    zaehl_fz = {k: len(nur_einmal(v)) for k, v in teilmengen.items()}
     # Ankauf in Arbeit (P6-03): Inserate mit Kontaktlage, wichtigste Stufe zuerst; innerhalb „wartet“ die längste Wartezeit oben
-    pipeline = sorted((z for z in zeilen if (z.get("kontakt") or {}).get("stufe")),
-                      key=lambda z: (vh.REIHENFOLGE[z["kontakt"]["stufe"]], (z["kontakt"]["besichtigung"] or {}).get("termin") or "",
-                                     -(z["kontakt"]["tage"] or 0), z["a"]["id"]))
+    # je Fahrzeug einmal: die Lage gilt für die ganze bestätigte Gruppe (P7-01, QA B2) – das erste Inserat in der Reihenfolge vertritt sie
+    pipeline, gezeigt = [], set()
+    for z in sorted((z for z in zeilen if (z.get("kontakt") or {}).get("stufe")),
+                    key=lambda z: (vh.REIHENFOLGE[z["kontakt"]["stufe"]], (z["kontakt"]["besichtigung"] or {}).get("termin") or "",
+                                   -(z["kontakt"]["tage"] or 0), z["a"]["id"])):
+        gruppe = {z["a"]["id"], *z.get("dubletten_ids", ())}
+        if not gruppe & gezeigt:
+            pipeline.append(z)
+        gezeigt |= gruppe
     pipeline_zaehl = {s: sum(z["kontakt"]["stufe"] == s for z in pipeline) for s in vh.STUFEN}
     return env.get_template("report.html").render(
         stand=datetime.now().strftime("%d.%m.%Y %H:%M"), anzahl=len(zeilen), zeilen=zeilen, zaehl=zaehl,
@@ -76,7 +87,7 @@ def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None =
         pipeline=pipeline[:PIPELINE_MAX], pipeline_mehr=max(0, len(pipeline) - PIPELINE_MAX), pipeline_zaehl=pipeline_zaehl, STUFEN=vh.STUFEN,
         VH_ARTEN=vh.ARTEN, KANAELE=KANAELE, meldungen=meldungen(zeilen, datetime.now(), cfg, anfragen), MELDUNG_ARTEN=MELDUNG_ARTEN,
         anfragen_offen=None if anfragen is None else {s: sum(a["status"] == s for a in anfragen) for s in ("eingegangen", "in_pruefung", "angebot")},
-        jetzt_iso=datetime.now().isoformat(timespec="seconds"),
+        jetzt_iso=datetime.now().isoformat(timespec="seconds"), zaehl_fz=zaehl_fz,
         quellen=sorted({z["a"].get("quelle") or "kleinanzeigen" for z in zeilen})), zaehl
 
 
