@@ -323,6 +323,11 @@ def karten_link(adresse: str | None) -> str | None:
     return f"https://www.google.com/maps/search/?api=1&query={quote(adresse)}" if adresse else None
 
 
+def audit_anzeige(wert) -> str | None:
+    """Audit-Objekt aus der ID im Inhalt – nur eine gültige Anzeigen-ID, nie sonstiger Text (P7-01, QA B7)."""
+    return f"anzeige:{wert}" if isinstance(wert, str) and re.fullmatch(r"[\w-]{1,64}", wert) else None
+
+
 def _haendler_erlaubt(pfad: str) -> bool:
     return pfad in ("/", "/m", "/haendler", "/api/ich", "/api/logout", "/api/ereignisse") or pfad.startswith(("/api/haendler/", "/haendler-fotos/"))
 
@@ -349,6 +354,7 @@ class Anfrage:
         self.puffer: tuple | None = None   # Antwort erst nach dem Audit-Eintrag senden (bearbeite)
         self.puffern = False
         self.audit_name: str | None = None
+        self.audit_objekt: str | None = None           # Objekt aus dem Inhalt, wenn der Pfad keins nennt (z. B. /api/notiz, P6-03b)
 
     # ----- Antworten
     def senden(self, status: int, body: bytes, typ: str, kopf: dict | None = None):
@@ -1324,11 +1330,13 @@ class Anfrage:
         if m := re.fullmatch(r"/api/kontakt/(\d+)/bestaetigen", p):
             return self.json(200, self.kontakt_bestaetigen(int(m.group(1)), self.kanal(daten), daten))
         if p == "/api/notiz":
+            self.audit_objekt = audit_anzeige(daten.get("id"))
             ok = k.db.setze_notiz(str(daten.get("id")), str(daten.get("notiz") or "")[:2000])
             k.veraendert()
             return self.json(200 if ok else 404, {"ok": ok})
         if p == "/api/verhandlung":
             # Antwort des Verkäufers oder Verhandlungsnotiz von Hand eintragen (P6-03) – ändert keinen Status, sendet nichts
+            self.audit_objekt = audit_anzeige(daten.get("id"))
             try:
                 eingabe = verhandlung.pruefe(daten)
                 eid = verhandlung.eintragen(k.db, str(daten.get("id") or ""), eingabe, self.nutzer.get("id"))
@@ -2037,7 +2045,7 @@ def _protokolliere(a: Anfrage, k: Kontext, methode: str):
             team = k.team.hat_nutzer()
         if team:
             k.audit.schreibe(a.nutzer if a.nutzer and a.nutzer.get("id") else None, a.client_ip(), methode, a.pfad, a.status,
-                             art[0], art[1], a.audit_name)
+                             art[0], art[1] or a.audit_objekt, a.audit_name)
     except Exception:  # noqa: BLE001
         log.exception("Audit-Eintrag fehlgeschlagen: %s %s", methode, a.pfad)
 

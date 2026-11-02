@@ -59,7 +59,7 @@ td.z{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
     <tr><td>Läufe ohne Fehler ({{ art }})</td><td class="z">{{ anteil(i.ohne_fehler, i.laeufe) }}</td><td class="leise">{{ i.ohne_fehler }} von {{ i.laeufe }}</td></tr>
     {% endfor %}
     <tr><td>Zeit Sichtung → Import</td><td class="z">nicht messbar</td>
-      <td class="leise">keine angebundene Quelle liefert den Einstellzeitpunkt; der Zeitstempel der Suchagent-Mails ist als Ersatz noch nicht ausgewertet (P6-05b)</td></tr>
+      <td class="leise">keine angebundene Quelle liefert den Einstellzeitpunkt; bei Suchagent-Mails gilt das Mail-Datum schon als „erstmals gesehen“ – der Abstand bis zum Einlesen wird nicht gespeichert</td></tr>
     <tr><td>Mittlere Marktwertunsicherheit</td><td class="z" data-k="unsicherheit">{{ ((w.unsicherheit_median * 100) | round(0) | int ~ ' %') if w.unsicherheit_median is not none else 'zu wenige Fälle' }}</td>
       <td class="leise">Median der Spannenbreite im Verhältnis zum Marktwert, {{ w.unsicherheit_faelle }} bewertete Inserate im Bestand</td></tr>
     <tr><td>Priorisierte Ankaufsangebote</td><td class="z" data-k="priorisiert">{{ w.priorisiert_fahrzeuge }}</td>

@@ -242,7 +242,7 @@ erhalten (Re-Import-Test).
 | P5-04 | P2 | Angebotspreise vs. Transaktionspreise, Händler- vs. Privatpreise | acquisition-analyst | DONE (PR #44 gemergt; ADR-055, Rechenstand E4) |
 | P5-05 | P2 | Ausstattung und Mängel; Reparatur-, Gewährleistungs-, Standkostenrisiko – dazu Betreiberwunsch 25.10.2026: Spannen auf 100 € | acquisition-analyst | DONE (PR #45 gemergt; ADR-056, ohne Schemaänderung; Rechenstand E5) |
 | P5-06 | P2 | Transportkosten ab konfigurierbarer Standort-PLZ (Grundlage vorhanden: `anschreiben.plz`, `rechner.kosten.transport_*`) | acquisition-analyst | DONE (PR #47 gemergt; ADR-057, ohne Schemaänderung; Rechenstand E6) |
-| P5-06b | P3 | Abholvarianten (Auto/Bahn) auch in der Handy-App anzeigen (API liefert `bewertung.abholung` bereits; QA P5-06 B9) | scout-ui-engineer | TODO |
+| P5-06b | P3 | Abholvarianten (Auto/Bahn) auch in der Handy-App anzeigen (API liefert `bewertung.abholung` bereits; QA P5-06 B9) | scout-ui-engineer | DONE (P7-01, Branch `claude/phase7-nacharbeiten`) |
 | P5-07 | P1 | Deal-Score 0–100 mit benannten Komponenten; Speicherung in `bewertungen` mit `modell_version` | acquisition-analyst, scout-data-engineer | DONE (ADR-060, Schema v22; PR #50 gemergt) |
 
 ## Phase 6 – Ankaufs-Dashboard
@@ -259,11 +259,27 @@ Handy-App mit Besichtigung, Mängelabzug, Protokoll, Terminen, WhatsApp-Links.
 | P6-02 | P1 | Dublettengruppen und Preisverläufe anzeigen | scout-ui-engineer | DONE (ADR-062; PR #52 gemergt; „gleiches Fahrzeug nur einmal“) |
 | P6-03 | P2 | Kontaktstatus (vorbereitet/kontaktiert/Antwort), Verhandlungsnotizen, Besichtigungsstatus im Dashboard | scout-ui-engineer | DONE (ADR-063, Schema v23; PR #53 gemergt) |
 | P6-04 | P2 | Benachrichtigungen im Dashboard (neu, Preissenkung, Antwort fällig) | scout-ui-engineer | DONE (ADR-064; PR #54 gemergt) |
-| P6-05 | P2 | Kennzahlen-Ansicht (siehe unten) | scout-ui-engineer, scout-data-engineer | REVIEW (ADR-065; Branch `claude/phase6-kennzahlen`; Seite `/kennzahlen`) |
-| P6-01b | P3 | Handy-App: Listenaufruf direkt nach dem Login abfangen, solange `/api/ich` noch lädt (einmal „reading 'team'“ im Klicktest P6-01, bestehender Code) | scout-ui-engineer | TODO |
-| P6-02b | P3 | Preisverlauf nur für aktive Inserate und Gruppenmitglieder lesen (große Bestände); Filterzähler mit „gleiches Fahrzeug nur einmal“ als Fahrzeuge zählen (QA P6-02 B4/B7) | scout-data-engineer, scout-ui-engineer | TODO |
-| P6-03b | P3 | Kontaktlage je Fahrzeug statt je Inserat (bestätigte Dubletten); Audit-Objekt für `/api/verhandlung` und `/api/notiz`; nach dem Anonymisieren neu eingetragene Notiz-/Kontakttexte wieder fällig (wie Verhandlung) (QA P6-03 B2/B5/B6) | scout-data-engineer, scout-ui-engineer | TODO |
-| P6-05b | P3 | „Zeit Sichtung → Import“ aus dem Zeitstempel der Suchagent-Mails messen (ROADMAP-Ersatzdefinition); Rechte-HTTP-Test für Standort-Zugänge auf `/kennzahlen` (QA P6-05 B8) | scout-data-engineer | TODO |
+| P6-05 | P2 | Kennzahlen-Ansicht (siehe unten) | scout-ui-engineer, scout-data-engineer | DONE (ADR-065; PR #55 gemergt) |
+| P6-01b | P3 | Handy-App: Listenaufruf direkt nach dem Login abfangen, solange `/api/ich` noch lädt (einmal „reading 'team'“ im Klicktest P6-01, bestehender Code) | scout-ui-engineer | DONE (P7-01) |
+| P6-02b | P3 | Preisverlauf nur für aktive Inserate und Gruppenmitglieder lesen (große Bestände); Filterzähler mit „gleiches Fahrzeug nur einmal“ als Fahrzeuge zählen (QA P6-02 B4/B7) | scout-data-engineer, scout-ui-engineer | DONE (P7-01) |
+| P6-03b | P3 | Kontaktlage je Fahrzeug statt je Inserat (bestätigte Dubletten); Audit-Objekt für `/api/verhandlung` und `/api/notiz`; nach dem Anonymisieren neu eingetragene Notiz-/Kontakttexte wieder fällig (wie Verhandlung) (QA P6-03 B2/B5/B6) | scout-data-engineer, scout-ui-engineer | DONE (P7-01; Kontaktlage über bestätigte Fahrzeuggruppe) |
+| P6-05b | P3 | „Zeit Sichtung → Import“ aus dem Zeitstempel der Suchagent-Mails messen (ROADMAP-Ersatzdefinition); Rechte-HTTP-Test für Standort-Zugänge auf `/kennzahlen` (QA P6-05 B8) | scout-data-engineer | DONE (P7-01; Rechte-HTTP-Test; „Zeit Sichtung → Import“ bleibt nicht messbar: das Mail-Datum gilt schon als „erstmals gesehen“, der Abstand bis zum Einlesen wird nicht gespeichert) |
+
+---
+
+## Phase 7 – Inbetriebnahme vorbereiten
+
+Auftrag des Betreibers am 02.11.2026 („Stelle bitte alles soweit fertig“) nach der Frage, wie eine Verkaufsplattform (Ankaufsportal) integriert
+werden kann; Entscheidungen siehe ADR-066. Was nur der Betreiber tun kann (Server mieten, Suchagent-Mails einrichten, mobile.de-Zugang,
+Rechtstexte prüfen lassen, Push-Dienst) wird vorbereitet, nicht ausgeführt.
+
+| ID | Prio | Paket | Agent | Status |
+|---|---|---|---|---|
+| P7-01 | P2 | Nacharbeiten P5-06b, P6-01b, P6-02b, P6-03b, P6-05b | Orchestrator | DONE (PR #56 gemergt) |
+| P7-02 | P1 | Verkaufsanfragen im Dashboard: Meldungen, Ankaufstrichter, Hinweis in der Ankaufsliste | scout-ui-engineer | TODO |
+| P7-03 | P1 | Öffentliches Ankaufsportal (B4): öffentlicher Modus nur mit `/verkaufen`, Spam-Schutz, Status-Link für den Verkäufer, Vorlagen Impressum/Datenschutz, Löschanfrage | source-integrations, qa-security-reviewer | REVIEW (Branch `claude/phase7-ankaufsportal`) |
+| P7-04 | P2 | Serverbetrieb vorbereitet: Anleitung, Vorlagen (Dienst, HTTPS-Proxy, Sicherung), Gesundheitsprüfung | windows-bootstrap | TODO |
+| P7-01b | P3 | Nach dem Anonymisieren neu angelegte Besichtigungen und Kontakttexte wieder fällig machen (Zeitpunkt nach `anonymisiert_am`; QA P7-01 B6) | scout-data-engineer | TODO |
 
 ---
 

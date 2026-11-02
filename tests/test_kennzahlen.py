@@ -141,7 +141,7 @@ def test_storno_dubletten_abgebrochen_ohne_tabellen(cfg, db, tmp_path):
 def test_seite_wenige_faelle_als_n_von_m(server, db):
     c = lokal(server)
     html = c("GET", "/kennzahlen?tage=1")[1]
-    assert "Besichtigung angelegt" in html and "Kontaktierte Verkäufer" in html and "P6-05b" in html
+    assert "Besichtigung angelegt" in html and "Kontaktierte Verkäufer" in html and "Mail-Datum schon als" in html
     # Eingangsanteile bei kleiner Basis als „n von m“ statt Prozent (B3)
     zeile = re.search(r"Läufe ohne Fehler \((\w+)\)</td><td class=\"z\">([^<]*)</td>", html)
     assert zeile and re.fullmatch(r"\d von \d", zeile.group(2)), zeile and zeile.group(0)
