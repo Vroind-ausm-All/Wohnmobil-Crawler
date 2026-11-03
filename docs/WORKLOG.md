@@ -6,7 +6,22 @@ Wert „–“.
 
 ---
 
-## P7-02 – Verkaufsanfragen im Dashboard (02.11.2026) · Status: REVIEW
+## P7-03 – Öffentliches Ankaufsportal (B4) (02.11.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 02.11.2026: „Stelle bitte alles soweit fertig“ (Phase 7, B4 aus der Antwort zur Verkaufsplattform).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer` und `source-integrations`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/web/portal.py` (neu), `scout.py` (`portal`), `config.yaml` (Abschnitt `portal`, aus), `vorlagen/verkaufen.html`
+  (Portal-Variante), `vorlagen/portal_*.html` (neu: Kopf, Fuß, Seitenkopf, Status, Impressum, Datenschutz), `wmscout/verkauf.py` (`_text`);
+  Tests `test_portal.py` (neu); Doku ADR-068, DATENRECHTE, README.
+- **Implementierte Funktionen:** siehe ADR-068 – eigener Prozess nur mit Formular, Statusseite (Stand, „Meine Daten löschen“), Impressum,
+  Datenschutz; signierte Status-/Upload-Links ohne Schemaänderung; Spamschutz ohne Fremddienste; Start nur mit Freigabe und vollständiger
+  Konfiguration. Keine automatische Nachricht an Verkäufer.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Freigabe mit Auflagen** (keine kritischen Befunde). Korrekturrunde: B1 (hoch: Rollback außerhalb der Sperre),
+  B2–B10 behoben; B11 (fehlende `docs/SERVERBETRIEB.md`) kommt mit P7-04. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiber:** Impressum/Datenschutz/Einwilligung rechtlich prüfen lassen, Server und Domain (P7-04), Freischaltung `portal → aktiv`.
+- **Nächster sinnvoller Schritt:** P7-04 Serverbetrieb.
+## P7-02 – Verkaufsanfragen im Dashboard (02.11.2026) · Status: DONE (PR #57 gemergt)
 
 - **Auftrag:** Betreiber 02.11.2026: „Stelle bitte alles soweit fertig“ (Phase 7 „Inbetriebnahme vorbereiten“).
 - **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer`); QA `qa-security-reviewer`.

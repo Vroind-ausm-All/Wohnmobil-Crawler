@@ -190,7 +190,15 @@ angelegt habt (Haken und Adresse); „prüfen“ heißt: angelegt, aber seit 14 
 anbietet (Telefon, vor Ort oder Formular am Tablet): Fahrzeug, Mängel, bis zu 12 Fotos, freiwillige Preisvorstellung,
 Kontakt und Einwilligung. Danach erscheinen Referenz und – nur bei sicherer Datenlage – eine grobe Spanne für den
 Verkäufer (nie Max-EK oder Angebot). Unter **`/anfragen`** stehen alle Anfragen mit Bewertung, Fotos, Status, Bearbeiter
-und Verlauf. Es geht keine automatische Nachricht an Verkäufer. Öffentlich erreichbar ist das Portal noch nicht (ADR-025).
+und Verlauf. Es geht keine automatische Nachricht an Verkäufer.
+
+**Öffentliches Ankaufsportal (P7-03, ADR-068, vorbereitet – aus):** `python scout.py portal` startet einen **eigenen** Server nur mit
+dem Formular „Wohnmobil verkaufen“, einer Statusseite für den Verkäufer (persönlicher Link, dort auch „Meine Daten löschen“),
+Impressum und Datenschutz – ohne Anmeldung und ohne jede Team-Seite. Anfragen landen wie gewohnt unter `/anfragen`. Es startet erst,
+wenn in `config.yaml → portal` `aktiv: true`, `vertrauter_proxy: true`, die `oeffentliche_url` (https) und das Impressum gesetzt sind und die
+Umgebungsvariable `SCOUT_PORTAL_SCHLUESSEL` (mind. 32 Zeichen, z. B. `python -c "import secrets; print(secrets.token_urlsafe(48))"`)
+existiert. Öffentlich nur hinter einem HTTPS-Reverse-Proxy (Anleitung: `docs/SERVERBETRIEB.md`, P7-04). Impressum, Datenschutzhinweise und Einwilligungstext sind Entwürfe –
+vor dem Start rechtlich prüfen lassen und dann `texte_geprueft: true` setzen.
 
 **Händlerportal für eure Standorte (Phase C, erst intern):** Standorte legt der Inhaber unter **`/standorte`** an und schaltet
 sie nach Prüfung frei; Zugänge: `python scout.py nutzer anlegen NAME --rolle haendler --standort "Filiale Nord"`. Ein

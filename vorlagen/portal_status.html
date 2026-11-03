@@ -1,0 +1,48 @@
+{% set titel = "Ihre Anfrage" %}{% set robots = "noindex, nofollow" %}{% include "portal_seite_kopf.html" %}
+<h1>Ihre Verkaufsanfrage</h1>
+<p id="laden" class="leise">Wird geladen …</p>
+<p id="fehler" class="hinweis warn" role="alert" hidden></p>
+<section id="stand" hidden>
+  <p>Referenz: <b id="referenz"></b></p>
+  <p id="fahrzeug" class="leise"></p>
+  <p class="karte" id="status"></p>
+  <p class="leise klein">Eingegangen am <span id="eingegangen"></span> · zuletzt bearbeitet am <span id="aktualisiert"></span> · <span id="fotos"></span> Fotos</p>
+  <div id="loeschen-box">
+    <h2>Meine Daten löschen</h2>
+    <p class="leise klein">Löscht Name, Kontaktdaten, Beschreibung und Fotos sofort (Widerruf der Einwilligung). Die Anfrage gilt dann als zurückgezogen.
+    Fahrzeugdaten ohne Personenbezug bleiben für die Statistik.</p>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-weight:400"><input type="checkbox" id="bestaetigt" style="width:auto;margin-top:4px">
+      <span>Ja, meine Angaben zu dieser Anfrage endgültig löschen.</span></label>
+    <div class="knopfreihe" style="margin-top:10px"><button type="button" class="knopf" id="loeschen">Meine Daten löschen</button></div>
+  </div>
+  <p id="geloescht" class="hinweis" hidden>Ihre persönlichen Angaben zu dieser Anfrage sind gelöscht.</p>
+</section>
+{% include "portal_fuss.html" %}
+</main>
+<script>
+(function(){
+  var token = '', $ = function(id){ return document.getElementById(id); };
+  try { token = decodeURIComponent((location.hash || '').slice(1)); } catch(e) { token = ''; }
+  function post(url, d){
+    return fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d)})
+      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(x){ if(!r.ok) throw new Error(x.fehler || ('Fehler ' + r.status)); return x; }); });
+  }
+  function fehler(t){ $('laden').hidden = true; $('fehler').textContent = t; $('fehler').hidden = false; }
+  function zeige(s){
+    $('laden').hidden = true; $('stand').hidden = false;
+    $('referenz').textContent = s.referenz; $('fahrzeug').textContent = s.fahrzeug; $('status').textContent = s.status;
+    $('eingegangen').textContent = s.eingegangen || '–'; $('aktualisiert').textContent = s.aktualisiert || '–'; $('fotos').textContent = s.fotos;
+    $('loeschen-box').hidden = s.geloescht; $('geloescht').hidden = !s.geloescht;
+  }
+  function laden(){ return post('/api/portal/status', {token: token}).then(zeige, function(e){ fehler(e.message); }); }
+  if(!token){ fehler('Bitte den vollständigen Statuslink aus der Bestätigung öffnen.'); return; }
+  $('loeschen').onclick = function(){
+    if(!$('bestaetigt').checked){ fehler('Bitte die Löschung bestätigen (Häkchen setzen).'); $('stand').hidden = false; return; }
+    this.disabled = true;
+    post('/api/portal/loeschen', {token: token, bestaetigt: true}).then(laden, function(e){ $('loeschen').disabled = false; fehler(e.message); $('stand').hidden = false; });
+  };
+  laden();
+})();
+</script>
+</body>
+</html>
