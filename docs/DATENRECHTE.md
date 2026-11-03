@@ -36,6 +36,7 @@ Inhaber `GET /api/datenschutz` und `POST /api/datenschutz/ausfuehren` (`{"bestae
 |---|---|---|---|---|---|
 | Verkäufer einer Verkaufsanfrage: Name, E-Mail, Telefon, PLZ, Ort, Einwilligung (Zeitpunkt, Textversion) | `verkaeufer` | Bewertung und Kontakt wegen Ankauf (Einwilligung im Formular) | Team; Standorte nur Region „12xxx“, nie Name/Kontakt | **Widerruf** (`/anfragen` Knopf des Inhabers oder `scout.py anfrage widerruf REF --bestaetigt`): anonymisiert, sofern keine weitere Anfrage desselben Verkäufers besteht; ohne Widerruf nach 12 Monaten ohne Änderung (F10) | – |
 | Freitext und Notiz der Anfrage, Notiz-Verlauf | `verkaufsanfragen.beschreibung/notiz`, `anfrage_verlauf` | Zustand beschreiben, interne Absprache | Team (Standorte: Freitext ohne Telefon/E-Mail/Links) | Widerruf löscht beides | – |
+| Öffentliches Ankaufsportal (P7-03): dieselben Anfrage-Daten wie oben; Statuslink und Upload-Link als signierte Tokens – **nicht gespeichert** | `verkaeufer`, `verkaufsanfragen` (Kanal „formular“); Schlüssel nur in der Umgebungsvariablen `SCOUT_PORTAL_SCHLUESSEL` | Verkäufer bietet selbst an (Einwilligung im Formular), sieht den Stand und löscht selbst | Verkäufer (nur eigene Anfrage über den Link: Referenz, Fahrzeug, Status – keine Kontaktdaten); Team wie oben | **„Meine Daten löschen“** auf der Statusseite = Widerruf wie oben (bei Ankauf verweigert, Bitte um Kontakt); Statuslink gilt 365 Tage | IP-Adressen nur im Arbeitsspeicher (Grenzen gegen Massenanfragen, höchstens 1 Stunde), nicht protokolliert; Protokolle des Reverse-Proxys (P7-04) vom Betreiber festzulegen; Impressum/Datenschutz/Einwilligung rechtlich prüfen |
 | Fotos der Anfrage | Ordner `fotos/anfragen/<id>/`, `anfrage_fotos` | Zustand beurteilen | Team, freigegebene Standorte | Widerruf löscht Dateien und Einträge | – |
 | Metadaten in Fotos (EXIF/GPS, XMP, IPTC) | – | – | – | werden seit G0 beim Speichern entfernt (JPEG, PNG; Anfrage- und Besichtigungsfotos) | andere Formate (WebP/HEIC) nicht bereinigt |
 | Offline-Speicher der Handy-App | Browser-Cache des Handys | Arbeiten ohne Netz | Nutzer des Geräts | nur eine Positivliste (Heute, Fahrzeuge, offene Besichtigungen, Fotos, eigene Anmeldung); **abgeschlossene Besichtigungen nie**, Unterschriften und Verkäuferangaben nie (P1-14b); wird geleert, sobald der Server 401 meldet (abgemeldet, Sitzung abgelaufen oder gesperrt) | verlorene Handys: Sitzung sperren (`scout.py nutzer sperren`) |
@@ -65,7 +66,7 @@ Sicherung erstellen, nach Vertrag übergeben oder löschen, Ordner entfernen (`d
 
 | Recht | Stand |
 |---|---|
-| Widerruf / Löschung (Art. 7 Abs. 3, Art. 17) | umgesetzt für Verkaufsanfragen (siehe oben); Ankauf blockiert bewusst |
+| Widerruf / Löschung (Art. 7 Abs. 3, Art. 17) | umgesetzt für Verkaufsanfragen (siehe oben), seit P7-03 auch durch den Verkäufer selbst über den Statuslink des Ankaufsportals; Ankauf blockiert bewusst |
 | Auskunft (Art. 15) | **offen** – derzeit nur über die Anfrage-Ansicht; ein Export je Verkäufer fehlt |
 | Berichtigung (Art. 16) | über Bearbeitung der Anfrage im Team |
 

@@ -1,0 +1,40 @@
+{% set titel = "Datenschutz" %}{% include "portal_seite_kopf.html" %}
+<h1>Datenschutzhinweise</h1>
+<p class="leise klein">Vorlage des Wohnmobil-Scout – vom Betreiber zu prüfen und zu ergänzen (Hoster, Aufsichtsbehörde, ggf. Datenschutzbeauftragter).</p>
+
+<h2>Verantwortlicher</h2>
+<p>{{ impressum.name or "[Name/Firma]" }}, {{ (impressum.anschrift or "[Anschrift]").replace("\n", ", ") }}, E-Mail: {{ impressum.email or "[E-Mail]" }}{% if impressum.datenschutz_kontakt %}<br>Datenschutz: {{ impressum.datenschutz_kontakt }}{% endif %}</p>
+
+<h2>Welche Daten, wofür</h2>
+<p>Wenn Sie uns Ihr Wohnmobil anbieten, verarbeiten wir die Angaben aus dem Formular: Fahrzeugdaten (Art, Marke, Modell, Erstzulassung,
+Kilometerstand, Zustand, Beschreibung, Preisvorstellung), Fotos sowie Name, Telefon und/oder E-Mail, PLZ und Ort. Zweck: Ihr Fahrzeug zu
+bewerten und Sie wegen eines möglichen Ankaufs persönlich zu kontaktieren. Rechtsgrundlage ist Ihre Einwilligung (Art. 6 Abs. 1 lit. a DSGVO);
+kommt es zu Vertragsverhandlungen oder einem Kauf, außerdem Art. 6 Abs. 1 lit. b DSGVO.</p>
+<p>Aus Fotos entfernen wir beim Speichern eingebettete Metadaten (z. B. Aufnahmeort). Es gibt keine automatischen Entscheidungen und keine
+automatischen Nachrichten – wir melden uns persönlich.</p>
+
+<h2>Weitergabe</h2>
+<p>Nur wenn Sie es im Formular ausdrücklich erlauben, dürfen wir Ihr Fahrzeug – ohne Namen, Telefon, E-Mail und genaue Adresse – geprüften
+Standorten bzw. Partnerhändlern anbieten. Sonst geben wir Ihre Angaben nicht weiter, außer an Dienstleister, die den Server für uns betreiben
+({{ impressum.hoster or "[Hoster – vom Betreiber zu ergänzen, Auftragsverarbeitungsvertrag]" }}).</p>
+
+<h2>Speicherdauer und Löschung</h2>
+<p>Sie können Ihre Einwilligung jederzeit widerrufen – am einfachsten über „Meine Daten löschen“ auf Ihrer persönlichen Statusseite, oder per
+E-Mail. Dann löschen wir Name, Kontaktdaten, Beschreibung und Fotos; Fahrzeugdaten ohne Personenbezug bleiben für die Statistik.
+{% if frist %}Ohne Ankauf löschen wir die persönlichen Angaben spätestens {{ frist }} Monate nach der letzten Bearbeitung.{% endif %}
+Kommt es zu einem Ankauf, bewahren wir die Kaufunterlagen so lange auf, wie es gesetzlich vorgeschrieben ist. Der Statuslink ist
+{{ status_tage }} Tage gültig.</p>
+
+<h2>Beim Aufruf der Seite</h2>
+<p>Das Portal setzt keine Cookies und verwendet keine Analyse- oder Werbedienste und keine Inhalte fremder Anbieter. Zum Schutz vor
+missbräuchlichen Massenanfragen wird Ihre IP-Adresse kurzzeitig im Arbeitsspeicher gezählt (höchstens eine Stunde, nicht gespeichert).
+{{ impressum.server_protokolle or "[Server-Protokolle des Reverse-Proxys/Hosters: Inhalt und Speicherdauer vom Betreiber zu ergänzen]" }}</p>
+
+<h2>Ihre Rechte</h2>
+<p>Sie haben das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerruf Ihrer
+Einwilligung mit Wirkung für die Zukunft sowie das Recht auf Beschwerde bei einer Datenschutz-Aufsichtsbehörde
+({{ impressum.aufsicht or "[zuständige Aufsichtsbehörde – vom Betreiber zu ergänzen]" }}).</p>
+{% include "portal_fuss.html" %}
+</main>
+</body>
+</html>

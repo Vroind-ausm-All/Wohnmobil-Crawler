@@ -18,6 +18,22 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 **Nicht geprüft:** `caddy validate` (Caddy nicht installiert), echter Server, Zertifikate, logrotate, Tailscale (`X-Forwarded-For`), Härtung im laufenden Betrieb, CI (läuft nach dem Push); Korrekturen nicht erneut von der QA geprüft.
 
+## P7-03 – Öffentliches Ankaufsportal (B4) (02.11.2026) · DONE (PR #58 gemergt)
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator nach der Korrekturrunde) | 2645 bestanden, neu `test_portal.py` (11) |
+| `ruff check .` | grün |
+| Start nur mit Freigabe: ohne `aktiv`, `oeffentliche_url` (https), `vertrauter_proxy`, Impressum oder Schlüssel (≥ 32 Zeichen) startet nichts; CLI bricht mit Begründung ab; falsche Werte → klare Fehlermeldung | bestanden |
+| Tokens: Zweck gebunden (Status ≠ Upload), anderer Schlüssel, veränderte ID/Ablauf, abgelaufen, Nicht-ASCII → ungültig; Bremse im Fenster, vergisst Schlüssel nach einem Fenster | bestanden |
+| Nur Portal-Wege: Team-Seiten und -APIs (`/anfragen`, `/api/fahrzeuge`, `/login`, `/m`, `/kennzahlen`, Team-Skripte, `/sw.js`) → 404; fremder Host → 403; Sicherheitsköpfe; Impressum/Datenschutz aus der Konfiguration mit Entwurfshinweis; Statusseite `noindex` | bestanden |
+| Ablauf über HTTP: Anfrage (Kanal immer „formular“, `erfasst_von` leer) → Foto per Upload-Token im Kopf → Status ohne Personen- und Teamdaten → Löschen nur mit Bestätigung → Verkäufer anonymisiert, Fotos weg, danach kein Upload; Upload-Link läuft ab; bei Ankauf 409, nichts gelöscht | bestanden |
+| Spamschutz: zu schnell, gefälschtes oder abgelaufenes Formular → 400; verstecktes Feld → Scheinerfolg ohne Speicherung; nur JSON (415); fremde Herkunft/`http://`-Origin → 403; Größe → 413; 5 gültige Anfragen je IP, die 6. → 429; `X-Forwarded-For` nur bei `vertrauter_proxy`; POST-Grenze vor dem Lesen; statische Dateien zählen nicht | bestanden |
+| Korrekturrunde: Nicht-ASCII-Token → 403, tiefe Verschachtelung → 400 (statt 500); 12 Fotos, das 13. → 400; Upload für fremde ID → 403; Bewertung wirft → Anfrage trotzdem angenommen (Spanne leer); Liste als Modell wird nicht als Text gespeichert | bestanden |
+| Klicktest Chromium (Playwright, 390 px): Formular in drei Schritten mit Foto, Bestätigung mit Statuslink, „Alle 1 Fotos übertragen ✓“, Statusseite, „Meine Daten löschen“ → gelöscht; keine JS-Fehler | bestanden (vor und nach der Korrekturrunde) |
+| QA-Review (`qa-security-reviewer`, eine Runde; eigene Angriffsproben) | Freigabe mit Auflagen; B1–B10 behoben, B11 mit P7-04 |
+
+**Nicht geprüft:** CI (läuft nach dem Push), Betrieb hinter echtem Reverse-Proxy/HTTPS, App und Portal gleichzeitig unter Last auf derselben Datenbank, Windows, echtes Handy, Inhalt der Rechtstexte; Korrekturen nicht erneut von der QA geprüft.
 ## P7-02 – Verkaufsanfragen im Dashboard (02.11.2026) · DONE (PR #57 gemergt)
 
 | Prüfung | Ergebnis |
