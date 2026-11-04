@@ -1558,3 +1558,28 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   nicht mehr). Grenzen im Speicher gelten je Prozess und beginnen nach einem Neustart neu; zusätzlich Grenzen im Reverse-Proxy (P7-04).
   Kein Live-Ereignis an die laufende Team-App (sie liest bei der nächsten Abfrage). Rechtliche Prüfung von Impressum, Datenschutz und
   Einwilligungstext steht aus.
+
+## ADR-069 – Serverbetrieb: systemd, Caddy, Tailscale fürs Team, Health-Check · gilt (02.11.2026)
+
+* **Kontext:** Das öffentliche Ankaufsportal (P7-03, ADR-068) muss rund um die Uhr erreichbar sein; der Büro-PC ist dafür ungeeignet.
+  Phase 7 bereitet den Betrieb vor, ohne ihn auszuführen (Server, Kosten, Domain und Freischaltung entscheidet der Betreiber, Regel 13).
+* **Entscheidung:**
+  1. **Ein Linux-Server** (Debian 13 wegen Python 3.13), Programm unter `/opt/wohnmobil-scout` mit eigenem Systembenutzer, drei
+     **systemd-Dienste** (Team-App, Portal, tägliche Sicherung per Timer) mit Härtung (`ProtectSystem=strict`, nur `daten/`, `ausgabe/`,
+     `import/` beschreibbar, `NoNewPrivileges`, `UMask=0077`). Vorlagen in `betrieb/`.
+  2. **Caddy** als HTTPS-Reverse-Proxy (automatische Zertifikate, HSTS, 15 MB Grenze, Protokoll nur mit gekürzter IP) – standardmäßig
+     **nur für das Portal**. Die Team-App bleibt im Internet unsichtbar und ist fürs Team über **Tailscale** erreichbar (Variante A,
+     empfohlen); Variante B (Team-App über Caddy) ist im `Caddyfile` vorbereitet und auskommentiert.
+  3. **Geheimnisse** nur in `/etc/wohnmobil-scout/umgebung` (root, 600, `EnvironmentFile`); Vorlage ohne Werte.
+  4. **Health-Check `GET /gesund`** (Team-App und Portal): `{"ok": true}` nach einer Leseabfrage auf die Datenbank, ohne Anmeldung, ohne
+     Inhalte, ohne Audit-Eintrag.
+  5. **Korrekturrunde (QA):** alle Programmbefehle als Dienstbenutzer, ausdrücklich nie als root (B1); Caddy protokolliert keine
+     Kopfzeilen (kein Upload-Token) und rotiert per logrotate täglich mit 14 Tagen (B2, B3); Timer für die Aufbewahrungsfristen
+     vorbereitet, aber aus (B4, Freigabe durch den Betreiber); Tailscale-Kopfzeilen als „nicht geprüft“ mit Folgen beschrieben (B5); Update
+     mit Sicherung zuerst, `try-restart`, Units neu kopieren (B6); Installationsliste und Tailscale-HTTPS ergänzt (B7); `/gesund` nur GET
+     (B8); fehlendes Login-Ratenlimit im Debian-Caddy offen ausgewiesen (B9). Gemeinsame `scout.log` mehrerer Prozesse → Backlog (B10).
+* **Alternativen:** Docker (zusätzliche Schicht, Volumes, Updates des Images – für einen Server und zwei Prozesse unnötig); nginx (mehr
+  Konfiguration, Zertifikate über certbot); Team-App öffentlich (größere Angriffsfläche, Pilot-Checkliste vollständig nötig); Portal auf
+  einem zweiten Server mit Datenabgleich (doppelte Datenhaltung).
+* **Folgen / offen:** Die Vorlagen sind nur per `systemd-analyze verify` (Syntax) und Tests geprüft, nicht auf einem echten Server.
+  Kopie der Sicherungen außer Haus, Ratenlimit im Proxy (Zusatzmodul) und das Abholen von Suchagenten-Mails richtet der Betreiber ein.

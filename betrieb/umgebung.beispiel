@@ -1,0 +1,15 @@
+# Geheimnisse für die Dienste (P7-04). NIE ins Repository, nie in config.yaml/config.local.yaml.
+# Kopieren nach /etc/wohnmobil-scout/umgebung, Werte eintragen, dann:
+#   chown root:root /etc/wohnmobil-scout/umgebung && chmod 600 /etc/wohnmobil-scout/umgebung
+# systemd liest die Datei als root vor dem Start; der Dienst-Benutzer „scout“ kann sie nicht lesen.
+
+# Ankaufsportal: Schlüssel für Status- und Upload-Links, mind. 32 Zeichen. Erzeugen:
+#   python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+# Ein neuer Schlüssel macht alle bisherigen Statuslinks ungültig.
+SCOUT_PORTAL_SCHLUESSEL=
+
+# Mail-Benachrichtigung (config.yaml → email → passwort_env), nur wenn genutzt
+SCOUT_SMTP_PASSWORT=
+
+# WhatsApp Cloud API (config.yaml → whatsapp → token_env), nur wenn genutzt
+SCOUT_WHATSAPP_TOKEN=

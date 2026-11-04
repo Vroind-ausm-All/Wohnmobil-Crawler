@@ -4,7 +4,21 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
-## P7-03 – Öffentliches Ankaufsportal (B4) (02.11.2026) · REVIEW
+## P7-04 – Serverbetrieb vorbereitet (02.11.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, vom Orchestrator, **vor** der Korrekturrunde) | 2650 bestanden, `test_serverbetrieb.py` (damals 6) |
+| nach der Korrekturrunde (nur Vorlagen, Doku und Test geändert): `test_serverbetrieb.py` | 7 bestanden; Vollsuite nicht erneut |
+| `ruff check .` | grün |
+| `systemd-analyze verify` (systemd 255) auf alle 6 Units | keine Fehler außer der erwarteten Meldung „/opt/wohnmobil-scout/.venv/bin/python is not executable“ |
+| Vorlagen: ExecStart, Dienstbenutzer, Härtung, beschreibbare Pfade je Dienst; Timer; Caddy (Portal aktiv, Team-App nur auskommentiert, HSTS, Größe, gekürzte IP, keine Kopfzeilen im Protokoll); logrotate 14 Tage; Umgebungsdatei ohne Werte und mit allen benutzten Variablennamen; `config.local`-Beispiel ohne Geheimnisse, Portal aus; Anleitung ohne Programmbefehle als root | bestanden |
+| `/gesund`: ohne Anmeldung `{"ok": true}` (Einzelplatz und mit Team), keine Daten, kein Audit-Eintrag; fremder Host 403; ohne Nutzer über Proxy 403; ohne `schema_version` kein 200 | bestanden |
+| QA-Review (`qa-security-reviewer`, eine Runde) | Freigabe mit Auflagen; B1–B9 behoben, B10 → P7-04b |
+
+**Nicht geprüft:** `caddy validate` (Caddy nicht installiert), echter Server, Zertifikate, logrotate, Tailscale (`X-Forwarded-For`), Härtung im laufenden Betrieb, CI (läuft nach dem Push); Korrekturen nicht erneut von der QA geprüft.
+
+## P7-03 – Öffentliches Ankaufsportal (B4) (02.11.2026) · DONE (PR #58 gemergt)
 
 | Prüfung | Ergebnis |
 |---|---|

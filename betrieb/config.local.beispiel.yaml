@@ -1,0 +1,26 @@
+# Beispiel für /opt/wohnmobil-scout/config.local.yaml auf dem Server (P7-04). Überlagert config.yaml abschnittsweise;
+# die Datei ist in .gitignore. Keine Geheimnisse hier – die stehen in /etc/wohnmobil-scout/umgebung.
+
+app:
+  # Variante A (empfohlen): Team-App nur über Tailscale – Adresse aus „tailscale serve“, z. B. https://scout-server.tail1234.ts.net
+  # Variante B: Team-App über Caddy – https://app.example.de, dann zusätzlich vertrauter_proxy: true und nur_https: true
+  # vertrauter_proxy bei Variante A nur nach Prüfung, ob tailscale serve X-Forwarded-For setzt (docs/SERVERBETRIEB.md, Abschnitt 7)
+  oeffentliche_url: ""
+  nur_https: true
+
+portal:
+  aktiv: false                     # erst nach Freigabe und rechtlicher Prüfung auf true
+  oeffentliche_url: "https://verkaufen.example.de"
+  vertrauter_proxy: true           # Caddy setzt X-Forwarded-For
+  texte_geprueft: false            # true erst nach rechtlicher Prüfung von Impressum, Datenschutz und Einwilligung
+  impressum:
+    name: ""
+    anschrift: ""                  # mehrzeilig mit \n
+    telefon: ""
+    email: ""
+    vertreten_durch: ""
+    register: ""
+    ust_id: ""
+    hoster: ""
+    aufsicht: ""
+    server_protokolle: "Der Reverse-Proxy protokolliert Zeitpunkt, Methode, aufgerufene Adresse, Antwortcode, Dauer, Größe und die gekürzte IP-Adresse (keine Kopfzeilen); die Protokolle werden täglich rotiert und nach 14 Tagen gelöscht."

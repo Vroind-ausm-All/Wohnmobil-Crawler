@@ -4,6 +4,7 @@ Der Scout ist für den Betrieb **auf einem Rechner im Büro** gebaut: Server nur
 `tailscale serve` (HTTPS im eigenen Tailnet, docs/HANDY-APP.md). Für diesen Betrieb reicht die Härtung aus Phase G0.
 Diese Liste gilt, **bevor** die App über ein öffentliches Netz, für weitere Firmen oder mit fremden Nutzern läuft.
 Sie ist eine technische Checkliste, keine Rechtsberatung.
+Umsetzung auf einem eigenen Server (systemd, Caddy, Tailscale, Sicherung): `docs/SERVERBETRIEB.md` (P7-04).
 
 ## 1. Erreichbarkeit
 

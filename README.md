@@ -343,7 +343,9 @@ Nachrichten verschicken, und viele Verkäufer reagieren auf Massenanfragen aller
   `docs/DATENRECHTE.md`): Bericht mit `python scout.py datenschutz`, ausführen mit `--ausfuehren --bestaetigt` (vorher Sicherung). Die App selbst lauscht nur auf dem eigenen Rechner (127.0.0.1;
   Handys über `tailscale serve`); Mail-Anhang und Handy-Speicher liegen außerhalb davon.
 - **Betrieb über das eigene Büro hinaus** (öffentliche Adresse, weitere Firmen): erst die Checkliste
-  `docs/PILOTBETRIEB.md` abarbeiten. Was gespeichert wird und wie es sich löschen lässt: `docs/DATENRECHTE.md`
+  `docs/PILOTBETRIEB.md` abarbeiten. **Eigener Server** (für das öffentliche Ankaufsportal): Schritt-für-Schritt-Anleitung
+  `docs/SERVERBETRIEB.md` mit Vorlagen in `betrieb/` (systemd-Dienste, Caddy für HTTPS, Sicherung, Umgebungsdatei für Geheimnisse);
+  Health-Check `GET /gesund`. Was gespeichert wird und wie es sich löschen lässt: `docs/DATENRECHTE.md`
   (Widerruf einer Verkaufsanfrage: `/anfragen` → „Widerruf: personenbezogene Daten löschen“ oder `scout.py anfrage widerruf REF --bestaetigt`).
   Wer wann Verkäuferdaten gelesen oder etwas geändert hat, zeigt `scout.py audit --tage 7` (nur Metadaten, ohne Inhalte).
 - **Mehrere Firmen auf einem Server** (Mandanten, je eigene Datenbank): `docs/MANDANTEN.md`.
