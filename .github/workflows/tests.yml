@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: [main, "claude/**"]
+    branches: [main, "claude/**", "feature/auto-api-integration-step1"]
   pull_request:
   workflow_dispatch:
 
