@@ -26,6 +26,10 @@ def cfg(tmp_path, monkeypatch) -> dict:
     c["crawler"].update(pause_min_sek=0, pause_max_sek=0, detailseiten_pro_lauf=100)
     c["ausgabe"]["ordner"] = str(tmp_path / "ausgabe")
     c["ausgabe"]["datenbank"] = str(tmp_path / "anzeigen.sqlite")
+    # nie den echten Import-Ordner des Projekts: die Aufbewahrungsfristen (F10) löschen dort abgelegte Seiten und Mails
+    c["import"] = {**(c.get("import") or {}), "ordner": str(tmp_path / "import")}
+    # ebenso nie den echten Sicherungsordner (Kommandozeilen-Tests laufen im Projektordner, QA F10 B2)
+    c["sicherung"] = {**(c.get("sicherung") or {}), "ordner": str(tmp_path / "sicherungen")}
     return c
 
 

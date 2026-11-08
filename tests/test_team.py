@@ -57,9 +57,11 @@ def test_besichtigung_ablauf_und_fotos(team):
 
 
 def test_cli_nutzer(cfg, tmp_path):
-    r = _scout(cfg, tmp_path, "nutzer", "anlegen", "Chris", "--rolle", "inhaber", "--passwort", "sicher1234")
+    r = _scout(cfg, tmp_path, "nutzer", "anlegen", "Chris", "--rolle", "inhaber", umgebung={"SCOUT_NEUES_PASSWORT": "sicher1234"})
     assert r.returncode == 0 and "angelegt" in r.stdout, r.stderr
     r = _scout(cfg, tmp_path, "nutzer", "liste")
     assert "Chris" in r.stdout and "Inhaber" in r.stdout
-    r = _scout(cfg, tmp_path, "nutzer", "anlegen", "Kurz", "--passwort", "123")
+    r = _scout(cfg, tmp_path, "nutzer", "anlegen", "Kurz", umgebung={"SCOUT_NEUES_PASSWORT": "123"})
     assert r.returncode != 0 and "mindestens 8" in r.stderr
+    r = _scout(cfg, tmp_path, "nutzer", "anlegen", "Dora", "--passwort", "sicher1234")                 # P1-09: nicht mehr als Argument
+    assert r.returncode != 0 and "--passwort" in r.stderr

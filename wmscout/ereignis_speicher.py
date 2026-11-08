@@ -8,7 +8,10 @@ from __future__ import annotations
 import logging
 
 from .datenbank import IMPORT_SUCHE, STANDARD_PLATTFORM, inhalt_hash
+from .domaene import PUSH_KANAELE
 from .ereignisse import InseratEreignis
+from .quellen import QUELLEN
+from .verfuegbarkeit import OFFLINE, aus_signal, erkenne_signal
 
 log = logging.getLogger(__name__)
 
@@ -33,10 +36,14 @@ class EreignisSpeicher:
 
     def _verarbeite(self, ereignis: InseratEreignis) -> str:
         con = self.db.con
+        if ereignis.kanal in PUSH_KANAELE:
+            # Was der Nutzer liefert (E-Mail, Text, Seite), läuft über Importer.importiere mit den Regeln zu Art und Anbieter (ADR-035)
+            raise ValueError(f"Kanal {ereignis.kanal!r} ist ein Push-Eingang – Importer.importiere verwenden, nicht den EreignisSpeicher")
         if ereignis.kanal in ("stream", "api"):
             q = con.execute("SELECT freigegeben, aktiv, zugriffsart FROM quellen WHERE kennung=?",
                             (ereignis.plattform,)).fetchone()
-            if q is None or not q["freigegeben"] or not q["aktiv"] or q["zugriffsart"] != "api":
+            klasse = QUELLEN.get(ereignis.plattform)     # Plattform mit Adapter im Code: auch dessen Freigabe zählt (ADR-036)
+            if q is None or not q["freigegeben"] or not q["aktiv"] or q["zugriffsart"] != "api" or (klasse and not klasse.freigegeben):
                 raise QuelleNichtFreigegeben(f"Automatischer Eingang für {ereignis.plattform} nicht freigegeben")
         if ereignis.ereignis_id is not None:
             schon = con.execute(
@@ -52,32 +59,36 @@ class EreignisSpeicher:
 
         zeit = ereignis.empfangen_am.isoformat()
         if ereignis.typ == "geloescht":
-            status = "offline"
+            gewuenscht = OFFLINE
             url, titel, preis = alt["url"], alt["titel"], alt["preis"]
         else:
-            status = "aktiv"
             i = ereignis.inserat
             url = i.url or (alt["url"] if alt else None)
             titel = i.titel if i.titel is not None else (alt["titel"] if alt else None)
             preis = i.preis if i.preis is not None else (alt["preis"] if alt else None)
+            gewuenscht = aus_signal(erkenne_signal(titel))          # zu sehen = verfügbar, außer der Titel sagt „reserviert“/„verkauft“
+        # Altersregel: ein Ereignis vor der letzten Bestätigung ändert die Verfügbarkeit nicht (Preis und Titel laufen wie bisher)
+        status, bestaetigt = self.db.verfuegbarkeit_nach_regel(alt, gewuenscht, zeit)
 
         neu = alt is None
         alt_signatur = (alt["url"], alt["titel"], alt["preis"], alt["verfuegbarkeit"]) if alt else None
         signatur = (url, titel, preis, status)
         if alt_signatur == signatur:
+            if bestaetigt != alt["zuletzt_bestaetigt"]:            # gleicher Stand erneut bestätigt: nur der Zeitpunkt rückt vor
+                con.execute("UPDATE inserate SET zuletzt_bestaetigt=? WHERE id=?", (bestaetigt, alt["id"]))
             return "bekannt"
 
         if neu:
             con.execute(
                 """INSERT INTO inserate (plattform, anzeigen_id, url, titel, preis, verfuegbarkeit,
-                   erstmals_gesehen, zuletzt_gesehen) VALUES (?,?,?,?,?,?,?,?)""",
-                (ereignis.plattform, ereignis.anzeigen_id, url, titel, preis, status, zeit, zeit))
+                   erstmals_gesehen, zuletzt_gesehen, zuletzt_bestaetigt) VALUES (?,?,?,?,?,?,?,?,?)""",
+                (ereignis.plattform, ereignis.anzeigen_id, url, titel, preis, status, zeit, zeit, bestaetigt))
             inserat_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
         else:
             inserat_id = alt["id"]
             con.execute(
-                "UPDATE inserate SET url=?, titel=?, preis=?, verfuegbarkeit=?, zuletzt_gesehen=? WHERE id=?",
-                (url, titel, preis, status, zeit, inserat_id))
+                "UPDATE inserate SET url=?, titel=?, preis=?, verfuegbarkeit=?, zuletzt_gesehen=?, zuletzt_bestaetigt=? WHERE id=?",
+                (url, titel, preis, status, zeit, bestaetigt, inserat_id))
 
         con.execute(
             """INSERT INTO beobachtungen

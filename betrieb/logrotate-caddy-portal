@@ -1,0 +1,12 @@
+# Portal-Protokoll von Caddy (P7-04): täglich rotieren, nach 14 Tagen löschen. Nach /etc/logrotate.d/caddy-portal kopieren.
+/var/log/caddy/portal.log {
+	daily
+	rotate 14
+	maxage 14
+	missingok
+	notifempty
+	compress
+	delaycompress
+	copytruncate
+	su caddy caddy
+}

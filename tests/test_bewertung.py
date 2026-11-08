@@ -72,9 +72,11 @@ def test_ohne_erstzulassung_kein_betrag(vergleich):
 
 
 def test_transport_nach_entfernung():
+    """Ohne Abschnitt ``kosten.abholung`` gilt die alte Formel (P5-06: Auto/Bahn siehe test_abholung.py)."""
     cfg = copy.deepcopy(CFG)
     a = {"id": "t", "suche": "Kastenwagen", "ez_jahr": date.today().year - 5, "km": 50000, "entfernung_km": 300}
     k = cfg["rechner"]["kosten"]
+    del k["abholung"]
     posten = Rechner(cfg).kosten(a, 40000)
     assert posten["Abholung (300 km)"] == round((k["transport_grundpauschale"] + 300 * k["transport_pro_km"]) / 10) * 10
     assert Rechner(cfg).kosten({**a, "entfernung_km": None}, 40000)["Transport"] == k["transport_pauschal"]

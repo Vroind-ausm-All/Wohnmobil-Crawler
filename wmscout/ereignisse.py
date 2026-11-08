@@ -5,10 +5,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
+from .domaene import pruefe_kanal, pruefe_plattform
 from .quellen.basis import Inserat
 
 EreignisTyp = Literal["neu", "geaendert", "geloescht"]
-Eingangskanal = Literal["stream", "api", "email", "manuell"]
+Eingangskanal = Literal["stream", "api", "email", "manuell"]          # = domaene.KANAELE
 
 
 @dataclass(frozen=True)
@@ -28,8 +29,7 @@ class InseratEreignis:
             raise ValueError("Plattform und Anzeigen-ID dürfen nicht leer sein")
         if self.typ not in ("neu", "geaendert", "geloescht"):
             raise ValueError(f"Unbekannter Ereignistyp: {self.typ}")
-        if self.kanal not in ("stream", "api", "email", "manuell"):
-            raise ValueError(f"Unbekannter Eingangskanal: {self.kanal}")
+        pruefe_kanal(self.kanal)
         if not isinstance(self.empfangen_am, datetime) or self.empfangen_am.tzinfo is None:
             raise ValueError("empfangen_am benötigt eine Zeitzone")
         if self.typ != "geloescht" and self.inserat is None:
@@ -39,5 +39,6 @@ class InseratEreignis:
                 raise ValueError("Inserat und Ereignis haben unterschiedliche Plattform-IDs")
             if self.inserat.preis is not None and self.inserat.preis < 0:
                 raise ValueError("Ein Preis darf nicht negativ sein")
+        pruefe_plattform(self.plattform)
         if self.ereignis_id is not None and not self.ereignis_id.strip():
             raise ValueError("ereignis_id darf nicht leer sein")

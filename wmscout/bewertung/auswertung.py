@@ -5,12 +5,29 @@ from collections import defaultdict
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from ..datenbank import STATUS, UNBEKANNT, Datenbank, import_art
+from ..domaene import STATUS, UNBEKANNT, fahrzeug_status, import_art
+from ..dubletten import Wirkung, lade_wirkung, wende_an
+from ..anbieter import einstufung
+from ..normalisierung.qualitaet import pruefe_fahrzeug, pruefe_inserat
 from ..normalisierung.fahrzeug import arten_im_text, ergaenze_fahrzeug
 from ..normalisierung.geo import entfernung_km
+from .deal_score import deal_score
+from .risikofaktoren import risikofaktoren
+from . import gruppen
+from .. import preisverlauf as pv
+from .. import verhandlung
+from .deal_score import einstellungen as deal_einstellungen
+from ..verfuegbarkeit import ergaenze as ergaenze_verfuegbarkeit
+from ..verfuegbarkeit import offline_nach_tagen
 from .anschreiben import Anschreiber, betrag_im_brief, euro, hinweise, sperrgrund
-from .rechner import Bewertung, Rechner
+from .neuigkeit import einstellungen as neuigkeit_einstellungen
+from .neuigkeit import neuigkeit
+from .rechner import Bewertung, Rechner, Vergleichsliste
+
+if TYPE_CHECKING:                      # nur für Typangaben – die Bewertung selbst braucht keine Datenbank (P1-08)
+    from ..datenbank import Datenbank
 
 
 BEARBEITET = {"vorbereitet", "kontaktiert", "verhandlung", "besichtigung", "gekauft", "abgesagt", "uninteressant"}
@@ -36,9 +53,12 @@ def finde_duplikate(alle: list[dict]) -> dict[str, list[dict]]:
 
 def dubletten_ids(db: Datenbank) -> dict[str, list[str]]:
     """id → sortierte IDs der Dubletten – dieselbe Gruppierung wie in `bewerte_alle` (`dubletten_ids` je Zeile), aber ohne
-    Rechner, Anschreiben und Entfernungen. Für die Team-Prüfung bei Schreibzugriffen (Reservierung wirkt auf die Fahrzeuggruppe)."""
+    Rechner, Anschreiben und Entfernungen. Für die Team-Prüfung bei Schreibzugriffen (Reservierung wirkt auf die Fahrzeuggruppe).
+    Heuristik ∪ bestätigte Fahrzeuggruppe, ohne Paare mit Entscheidung „verschieden“ (P3-02b); die Gruppe gilt auch für Inserate ohne Preis."""
     alle = [ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()]
-    return {i: sorted(b["id"] for b in andere) for i, andere in finde_duplikate(alle).items()}
+    ids = {i: [b["id"] for b in andere] for i, andere in finde_duplikate(alle).items()}
+    ids = wende_an(ids, lade_wirkung(db), lambda i: i, lambda i: i)
+    return {i: sorted(andere) for i, andere in ids.items()}
 
 
 def fuer_rechner(a: dict) -> dict:
@@ -76,7 +96,8 @@ def _sicht_als(sicht: dict, art: str) -> dict:
 SICHERHEIT_ART_UNBEKANNT = "niedrig"
 
 
-def bewerte_anzeige(rechner: Rechner, a: dict, vergleich: list[dict], marktwert_manuell: int | None = None) -> Bewertung:
+def bewerte_anzeige(rechner: Rechner, a: dict, vergleich: list[dict], marktwert_manuell: int | None = None,
+                    haendler_quantil: float = .5) -> Bewertung:
     """Bewertung einer Anzeige in Rechner-Sicht; `vergleich` aus `vergleichsbasis`.
 
     Orte im Ausland (`a["ausland"]`, siehe `normalisierung.geo.auslands_kuerzel`) haben keine PLZ und keine Entfernung; der Rechner
@@ -94,22 +115,25 @@ def bewerte_anzeige(rechner: Rechner, a: dict, vergleich: list[dict], marktwert_
         „Sonstige“ grün; der Brief nennt dann keinen Betrag (`anschreiben.kontext`).
       * Spanne = von der kleinsten bis zur größten Spanne aller Kandidaten (Unsicherheit über die Art ausweisen).
     Welche Art genommen wurde, steht in `b.art` und im Hinweis am Fahrzeug (`anschreiben.hinweise(a, b)`)."""
-    b = _bewerte_nach_art(rechner, a, vergleich, marktwert_manuell)
+    b = _bewerte_nach_art(rechner, a, vergleich, marktwert_manuell, haendler_quantil)
     if a.get("ausland"):
         b = replace(b, ampel="gelb" if b.ampel == "gruen" else b.ampel,
                     vergleich_basis=f"{b.vergleich_basis} · Ausland ({a['ausland']}): Entfernung und Transport nicht berechnet")
     return b
 
 
-def _bewerte_nach_art(rechner: Rechner, a: dict, vergleich: list[dict], marktwert_manuell: int | None) -> Bewertung:
+def _bewerte_nach_art(rechner: Rechner, a: dict, vergleich: list[dict], marktwert_manuell: int | None, haendler_quantil: float = .5) -> Bewertung:
     sicht = fuer_rechner(a)
     kandidaten = kandidaten_arten(a)
     if not kandidaten:
-        return rechner.bewerte(sicht, vergleich, marktwert_manuell=marktwert_manuell)
-    alle_b = [rechner.bewerte(_sicht_als(sicht, art), vergleich, marktwert_manuell=marktwert_manuell) for art in kandidaten]
+        return rechner.bewerte(sicht, vergleich, marktwert_manuell=marktwert_manuell, haendler_quantil=haendler_quantil)
+    alle_b = [rechner.bewerte(_sicht_als(sicht, art), vergleich, marktwert_manuell=marktwert_manuell, haendler_quantil=haendler_quantil)
+              for art in kandidaten]
     b = min(alle_b, key=lambda x: x.max_ek)                       # min() nimmt bei Gleichstand den ersten: „Sonstige“
     von = [x.spanne_von for x in alle_b if x.spanne_von]
     bis = [x.spanne_bis for x in alle_b if x.spanne_bis]
+    spannen = {f"{feld}_{ende}": (min if ende == "von" else max)(w) for feld in ("max_ek", "privat") for ende in ("von", "bis")
+               if (w := [getattr(x, f"{feld}_{ende}") for x in alle_b if getattr(x, f"{feld}_{ende}") is not None])}
     basis = b.vergleich_basis
     if len(kandidaten) > 1:
         geprueft = ", ".join("ohne Art" if k == "Sonstige" else k for k in kandidaten)
@@ -117,24 +141,32 @@ def _bewerte_nach_art(rechner: Rechner, a: dict, vergleich: list[dict], marktwer
     return replace(b, sicherheit=SICHERHEIT_ART_UNBEKANNT if b.sicherheit in ("hoch", "mittel") else b.sicherheit,
                    ampel="gelb" if b.ampel == "gruen" else b.ampel,
                    spanne_von=min(von) if von else b.spanne_von, spanne_bis=max(bis) if bis else b.spanne_bis,
-                   vergleich_basis=basis)
+                   vergleich_basis=basis, **spannen)
 
 
 def vergleichsbasis(alle: list[dict], duplikate: dict[str, list[dict]] | None = None) -> list[dict]:
     """Vergleichsangebote für den Rechner – für `bewerte_alle` und `scout.py rechne` gleich: von mehrfach eingestellten
     Fahrzeugen nur die aktuellste Anzeige, jede in Rechner-Sicht (`fuer_rechner`), damit Art und Rechner-Cache (je id)
-    zur bewerteten Anzeige passen (M6-1/M6-2)."""
+    zur bewerteten Anzeige passen (M6-1/M6-2). Als ``Vergleichsliste`` mit Vorfilter für ``Rechner.vergleiche`` (P3-07)."""
     duplikate = finde_duplikate(alle) if duplikate is None else duplikate
-    return [fuer_rechner(a) for a in alle if not any((b.get("zuletzt_gesehen") or "", b["id"]) > (a.get("zuletzt_gesehen") or "", a["id"])
-                                                     for b in duplikate.get(a["id"], []))]
+    return Vergleichsliste(fuer_rechner(a) for a in alle if not any((b.get("zuletzt_gesehen") or "", b["id"]) > (a.get("zuletzt_gesehen") or "", a["id"])
+                                                     for b in duplikate.get(a["id"], [])))
+
+
+def vergleichsbasis_aus(db: Datenbank) -> list[dict]:
+    """``vergleichsbasis`` über alle Inserate mit Preis, mit den geltenden Dublettenentscheidungen (wie `bewerte_alle`)."""
+    alle = [ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()]
+    nach_id = {a["id"]: a for a in alle}
+    return vergleichsbasis(alle, wende_an(finde_duplikate(alle), lade_wirkung(db), nach_id.get, lambda a: a["id"]))  # nur Inserate mit Preis
 
 
 def _datum(iso: str | None) -> str:
     return f"{iso[8:10]}.{iso[5:7]}." if iso and len(iso) >= 10 else "?"
 
 
-def nachfass_grund(a: dict, cfg: dict, jetzt: datetime) -> str | None:
-    """Warum jetzt nachgefasst werden sollte (oder None)."""
+def nachfass_grund(a: dict, cfg: dict, jetzt: datetime, beantwortet: bool = False) -> str | None:
+    """Warum jetzt nachgefasst werden sollte (oder None). ``beantwortet``: der Verkäufer hat nach dem letzten Kontakt geantwortet (P6-03) –
+    dann ist „keine Antwort“ falsch, die Rückmeldung liegt bei uns (Meldung „Antwort fällig“, P6-04)."""
     nf = cfg.get("nachfassen") or {}
     letzter = max(a.get("kontaktiert_am") or "", a.get("nachgefasst_am") or "")
     if a.get("status") not in ("kontaktiert", "verhandlung", "abgesagt") or not letzter:
@@ -142,31 +174,83 @@ def nachfass_grund(a: dict, cfg: dict, jetzt: datetime) -> str | None:
     if a.get("preis_geaendert_am") and a["preis_geaendert_am"] > letzter:
         return f"Preis gesenkt auf {euro(a['preis'])}"
     tage = (jetzt - datetime.fromisoformat(letzter)).days
+    if beantwortet:
+        return None
     if (a["status"] == "kontaktiert" and tage >= nf.get("nach_tagen", 3)
             and (a.get("nachfass_anzahl") or 0) < nf.get("max_anzahl", 1)):
         return f"seit {tage} Tagen keine Antwort"
     return None
 
 
-def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None = None) -> list[dict]:
+def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None = None, erstmals_seit: str | None = None) -> list[dict]:
+    """Liest die Inserate und die geltenden Dublettenentscheidungen aus der Datenbank und bewertet sie (``bewerte_zeilen``).
+    ``erstmals_seit`` (ISO, lokal): statt der aktiven Inserate alle, die ab diesem Zeitpunkt zuerst eingingen (Abdeckung, P4-05)."""
+    wirkung = lade_wirkung(db)
+    mitglieder = {i for g in wirkung.gruppen for i in g}
+    roh = db.verfuegbarkeit_zu()                       # Verfügbarkeit aus „inserate“, eine Abfrage für alle Zeilen (P3-04)
+    arbeit = db.anzeigen_mit_arbeit()                  # Team-Arbeit, die nicht im Ankaufsstatus steht (Reservierung, Besichtigung, Ankauf)
+
+    def zeile(r) -> dict:
+        return {**dict(r), **roh.get(r["id"], {}), "hat_arbeit": r["id"] in arbeit}
+    zu_bewerten = db.erstmals_seit(erstmals_seit) if erstmals_seit else db.aktive()
+    return bewerte_zeilen(cfg, basis, [zeile(r) for r in db.alle_mit_preis()], [zeile(r) for r in zu_bewerten], lauf_start,
+                          wirkung=wirkung, gruppenzeilen=[zeile(r) for r in db.anzeigen_zu(mitglieder)], preise=lambda ids: pv.verlaeufe(db, ids),
+                          kontaktlage=verhandlung.lage(db))
+
+
+def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[dict], lauf_start: str | None = None,
+                   jetzt: datetime | None = None, wirkung: Wirkung | None = None, gruppenzeilen: list[dict] = (),
+                   preise=None, kontaktlage: dict[str, dict] | None = None) -> list[dict]:
+    """Bewertung ohne Datenbank (P1-08, ADR-015): ``mit_preis`` = alle Inserate mit Preis (Vergleichsbasis, Dubletten),
+    ``aktive`` = die zu bewertenden Inserate – beide als einfache Dicts mit den Spalten der Tabelle ``anzeigen``.
+    ``wirkung``: geltende Dublettenentscheidungen (bestätigte Fahrzeuggruppen, „verschieden“-Paare); ohne sie gilt nur die Heuristik.
+    ``gruppenzeilen``: Zeilen der Gruppenmitglieder (auch ohne Preis oder lange nicht gesehen). Sperren und Markierungen berücksichtigen
+    jedes Mitglied, das als ``mit_preis``-, ``aktive``- oder Gruppenzeile vorliegt; die Vergleichsbasis nur Inserate mit Preis.
+    ``preise``: Preisverläufe je Anzeigen-ID (``preisverlauf.verlaeufe``) – als Dict oder als Funktion der benötigten IDs (aktive Zeilen und
+    ihre Dubletten, P6-02b); nur Anzeige (P6-02).
+    ``kontaktlage``: Kontakte, Verhandlungseinträge und Besichtigungen je Anzeigen-ID (``verhandlung.lage``) – nur Anzeige (P6-03)."""
     rechner, schreiber = Rechner(cfg), Anschreiber(cfg, basis)
-    jetzt = datetime.now()
+    deal_e = deal_einstellungen(cfg)                  # ValueError mit verständlicher Meldung bei falscher Konfiguration
+    jetzt = jetzt or datetime.now()
     standort = str(cfg["anschreiben"].get("plz") or "") or None
-    alle = [ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()]
-    duplikate = finde_duplikate(alle)
-    vergleich = vergleichsbasis(alle, duplikate)
+    tage = offline_nach_tagen(cfg)
+    neu_e = neuigkeit_einstellungen(cfg)
+
+    def angereichert(r) -> dict:                      # Fahrzeugmerkmale + Verfügbarkeit (wirksam, „vermutlich offline“ beim Lesen abgeleitet)
+        a = ergaenze_verfuegbarkeit(ergaenze_fahrzeug(dict(r)), jetzt, tage)
+        a["anbieter"] = einstufung(a.get("gewerblich"), a.get("anbieter_herkunft"))     # Anbieterart mit Herkunft (P3-05)
+        return a
+    alle = [angereichert(r) for r in mit_preis]
+    nach_id = {a["id"]: a for a in alle}
+    heuristisch = finde_duplikate(alle)
+    vergleich = vergleichsbasis(alle, wende_an(heuristisch, wirkung, nach_id.get, lambda a: a["id"]))
+    sonst: dict[str, dict] = {}
+    if wirkung is None or wirkung.leer:
+        duplikate = heuristisch
+    else:                                   # Mitglieder ohne Preis zählen für Sperren und Markierungen, nicht für die Vergleichsbasis
+        sonst = {z["id"]: angereichert(z) for z in [*aktive, *gruppenzeilen] if z["id"] not in nach_id}
+        duplikate = wende_an(heuristisch, wirkung, {**sonst, **nach_id}.get, lambda a: a["id"])
+    fahrzeug_von = wirkung.karte() if wirkung else {}          # bestätigte Fahrzeuggruppen: id → die anderen Mitglieder
+    status_von = {r["id"]: r.get("status") for r in (*mit_preis, *aktive, *gruppenzeilen)}
+    qcache: dict[str, list] = {}
+
+    def markierungen(b: dict) -> list[dict]:          # Datenqualität je Inserat nur einmal je Bewertungslauf (P3-08, Gruppen)
+        if b["id"] not in qcache:
+            qcache[b["id"]] = pruefe_inserat(b, jetzt)
+        return qcache[b["id"]]
     zeilen = []
-    for r in db.aktive():
-        a = ergaenze_fahrzeug(dict(r))
-        if a.get("status") == "gelöscht":
-            continue
+    for r in aktive:
+        a = angereichert(r)                  # Altbestand-Status „gelöscht“ bleibt in der Liste und gilt wie offline (gesperrt, Abzeichen)
         a["entfernung_km"] = entfernung_km(standort, a.get("plz"))
         andere = duplikate.get(a["id"], [])
+        # Datenqualität (P3-08): Markierungen des Inserats und Wert des Fahrzeugs über alle seine Inserate – nur Anzeige, keine Wirkung
+        a["datenqualitaet_inserat"] = markierungen(a)
+        a["datenqualitaet"] = pruefe_fahrzeug(a, andere, jetzt, a["datenqualitaet_inserat"], vorab=markierungen)
         seit = min([a.get("erstmals_gesehen") or jetzt.isoformat()] + [b.get("erstmals_gesehen") or "9" for b in andere])
         a["tage_online"] = max(0, (jetzt - datetime.fromisoformat(seit)).days)
         a["neu_eingestellt"] = any((b.get("erstmals_gesehen") or "") < (a.get("erstmals_gesehen") or "") for b in andere)
         bearbeitet = [b for b in andere if b.get("status") in BEARBEITET]
-        live_aelter = [b for b in andere if b.get("status") in (None, "neu")
+        live_aelter = [b for b in andere if b.get("status") in (None, "neu") and not b.get("nicht_verfuegbar")
                        and (b.get("erstmals_gesehen") or "") < (a.get("erstmals_gesehen") or "")
                        and (b.get("zuletzt_gesehen") or "") >= (a.get("zuletzt_gesehen") or "")[:10]]
         if bearbeitet:
@@ -180,18 +264,53 @@ def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None =
         # Text gibt es für jede nicht gesperrte Anzeige; „bereit“ sind nur die, deren Ampel passt.
         # `hinweise` (z. B. Fahrzeugart nicht bestätigt) sperren nichts, sie stehen sichtbar am Fahrzeug
         brief = schreiber.text(a, b) if not sperre else None
-        grund = nachfass_grund(a, cfg, jetzt)
+        # Lage über das ganze Fahrzeug: Kontakt an einem Inserat, Antwort an der bestätigten Dublette (P6-03b)
+        lage_a = verhandlung.zusammen([(kontaktlage or {}).get(i) for i in (a["id"], *sorted(fahrzeug_von.get(a["id"], ())))])
+        # Status des Vorgangs über das Fahrzeug: eigener Status, sonst der höchste der Gruppe; gekauft an einem Mitglied beendet alle (QA B3)
+        stati = [a.get("status"), *(status_von.get(i) for i in fahrzeug_von.get(a["id"], ()))]
+        vorgang = "gekauft" if "gekauft" in stati else (a.get("status") if a.get("status") not in (None, "neu") else fahrzeug_status(stati))
+        kontakt = verhandlung.zustand(vorgang, lage_a, jetzt)
+        antwort = lage_a.get("antwort")                 # beantwortet unabhängig von der Stufe (auch bei geplanter Besichtigung, QA B6)
+        beantwortet = bool(antwort) and (not lage_a.get("kontakt_am") or antwort["zeitpunkt"] >= lage_a["kontakt_am"])
+        grund = nachfass_grund(a, cfg, jetzt, beantwortet=beantwortet)
         nachfass_text, nachfass_betrag = schreiber.nachfass(a, b) if grund else (None, None)
         if cfg["rechner"]["differenzbesteuerung"]:
             ust = (b.haendler_vk - b.max_ek) * 19 / 119
         else:
             ust = b.haendler_vk - b.haendler_vk / 1.19
+        # Verkaufte/nicht mehr online stehende Anzeigen ohne Ankaufsarbeit sind in den Standardlisten ausgeblendet (wie früher Status „gelöscht“)
+        # …es sei denn, es wird schon daran gearbeitet: Status, Team-Reservierung, Besichtigung/Ankauf oder eine Notiz (nichts Eigenes verstecken)
+        ausblenden = (bool(a.get("nicht_verfuegbar")) and a.get("status") in (None, "neu", "gelöscht")
+                      and not a.get("hat_arbeit") and not str(a.get("notiz") or "").strip())
+        bereit = bool(brief) and schreiber.soll_schreiben(b.ampel)
+        neuig = neuigkeit(a, b, bereit, ausblenden, jetzt, neu_e, sperre)
         zeilen.append({
-            "a": a, "b": b, "sperre": sperre, "hinweise": hinweise(a, b), "brief": brief, "ust": round(ust / 10) * 10,
+            "a": a, "b": b, "sperre": sperre, "ausblenden": ausblenden, "hinweise": hinweise(a, b), "brief": brief, "ust": round(ust / 10) * 10,
             "brief_betrag": betrag_im_brief(a, b),
-            "bereit": bool(brief) and schreiber.soll_schreiben(b.ampel),
-            "neu": bool(lauf_start and (a.get("erstmals_gesehen") or "") >= lauf_start),
+            "bereit": bereit,
+            # frisch eingegangen / Preis deutlich gesenkt / dadurch jetzt im Rahmen: Rang für „Neuigkeiten zuerst“, ohne Wirkung (P4-03)
+            "neuigkeit": neuig,
+            # Deal-Score 0–100 mit Bestandteilen (P5-07): Sperren vom Markt her, nicht durch den eigenen Ankaufsstatus (QA B4)
+            "deal": deal_score(a, b, neuig, sperre and sperrgrund({**a, "status": None}, cfg), cfg, deal_e),
+            "risiken": risikofaktoren(a, b),                                  # vor einem Angebot zu prüfen – nur Anzeige (P6-01)
+            "neu": bool(lauf_start and (a.get("erstmals_gesehen") or "") >= lauf_start) and not ausblenden,
             "nachfassen": grund, "nachfass_text": nachfass_text, "nachfass_betrag": nachfass_betrag,
             "dubletten_ids": sorted(b["id"] for b in andere),       # Fahrzeuggruppe: Team-Reservierungen wirken auf alle
+            # Kontaktlage (P6-03): Text kopiert, wartet auf Antwort, Antwort erhalten, Besichtigung – mit letzter Notiz
+            "kontakt": kontakt,
         })
+    # Dublettengruppe für die Anzeige (P6-02): die anderen Inserate desselben Fahrzeugs (eine Stufe wie Sperren und Team, ADR-040)
+    # mit Preis, Status und Preisverlauf; Rang für „gleiches Fahrzeug nur einmal“
+    if callable(preise):
+        preise = preise({z["a"]["id"] for z in zeilen} | {i for z in zeilen for i in z["dubletten_ids"]})
+    for z in zeilen:
+        z["preisverlauf"] = pv.kurz((preise or {}).get(z["a"]["id"]))          # Preisstände dieses Inserats (P6-02)
+    bekannt = {**sonst, **nach_id, **{z["a"]["id"]: z["a"] for z in zeilen}}
+    bestaetigt = wirkung.karte() if wirkung else {}
+    gruppen.ordne(zeilen)
+    for z in zeilen:
+        eigen = z["a"]["id"]
+        z["gruppe"] = sorted((gruppen.mitglied(bekannt[i], i in bestaetigt.get(eigen, ()), pv.kurz((preise or {}).get(i)))
+                              for i in z["dubletten_ids"] if i in bekannt), key=lambda m: (m["preis"] is None, m["preis"] or 0, m["id"]))
+        z["fahrzeug_status"] = fahrzeug_status([z["a"].get("status"), *(m["status"] for m in z["gruppe"])])     # höchster Status (QA B5)
     return zeilen

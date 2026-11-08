@@ -1,0 +1,17 @@
+# Aufbewahrungsfristen anwenden (config.yaml → datenschutz; F10): anonymisiert/löscht Fälliges, legt vorher eine Sicherung an.
+# Ausgelöst von wohnmobil-scout-datenschutz.timer – nur nach Freigabe durch den Betreiber einschalten.
+[Unit]
+Description=Wohnmobil-Scout Aufbewahrungsfristen anwenden
+
+[Service]
+Type=oneshot
+User=scout
+Group=scout
+WorkingDirectory=/opt/wohnmobil-scout
+ExecStart=/opt/wohnmobil-scout/.venv/bin/python scout.py datenschutz --ausfuehren --bestaetigt
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/wohnmobil-scout/daten /opt/wohnmobil-scout/ausgabe /opt/wohnmobil-scout/import
+UMask=0077

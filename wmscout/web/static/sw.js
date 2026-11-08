@@ -1,7 +1,7 @@
 /* Service Worker: App-Gerüst offline verfügbar, zuletzt geladene Daten als Rückfall ohne Netz.
    Änderungen (Speichern, Fotos) puffert die App selbst und sendet sie, sobald wieder Netz da ist. */
-var VERSION = 'wm-scout-4';      // 4: nur noch Positivliste im Zwischenspeicher (G0) – alte Caches werden gelöscht
-var GERUEST = ['/m', '/static/mobil.css', '/static/mobil.js', '/static/besichtigung.js',
+var VERSION = 'wm-scout-25';      // 25: Verkaufsanfragen in den Meldungen (P7-02); 24: Abholvarianten im Fahrzeugdetail, Route erst nach /api/ich (P7-01); 23: Link zu den Kennzahlen (P6-05); 22: Meldungen auf der Startseite (P6-04); 21: Kontaktlage und Verhandlung (Antworten, Notizen) (P6-03); 20: Dublettengruppe, Preisverlauf, „gleiches Fahrzeug nur einmal“ (P6-02); 19: Top-Deals, Quelle, Deal-Score + Risikofaktoren (P6-01); 18: Händlermarkt im Fahrzeugdetail (P5-04); 17: Max-EK als Spanne, Mängelliste (P5-03); 16: Link zur Statusseite (P4-04); 15: Liste „Neu & gesenkt“, Abzeichen Neuigkeit (P4-03); 14: Suchprofil-Filter in der Liste (P4-01); 13: Datenqualität (Abzeichen, Markierungen im Detail, P3-08); 12: Kontaktverlauf im Fahrzeugdetail, Nachfassen bestätigen (P3-06); 11: Anbieter mit Herkunft + Korrektur im Fahrzeugdetail (P3-05); 10: Abzeichen Verfügbarkeit (reserviert/verkauft/offline, P3-04); 9: Gruppe „Gleiches Fahrzeug“ im Fahrzeugdetail (P3-02b, nur Anzeige); 8: Preisfeld im Formular „Inserat einlesen“ (P2-05); 7: Inserat einlesen (Link + Text, P2-05); 6: abgeschlossene Besichtigungen nie im Speicher (P1-14b); 5: Versionskonflikt (P1-07); 4: nur noch Positivliste (G0) – alte Caches werden gelöscht
+var GERUEST = ['/m', '/static/mobil.css', '/static/mobil.js', '/static/besichtigung.js', '/static/textimport.js', '/static/textimport.css', '/static/dubletten.js', '/static/dubletten.css',
                '/static/icon-192.png', '/static/icon-512.png', '/manifest.webmanifest'];
 
 self.addEventListener('install', function (e) {
@@ -24,7 +24,8 @@ self.addEventListener('fetch', function (e) {
   // erst Netz (aktuelle Daten), bei Funkloch der zuletzt gespeicherte Stand
   e.respondWith(fetch(e.request).then(function (antwort) {
     if (antwort.status === 401) caches.delete(VERSION);       // abgemeldet oder Sitzung abgelaufen: nichts auf dem Gerät lassen
-    if (antwort.ok) { var kopie = antwort.clone(); caches.open(VERSION).then(function (c) { c.put(e.request, kopie); }); }
+    if (antwort.headers.get('X-Scout-Offline') === 'nein') caches.open(VERSION).then(function (c) { c.delete(e.request); });
+    else if (antwort.ok) { var kopie = antwort.clone(); caches.open(VERSION).then(function (c) { c.put(e.request, kopie); }); }
     return antwort;
   }).catch(function () {
     return caches.match(e.request).then(function (t) {

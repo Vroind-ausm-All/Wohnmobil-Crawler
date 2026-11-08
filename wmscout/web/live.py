@@ -26,7 +26,7 @@ _ARTEN = (
     (re.compile(r"/api/ankauf/(\d+)/"), "ankauf"),
     (re.compile(r"/api/besichtigung/(\d+)/abschluss"), "ankauf"),
     (re.compile(r"/api/besichtigung"), "besichtigung"),
-    (re.compile(r"/api/(bearbeitung|status|notiz|nachfassen|angebot)"), "team"),
+    (re.compile(r"/api/(bearbeitung|status|notiz|nachfassen|angebot|import/text)"), "team"),
 )
 HAENDLER_ARTEN = {"auktion"}
 

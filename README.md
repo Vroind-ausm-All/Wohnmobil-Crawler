@@ -8,7 +8,7 @@ Wohnmobil an und schreibst es mit einem Klick an.
 ## Einrichtung (einmalig, ca. 5 Minuten)
 
 1. **Python 3.13** installieren (python.org → Downloads → Windows → „Python 3.13.x“ →
-   „Windows installer (64-bit)“). 3.10–3.12 gehen auch. **Neuere Versionen wie 3.14/3.15 noch nicht**:
+   „Windows installer (64-bit)“). Ältere Versionen werden nicht unterstützt. **Neuere Versionen wie 3.14/3.15 noch nicht**:
    Für sie gibt es PyYAML nicht fertig für Windows, die Installation bricht dann mit
    „Microsoft Visual C++ 14.0 or greater is required“ ab. 3.13 kann problemlos *zusätzlich* zu
    einer anderen Version installiert sein. Python selbst muss nie geöffnet werden.
@@ -18,6 +18,9 @@ Wohnmobil an und schreibst es mit einem Klick an.
    - **suchen**: Suche im Browser auf kleinanzeigen.de zusammenklicken (Ort/Radius, Preis, Art,
      *Anbieter: Privat*), URL kopieren und eintragen. Seitenzahlen ergänzt das Tool selbst.
    - **rechner**: deine echten Kosten und Zielmarge eintragen.
+
+   Tipp: Eigene Werte lieber in eine neue Datei `config.local.yaml` daneben schreiben (gleiche Abschnitte, nur die
+   Abweichungen). Sie überlagert `config.yaml`, wird nie ins Repository übernommen und bleibt bei Updates erhalten.
 4. **Windows: Doppelklick auf `app.bat`.** Beim ersten Start richtet `installieren.bat` automatisch
    eine eigene Python-Umgebung im Projektordner ein (`.venv`, mit Python 3.13) und installiert dort die
    Zusatzpakete – nur als fertige Pakete, ohne Kompilieren. Globale Python-Einstellungen und andere
@@ -51,10 +54,17 @@ es wird niemand als Bearbeiter eingetragen (eine bestehende Reservierung bleibt 
 | `python scout.py app` | Browser-App: Wohnmobile anklicken, anschreiben, Status und Notizen speichern, Suchlauf starten |
 | `python scout.py lauf` | Crawlen → bewerten → Report, CSV, Anschreiben (+ Mail, falls aktiv) |
 | `python scout.py import` | Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten aus dem Ordner `import/` einlesen, bewerten, Report erzeugen (ohne Internet; anderer Ordner: `--ordner PFAD`) |
+| `python scout.py import --mails` | Suchagent-Benachrichtigungen (`.eml` aus `import/email/`) einlesen, bewerten, Report erzeugen – nur bei eingeschaltetem Eingang `email` |
+| `python scout.py quellen liste` | Pull-Quellen (Suchlauf) und Eingänge mit Status anzeigen; `quellen an KENNUNG` / `quellen aus KENNUNG` schaltet eine Quelle – `an` nur, wenn sie im Code freigegeben ist (Kleinanzeigen ist es nicht; der Suchlauf überspringt sie dann ohne Fehler). Eingänge (`seiten`, `text`, `email`) schaltest du in `config.yaml` unter `eingaenge`; ausgeschaltet wird nichts eingelesen |
+| `python scout.py lauf --sofort` | Suchlauf ohne Rücksicht auf Intervalle je Quelle und die Pause nach einer Sperre (`config.yaml → app`); ohne `--sofort` (z. B. als geplante Aufgabe) werden Quellen im Intervall übersprungen. Den Zustand zeigt `python scout.py quellen liste` bzw. die Statusseite `/status` in der App |
+| `python scout.py abdeckung --tage 30` | Abdeckung und Suchlücken der letzten Tage: neue Inserate und Fahrzeuge, relevante Privatangebote, Preisänderungen, Tage ohne Eingang je Plattform, PLZ-Bereiche ohne Angebote und Lücken je Suchprofil (nur lesen; in der App unter `/abdeckung`) |
+| `python scout.py kalibrierung` | Kalibrierungsbericht: Kaufpreis gegenüber Max-EK, Verkaufspreis gegenüber geplantem Händler-VK, Ist- gegen Plankosten, Standzeit – mit Vorschlägen für `config.yaml` ab 5 Fällen (nur lesen, ändert nichts; frühere Ankäufe in der App unter `/kalibrierung` nachtragen) |
+| `python scout.py qualitaet` | Datenqualität je Quelle: Anteil der Inserate mit Preis, EZ, km, Ort und bekanntem Anbieter, mittlerer Qualitätswert, Fahrzeuge mit widersprüchlichen oder unplausiblen Angaben (nur lesen). Die Markierungen je Fahrzeug stehen in der App im Detail und in der CSV |
 | `python scout.py report` | Report neu erzeugen, z. B. nach Änderung der Kosten in `config.yaml` (ohne Internet) |
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --titel "Knaus Sky TI 650 MEG" --anschreiben` | Einzelfahrzeug durchrechnen und Anschreiben ausgeben (auch für Anfragen außerhalb von Kleinanzeigen; `--text` mit der Beschreibung berücksichtigt Ausstattung/Mängel) |
 | `python scout.py rechne --preis 42900 --ez 2017 --km 85000 --marktwert 44000` | mit eigenem Marktwert (z. B. aus mobile.de oder DAT) |
-| `python scout.py nutzer anlegen Anna --rolle inhaber --telefon "+49 170 …"` | Team-Zugang für die Handy-App (auch `liste`, `passwort`, `sperren`, `entsperren`) |
+| `python scout.py nutzer anlegen Anna --rolle inhaber --telefon "+49 170 …"` | Team-Zugang für die Handy-App (auch `liste`, `passwort`, `sperren`, `entsperren`); das Passwort wird abgefragt – nie als Argument, für Skripte nur über die Umgebungsvariable `SCOUT_NEUES_PASSWORT` |
+| `python scout.py nutzer einladen Anna --rolle inhaber` | **Einfacher Login (F4):** Einmal-Link (7 Tage) – Anna legt ihr Passwort selbst fest und ist angemeldet. In der App unter „Zugänge“ (Inhaber) ebenso, dort auch die Händlerzugänge bei mobile.de/AutoScout24 (Passwort nur als Umgebungsvariable `WMSCOUT_…`) mit Verbindungstest |
 | `python scout.py sichern` | Datenbank und Fotos sichern (siehe „Datensicherung“) |
 | `python scout.py wiederherstellen <Datei> --bestaetigt [--ohne-fotos]` | Sicherung zurückspielen – vorher App und Suchlauf beenden |
 | `python scout.py status 3531797014 kontaktiert` | Status setzen: `neu`, `kontaktiert`, `uninteressant`, `gekauft` (in der App per Klick) |
@@ -162,11 +172,33 @@ Du bekommst dann nur eine Mail, wenn neue Treffer mit Anschreiben dabei sind.
 4. In der Anzeige den Kontakt öffnen – bei Kleinanzeigen **„Nachricht schreiben“**, bei mobile.de das **„E-Mail“/„Nachricht“-Formular** des Anbieters → `Strg`+`V` → Senden.
 5. **gesendet ✓** klicken – erst jetzt gilt der Verkäufer als „kontaktiert“ (ADR-012).
 
+**Neuigkeiten (P4-03):** Was in den letzten 48 Stunden eingegangen ist oder deutlich günstiger wurde (mindestens 3 % oder 500 €
+in den letzten 14 Tagen), zeigt der Filter **„Neu & gesenkt“** – ganz oben, was durch die Senkung jetzt unter euren Max-EK fällt
+(„jetzt im Rahmen“). Am Handy gibt es dafür eine eigene Kachel und Liste. Nach einem Suchlauf nennen Browser-Hinweis und Mail auch die
+Preissenkungen. Einstellungen: `config.yaml → neuigkeiten`; die Bewertung ändert sich dadurch nicht.
+
+**Suchprofile (P4-01):** Über **Suchprofile** in der Filterleiste legt ihr fest, welche Fahrzeuge ihr sucht (Art, Marke, Modell,
+Preis, EZ, km). Ein Profil ruft nichts ab – es filtert die eingegangenen Inserate (Suchlauf, gespeicherte Seiten, Text, Mails);
+die Auswahl „Suchprofil“ zeigt nur passende Fahrzeuge, solche mit fehlenden Angaben als „unklar“ (auch am Handy). Je Profil
+wählt ihr ein **Suchgebiet**: bundesweit, Umkreis um eine PLZ (km Fahrstrecke wie die angezeigte Entfernung) oder PLZ-Bereiche (erste
+ein oder zwei Ziffern, z. B. „7, 80“); Fahrzeuge ohne erkennbaren Ort gelten dann als „unklar“, Orte im Ausland passen nicht. Die
+**Checkliste** je Profil hält fest, auf welcher Plattform ihr einen passenden Suchauftrag bzw. eine E-Mail-Benachrichtigung
+angelegt habt (Haken und Adresse); „prüfen“ heißt: angelegt, aber seit 14 Tagen kein passender Treffer von dort. Anlegen und
+ändern darf im Team nur der Inhaber.
+
 **Verkaufsanfragen (Phase B, erst intern):** Unter **`/verkaufen`** erfasst ihr ein Fahrzeug, das ein Verkäufer euch selbst
 anbietet (Telefon, vor Ort oder Formular am Tablet): Fahrzeug, Mängel, bis zu 12 Fotos, freiwillige Preisvorstellung,
 Kontakt und Einwilligung. Danach erscheinen Referenz und – nur bei sicherer Datenlage – eine grobe Spanne für den
 Verkäufer (nie Max-EK oder Angebot). Unter **`/anfragen`** stehen alle Anfragen mit Bewertung, Fotos, Status, Bearbeiter
-und Verlauf. Es geht keine automatische Nachricht an Verkäufer. Öffentlich erreichbar ist das Portal noch nicht (ADR-025).
+und Verlauf. Es geht keine automatische Nachricht an Verkäufer.
+
+**Öffentliches Ankaufsportal (P7-03, ADR-068, vorbereitet – aus):** `python scout.py portal` startet einen **eigenen** Server nur mit
+dem Formular „Wohnmobil verkaufen“, einer Statusseite für den Verkäufer (persönlicher Link, dort auch „Meine Daten löschen“),
+Impressum und Datenschutz – ohne Anmeldung und ohne jede Team-Seite. Anfragen landen wie gewohnt unter `/anfragen`. Es startet erst,
+wenn in `config.yaml → portal` `aktiv: true`, `vertrauter_proxy: true`, die `oeffentliche_url` (https) und das Impressum gesetzt sind und die
+Umgebungsvariable `SCOUT_PORTAL_SCHLUESSEL` (mind. 32 Zeichen, z. B. `python -c "import secrets; print(secrets.token_urlsafe(48))"`)
+existiert. Öffentlich nur hinter einem HTTPS-Reverse-Proxy (Anleitung: `docs/SERVERBETRIEB.md`, P7-04). Impressum, Datenschutzhinweise und Einwilligungstext sind Entwürfe –
+vor dem Start rechtlich prüfen lassen und dann `texte_geprueft: true` setzen.
 
 **Händlerportal für eure Standorte (Phase C, erst intern):** Standorte legt der Inhaber unter **`/standorte`** an und schaltet
 sie nach Prüfung frei; Zugänge: `python scout.py nutzer anlegen NAME --rolle haendler --standort "Filiale Nord"`. Ein
@@ -202,11 +234,29 @@ Grundlage, die Kalkulation bewusst nachzustellen (ADR-029).
 Zähler je Mitarbeiter (Mitarbeiter sehen nur die eigenen), der Filter **Wer: Alle / Meine / Frei** blendet fremde Fahrzeuge
 aus. Der Stand der Kollegen wird jede Minute und beim Zurückkehren zur Seite neu geladen.
 
+**Dubletten entscheiden (Büro-PC, Inhaber und Mitarbeiter):** Der Filter **„Dublettenvorschläge (n)“** zeigt Inserate, die dasselbe Fahrzeug
+sein könnten (Stufe „hoch“ oder „mittel“ mit Gründen, beide Inserate nebeneinander). **„Gleiches Fahrzeug“** (Inhaber und Mitarbeiter)
+führt sie zusammen: nicht doppelt anschreiben, zählt einmal in der Vergleichsbasis. **„Verschieden“** (nur Inhaber) sperrt das Paar für
+künftige Vorschläge. Beides fragt vorher mit den Folgen nach; nichts passiert automatisch. Im Fahrzeugfenster zeigt „Gleiches Fahrzeug“
+die Gruppe, den Fahrzeugstatus und den Verlauf; **„Aufheben“** (nur Inhaber) nimmt eine Entscheidung zurück (Reihenfolge: erst die
+spätere Zusammenführung). Halten verschiedene Kollegen Inserate einer Gruppe, erscheint eine Warnung. Auf dem Handy wird die Gruppe nur angezeigt.
+
 **Gespeicherte Seiten einlesen:** Öffne eine Suchergebnisseite oder eine einzelne Anzeige auf Kleinanzeigen
 ganz normal im Browser, drücke `Strg`+`S` und speichere sie als „Webseite, nur HTML“ in den Ordner `import`
 im Programmordner. Dann in der App auf **„⤓ Gespeicherte Seiten einlesen“** klicken (oder `python scout.py import`).
 Neue Fahrzeuge erscheinen sofort in der Liste; das Programm ruft dafür nichts selbst aus dem Internet ab.
 Eingelesene Dateien wandern nach `import/eingelesen/<Datum>/`, nicht erkannte nach `import/nicht_erkannt/`.
+
+**Anzeige per Adresse + Text einlesen** (jedes Teammitglied, Desktop und Handy; API `POST /api/import/text`): Adresse der einzelnen
+Anzeige (Kleinanzeigen oder mobile.de) und den kopierten Anzeigentext einfügen, optional „privat“/„gewerblich“ wählen. Der Server ruft die
+Adresse **nicht** ab – sie liefert nur Plattform und Anzeigen-ID; Preis, Kilometer, Erstzulassung, PLZ/Ort und Titel kommen aus dem Text
+(fehlt etwas, steht „unvollständig: …“ im Ergebnis; ohne Erstzulassung gibt es keine Beträge). **Ein Preis wird nur gespeichert, wenn er klar gekennzeichnet ist (VB, „Preis: …“, eigene Zeile) oder du ihn im Feld „Preis laut Anzeige“ einträgst** – Beträge im Fließtext zählen nie; bereits vorhandene Angaben anderer Kanäle bleiben bestehen. Telefonnummern, E-Mail-Adressen, Links,
+Straßen und Namenszeilen werden vor dem Speichern entfernt, Gesuche („Suche Wohnmobil …“) nicht gespeichert, die Fahrzeugart höchstens
+„vorläufig“. Dieselbe Anzeige per Seite und per Text ist eine Zeile. Abschaltbar über `eingaenge.text.aktiv: false`.
+Bedienung: Desktop **„＋ Inserat einlesen (Link + Text)“** neben „Gespeicherte Seiten einlesen“, Handy **„Heute“ → „＋ Inserat einlesen“**. Nach dem Einlesen
+zeigt die Seite das Ergebnis (neu / Preis gesenkt / bereits bekannt, erkannte Felder, alle Hinweise) mit Link zum Fahrzeug; „gesendet ✓“ bleibt
+die einzige Bestätigung einer Kontaktaufnahme. Nur Anzeigentext einfügen – keine Namen, Telefonnummern oder Adressen des Verkäufers.
+Online-Aktion: ohne Netz bleibt der Text im Formular stehen, es wird nichts zwischengespeichert.
 
 **Auch mobile.de:** Genauso geht es mit **mobile.de** – Wohnmobil-Suche (Treffer-Liste) oder einzelne Anzeige im Browser öffnen,
 `Strg`+`S`, als „Webseite, komplett“ (so sind die Testseiten gespeichert worden) oder „Webseite, nur HTML“ (für mobile.de noch nicht
@@ -217,8 +267,8 @@ In der mobile.de-Suche den Filter **„Privatanbieter“** setzen (linke Spalte 
 Verkäufer; jede Suchseite enthält höchstens 20 Treffer, weitere Seiten einzeln speichern. Die Treffer tragen als Nummer `md-<mobile.de-ID>`.
 Gesponserte Plätze („Gesponsert“) werden mitgelesen, weil es normale Anzeigen sind. Gewerbliche Anbieter („Gewerbe“, Händler mit
 Namen) werden als gewerblich erkannt und – wie bei Kleinanzeigen – nicht zum Anschreiben vorgeschlagen. Fehlt bei einem Treffer der
-Anbieterkasten, ist der Anbieter **unbekannt** (nicht „privat“): das Fahrzeug trägt den Hinweis „Anbieter unbekannt“, und beim Einlesen
-wird die Zahl gemeldet (über die Hälfte der Treffer: Seitenlayout vermutlich geändert). Es werden nur **Wohnmobile und Wohnwagen**
+Anbieterkasten, ist der Anbieter **unbekannt** (nicht „privat“): das Fahrzeug trägt den Hinweis „Anbieter unbekannt“, zählt nicht zur
+Vergleichsbasis des Rechners, und beim Einlesen wird die Zahl gemeldet (über die Hälfte der Treffer: Seitenlayout vermutlich geändert). Es werden nur **Wohnmobile und Wohnwagen**
 eingelesen; Pkw-Treffer oder -Anzeigen (z. B. Kategorie „Limousine“) landen mit einer Meldung in `import/nicht_erkannt/` bzw. werden
 übersprungen und gemeldet. **Orte im Ausland** („SE-123 45 Ort“, „FR-75001 Paris“): keine Entfernung, Ampel höchstens gelb, Brief ohne Betrag
 und der Hinweis „Ausland – Abholung, Überführung und Zulassung prüfen“; mit `max_entfernung_km` > 0 werden sie nicht angeschrieben.
@@ -253,6 +303,15 @@ Hinweise zum Einlesen:
 - Beim Einlesen einer alten gespeicherten Seite gilt die Anzeige als „zuletzt gesehen: heute“, auch wenn sie
   inzwischen gelöscht oder verkauft sein kann. Lies deshalb möglichst frisch gespeicherte Seiten ein.
 
+**Suchagent-Mails einlesen (E-Mail-Eingang, Gerüst):** Der Eingang ist standardmäßig **aus** (`config.yaml` → `eingaenge` → `email` → `aktiv: true`).
+Benachrichtigungen deines Suchagenten bei Kleinanzeigen oder mobile.de speicherst du als `.eml` – Thunderbird: Mail markieren, *Datei → Speichern unter*
+(Dateityp *E-Mail-Datei (.eml)*) oder per Drag&Drop in den Ordner ziehen; im Webmail „Als .eml herunterladen“ – und legst sie in `import/email/`. Dann in der App
+auf **„✉ Mails einlesen“** klicken oder `python scout.py import --mails` ausführen. Gelesen wird nur, was in der Mail steht: Links werden nie abgerufen, die
+Fahrzeuge kommen mit Titel, Preis (nur aus einer eigenen Preiszeile) und Ort in die Liste; Absender, Empfänger und Betreff werden nicht gespeichert. Ob echte
+Mails so aufgebaut sind, ist noch nicht belegt (Abnahme mit echten Mails steht aus, `docs/QUELLEN.md` Abschnitt 6). Eingelesene Mails liegen danach in
+`import/email/eingelesen/<Datum>/`, nicht erkannte in `nicht_erkannt/`, unlesbare in `fehlerhaft/`; alles davon löscht die Datenschutz-Frist
+(`datenschutz` → `inserate_anonymisieren_nach_monaten`, 6 Monate), noch nicht eingelesene Mails nicht, die werden nach Fristablauf gemeldet.
+
 Status (offen / kontaktiert / uninteressant / gekauft) und Notizen setzt du im Fahrzeugfenster. Unter
 „Kontaktiert“ findest du alle angeschriebenen Fahrzeuge mit dem Text, den du geschickt hast.
 
@@ -277,11 +336,16 @@ Nachrichten verschicken, und viele Verkäufer reagieren auf Massenanfragen aller
   Nummern und Adressen werden verworfen. Er dient der persönlichen Anrede im Anschreiben und steht deshalb
   auch im erzeugten Brief: in `ausgabe/report.html`, in `ausgabe/anschreiben/<id>.txt` im Anhang der
   Benachrichtigungs-Mail (`report.html`, verlässt damit den Rechner), im Offline-Speicher der Handy-App (Fahrzeugansicht
-  mit Brief) und – nach dem Kontakt – im gespeicherten Anschreibentext der Datenbank. **Eine Lösch- oder Anonymisierungsfunktion gibt es noch nicht** (geplant als Paket P1-14a, Backlog): der Status „gelöscht“ markiert nur
-  das Inserat und entfernt den Namen **nicht** aus `details_json`. Die App selbst lauscht nur auf dem eigenen Rechner (127.0.0.1;
+  mit Brief) und – nach dem Kontakt – im gespeicherten Anschreibentext der Datenbank. **Löschen:** `python scout.py inserat anonymisieren ID --bestaetigt` (oder `--aelter-als MONATE`) entfernt den Profilnamen aus
+  `details_json`, den Namen im gespeicherten Anschreiben, Verkäuferangaben im Besichtigungsprotokoll und die Anschreiben-Datei; mit
+  `datenschutz → inserate_anonymisieren_nach_monaten` auch automatisch nach jedem Suchlauf (6 Monate). Gekaufte Fahrzeuge
+  bleiben unverändert (Aufbewahrung). **Alle Aufbewahrungsfristen** (Inserate, Verkaufsanfragen, Sitzungen, Audit, Kaufunterlagen –
+  `docs/DATENRECHTE.md`): Bericht mit `python scout.py datenschutz`, ausführen mit `--ausfuehren --bestaetigt` (vorher Sicherung). Die App selbst lauscht nur auf dem eigenen Rechner (127.0.0.1;
   Handys über `tailscale serve`); Mail-Anhang und Handy-Speicher liegen außerhalb davon.
 - **Betrieb über das eigene Büro hinaus** (öffentliche Adresse, weitere Firmen): erst die Checkliste
-  `docs/PILOTBETRIEB.md` abarbeiten. Was gespeichert wird und wie es sich löschen lässt: `docs/DATENRECHTE.md`
+  `docs/PILOTBETRIEB.md` abarbeiten. **Eigener Server** (für das öffentliche Ankaufsportal): Schritt-für-Schritt-Anleitung
+  `docs/SERVERBETRIEB.md` mit Vorlagen in `betrieb/` (systemd-Dienste, Caddy für HTTPS, Sicherung, Umgebungsdatei für Geheimnisse);
+  Health-Check `GET /gesund`. Was gespeichert wird und wie es sich löschen lässt: `docs/DATENRECHTE.md`
   (Widerruf einer Verkaufsanfrage: `/anfragen` → „Widerruf: personenbezogene Daten löschen“ oder `scout.py anfrage widerruf REF --bestaetigt`).
   Wer wann Verkäuferdaten gelesen oder etwas geändert hat, zeigt `scout.py audit --tage 7` (nur Metadaten, ohne Inhalte).
 - **Mehrere Firmen auf einem Server** (Mandanten, je eigene Datenbank): `docs/MANDANTEN.md`.
@@ -371,4 +435,22 @@ Die Zeilen „Phase 1“ unten beziehen sich auf den früheren Phasenplan; die n
 | Besichtigungsmodus: Pflicht-Checkliste, Messwerte, Mängelkatalog, Fotos, Live-Abzug, offline | umgesetzt | `test_besichtigung.py`, Paritätstest Python↔JavaScript (600 Fälle), Klicktest inkl. Offline |
 | Ankaufprotokoll mit Unterschriften, Termine/Zuständigkeit, Kalender (.ics), WhatsApp-Links | umgesetzt | `test_handy.py`, Klicktest |
 | WhatsApp automatisch (Cloud API von Meta) | umgesetzt, **nicht live getestet** (braucht Meta-Konto und freigegebene Vorlagen) | `test_handy.py` mit nachgebautem Server |
-| Mehrere Quellen, Datenmodell/Historie, Suchprofile, Deal-Score, Ankaufs-Dashboard | **geplant** – Phasen 2–6 in `docs/ROADMAP.md` | – |
+| Suchprofile als Filter über eingegangene Inserate, Abdeckungscheckliste je Plattform (P4-01, Schema v17) | umgesetzt | `test_suchprofile.py`, Klicktest Desktop und Handy |
+| Suchgebiet je Suchprofil: bundesweit, Umkreis, PLZ-Bereiche (P4-02, Schema v18) | umgesetzt | `test_suchgebiete.py`, Klicktest Desktop |
+| Neuigkeiten: frisch eingegangen und deutliche Preissenkungen hervorheben, priorisieren, melden (P4-03) | umgesetzt | `test_neuigkeiten.py`, Klicktest Desktop und Handy |
+| Statusseite `/status`: Quellen, Eingänge, letzte Suchläufe und Fehler; Intervalle je Quelle, Pause nach Sperre (P4-04, Schema v19) | umgesetzt | `test_statusseite.py`, Klicktest |
+| Abdeckung und Suchlücken messen: Kennzahlen, Zeit-, Gebiets- und Profillücken (P4-05) | umgesetzt | `test_abdeckung.py`, Klicktest |
+| Rechner-Analyse (`docs/RECHNER-ANALYSE.md`) und Kalibrierung mit tatsächlichen Ankäufen: Bericht und Vorschläge, frühere Ankäufe nachtragen (P5-01, Schema v20) | umgesetzt | `test_kalibrierung.py`, Klicktest |
+| Vergleichsauswahl nach Ähnlichkeit: gleiches Modell, Modellreihe, Marke, Markenklasse, Länge und Basisfahrzeug (P5-02) | umgesetzt | `test_vergleichsauswahl.py` |
+| Max-EK und Marktwert privat als Spanne, Abschlag bei unbekannter Marke (mit Hinweis), Mängelliste beim Inserat (P5-03) | umgesetzt | `test_spannen.py`, Klicktest Desktop und Handy |
+| Händlermarkt als Obergrenze für den Händler-VK; Marktbeobachtung der Preissenkungen privater Inserate im Kalibrierungsbericht (P5-04) | umgesetzt | `test_preisarten.py`, Klicktest |
+| Gewährleistungsrücklage nach Alter, Standzeit nach Saison, Kapitalbindung, Mängelrisiko in Spanne/Sicherheit, neue Mängel- und Ausstattungsbegriffe; Spannen auf 100 € (P5-05) | umgesetzt | `test_risiko.py` |
+| Abholung: Auto ab Firmensitz Besigheim oder Bahn ab Stuttgart Hbf (ICE-Ticket und Reisezeit grob), der günstigere Weg zählt (P5-06) | umgesetzt | `test_abholung.py` |
+| Deal-Score 0–100 mit Bestandteilen (Preisvorteil, Datensicherheit, Zustand, Abholung, Frische, Verkäufer), Sortierung und Filter „Top-Deals“, Bewertungsverlauf (P5-07) | umgesetzt | `test_deal_score.py` |
+| Kombinierte Ankaufsliste: alle Quellen in einer Liste (Quelle als Abzeichen und Filter), nach Deal-Score sortiert, Risikofaktoren auf der Karte und im Detail, Liste „Top-Deals“ auch in der Handy-App (P6-01) | umgesetzt | `test_liste.py`, Klicktest Desktop und Handy |
+| Dublettengruppen in der Liste (Abzeichen, „gleiches Fahrzeug nur einmal“, alle Inserate des Fahrzeugs mit Quelle, Preis, Status, bestätigt/vermutet) und Preisverlauf auf Karte und im Detail, Desktop und Handy (P6-02) | umgesetzt | `test_gruppen_preise.py`, Klicktest Desktop und Handy |
+| Ankauf in Arbeit: Kontaktlage je Inserat (Text kopiert, wartet auf Antwort seit n Tagen, Antwort erhalten, Besichtigung mit Termin), Antworten des Verkäufers und Verhandlungsnotizen von Hand eintragen – Desktop und Handy (P6-03, Schema v23) | umgesetzt | `test_verhandlung.py`, Klicktest Desktop und Handy |
+| Meldungen im Dashboard und auf der Handy-Startseite: Antwort des Verkäufers liegt vor (Rückmeldung fällig), Besichtigung heute/morgen, Nachfassen, Preis deutlich gesenkt, neu und passend – „ungelesen“ je Gerät, nichts wird versendet (P6-04) | umgesetzt | `test_meldungen.py`, Klicktest Desktop und Handy |
+| Nacharbeiten: Abholvarianten in der Handy-App, Kontaktlage je Fahrzeug, Filterzähler als Fahrzeuge, Preisverlauf nur für benötigte Inserate, Audit für Notizen und Verhandlung (P7-01) | umgesetzt | `test_nacharbeiten.py` |
+| Verkaufsanfragen im Dashboard: Meldung „Verkaufsanfrage“ (ohne Personendaten, Link zur Anfrage), Kachel „Verkaufsanfragen offen“, Anfragen-Trichter in den Kennzahlen (P7-02) | umgesetzt | `test_anfragen_dashboard.py` |
+| Kennzahlen-Ansicht `/kennzahlen` (7/30/90 Tage): Eingang je Quelle, Fahrzeuge, Privatangebote, Dubletten, Preisänderungen, Vollständigkeit, Importerfolg, Marktwertunsicherheit, priorisierte Angebote, Ankaufstrichter (Kontakt → Antwort → Besichtigung → Ankauf) – ohne Preise (P6-05) | umgesetzt | `test_kennzahlen.py`, Klicktest |

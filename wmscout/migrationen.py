@@ -3,21 +3,25 @@
 Versionen: 1 = ZIP-Stand (Tabelle ``anzeigen`` im Ur-Schema), 2 = Stand vor Phase 1 (ergänzte Spalten + Team-Tabellen),
 3 = Phase 1 (``schema_version``, ``bearbeitung``), 4 = vorbereiteter Mehrquellen-Ereigniseingang, 5 = Verkäuferportal,
 6 = Händlerportal (Standorte), 7 = Demo-Auktionen, 8 = gespeicherte Kalkulationen (Deal Intelligence),
-9 = Ankaufsvorgänge (Besichtigung bis Verkauf), 10 = Audit-Protokoll und Leerlauf-Zeit der Sitzungen (G0b).
+9 = Ankaufsvorgänge (Besichtigung bis Verkauf), 10 = Audit-Protokoll und Leerlauf-Zeit der Sitzungen (G0b),
+11 = Fahrzeuge getrennt von Inseraten (P3-01, ``fahrzeuge`` + ``inserate.fahrzeug_id``),
+12 = Dublettenentscheidungen und Zuordnungsprotokoll (P3-02a, nur Tabellen, noch ohne fachliche Wirkung),
+13 = Verfügbarkeit mit Bestätigungszeitpunkt (P3-04, ``inserate.zuletzt_bestaetigt``) und Index für ``fahrzeug_zuordnungen(entscheidung_id)``.
 Jeder Schritt läuft in einer eigenen Transaktion, ist idempotent
 (``IF NOT EXISTS``, Spaltenprüfung) und wird erst nach erfolgreicher Sicherung der Datenbank ausgeführt.
 Die DDL der Schritte ist eingefroren: spätere Änderungen gehören in einen neuen Schritt, nicht in einen alten.
 """
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .sicherung import SicherungsFehler, oeffne_lesend, sichere
 
-AKTUELLE_VERSION = 10
+AKTUELLE_VERSION = 23
 
 
 class MigrationsFehler(RuntimeError):
@@ -267,9 +271,362 @@ def _schritt_10(con: sqlite3.Connection):
     _neue_spalte(con, "sitzungen", "zuletzt", "TEXT")
 
 
+def _schritt_11(con: sqlite3.Connection):
+    """Additive v11 (P3-01, ADR-039): ein Fahrzeug ist nicht dasselbe wie ein Inserat. Neue Tabelle ``fahrzeuge`` (bewusst nur
+    Kennung, Herkunft, Zeitpunkt – Merkmale, FIN und Status folgen mit P3-02) und neue Spalte ``inserate.fahrzeug_id``.
+    Jedes vorhandene Inserat bekommt genau ein eigenes Fahrzeug; es wird NICHTS zusammengeführt (Zuordnungen nur vorgeschlagen).
+    Der Ankaufsstatus bleibt am Inserat (``anzeigen``/``bearbeitung``). Nichts Bestehendes wird verändert oder gelöscht."""
+    con.execute("""CREATE TABLE IF NOT EXISTS fahrzeuge (
+        id INTEGER PRIMARY KEY, erstellt_am TEXT NOT NULL,
+        herkunft TEXT NOT NULL CHECK(herkunft IN ('migration', 'eingang')))""")
+    _neue_spalte(con, "inserate", "fahrzeug_id", "INTEGER REFERENCES fahrzeuge(id)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_inserate_fahrzeug ON inserate(fahrzeug_id)")
+    vorher = _zaehle_v11(con)
+    # Altbestand set-basiert. Die Gleichheit fahrzeuge.id = inserate.id gilt NUR für diesen Altbestand; kein Code darf sich darauf
+    # verlassen (Zugriff immer über inserate.fahrzeug_id).
+    con.execute("INSERT INTO fahrzeuge (id, erstellt_am, herkunft) SELECT id, ?, 'migration' FROM inserate WHERE fahrzeug_id IS NULL",
+                (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),))
+    con.execute("UPDATE inserate SET fahrzeug_id = id WHERE fahrzeug_id IS NULL")
+    # Neue Inserate (Suche, Seiten-/Text-/Mail-Import, Ereigniseingang, Abgleich) bekommen ohne Zutun ein eigenes Fahrzeug.
+    # In `inserate` nur mit einfachem INSERT oder UPSERT schreiben: INSERT OR REPLACE ließe ein verwaistes Fahrzeug zurück.
+    con.execute("""CREATE TRIGGER IF NOT EXISTS inserate_fahrzeug_anlegen AFTER INSERT ON inserate WHEN NEW.fahrzeug_id IS NULL
+        BEGIN
+            INSERT INTO fahrzeuge (erstellt_am, herkunft) VALUES (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'eingang');
+            UPDATE inserate SET fahrzeug_id = last_insert_rowid() WHERE id = NEW.id;
+        END""")
+    nachher = _zaehle_v11(con)
+    if nachher != {**vorher, "fahrzeuge": nachher["inserate"]}:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 11 geändert: {vorher} -> {nachher}")
+    ohne = con.execute("SELECT COUNT(*) FROM inserate WHERE fahrzeug_id IS NULL").fetchone()[0]
+    if ohne:
+        raise MigrationsFehler(f"{ohne} Inserate ohne Fahrzeug nach Schritt 11")
+    verschieden = con.execute("SELECT COUNT(DISTINCT fahrzeug_id) FROM inserate").fetchone()[0]
+    if verschieden != nachher["inserate"]:
+        raise MigrationsFehler(f"Schritt 11: Fahrzeuge und Inserate passen nicht 1:1 ({verschieden} verschiedene Fahrzeuge, {nachher['inserate']} Inserate)")
+    lose = con.execute("SELECT COUNT(*) FROM inserate WHERE fahrzeug_id NOT IN (SELECT id FROM fahrzeuge)").fetchone()[0]
+    if lose:
+        raise MigrationsFehler(f"Schritt 11: {lose} Inserate verweisen auf ein fehlendes Fahrzeug")
+
+
+_ZAEHLE_V11 = ("inserate", "beobachtungen", "preis_historie", "bearbeitung", "besichtigungen", "ankaeufe", "anzeigen", "fahrzeuge")
+
+
+def _zaehle_v11(con: sqlite3.Connection) -> dict[str, int]:
+    """Zeilenzahlen der Tabellen, die Schritt 11 nicht verändern darf (plus ``fahrzeuge``, das genau so viele Zeilen wie ``inserate`` bekommt)."""
+    vorhanden = _tabellen(con)
+    return {t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in _ZAEHLE_V11 if t in vorhanden}
+
+
+_SPALTEN_V12 = {
+    "dubletten_entscheidungen": ["id", "inserat_a", "inserat_b", "entscheidung", "status", "konfidenz", "gruende_json", "regel_version",
+                                 "nutzer_id", "zeitpunkt", "aufgehoben_von", "aufgehoben_am"],
+    "fahrzeug_zuordnungen": ["id", "entscheidung_id", "inserat_id", "von_fahrzeug", "nach_fahrzeug", "art", "nutzer_id", "zeitpunkt"],
+}
+
+
+def _schritt_12(con: sqlite3.Connection):
+    """Additive v12 (P3-02a): Grundlage für bestätigte Dublettenentscheidungen. ``dubletten_entscheidungen`` hält je Inseratspaar
+    (``inserat_a < inserat_b``) höchstens EINE geltende Entscheidung (gleich/verschieden); aufgehobene bleiben als Verlauf stehen.
+    Eine Entscheidung wird nie gelöscht und nie inhaltlich geändert: erlaubt ist nur ``gilt`` → ``aufgehoben`` mit ``aufgehoben_am``
+    (``aufgehoben_von`` = Nutzer-ID, im Einzelplatz ohne Nutzer NULL); eine neue Entscheidung ist eine neue Zeile (Trigger).
+    ``fahrzeug_zuordnungen`` protokolliert jedes Umhängen eines Inserats auf ein anderes Fahrzeug (nur anfügbar, Trigger).
+    Beide Tabellen bleiben vorerst leer; es wird NICHTS zusammengeführt und kein Bestandsdatensatz verändert."""
+    vorher = _zaehle_v11(con)
+    con.execute("""CREATE TABLE IF NOT EXISTS dubletten_entscheidungen (
+        id INTEGER PRIMARY KEY,
+        inserat_a INTEGER NOT NULL REFERENCES inserate(id), inserat_b INTEGER NOT NULL REFERENCES inserate(id),
+        entscheidung TEXT NOT NULL CHECK(entscheidung IN ('gleich', 'verschieden')),
+        status TEXT NOT NULL CHECK(status IN ('gilt', 'aufgehoben')),
+        konfidenz TEXT CHECK(konfidenz IS NULL OR konfidenz IN ('hoch', 'mittel')),
+        gruende_json TEXT NOT NULL, regel_version INTEGER NOT NULL,
+        nutzer_id INTEGER, zeitpunkt TEXT NOT NULL, aufgehoben_von INTEGER, aufgehoben_am TEXT,
+        CHECK(inserat_a < inserat_b))""")
+    con.execute("""CREATE UNIQUE INDEX IF NOT EXISTS idx_dubletten_gilt ON dubletten_entscheidungen(inserat_a, inserat_b)
+        WHERE status = 'gilt'""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_dubletten_b ON dubletten_entscheidungen(inserat_b)")      # „Entscheidungen zu Inserat X“
+    con.execute("""CREATE TRIGGER IF NOT EXISTS dubletten_entscheidungen_kein_delete BEFORE DELETE ON dubletten_entscheidungen
+        BEGIN SELECT RAISE(ABORT, 'dubletten_entscheidungen wird nicht gelöscht, nur aufgehoben'); END""")
+    unveraendert = " AND ".join(f"NEW.{c} IS OLD.{c}" for c in ("id", "inserat_a", "inserat_b", "entscheidung", "konfidenz", "gruende_json",
+                                                              "regel_version", "nutzer_id", "zeitpunkt"))
+    con.execute(f"""CREATE TRIGGER IF NOT EXISTS dubletten_entscheidungen_nur_aufheben BEFORE UPDATE ON dubletten_entscheidungen
+        WHEN NOT (OLD.status = 'gilt' AND NEW.status = 'aufgehoben' AND OLD.aufgehoben_am IS NULL AND NEW.aufgehoben_am IS NOT NULL
+                  AND OLD.aufgehoben_von IS NULL AND {unveraendert})
+        BEGIN SELECT RAISE(ABORT, 'dubletten_entscheidungen: nur gilt -> aufgehoben (mit aufgehoben_am) erlaubt'); END""")
+    con.execute("""CREATE TABLE IF NOT EXISTS fahrzeug_zuordnungen (
+        id INTEGER PRIMARY KEY,
+        entscheidung_id INTEGER NOT NULL REFERENCES dubletten_entscheidungen(id),
+        inserat_id INTEGER NOT NULL REFERENCES inserate(id),
+        von_fahrzeug INTEGER NOT NULL REFERENCES fahrzeuge(id), nach_fahrzeug INTEGER NOT NULL REFERENCES fahrzeuge(id),
+        art TEXT NOT NULL CHECK(art IN ('zusammen', 'zurueck')), nutzer_id INTEGER, zeitpunkt TEXT NOT NULL)""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_zuordnungen_inserat ON fahrzeug_zuordnungen(inserat_id, id)")
+    for art in ("UPDATE", "DELETE"):
+        con.execute(f"""CREATE TRIGGER IF NOT EXISTS fahrzeug_zuordnungen_kein_{art.lower()} BEFORE {art} ON fahrzeug_zuordnungen
+            BEGIN SELECT RAISE(ABORT, 'fahrzeug_zuordnungen ist nur anfügbar'); END""")
+    for tabelle, erwartet in _SPALTEN_V12.items():      # eine schon vorhandene, abweichende Tabelle würde von IF NOT EXISTS übergangen
+        if [r[1] for r in con.execute(f"PRAGMA table_info({tabelle})")] != erwartet:
+            raise MigrationsFehler(f"Schritt 12: Tabelle {tabelle} hat nicht die erwarteten Spalten")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 12 geändert: {vorher} -> {nachher}")
+
+
+def _schritt_13(con: sqlite3.Connection):
+    """Additive v13 (P3-04, ADR-042): ``inserate.zuletzt_bestaetigt`` = Zeitpunkt (UTC) der letzten Beobachtung, die die gespeicherte Verfügbarkeit
+    bestätigt hat – anders als ``zuletzt_gesehen`` (jede Beobachtung, bei Mails die Einlesezeit) und Grundlage der Altersregel (eine ältere
+    Beobachtung überschreibt keine neuere) und des abgeleiteten „vermutlich offline“. Altbestand: Für ``aktiv`` und ``offline`` war
+    ``zuletzt_gesehen`` genau der Zeitpunkt der Beobachtung, die den Wert setzte; er wird übernommen (nach UTC). ``unbekannt`` bleibt ohne Wert.
+    Außerdem der Index ``fahrzeug_zuordnungen(entscheidung_id)`` (Befund aus P3-02b). Kein Wert und keine Zeile wird verändert oder gelöscht."""
+    vorher = _zaehle_v11(con)
+    feste = "SELECT id, plattform, anzeigen_id, url, titel, preis, verfuegbarkeit, erstmals_gesehen, zuletzt_gesehen, fahrzeug_id FROM inserate ORDER BY id"
+    vorher_inhalt = hashlib.sha256(repr([tuple(r) for r in con.execute(feste)]).encode()).hexdigest()
+    _neue_spalte(con, "inserate", "zuletzt_bestaetigt", "TEXT")
+    umzusetzen = []
+    offen = con.execute("SELECT id, zuletzt_gesehen FROM inserate WHERE zuletzt_bestaetigt IS NULL AND verfuegbarkeit IN ('aktiv', 'offline')").fetchall()
+    for iid, gesehen in offen:
+        try:
+            zeit = datetime.fromisoformat(gesehen).astimezone(timezone.utc).isoformat(timespec="seconds") if gesehen else None
+        except (TypeError, ValueError):
+            zeit = None                       # nicht lesbar: bleibt leer, die Anzeige fällt auf zuletzt_gesehen zurück
+        if zeit:
+            umzusetzen.append((zeit, iid))
+    con.executemany("UPDATE inserate SET zuletzt_bestaetigt = ? WHERE id = ?", umzusetzen)
+    con.execute("CREATE INDEX IF NOT EXISTS idx_zuordnungen_entscheidung ON fahrzeug_zuordnungen(entscheidung_id)")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 13 geändert: {vorher} -> {nachher}")
+    if hashlib.sha256(repr([tuple(r) for r in con.execute(feste)]).encode()).hexdigest() != vorher_inhalt:
+        raise MigrationsFehler("Schritt 13: bestehende Inseratsspalten haben sich verändert")
+
+
+def _schritt_14(con: sqlite3.Connection):
+    """Additive v14 (P3-05, ADR-043): ``anzeigen.anbieter_herkunft`` = worauf die Anbieterart (``gewerblich`` 0/1) beruht, siehe ``anbieter.py``.
+    Altbestand mit bekannter Anbieterart erhält ``altbestand`` (Herkunft nicht mehr feststellbar; Betreiberfrage F6: die Art selbst bleibt),
+    unbekannte (NULL) bleiben ohne Herkunft. Kein bestehender Wert und keine Zeile wird verändert oder gelöscht."""
+    vorher = _zaehle_v11(con)
+    spalten = ", ".join(r[1] for r in con.execute("PRAGMA table_info(anzeigen)") if r[1] != "anbieter_herkunft")
+
+    def inhalt() -> str:
+        return hashlib.sha256(repr([tuple(r) for r in con.execute(f"SELECT {spalten} FROM anzeigen ORDER BY id")]).encode()).hexdigest()
+    vorher_inhalt = inhalt()
+    _neue_spalte(con, "anzeigen", "anbieter_herkunft", "TEXT")
+    con.execute("UPDATE anzeigen SET anbieter_herkunft = 'altbestand' WHERE anbieter_herkunft IS NULL AND gewerblich IS NOT NULL")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 14 geändert: {vorher} -> {nachher}")
+    if inhalt() != vorher_inhalt:
+        raise MigrationsFehler("Schritt 14: bestehende Spalten von „anzeigen“ haben sich verändert")
+
+
+def _schritt_15(con: sqlite3.Connection):
+    """Additive v15 (P3-06, ADR-044): Tabelle ``kontakte`` – jedes Anschreiben und Nachfassen als Ereignis (vorbereitet → bestätigt), nur anfügen.
+    Altbestand (Betreiberfrage F7, konservativ): ein gespeicherter Kontaktzeitpunkt (``kontaktiert_am``) wird eine bestätigte Zeile, ein offenes
+    „Text kopiert“ (Status ``vorbereitet``) eine vorbereitete, das letzte Nachfassen (``nachgefasst_am``) eine vorbereitete – alle mit Herkunft
+    ``altbestand``, ohne Text (der bleibt in ``anzeigen.anschreiben_text``). ``verworfen_am``: ein offenes Ereignis wurde nicht gesendet (Status „neu“,
+    durch ein späteres ersetzt). Bestehende Tabellen werden nicht verändert."""
+    vorher = _zaehle_v11(con)
+    feste = "SELECT * FROM anzeigen ORDER BY id"
+    vorher_inhalt = hashlib.sha256(repr([tuple(r) for r in con.execute(feste)]).encode()).hexdigest()
+    rueckfuellen = "kontakte" not in _tabellen(con)      # nur beim ersten Anlegen: eine zweite Ausführung ergänzt nichts
+    con.execute("""CREATE TABLE IF NOT EXISTS kontakte (
+        id INTEGER PRIMARY KEY,
+        anzeige_id TEXT NOT NULL,
+        art TEXT NOT NULL CHECK (art IN ('anschreiben', 'nachfassen')),
+        kanal TEXT NOT NULL DEFAULT 'plattform',
+        text TEXT,
+        betrag INTEGER,
+        nutzer_id INTEGER,
+        vorbereitet_am TEXT,
+        bestaetigt_am TEXT,
+        bestaetigt_von INTEGER,
+        verworfen_am TEXT,
+        herkunft TEXT NOT NULL DEFAULT 'app' CHECK (herkunft IN ('app', 'altbestand')),
+        CHECK (vorbereitet_am IS NOT NULL OR bestaetigt_am IS NOT NULL))""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_kontakte_anzeige ON kontakte(anzeige_id, id)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_kontakte_bestaetigt ON kontakte(bestaetigt_am)")
+    if rueckfuellen:
+        team = "bearbeitung" in _tabellen(con)
+        von = "(SELECT kontaktiert_von FROM bearbeitung b WHERE b.anzeige_id = a.id)" if team else "NULL"
+        halter = "(SELECT bearbeiter_id FROM bearbeitung b WHERE b.anzeige_id = a.id)" if team else "NULL"
+        con.execute(f"""INSERT INTO kontakte (anzeige_id, art, kanal, betrag, nutzer_id, bestaetigt_am, bestaetigt_von, herkunft)
+                        SELECT a.id, 'anschreiben', 'unbekannt', a.angebot_betrag, {von}, a.kontaktiert_am, {von}, 'altbestand'
+                        FROM anzeigen a WHERE COALESCE(a.kontaktiert_am, '') != '' ORDER BY a.id""")
+        con.execute(f"""INSERT INTO kontakte (anzeige_id, art, kanal, betrag, nutzer_id, vorbereitet_am, herkunft)
+                        SELECT a.id, 'anschreiben', 'plattform', a.angebot_betrag, {halter}, COALESCE(NULLIF(a.status_am, ''), a.zuletzt_gesehen),
+                               'altbestand'
+                        FROM anzeigen a WHERE a.status = 'vorbereitet' AND COALESCE(a.kontaktiert_am, '') = ''
+                          AND COALESCE(NULLIF(a.status_am, ''), a.zuletzt_gesehen) IS NOT NULL ORDER BY a.id""")
+        con.execute(f"""INSERT INTO kontakte (anzeige_id, art, kanal, nutzer_id, vorbereitet_am, herkunft)
+                        SELECT a.id, 'nachfassen', 'plattform', {halter}, a.nachgefasst_am, 'altbestand'
+                        FROM anzeigen a WHERE COALESCE(a.nachgefasst_am, '') != '' ORDER BY a.id""")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 15 geändert: {vorher} -> {nachher}")
+    if hashlib.sha256(repr([tuple(r) for r in con.execute(feste)]).encode()).hexdigest() != vorher_inhalt:
+        raise MigrationsFehler("Schritt 15: Zeilen von „anzeigen“ haben sich verändert")
+
+
+def _schritt_16(con: sqlite3.Connection):
+    """Additive v16 (P3-07, ADR-045): Indizes nach ``EXPLAIN QUERY PLAN`` der im Betrieb laufenden Abfragen. ``idx_anzeigen_detail_offen`` (Teilindex
+    nur über Anzeigen ohne Detailseite) bedient die Warteschlange des Detailabrufs (``WHERE detail_geladen=0 … ORDER BY erstmals_gesehen DESC LIMIT``)
+    ohne Tabellendurchlauf und Sortierung; ``idx_besichtigung_anfrage`` die Suche nach offenen Besichtigungen einer Verkaufsanfrage. Keine Daten
+    werden verändert."""
+    vorher = _zaehle_v11(con)
+    con.execute("CREATE INDEX IF NOT EXISTS idx_anzeigen_detail_offen ON anzeigen(erstmals_gesehen) WHERE detail_geladen = 0")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_besichtigung_anfrage ON besichtigungen(anfrage_id)")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 16 geändert: {vorher} -> {nachher}")
+
+
+def _schritt_17(con: sqlite3.Connection):
+    """Additive v17 (P4-01, ADR-047): ``suchprofile`` (gesuchte Fahrzeuge: Art, Marke, Modell, Preis, EZ, km – wirken als Filter über eingegangene
+    Daten, kein Abruf) und ``suchauftraege`` (Abdeckungscheckliste: je Profil und Plattform, ob der Nutzer dort einen Suchauftrag bzw. eine
+    E-Mail-Benachrichtigung angelegt hat). Keine bestehende Tabelle wird verändert."""
+    vorher = _zaehle_v11(con)
+    con.execute("""CREATE TABLE IF NOT EXISTS suchprofile (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        aktiv INTEGER NOT NULL DEFAULT 1,
+        arten TEXT NOT NULL DEFAULT '[]',
+        marken TEXT NOT NULL DEFAULT '[]',
+        modell TEXT,
+        preis_min INTEGER, preis_max INTEGER,
+        ez_min INTEGER, ez_max INTEGER,
+        km_max INTEGER,
+        notiz TEXT,
+        erstellt_am TEXT NOT NULL,
+        geaendert_am TEXT NOT NULL)""")
+    con.execute("""CREATE TABLE IF NOT EXISTS suchauftraege (
+        id INTEGER PRIMARY KEY,
+        profil_id INTEGER NOT NULL REFERENCES suchprofile(id) ON DELETE CASCADE,
+        plattform TEXT NOT NULL,
+        angelegt INTEGER NOT NULL DEFAULT 0,
+        url TEXT,
+        notiz TEXT,
+        geaendert_am TEXT NOT NULL,
+        UNIQUE(profil_id, plattform))""")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 17 geändert: {vorher} -> {nachher}")
+
+
+def _schritt_18(con: sqlite3.Connection):
+    """Additive v18 (P4-02, ADR-048): Suchgebiet je Suchprofil – ``gebiet`` (bundesweit/umkreis/regionen), ``gebiet_plz`` und
+    ``gebiet_radius_km`` (Umkreis), ``gebiet_regionen`` (JSON-Liste von PLZ-Bereichen). Bestehende Profile werden „bundesweit“ – sie filtern
+    unverändert. Keine Zeile wird verändert oder gelöscht."""
+    vorher = _zaehle_v11(con)
+    vorhanden = _spalten(con, "suchprofile")
+    for spalte, typ in (("gebiet", "TEXT NOT NULL DEFAULT 'bundesweit'"), ("gebiet_plz", "TEXT"), ("gebiet_radius_km", "INTEGER"),
+                        ("gebiet_regionen", "TEXT NOT NULL DEFAULT '[]'")):
+        if spalte not in vorhanden:
+            con.execute(f"ALTER TABLE suchprofile ADD COLUMN {spalte} {typ}")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 18 geändert: {vorher} -> {nachher}")
+
+
+def _schritt_19(con: sqlite3.Connection):
+    """Additive v19 (P4-04, ADR-050): ``suchlaeufe`` – Protokoll je Suchlauf bzw. Import (gespeicherte Seiten, Mails): Auslöser, Beginn,
+    Ende, Ergebnis, Zähler, Fehler und je Quelle die Zahlen und den Fehler. Grundlage für Statusseite, Intervalle je Quelle und die Pause
+    nach einer Sperre. Keine bestehende Tabelle wird verändert."""
+    vorher = _zaehle_v11(con)
+    con.execute("""CREATE TABLE IF NOT EXISTS suchlaeufe (
+        id INTEGER PRIMARY KEY,
+        art TEXT NOT NULL,
+        ausloeser TEXT NOT NULL,
+        start TEXT NOT NULL,
+        ende TEXT,
+        ergebnis TEXT NOT NULL DEFAULT 'laeuft',
+        neu INTEGER NOT NULL DEFAULT 0, preis INTEGER NOT NULL DEFAULT 0, bekannt INTEGER NOT NULL DEFAULT 0,
+        details INTEGER NOT NULL DEFAULT 0, dateien INTEGER,
+        fehler TEXT,
+        je_quelle TEXT NOT NULL DEFAULT '{}',
+        uebersprungen TEXT NOT NULL DEFAULT '[]')""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_suchlaeufe_start ON suchlaeufe(start)")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 19 geändert: {vorher} -> {nachher}")
+
+
+def _schritt_20(con: sqlite3.Connection):
+    """Additive v20 (P5-01, ADR-052): ``kalibrierung_faelle`` – frühere Ankäufe, die der Inhaber von Hand nachträgt (Fahrzeugdaten,
+    tatsächlicher Kaufpreis, optional Verkaufspreis, Ist-Kosten, Daten), damit der Rechner gegen echte Abschlüsse geprüft werden kann.
+    Keine Verkäuferdaten. Keine bestehende Tabelle wird verändert."""
+    vorher = _zaehle_v11(con)
+    con.execute("""CREATE TABLE IF NOT EXISTS kalibrierung_faelle (
+        id INTEGER PRIMARY KEY,
+        fahrzeug TEXT, marke TEXT, modell TEXT,
+        art TEXT NOT NULL, ez_jahr INTEGER NOT NULL, km INTEGER, plz TEXT, angebotspreis INTEGER,
+        ankauf_am TEXT NOT NULL, ankauf_preis INTEGER NOT NULL, kosten INTEGER,
+        verkauf_am TEXT, verkauf_preis INTEGER,
+        notiz TEXT, erfasst_am TEXT NOT NULL, erfasst_von INTEGER,
+        CHECK(typeof(ankauf_preis) = 'integer' AND ankauf_preis > 0),
+        CHECK(verkauf_preis IS NULL OR (typeof(verkauf_preis) = 'integer' AND verkauf_preis > 0)))""")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 20 geändert: {vorher} -> {nachher}")
+
+
+def _schritt_21(con: sqlite3.Connection):
+    """Additive v21 (F4, ADR-059): ``einladungen`` – einfacher erster Login: Einmal-Link (nur der Hash des Tokens wird gespeichert),
+    mit dem ein Kunde oder Mitarbeiter sein Passwort selbst setzt – und ``plattform_zugaenge`` – Händlerzugang der Firma bei mobile.de
+    bzw. AutoScout24: Händlernummer, API-Benutzer und nur der NAME der Umgebungsvariable mit dem Geheimnis, nie das Geheimnis selbst
+    (Regel 5). Keine bestehende Tabelle wird verändert."""
+    vorher = _zaehle_v11(con)
+    con.execute("""CREATE TABLE IF NOT EXISTS einladungen (
+        id INTEGER PRIMARY KEY, nutzer_id INTEGER NOT NULL REFERENCES nutzer(id), token_hash TEXT NOT NULL UNIQUE,
+        ablauf TEXT NOT NULL, erstellt_am TEXT NOT NULL, erstellt_von INTEGER, eingeloest_am TEXT)""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_einladungen_nutzer ON einladungen(nutzer_id)")
+    con.execute("""CREATE TABLE IF NOT EXISTS plattform_zugaenge (
+        plattform TEXT PRIMARY KEY CHECK(plattform IN ('mobilede', 'autoscout24')),
+        haendlernummer TEXT, api_benutzer TEXT, geheimnis_variable TEXT,
+        letzter_test_am TEXT, letzter_test_ergebnis TEXT,
+        aktualisiert_am TEXT NOT NULL, aktualisiert_von INTEGER)""")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 21 geändert: {vorher} -> {nachher}")
+
+
+def _schritt_22(con: sqlite3.Connection):
+    """Additive v22 (P5-07, ADR-060): ``bewertungen`` – Verlauf der Bewertung je Inserat (Preis, Marktwert, Spanne, Max-EK, Sicherheit,
+    Ampel, Deal-Score und Bestandteile, Rechenstand). Nur anfügbar; eine Zeile nur, wenn sich etwas geändert hat. Keine Personendaten.
+    Keine bestehende Tabelle wird verändert."""
+    vorher = _zaehle_v11(con)
+    con.execute("""CREATE TABLE IF NOT EXISTS bewertungen (
+        id INTEGER PRIMARY KEY, anzeige_id TEXT NOT NULL, zeitpunkt TEXT NOT NULL, modell_version TEXT NOT NULL,
+        preis INTEGER, marktwert INTEGER, spanne_von INTEGER, spanne_bis INTEGER, max_ek INTEGER, erstangebot INTEGER,
+        sicherheit TEXT, n_vergleich INTEGER, ampel TEXT, deal_score INTEGER, komponenten_json TEXT NOT NULL DEFAULT '[]',
+        CHECK(deal_score IS NULL OR (deal_score BETWEEN 0 AND 100)))""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_bewertungen_anzeige ON bewertungen(anzeige_id, id)")
+    for art in ("UPDATE", "DELETE"):
+        con.execute(f"""CREATE TRIGGER IF NOT EXISTS bewertungen_kein_{art.lower()} BEFORE {art} ON bewertungen
+            BEGIN SELECT RAISE(ABORT, 'bewertungen ist nur anfügbar'); END""")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 22 geändert: {vorher} -> {nachher}")
+
+
+def _schritt_23(con: sqlite3.Connection):
+    """Additive v23 (P6-03, ADR-063): ``verhandlung`` – Antworten des Verkäufers und Verhandlungsnotizen je Inserat, von Hand eingetragen
+    (Zeitpunkt, Nutzer, optional Kanal und genannter Betrag, Text). Texte können Personendaten enthalten und werden bei Anonymisierung und
+    Frist geleert (kein Schutz gegen UPDATE). Keine bestehende Tabelle wird verändert."""
+    vorher = _zaehle_v11(con)
+    con.execute("""CREATE TABLE IF NOT EXISTS verhandlung (
+        id INTEGER PRIMARY KEY, anzeige_id TEXT NOT NULL, art TEXT NOT NULL CHECK (art IN ('antwort', 'notiz')),
+        zeitpunkt TEXT NOT NULL, nutzer_id INTEGER, kanal TEXT, betrag INTEGER CHECK (betrag IS NULL OR betrag > 0), text TEXT)""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_verhandlung_anzeige ON verhandlung(anzeige_id, id)")
+    nachher = _zaehle_v11(con)
+    if nachher != vorher:
+        raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 23 geändert: {vorher} -> {nachher}")
+
+
 SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4, 5: _schritt_5,
                                                              6: _schritt_6, 7: _schritt_7, 8: _schritt_8, 9: _schritt_9,
-                                                             10: _schritt_10}
+                                                             10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
+                                                             14: _schritt_14, 15: _schritt_15,
+                                                             16: _schritt_16, 17: _schritt_17, 18: _schritt_18,
+                                                             19: _schritt_19, 20: _schritt_20, 21: _schritt_21, 22: _schritt_22,
+                                                             23: _schritt_23}
 
 _SCHEMA_VERSION = ("CREATE TABLE IF NOT EXISTS schema_version ("
                    "version INTEGER PRIMARY KEY, angewendet_am TEXT NOT NULL)")

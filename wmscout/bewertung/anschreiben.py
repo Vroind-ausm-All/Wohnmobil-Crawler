@@ -7,9 +7,10 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from ..datenbank import STATUS, UNBEKANNT, VORLAEUFIG, import_art
+from ..domaene import STATUS, UNBEKANNT, VORLAEUFIG, import_art
 from ..normalisierung.fahrzeug import ART_PLURAL, fahrzeug_bezeichnung
 from ..normalisierung.person import profilname
+from .rechner import SCHWERER_MANGEL
 
 AMPEL_RANG = {"gruen": 0, "gelb": 1, "rot": 2, "grau": 3}
 ART_EINZAHL = {"Sonstige": "Wohnmobil"}
@@ -78,6 +79,17 @@ HINWEIS_AUSLAND = "Ausland – Abholung, Überführung und Zulassung prüfen"
 HINWEIS_ANBIETER_UNBEKANNT = "Anbieter unbekannt (privat oder gewerblich) – bitte vor dem Anschreiben prüfen"
 
 
+def hinweis_schwere_maengel(namen: list[str]) -> str:
+    """P5-05: nur ein Hinweis an den Ankäufer – das Ausmaß eines schweren Mangels steht im Inserat nicht."""
+    return f"Schwerer Mangel laut Inserat ({', '.join(namen)}) – Ausmaß vor einem verbindlichen Angebot bei der Besichtigung klären"
+
+
+def hinweis_marke_unbekannt(abschlag: float) -> str:
+    """P5-03: nur ein Hinweis an den Ankäufer – der Abschlag steckt schon im Händler-VK, das Anschreiben bleibt wie es ist."""
+    return (f"Marke unbekannt – Händler-VK {abschlag:.0%} niedriger angesetzt; Marke beim Verkäufer erfragen, dann neu bewerten"
+            ).replace("%", " %")
+
+
 def hinweis_ausland(land: str) -> str:
     return (f"{HINWEIS_AUSLAND} (Standort {land}; Entfernung und Transportkosten nicht berechnet – Ampel höchstens gelb, Brief ohne Betrag)")
 
@@ -89,8 +101,11 @@ def hinweise(a: dict, b=None) -> list[str]:
     vorläufigen bzw. vorsichtig mit der Kandidaten-Art mit dem niedrigsten Max-EK (`b.art`, siehe
     auswertung.bewerte_anzeige). Crawler-Funde (Art aus der Suche) und bestätigte Arten tragen keinen Hinweis.
     Außerdem: Ort im Ausland (`a["ausland"]` – keine Entfernung, Transport ungewiss) und unbekannter Anbieter (`gewerblich` ist
-    None, z. B. fehlender Anbieterkasten der Trefferliste) – beides sperrt nichts, steht aber sichtbar am Fahrzeug."""
+    None, z. B. fehlender Anbieterkasten der Trefferliste) – beides sperrt nichts, steht aber sichtbar am Fahrzeug. Ebenso eine unbekannte
+    Aufbaumarke (P5-03: Händler-VK mit Abschlag gerechnet)."""
     liste = []
+    if a.get("verfuegbarkeit_hinweis"):                   # reserviert / vermutlich nicht mehr online (P3-04): sperrt nichts
+        liste.append(a["verfuegbarkeit_hinweis"])
     _, herkunft = import_art(a.get("suche"))
     if herkunft == VORLAEUFIG:
         liste.append(HINWEIS_ART_VORLAEUFIG)
@@ -100,6 +115,10 @@ def hinweise(a: dict, b=None) -> list[str]:
         liste.append(hinweis_ausland(a["ausland"]))
     if "gewerblich" in a and a["gewerblich"] is None:
         liste.append(HINWEIS_ANBIETER_UNBEKANNT)
+    if b is not None and b.abschlag_marke:
+        liste.append(hinweis_marke_unbekannt(b.abschlag_marke))
+    if b is not None and (schwer := [m["name"] for m in b.maengel if m.get("roh", m["wert"]) <= -SCHWERER_MANGEL]):
+        liste.append(hinweis_schwere_maengel(schwer))
     return liste
 
 
@@ -147,10 +166,13 @@ def anrede_name(roh) -> str | None:
 
 
 def sperrgrund(a: dict, cfg: dict) -> str | None:
-    """Warum diese Anzeige nicht angeschrieben werden soll (oder None). Die Fahrzeugart sperrt nicht – siehe hinweise()."""
+    """Warum diese Anzeige nicht angeschrieben werden soll (oder None). Die Fahrzeugart sperrt nicht – siehe hinweise(). Verkaufte und
+    nicht mehr online stehende Anzeigen sind gesperrt; „reserviert“ und „vermutlich offline“ nicht (nur Hinweis)."""
     f = cfg["filter"]
     if a.get("gewerblich"):
         return "gewerblicher Anbieter"
+    if a.get("verfuegbarkeit_sperre"):                    # verkauft oder offline (auch Altbestand-Status „gelöscht“), P3-04
+        return a["verfuegbarkeit_sperre"]
     if a.get("status") not in (None, "neu"):
         return f"Status: {STATUS.get(a['status'], a['status'])}"
     if a.get("duplikat"):

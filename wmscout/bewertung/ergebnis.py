@@ -29,7 +29,8 @@ def plan_aus_kalkulation(erg: dict, kalkulation_id: int, *, standzeit_tage: int,
             "haendler_vk": erw["haendler_vk"], "kosten": erw["kosten"] + erw.get("provision", 0), "provision": erw.get("provision", 0),
             "ziel_marge": erw["ziel_marge"], "max_ek": erw["max_ek"], "gewinn": erw.get("gewinn"),
             "vk_spanne": [s["vorsichtig"]["haendler_vk"], s["guenstig"]["haendler_vk"]] if "vorsichtig" in s else None,
-            "standzeit_tage": standzeit_tage, "differenzbesteuerung": differenzbesteuerung}
+            "standzeit_tage": standzeit_tage, "differenzbesteuerung": differenzbesteuerung,
+            "abschlag_marke": erg.get("abschlag_marke", 0.0), "kosten_kapital": erg.get("kosten_kapital", 0)}
 
 
 def plan_aus_bewertung(b, kaufpreis: int, *, standzeit_tage: int, differenzbesteuerung: bool) -> dict:
@@ -37,7 +38,13 @@ def plan_aus_bewertung(b, kaufpreis: int, *, standzeit_tage: int, differenzbeste
     return {"quelle": "Bewertung des Inserats zum Kaufzeitpunkt (eingefroren)", "kalkulation_id": None,
             "haendler_vk": b.haendler_vk, "kosten": b.kosten, "provision": 0, "ziel_marge": b.ziel_marge, "max_ek": b.max_ek,
             "gewinn": _gewinn(b.haendler_vk, b.kosten, kaufpreis, differenzbesteuerung),
-            "vk_spanne": None, "standzeit_tage": standzeit_tage, "differenzbesteuerung": differenzbesteuerung}
+            "vk_spanne": None, "standzeit_tage": standzeit_tage, "differenzbesteuerung": differenzbesteuerung,
+            "abschlag_marke": b.abschlag_marke, "kosten_kapital": kosten_kapital(b.kosten_posten)}
+
+
+def kosten_kapital(posten: dict) -> int:
+    """Rechnerische Kapitalbindung (P5-05) – fällt nie als Ausgabe an, gehört also nicht in den Vergleich mit erfassten Ist-Kosten."""
+    return sum(v for n, v in (posten or {}).items() if n.startswith("Kapitalbindung"))
 
 
 def plan_aus_basis(basis: dict, *, standzeit_tage: int) -> dict:

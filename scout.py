@@ -5,9 +5,13 @@
   python scout.py lauf                      Crawlen + bewerten + Report (+ Mail)
   python scout.py report                    Nur Report neu erzeugen (ohne Internet)
   python scout.py import [--ordner PFAD]    Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten einlesen (ohne Internet)
+  python scout.py import --mails [--ordner PFAD]   Suchagent-Benachrichtigungen (.eml in import/email/) einlesen (Eingang „email“, Standard aus)
+  python scout.py quellen liste|an|aus [KENNUNG]   Pull-Quellen und Eingänge anzeigen; Quellen schalten (nur im Code freigegebene)
   python scout.py rechne --preis 32900 --ez 2016 --km 98000 --titel "Knaus Sky TI 650 MEG" [--anschreiben]
   python scout.py nutzer anlegen <Name> [--rolle inhaber]   Team-Zugang für Handy-App anlegen
   python scout.py sichern                   Datenbank (und Fotos) sichern -> daten/sicherungen
+  python scout.py dubletten [--stufe hoch|mittel]   Offene Dublettenvorschläge anzeigen (nur lesen)
+  python scout.py dubletten bestaetigen|ablehnen ID1 ID2 | aufheben NR   Dublette entscheiden (nur Einzelplatz)
   python scout.py wiederherstellen <Datei> --bestaetigt [--ohne-fotos]   Sicherung zurückspielen (App und Suchlauf vorher beenden)
   python scout.py status <ID> kontaktiert [--nutzer NAME]   Status setzen (neu|kontaktiert|verhandlung|besichtigung|gekauft|abgesagt|
                                             uninteressant|vorbereitet); mit --nutzer im Team für diesen Mitarbeiter (sonst „ohne Zuordnung“)
@@ -22,8 +26,8 @@ for _strom in (sys.stdout, sys.stderr):
     if hasattr(_strom, "reconfigure"):
         _strom.reconfigure(encoding="utf-8", errors="replace")
 
-if not (3, 10) <= sys.version_info[:2] <= (3, 13):
-    print(f"Hinweis: Wohnmobil-Scout ist für Python 3.10–3.13 gedacht, verwendet wird {sys.version.split()[0]}.\n"
+if sys.version_info[:2] != (3, 13):
+    print(f"Hinweis: Wohnmobil-Scout ist für Python 3.13 gedacht, verwendet wird {sys.version.split()[0]}.\n"
           "Unter Windows bitte über app.bat starten – das richtet automatisch eine passende Umgebung (.venv) ein.",
           file=sys.stderr)
 _fehlt = [paket for paket, modul in (("requests", "requests"), ("beautifulsoup4", "bs4"), ("PyYAML", "yaml"),
@@ -36,6 +40,8 @@ if _fehlt:
 import argparse
 import logging
 import logging.handlers
+import os
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -45,31 +51,60 @@ import yaml
 from wmscout.ausgabe import schreibe_ausgaben
 from wmscout.benachrichtigung import sende_mail
 from wmscout.bewertung.anschreiben import Anschreiber, euro
-from wmscout.bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids, vergleichsbasis
+from wmscout.bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids, vergleichsbasis_aus
+from wmscout.bewertung.deal_score import einstellungen as deal_einstellungen
 from wmscout.bewertung.rechner import Rechner
 from wmscout.datenbank import STATUS, Datenbank, wal_aktiv
 from wmscout.laufsperre import Laufsperre
 from wmscout.eingang import import_ordner
+from wmscout.eingang.email import mail_ordner
 from wmscout.auktion import STATUS as AUKTION_STATUS
 from wmscout.auktion import AuktionSpeicher
-from wmscout import datenrechte, mandanten
+from wmscout import abdeckung, aufbewahrung, bewertungsverlauf, datenrechte, laufprotokoll, mandanten
+from wmscout.bewertung import kalibrierung
 from wmscout.audit import AuditSpeicher
 from wmscout.nutzung import nutzung
 from wmscout.deal import DealSpeicher
+from wmscout.dubletten import MAX_LIMIT, STANDARD_LIMIT, pruefe_dubletten
 from wmscout.haendler import STANDORT_STATUS, HaendlerSpeicher
 from wmscout.importer import Importer
+from wmscout.quellen import QUELLEN
+from wmscout.schalter import (EingangDeaktiviert, QuelleNichtSchaltbar, bewerte_quelle, eingaenge, eingang_pruefen, pruefe_eingaenge,
+                              quelle_zeile, setze_quelle)
 from wmscout.migrationen import MigrationsFehler
 from wmscout.normalisierung.fahrzeug import ergaenze_fahrzeug
+from wmscout.normalisierung.qualitaet import je_quelle
 from wmscout.sicherung import SicherungsFehler, einstellungen, sichere, sicherung_ordner, wiederherstellen
 from wmscout.bearbeitung import BearbeitungsKonflikt, ablauf_grenze, reservierung_tage
-from wmscout.team import ROLLEN, TeamSpeicher, lade_team_sicht
+from wmscout.team import EINLADUNG_TAGE, ROLLEN, TeamSpeicher, lade_team_sicht
 
 BASIS = Path(__file__).resolve().parent
 
 
+def _mischen(basis: dict, zusatz: dict) -> dict:
+    for k, v in zusatz.items():
+        basis[k] = _mischen(basis[k], v) if isinstance(v, dict) and isinstance(basis.get(k), dict) else v
+    return basis
+
+
+LOKAL_ABSCHNITTE: list[str] = []
+
+
 def lade_config(pfad: str) -> dict:
-    with open(BASIS / pfad, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    """``config.yaml`` und – falls vorhanden – ``config.local.yaml`` daneben (P1-09): eigene Einstellungen des Betriebs, die
+    nicht ins Repository gehören (.gitignore). Abschnitte werden zusammengeführt, einzelne Werte und Listen ersetzt."""
+    datei = BASIS / pfad
+    with open(datei, encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+    lokal = datei.with_name(f"{datei.stem}.local{datei.suffix}")
+    if lokal.is_file():
+        with open(lokal, encoding="utf-8") as f:
+            zusatz = yaml.safe_load(f) or {}
+        if not isinstance(zusatz, dict):
+            sys.exit(f"{lokal.name}: erwartet werden Abschnitte wie in {datei.name}")
+        cfg = _mischen(cfg, zusatz)
+        LOKAL_ABSCHNITTE[:] = sorted(zusatz)        # wird nach dem Einrichten des Protokolls gemeldet (nachvollziehbar)
+    return cfg
 
 
 def logging_einrichten(cfg: dict):
@@ -79,6 +114,8 @@ def logging_einrichten(cfg: dict):
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S",
         handlers=[logging.StreamHandler(sys.stdout),        # Protokoll rotiert: höchstens 6 × 5 MB (G0)
                   logging.handlers.RotatingFileHandler(ordner / "scout.log", maxBytes=5_000_000, backupCount=5, encoding="utf-8")])
+    if LOKAL_ABSCHNITTE:
+        logging.getLogger("scout").info("config.local.yaml überlagert: %s", ", ".join(LOKAL_ABSCHNITTE))
 
 
 def _team(cfg, db):
@@ -92,34 +129,100 @@ def cmd_lauf(cfg, db, args):
         logging.warning("Suchlauf übersprungen: Es läuft bereits ein Suchlauf (App oder geplante Aufgabe).")
         return
     try:
-        _lauf(cfg, db)
+        _lauf(cfg, db, sofort=args.sofort)
     finally:
         sperre.freigeben()
 
 
-def _lauf(cfg, db):
+def _lauf(cfg, db, sofort: bool = False):
     start = datetime.now().isoformat(timespec="seconds")
-    stat = Importer(cfg, db).lauf(cfg["suchen"])
+    importer = Importer(cfg, db)
+    # geplante Aufgabe/Kommandozeile: Intervalle je Quelle und Pause nach Sperre gelten, außer mit --sofort (P4-04)
+    importer.ausloeser, importer.intervall_beachten = "cli", not sofort
+    stat = importer.lauf(cfg["suchen"])
+    datenrechte.frist_anwenden(db, cfg, BASIS, foto_ordner(cfg))
     logging.info("Crawl fertig: %d neu, %d Preissenkungen, %d bekannt, %d Detailseiten",
                  stat["neu"], stat["preis"], stat["bekannt"], stat["details"])
+    for u in stat["uebersprungen"]:
+        logging.info("Übersprungen: Quelle %s (%s) – kein Fehler; Übersicht: python scout.py quellen liste", u["quelle"], u["grund"])
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
+    bewertungsverlauf.merken(db, zeilen)                                 # Verlauf von Bewertung und Deal-Score (P5-07)
     erg = schreibe_ausgaben(cfg, zeilen, BASIS, fehler=stat["fehler"], team=_team(cfg, db))
     logging.info("Report: %s  (%s)", erg["html"], erg["zaehl"])
-    sende_mail(cfg, zeilen, erg)
+    sende_mail(cfg, zeilen, erg, seit=start)
 
 
 def _anzahl(n: int, einzahl: str, mehrzahl: str) -> str:
     return f"{n} {einzahl if n == 1 else mehrzahl}"
 
 
+def cmd_import_mails(cfg, db, args):
+    """E-Mail-Suchbenachrichtigungen (.eml) aus import/email/ einlesen – ohne Internet, verlinkte Anzeigen werden nicht abgerufen (P2-06)."""
+    try:
+        eingang_pruefen(cfg, "email")
+    except EingangDeaktiviert as e:
+        print(e)                                    # nichts lesen, Ordner nicht anlegen, Dateien bleiben liegen
+        return
+    ordner = Path(args.ordner).expanduser().resolve() if args.ordner else mail_ordner(cfg, BASIS)
+    if not ordner.is_dir():
+        ordner.mkdir(parents=True, exist_ok=True)
+        print(f"Ordner für Mails angelegt: {ordner}")
+    print(f"E-Mail-Suchbenachrichtigungen einlesen aus: {ordner}")
+    start = datetime.now().isoformat(timespec="seconds")
+    importer = Importer(cfg, db)
+    importer.ausloeser = "cli"
+    stat = importer.importiere_mails(ordner)
+    if not stat["dateien"]:
+        print("Keine Mails gefunden (.eml).\n"
+              "So geht's: Benachrichtigung des Suchagenten in Thunderbird (Datei → Speichern unter → .eml) bzw. im Webmail als .eml speichern "
+              "und in diesen Ordner legen. Danach diesen Befehl erneut ausführen.")
+    else:
+        print(f"{_anzahl(stat['dateien'], 'Mail', 'Mails')} gelesen: {_anzahl(stat['suchseiten'], 'mit Anzeigen', 'mit Anzeigen')}, "
+              f"{stat['unbekannt']} nicht erkannt, {stat['fehlerhaft']} nicht lesbar")
+        print(f"Ergebnis: {_anzahl(stat['neu'], 'neue Anzeige', 'neue Anzeigen')}, "
+              f"{_anzahl(stat['preis'], 'Preissenkung', 'Preissenkungen')}, {stat['bekannt']} schon bekannt")
+        if stat["dateien"] > stat["unbekannt"] + stat["fehlerhaft"]:
+            print(f"Eingelesene Mails liegen jetzt in: {ordner / 'eingelesen'}")
+        if stat["unbekannt"]:
+            print(f"Nicht erkannte Mails: {ordner / 'nicht_erkannt'}")
+        if stat["fehlerhaft"]:
+            print(f"Nicht lesbare Mails: {ordner / 'fehlerhaft'}")
+        if stat["fehler"]:
+            print("Bitte prüfen:\n" + "\n".join(f"  - {f}" for f in stat["fehler"]))
+    if args.ordner:                                 # abweichender Ordner: die Standard-Frist (import/email) erreicht ihn nicht
+        try:
+            geloescht = datenrechte.mails_nach_frist(ordner, datenrechte.frist_aus(cfg))
+        except ValueError:
+            geloescht = 0
+        if geloescht:
+            print(f"Datenschutz-Frist: {_anzahl(geloescht, 'abgelegte Mail', 'abgelegte Mails')} in {ordner} gelöscht.")
+    if (offen := datenrechte.mails_unverarbeitet_gemeldet(cfg, ordner)):
+        print(f"Achtung: {_anzahl(offen, 'Mail liegt', 'Mails liegen')} seit über der Datenschutz-Frist unverarbeitet im Ordner – bitte einlesen oder löschen.")
+    datenrechte.frist_anwenden(db, cfg, BASIS, foto_ordner(cfg))         # abgelegte Mails nach der Frist löschen (P2-06)
+    if stat["dateien"]:
+        zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
+        bewertungsverlauf.merken(db, zeilen)
+        erg = schreibe_ausgaben(cfg, zeilen, BASIS, team=_team(cfg, db))
+        print(f"Report: {erg['html']}  ({erg['zaehl']})")
+
+
 def cmd_import(cfg, db, args):
+    if args.mails:
+        return cmd_import_mails(cfg, db, args)
+    try:
+        eingang_pruefen(cfg, "seiten")
+    except EingangDeaktiviert as e:
+        print(e)                                    # nichts lesen, Import-Ordner nicht anlegen, Dateien bleiben liegen
+        return
     ordner = Path(args.ordner).expanduser().resolve() if args.ordner else import_ordner(cfg)
     if not ordner.is_dir():
         ordner.mkdir(parents=True, exist_ok=True)
         print(f"Import-Ordner angelegt: {ordner}")
     print(f"Gespeicherte Seiten einlesen aus: {ordner}")
     start = datetime.now().isoformat(timespec="seconds")
-    stat = Importer(cfg, db).importiere_seiten(ordner)
+    importer = Importer(cfg, db)
+    importer.ausloeser = "cli"
+    stat = importer.importiere_seiten(ordner)
     if not stat["dateien"]:
         print("Keine gespeicherten Seiten gefunden (.html/.htm).\n"
               "So geht's: Suchergebnis- oder Anzeigenseite in Kleinanzeigen oder mobile.de öffnen, Strg+S drücken und in diesen Ordner "
@@ -134,13 +237,132 @@ def cmd_import(cfg, db, args):
         print(f"Eingelesene Dateien liegen jetzt in: {ordner / 'eingelesen'}")
     if stat["fehler"]:
         print("Bitte prüfen:\n" + "\n".join(f"  - {f}" for f in stat["fehler"]))
+    datenrechte.frist_anwenden(db, cfg, BASIS, foto_ordner(cfg))         # Verkäufernamen kommen über den Seitenimport (P1-14a)
     zeilen = bewerte_alle(cfg, db, BASIS, lauf_start=start)
+    bewertungsverlauf.merken(db, zeilen)
     erg = schreibe_ausgaben(cfg, zeilen, BASIS, team=_team(cfg, db))
     print(f"Report: {erg['html']}  ({erg['zaehl']})")
 
 
+def cmd_quellen(cfg, db, args):
+    """Pull-Quellen (Suchlauf) und Eingänge anzeigen bzw. Quellen ein-/ausschalten (ADR-036).
+    Die Freigabe steht im Code (Nutzungsrechte); `an` schaltet nur freigegebene Quellen. Eingänge werden in config.yaml geschaltet."""
+    if args.aktion in ("an", "aus"):
+        if not args.kennung:
+            sys.exit(f"Kennung fehlt – Aufruf: python scout.py quellen {args.aktion} KENNUNG (verfügbar: {', '.join(sorted(QUELLEN))})")
+        klasse = QUELLEN.get(args.kennung)
+        if klasse is None:
+            sys.exit(f"Unbekannte Quelle „{args.kennung}“ – verfügbar: {', '.join(sorted(QUELLEN))}")
+        try:
+            setze_quelle(db, klasse, args.aktion == "an")
+        except QuelleNichtSchaltbar as e:
+            sys.exit(f"Nicht geändert: {e}")
+        print(f"Quelle {klasse.kennung}: {'eingeschaltet' if args.aktion == 'an' else 'ausgeschaltet'}")
+        return
+    if args.kennung:
+        sys.exit("„quellen liste“ nimmt keine Kennung – zum Schalten: python scout.py quellen an|aus KENNUNG")
+    print("Pull-Quellen (Suchlauf) – schalten: python scout.py quellen an|aus KENNUNG")
+    print(f"  {'Kennung':<16}{'Zugriff':<9}{'Code-Freigabe':<15}{'Schalter':<16}Suchlauf")
+    status = {q["kennung"]: q for q in laufprotokoll.uebersicht(db, cfg)["quellen"]}
+    for kennung in sorted(QUELLEN):
+        klasse = QUELLEN[kennung]
+        zeile = quelle_zeile(db, kennung)
+        laeuft, grund = bewerte_quelle(bool(klasse.freigegeben), zeile)
+        schalter = "nicht entschieden" if zeile is None or (not zeile["freigegeben"] and not zeile["aktiv"]) else ("an" if zeile["aktiv"] else "aus")
+        print(f"  {kennung:<16}{klasse.zugriffsart:<9}{'ja' if klasse.freigegeben else 'nein':<15}{schalter:<16}"
+              f"{'läuft' if laeuft else 'übersprungen (' + grund + ')'}")
+        q = status[kennung]                                  # Laufprotokoll (P4-04); ausführlich in der App unter /status
+        if q["letzter_lauf"] or q["intervall_stunden"]:
+            print(f"  {'':<16}letzter Lauf {(q['letzter_lauf'] or '–').replace('T', ' ')} ({q['letztes_ergebnis'] or '–'}), "
+                  f"Fehler in Folge {q['fehler_in_folge']}, automatisch: {q['sperrgrund'] or 'sofort möglich'}")
+            if q["letzter_fehler"]:
+                print(f"  {'':<16}letzter Fehler: {q['letzter_fehler']}")
+    print("\nEingänge – schalten in config.yaml bzw. config.local.yaml → eingaenge → <name> → aktiv: true|false")
+    for name, an in eingaenge(cfg).items():
+        print(f"  {name:<10}{'an' if an else 'aus'}")
+
+
+def cmd_qualitaet(cfg, db, args):
+    """Datenqualität je Quelle (P3-08, P2-10) über die aktuell bewerteten Inserate – nur lesen."""
+    zeilen = bewerte_alle(cfg, db, BASIS)
+    if not zeilen:
+        print("Keine aktuellen Inserate.")
+        return
+    print(f"{'Quelle':<14}{'Anzahl':>7}{'Preis':>7}{'EZ':>6}{'km':>6}{'Ort':>6}{'Anbieter':>9}{'Ø Wert':>8}{'Widerspr.':>10}")
+    for q in je_quelle(zeilen):
+        print(f"{q['quelle']:<14}{q['anzahl']:>7}{q['preis']:>7.0%}{q['ez']:>6.0%}{q['km']:>6.0%}{q['ort']:>6.0%}{q['anbieter_bekannt']:>9.0%}"
+              f"{q['mittel']:>8.0f}{q['mit_widerspruch']:>10}")
+    schwach = [z for z in zeilen if z["a"]["datenqualitaet"]["stufe"] == "schwach"]
+    print(f"\n{len(schwach)} von {len(zeilen)} Fahrzeugen mit schwacher Datenlage (Wert unter 50).")
+
+
+def cmd_abdeckung(cfg, db, args):
+    """Abdeckung und Suchlücken (P4-05) für die letzten ``--tage`` Tage – nur lesen. Ausführlich in der App unter /abdeckung."""
+    try:
+        tage = abdeckung.tage_aus(args.tage)
+    except ValueError as e:
+        sys.exit(str(e))
+    m = abdeckung.messe(cfg, db, BASIS, tage)
+    k = m["kennzahlen"]
+    print(f"Abdeckung der letzten {tage} Tage")
+    je_quelle = ", ".join(f"{q} {n}" for q, n in k["neue_inserate_je_quelle"].items())
+    print(f"  Neue Inserate: {k['neue_inserate']}" + (f" ({je_quelle})" if je_quelle else "") +
+          f" · unterschiedliche Fahrzeuge: {k['neue_fahrzeuge']} · relevante Privatangebote: {k['relevante_privatangebote']}"
+          f" ({k['relevante_privatangebote_pro_tag']} pro Tag)")
+    voll = "–" if k["anteil_vollstaendig"] is None else f"{k['anteil_vollstaendig']:.0%}"
+    print(f"  Preisänderungen: {k['preisaenderungen']} · mit Dublette: {k['inserate_mit_dublette']} · nicht verfügbar: {k['nicht_verfuegbar']}"
+          f" · vollständig beschrieben: {voll}")
+    print("Zeitlücken je Plattform")
+    for p, z in m["zeitluecken"].items():
+        luecken = ", ".join(f"{lk['von']}–{lk['bis']} ({lk['tage']} Tage)" for lk in z["luecken"]) or "keine"
+        print(f"  {p:<14}{z['tage_mit_eingang']:>3} von {tage} Tagen mit Eingang · letzter {z['letzter_eingang'] or '–'} · Lücken: {luecken}")
+    print("Suchprofile")
+    for p in m["profile"] or [{"name": "(kein aktives Profil)", "passt": 0, "unklar": 0, "hinweise": []}]:
+        print(f"  {p['name']}: {p['passt']} passend, {p['unklar']} unklar" + "".join(f"\n    - {h}" for h in p["hinweise"]))
+    g = m["gebietsluecken"]
+    print(f"PLZ-Bereiche ohne neues Inserat ({len(g['ohne_inserat'])} von {len(g['ohne_inserat']) + len(g['je_bereich'])}): "
+          + (", ".join(g["ohne_inserat"]) or "keine"))
+
+
+def cmd_kalibrierung(cfg, db, args):
+    """Kalibrierungsbericht (P5-01): Rechnung gegen tatsächliche Ankäufe – nur lesen, ändert keine Parameter. Fälle nachtragen: /kalibrierung."""
+    faelle = kalibrierung.KalibrierungSpeicher(db).faelle(cfg)
+    b = kalibrierung.bericht(faelle, cfg)
+    print(f"Kalibrierung: {b['faelle']} Fälle, davon {b['verkauft']} verkauft – {b['belastbarkeit']}")
+
+    def zeile(name, k, fmt):
+        if k is None:
+            print(f"  {name}: keine Fälle")
+        else:
+            print(f"  {name}: Median {fmt(k['median'])} (mittlere Hälfte {fmt(k['q1'])} bis {fmt(k['q3'])}, {k['n']} Fälle)")
+
+    zeile("Kaufpreis gegenüber Max-EK", b["ek_zu_max_ek"], kalibrierung.prozent)
+    zeile("Verkaufspreis gegenüber geplantem Händler-VK", b["vk_zu_plan"], kalibrierung.prozent)
+    zeile("Ist- minus Plankosten", b["kosten_abweichung"], lambda x: f"{x:+,.0f} €".replace(",", ".").replace("-", "−"))
+    zeile("Standzeit gegenüber Plan", b["standzeit_abweichung"], lambda x: f"{x:+.0f} Tage".replace("-", "−"))
+    for h in b["hinweise"]:
+        print(f"Hinweis: {h}")
+    if not b["vorschlaege"]:
+        print(f"Keine Vorschläge (ab {b['min_faelle']} verwertbaren Fällen und Abweichung über der Toleranz).")
+    for v in b["vorschlaege"]:
+        print(f"Vorschlag {v['parameter']}: {v['alt']} → {v['neu']} ({v['faelle']} Fälle) – {v['grund']}")
+        if v["alternative"]:
+            print(f"  {v['alternative']}")
+        if v["warnung"]:
+            print(f"  Achtung: {v['warnung']}")
+    if b["vorschlaege"]:
+        print("Nichts wurde geändert – Parameter bewusst in config.yaml nachstellen.")
+    m = kalibrierung.KalibrierungSpeicher(db).marktbeobachtung(cfg)
+    senkung = "–" if m["median"] is None else f"{m['median']:.0%}"
+    print(f"Marktbeobachtung: {m['n']} verschwundene Privatinserate mit Preisverlauf, {m['mit_senkung']} gesenkt, Senkung im Median {senkung}"
+          f" (Untergrenze für den Abschlag Angebot → Abschluss, derzeit {m['abschlag']:.0%})")
+    if m["hinweis"]:
+        print(f"Hinweis: {m['hinweis']}")
+
+
 def cmd_report(cfg, db, args):
     zeilen = bewerte_alle(cfg, db, BASIS)
+    bewertungsverlauf.merken(db, zeilen)
     erg = schreibe_ausgaben(cfg, zeilen, BASIS, team=_team(cfg, db))
     print(f"Report: {erg['html']}\nCSV:    {erg['csv']}\n{erg['zaehl']}")
 
@@ -150,7 +372,7 @@ def cmd_rechne(cfg, db, args):
                            "marke": args.marke, "titel": args.titel or args.marke or "", "beschreibung": args.text,
                            "suche": args.art, "ort": args.ort, "vb": True})
     # gleiche Vergleichsbasis und Bewertung wie bewerte_alle (Rechner-Sicht, ohne ältere Dubletten; M6-2)
-    vergleich = vergleichsbasis([ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()])
+    vergleich = vergleichsbasis_aus(db)
     b = bewerte_anzeige(Rechner(cfg), a, vergleich, marktwert_manuell=args.marktwert)
     print(f"\nFahrzeug                 : {a['fahrzeug']} ({b.art}, EZ {a['ez_jahr'] or '?'}, "
           f"{a['km'] or '?'} km)")
@@ -158,6 +380,11 @@ def cmd_rechne(cfg, db, args):
         print(f"Referenzwert (Modell)    : {euro(b.modellwert)}   (km-Korrektur {b.km_korrektur:+.1%})")
     for n, w in b.wertfaktoren.items():
         print(f"  {n:<23}: {w:+.1%}")
+    if b.sicherheit == "keine":
+        print(f"  {b.vergleich_basis}\n  Keine Beträge – mit --marktwert einen eigenen Marktwert angeben (P1-12).")
+        if args.anschreiben:
+            print("\n--- Anschreiben ---\n" + Anschreiber(cfg, BASIS).text(a, b))
+        return
     print(f"Marktniveau Angebote     : {euro(b.marktwert_angebote)}   Sicherheit {b.sicherheit}"
           + (f", plausibel {euro(b.spanne_von)} – {euro(b.spanne_bis)}" if b.spanne_von else ""))
     print(f"  Basis: {b.vergleich_basis}")
@@ -185,6 +412,17 @@ def cmd_app(cfg, db, args):
     starte(cfg, db, BASIS, port=args.port, browser=not args.kein_browser)
 
 
+def cmd_portal(cfg, db, args):
+    """Öffentliches Ankaufsportal (P7-03): startet nur mit Freigabe (portal → aktiv) und vollständiger Konfiguration."""
+    from wmscout.web.portal import PortalFehler, starte_portal
+    try:
+        starte_portal(cfg, db, BASIS, port=args.port)
+    except PortalFehler as e:
+        sys.exit(str(e))
+    except OSError as e:
+        sys.exit(f"Portal-Port belegt oder nicht verfügbar: {e}")
+
+
 def cmd_mandant(cfg, args):
     """Mandanten (G2): anlegen, auflisten, Nutzung je Mandant. Arbeiten in einem Mandanten: scout.py --mandant KENNUNG <befehl>."""
     if args.aktion == "anlegen":
@@ -192,7 +430,7 @@ def cmd_mandant(cfg, args):
             sys.exit("Aufruf: python scout.py mandant anlegen KENNUNG --name \"Firma\" --url https://firma.example.de")
         ziel = mandanten.anlegen(cfg, BASIS, args.kennung, args.name or args.kennung, args.url)
         print(f"Mandant „{args.kennung}“ angelegt: {ziel}/mandant.yaml\n"
-              f"Ersten Inhaber anlegen: python scout.py --mandant {args.kennung} nutzer anlegen NAME --rolle inhaber")
+              f"Ersten Inhaber einladen (Link, Passwort setzt der Kunde selbst): python scout.py --mandant {args.kennung} nutzer einladen NAME --rolle inhaber")
         return
     liste = mandanten.alle(cfg, BASIS)
     for m in liste:
@@ -245,6 +483,15 @@ def cmd_wiederherstellen(cfg, args):
     print("Beim nächsten Start wird die Datenbank bei Bedarf auf die aktuelle Version gebracht (mit eigener Sicherung).")
 
 
+def _neues_passwort(name: str) -> str:
+    """Passwort nie als Kommandozeilen-Argument (stünde in der Prozessliste und im Verlauf, P1-09): Abfrage am Terminal oder –
+    für Automatisierung – Umgebungsvariable SCOUT_NEUES_PASSWORT."""
+    if os.environ.get("SCOUT_NEUES_PASSWORT"):
+        print(f"Hinweis: Passwort für {name} aus SCOUT_NEUES_PASSWORT – Variable danach wieder entfernen", file=sys.stderr)
+        return os.environ["SCOUT_NEUES_PASSWORT"]
+    return _passwort_abfragen(name)
+
+
 def _passwort_abfragen(name: str) -> str:
     import getpass
     while True:
@@ -273,12 +520,26 @@ def cmd_nutzer(cfg, db, args):
                 sys.exit(f"Standort „{args.standort}“ unbekannt (python scout.py standort liste)")
             standort_id = s["id"]
         try:
-            team.nutzer_anlegen(args.name, args.passwort or _passwort_abfragen(args.name), args.rolle, args.telefon, standort_id)
+            team.nutzer_anlegen(args.name, _neues_passwort(args.name), args.rolle, args.telefon, standort_id)
         except Exception as e:  # noqa: BLE001 – verständliche Meldung statt Traceback
             sys.exit(f"Nicht angelegt: {e}")
         print(f"{args.name} angelegt ({ROLLEN[args.rolle]}). Ab jetzt ist für die App eine Anmeldung nötig.")
+    elif args.aktion == "einladen":
+        standort_id = None
+        if args.standort:
+            s = HaendlerSpeicher(db).standort_nach_name(args.standort)
+            if not s:
+                sys.exit(f"Standort „{args.standort}“ unbekannt (python scout.py standort liste)")
+            standort_id = s["id"]
+        try:
+            _, token, rolle = team.einladen(args.name, args.rolle, args.telefon, standort_id, erneut=args.erneut)
+        except Exception as e:  # noqa: BLE001 – verständliche Meldung statt Traceback
+            sys.exit(f"Nicht eingeladen: {e}" + (" (mit --erneut bestätigen)" if "Erneut einladen?" in str(e) else ""))
+        basis = ((cfg.get("app") or {}).get("oeffentliche_url") or f"http://127.0.0.1:{(cfg.get('app') or {}).get('port', 8765)}").rstrip("/")
+        print(f"Einladung für {args.name} ({ROLLEN[rolle]}) – Link einmal gültig, {EINLADUNG_TAGE} Tage; über einen vertrauten Weg weitergeben:\n"
+              f"{basis}/einladung#{token}\nDer Eingeladene legt dort sein Passwort selbst fest. Ab jetzt ist für die App eine Anmeldung nötig.")
     elif args.aktion == "passwort":
-        ok = team.passwort_setzen(args.name, args.passwort or _passwort_abfragen(args.name))
+        ok = team.passwort_setzen(args.name, _neues_passwort(args.name))
         print("Passwort geändert – bestehende Anmeldungen wurden beendet." if ok else f"{args.name} nicht gefunden")
     elif args.aktion in ("sperren", "entsperren"):
         ok = team.nutzer_aktiv_setzen(args.name, args.aktion == "entsperren")
@@ -347,6 +608,88 @@ def cmd_anfrage(cfg, db, args):
           f"Verkäufer {'anonymisiert' if erg['verkaeufer_anonymisiert'] else 'bleibt (weitere Anfragen)'}.")
 
 
+def cmd_inserat(cfg, db, args):
+    """Personendaten aus Inseraten entfernen (P1-14a): einzeln oder alle ohne Kauf, die älter als N Monate sind."""
+    if bool(args.id) == (args.aelter_als is not None):
+        sys.exit("Entweder eine Inserat-ID oder --aelter-als MONATE angeben")
+    if args.aelter_als is not None and args.aelter_als < 1:
+        sys.exit("--aelter-als: mindestens 1 Monat")
+    if not args.bestaetigt:
+        sys.exit("Entfernt Verkäuferdaten (Profilname, Name im Anschreiben, Angaben im Protokoll) unwiderruflich – "
+                 "zur Bestätigung --bestaetigt angeben")
+    ausgabe = BASIS / cfg["ausgabe"]["ordner"]
+    if args.id:
+        try:
+            erg = datenrechte.inserat_anonymisieren(db, ausgabe, args.id, foto_ordner(cfg))
+        except LookupError as e:
+            sys.exit(str(e))
+        except ValueError as e:
+            sys.exit(f"Nicht geändert: {e}")
+        print(f"Inserat {args.id} anonymisiert ({'Name entfernt' if erg['name_entfernt'] else 'kein Name gespeichert'}, "
+              f"{erg['besichtigungen']} Besichtigung(en) bereinigt, {erg['fotos']} Foto(s) gelöscht). Bericht aktualisiert sich beim nächsten Lauf/„report“.")
+        return
+    erledigt = datenrechte.inserate_nach_frist(db, ausgabe, args.aelter_als, foto_ordner=foto_ordner(cfg))
+    print(f"{len(erledigt)} Inserat(e) ohne Kauf, älter als {args.aelter_als} Monate, anonymisiert.")
+
+
+def _protokoll_nach_stderr():
+    """Mit --json gehört stdout allein dem JSON (Aufgabenplanung/Überwachung) – das Protokoll geht nach stderr und in die Datei."""
+    for h in logging.getLogger().handlers:
+        if type(h) is logging.StreamHandler:
+            h.setStream(sys.stderr)
+
+
+def _datenschutz_lauf(cfg, db, args, kopf: str = "") -> list[dict]:
+    if args.ausfuehren:
+        plan = aufbewahrung.ausfuehren(db, cfg, BASIS, foto_ordner(cfg), audit=AuditSpeicher(db))
+    else:
+        plan = aufbewahrung.bericht(db, cfg, BASIS)
+    if args.json:
+        return plan
+    print(kopf + ("Aufbewahrungsfristen angewendet (vorher gesichert):" if args.ausfuehren else "Aufbewahrungsfristen – Bericht (nichts geändert):"))
+    for zeile in aufbewahrung.kurztext(plan):
+        print("  " + zeile)
+    return plan
+
+
+def cmd_datenschutz(cfg, db, args):
+    """Aufbewahrungsfristen (F10): Bericht oder ausführen – für Einzelplatz, Mandant (--mandant) und Server (--alle-mandanten)."""
+    import json
+    if args.ausfuehren and not args.bestaetigt:
+        sys.exit("Anonymisiert bzw. löscht fällige Personendaten unwiderruflich (vorher Sicherung) – zur Bestätigung --bestaetigt angeben")
+    if args.json:
+        _protokoll_nach_stderr()
+    plan = _datenschutz_lauf(cfg, db, args)
+    if args.json:
+        print(json.dumps(plan, ensure_ascii=False, indent=1))
+
+
+def cmd_datenschutz_mandanten(cfg, args):
+    """Wie ``datenschutz`` für jeden Mandanten nacheinander – für einen späteren Server-Aufruf (z. B. täglich per Aufgabenplanung).
+    Ein fehlerhafter Mandant hält die anderen nicht auf; Exit-Code 1, wenn einer scheiterte."""
+    import json
+    if args.ausfuehren and not args.bestaetigt:
+        sys.exit("Anonymisiert bzw. löscht fällige Personendaten unwiderruflich (vorher Sicherung) – zur Bestätigung --bestaetigt angeben")
+    if args.json:
+        _protokoll_nach_stderr()
+    alle, fehler = {}, []
+    for k in mandanten.kennungen(cfg, BASIS):           # je Kennung einzeln laden: ein kaputter Mandant hält die anderen nicht auf (QA B7)
+        try:
+            m = mandanten.mandant_cfg(cfg, BASIS, k)
+            db = Datenbank(str(BASIS / m["ausgabe"]["datenbank"]), str(sicherung_ordner(m, BASIS)), wal=wal_aktiv(m))
+            try:
+                alle[k] = _datenschutz_lauf(m, db, args, kopf=f"[{k}] ")
+            finally:
+                db.con.close()
+        except Exception as e:  # noqa: BLE001 – ein Mandant darf die anderen nicht aufhalten
+            logging.getLogger("scout").exception("Aufbewahrung für Mandant %s fehlgeschlagen", k)
+            fehler.append(f"{k}: {type(e).__name__}: {e}")
+    if args.json:
+        print(json.dumps({"mandanten": alle, "fehler": fehler}, ensure_ascii=False, indent=1))
+    if fehler:
+        sys.exit("Fehlgeschlagen: " + "; ".join(fehler))
+
+
 def cmd_audit(cfg, db, args):
     """Audit-Protokoll (G0b): wer hat wann Personendaten gelesen oder etwas geändert."""
     zeilen = AuditSpeicher(db).liste(tage=args.tage, nutzer=args.nutzer, objekt=args.objekt, limit=args.limit)
@@ -367,6 +710,50 @@ def cmd_nutzung(cfg, db, args):
         print(f"  {name.replace('_', ' '):<24} {'–' if wert is None else wert}")
     for z in n["je_nutzer"]:
         print(f"  · {z['nutzer']:<16} {z['rolle'] or '':<12} {z['zugriffe']} Zugriffe, {z['aenderungen']} Änderungen")
+
+
+def cmd_dubletten_entscheiden(cfg, db, args):
+    """Bestätigen, ablehnen oder aufheben per Kommandozeile (P3-02b) – nur im Einzelplatz (ohne angelegte Nutzer); im Team entscheidet die App
+    mit Rechteprüfung und Protokoll. IDs: Anzeigen-IDs (bestaetigen, ablehnen) bzw. die Nummer der Entscheidung (aufheben)."""
+    from wmscout.dubletten import DublettenFehler, DublettenKonflikt, bestaetige, hebe_auf, inserat_zu_anzeige, lehne_ab
+    if TeamSpeicher(db, foto_ordner(cfg)).hat_nutzer():
+        sys.exit("Mit angelegten Nutzern entscheidet die App (Rechte und Protokoll); die Kommandozeile gilt nur im Einzelplatz.")
+    try:
+        if args.aktion == "aufheben":
+            if len(args.ids) != 1 or not re.fullmatch(r"[0-9]+", args.ids[0]):
+                sys.exit("Aufheben: genau eine Entscheidungsnummer, z. B.: python scout.py dubletten aufheben 3")
+            erg = hebe_auf(db, int(args.ids[0]))
+            print(f"Entscheidung {erg['entscheidung_id']} aufgehoben" + (f"; zurückgehängt: {len(erg['zurueck'])} Inserat(e)" if erg["zurueck"] else "")
+                  if erg["neu"] else f"Entscheidung {erg['entscheidung_id']} war schon aufgehoben")
+            return
+        if len(args.ids) != 2:
+            sys.exit(f"{args.aktion.capitalize()}: genau zwei Anzeigen-IDs, z. B.: python scout.py dubletten {args.aktion} 123456 md-789")
+        iids = [inserat_zu_anzeige(db, i) for i in args.ids]
+        if None in iids:
+            sys.exit(f"Anzeige {args.ids[iids.index(None)]} nicht gefunden")
+        erg = (bestaetige if args.aktion == "bestaetigen" else lehne_ab)(db, iids[0], iids[1])
+    except (DublettenFehler, DublettenKonflikt) as e:
+        sys.exit(f"Nicht gespeichert: {e}")
+    wort = "gleiches Fahrzeug" if args.aktion == "bestaetigen" else "verschiedene Fahrzeuge"
+    print(f"Entscheidung {erg['entscheidung_id']}: {wort}" if erg["neu"] else "Schon so entschieden bzw. dasselbe Fahrzeug – nichts geändert")
+
+
+def cmd_dubletten(cfg, db, args):
+    """Offene Dublettenvorschläge (P3-02a) – nur lesen; zusammengeführt wird nichts. Mit ``bestaetigen``/``ablehnen``/``aufheben`` P3-02b."""
+    if args.aktion:
+        return cmd_dubletten_entscheiden(cfg, db, args)
+    if not 1 <= args.limit <= MAX_LIMIT:
+        sys.exit(f"--limit muss zwischen 1 und {MAX_LIMIT} liegen")
+    erg = pruefe_dubletten(db)
+    vorschlaege = [v for v in erg.vorschlaege if args.stufe in (None, v["stufe"])]
+    for v in vorschlaege[:args.limit]:
+        a, b = v["a"], v["b"]
+        print(f"[{v['stufe']}] {a['plattform']}:{a['anzeigen_id']} ~ {b['plattform']}:{b['anzeigen_id']}  "
+              f"({a['titel'] or '?'} | {b['titel'] or '?'})\n        " + "; ".join(v["gruende"]))
+    print(f"{len(vorschlaege)} offene Vorschläge" + (f" (angezeigt: {args.limit})" if len(vorschlaege) > args.limit else "")
+          + " – nur Vorschläge, es wurde nichts zusammengeführt.")
+    if erg.hinweis:
+        print(f"Hinweis: {erg.hinweis}")
 
 
 def cmd_status(cfg, db, args):
@@ -398,10 +785,20 @@ def main():
     a.add_argument("--kein-browser", action="store_true", help="Browser nicht automatisch öffnen")
     a.add_argument("--mandanten", action="store_true", help="alle Mandanten aus mandanten/ bedienen (Hostname wählt den Mandanten)")
     a.add_argument("--lokal", help="mit --mandanten: dieser Mandant ist zusätzlich über 127.0.0.1 erreichbar")
-    sub.add_parser("lauf", help="crawlen, bewerten, Report erzeugen")
+    po = sub.add_parser("portal", help="öffentliches Ankaufsportal starten (nur Formular/Status/Impressum; config.yaml → portal)")
+    po.add_argument("--port", type=int, help="Standard: config.yaml → portal → port (8770)")
+    la = sub.add_parser("lauf", help="crawlen, bewerten, Report erzeugen")
+    la.add_argument("--sofort", action="store_true",
+                    help="Intervalle je Quelle und die Pause nach einer Sperre nicht abwarten (config.yaml → app)")
     sub.add_parser("report", help="Report aus vorhandenen Daten neu erzeugen")
     im = sub.add_parser("import", help="im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten einlesen (ohne Internet)")
-    im.add_argument("--ordner", help="Ordner mit den gespeicherten Seiten (Standard: config.yaml → import → ordner)")
+    im.add_argument("--ordner", help="Ordner mit den gespeicherten Seiten bzw. (mit --mails) den .eml-Dateien "
+                                     "(Standard: config.yaml → import → ordner bzw. dessen Unterordner email)")
+    im.add_argument("--mails", action="store_true",
+                    help="statt Seiten die Suchagent-Benachrichtigungen (.eml in import/email/) einlesen – Eingang „email“ muss eingeschaltet sein")
+    qu = sub.add_parser("quellen", help="Pull-Quellen und Eingänge anzeigen; Quellen ein-/ausschalten (nur im Code freigegebene)")
+    qu.add_argument("aktion", choices=["liste", "an", "aus"])
+    qu.add_argument("kennung", nargs="?", help="Quelle für an/aus, z. B. kleinanzeigen")
     r = sub.add_parser("rechne", help="Einzelfahrzeug durchrechnen")
     r.add_argument("--preis", type=int, help="Angebotspreis des Verkäufers")
     r.add_argument("--ez", type=int, help="Erstzulassungsjahr")
@@ -414,12 +811,13 @@ def main():
     r.add_argument("--marktwert", type=int, help="eigener Marktwert (z. B. aus mobile.de/DAT) statt Vergleich")
     r.add_argument("--anschreiben", action="store_true", help="passendes Anschreiben mit ausgeben")
     n = sub.add_parser("nutzer", help="Team-Zugänge für die Handy-App verwalten")
-    n.add_argument("aktion", choices=["anlegen", "liste", "passwort", "sperren", "entsperren"])
+    n.add_argument("aktion", choices=["anlegen", "einladen", "liste", "passwort", "sperren", "entsperren"],
+                   help="einladen: Zugang mit Einmal-Link anlegen – das Passwort legt der Eingeladene selbst fest")
     n.add_argument("name", nargs="?")
     n.add_argument("--rolle", choices=list(ROLLEN), default="mitarbeiter")
     n.add_argument("--telefon", help="Handynummer international, z. B. +491701234567 (für WhatsApp)")
     n.add_argument("--standort", help="nur Rolle haendler: Name des Standorts (python scout.py standort anlegen …)")
-    n.add_argument("--passwort", help=argparse.SUPPRESS)      # nur für Tests/Automatisierung
+    n.add_argument("--erneut", action="store_true", help="nur einladen: vorhandenen Zugang erneut einladen (Passwort wird beim Einlösen neu gesetzt)")
     st = sub.add_parser("standort", help="Standorte/Händler für das Händlerportal verwalten (prüfen = Zugang frei)")
     st.add_argument("aktion", choices=["anlegen", "liste", "pruefen", "sperren"])
     st.add_argument("name", nargs="?")
@@ -438,12 +836,32 @@ def main():
     ad.add_argument("--limit", type=int, default=500)
     nz = sub.add_parser("nutzung", help="Nutzungszähler eines Monats (Anfragen, Auktionen, Gebote, Ankäufe, Zugriffe, aktive Nutzer)")
     nz.add_argument("--monat", help="JJJJ-MM, Standard: laufender Monat")
+    ins = sub.add_parser("inserat", help="Verkäuferdaten aus Inseraten entfernen (Datenschutz, P1-14a)")
+    ins.add_argument("aktion", choices=["anonymisieren"])
+    ins.add_argument("id", nargs="?", help="Inserat-ID (oder --aelter-als)")
+    ins.add_argument("--aelter-als", type=int, help="alle Inserate ohne Kauf, letzte Aktivität älter als so viele Monate")
+    ins.add_argument("--bestaetigt", action="store_true")
+    ds = sub.add_parser("datenschutz", help="Aufbewahrungsfristen: was ist fällig (Bericht) – oder ausführen (anonymisieren/löschen, vorher Sicherung)")
+    ds.add_argument("--ausfuehren", action="store_true", help="fällige Daten anonymisieren bzw. löschen (Kaufunterlagen nur melden)")
+    ds.add_argument("--bestaetigt", action="store_true")
+    ds.add_argument("--alle-mandanten", action="store_true", help="für jeden Mandanten nacheinander (Server-Betrieb)")
+    ds.add_argument("--json", action="store_true", help="Ergebnis als JSON (für Aufgabenplanung/Überwachung)")
     md = sub.add_parser("mandant", help="Mandanten (mehrere Firmen) anlegen, auflisten, Nutzung je Mandant")
     md.add_argument("aktion", choices=["anlegen", "liste", "nutzung"])
     md.add_argument("kennung", nargs="?", help="nur anlegen: z. B. firma-b (a–z, 0–9, Bindestrich)")
     md.add_argument("--name")
     md.add_argument("--url", help="nur anlegen: eigene Adresse, z. B. https://firma-b.example.de")
     md.add_argument("--monat", help="nur nutzung: JJJJ-MM")
+    ab = sub.add_parser("abdeckung", help="Abdeckung und Suchlücken: Kennzahlen, Tage ohne Eingang, PLZ-Bereiche und Suchprofile (nur lesen)")
+    ab.add_argument("--tage", default="30", help="Zeitraum in Tagen (1–365, Standard 30)")
+    sub.add_parser("kalibrierung", help="Kalibrierungsbericht: Kaufpreis/Max-EK, VK/Plan, Kosten, Standzeit und Vorschläge (nur lesen)")
+    sub.add_parser("qualitaet", help="Datenqualität je Quelle: Anteil mit Preis/EZ/km/Ort/Anbieter, Ø-Wert, Widersprüche (nur lesen)")
+    du = sub.add_parser("dubletten", help="offene Dublettenvorschläge auflisten (nur lesen) oder im Einzelplatz entscheiden: "
+                                          "bestaetigen ID1 ID2 | ablehnen ID1 ID2 | aufheben NUMMER")
+    du.add_argument("aktion", nargs="?", choices=["bestaetigen", "ablehnen", "aufheben"], help="ohne Angabe: Vorschläge auflisten")
+    du.add_argument("ids", nargs="*", help="Anzeigen-IDs bzw. Nummer der Entscheidung")
+    du.add_argument("--stufe", choices=["hoch", "mittel"], help="nur diese Stufe")
+    du.add_argument("--limit", type=int, default=STANDARD_LIMIT, help=f"höchstens so viele anzeigen (1–{MAX_LIMIT})")
     ka = sub.add_parser("kalkulation", help="gespeicherte Kalkulationen (Gebote) nachrechnen")
     ka.add_argument("aktion", choices=["pruefen"])
     s = sub.add_parser("status", help="Status einer Anzeige setzen")
@@ -462,10 +880,12 @@ def main():
 
     cfg = lade_config(args.config)
     try:
-        if args.cmd == "mandant" or (args.cmd == "app" and args.mandanten):
+        if args.cmd == "mandant" or (args.cmd == "app" and args.mandanten) or (args.cmd == "datenschutz" and args.alle_mandanten):
             logging_einrichten(cfg)
             if args.cmd == "mandant":
                 return cmd_mandant(cfg, args)
+            if args.cmd == "datenschutz":
+                return cmd_datenschutz_mandanten(cfg, args)
             from wmscout.app import starte_mandanten
             return starte_mandanten(cfg, BASIS, port=args.port, lokal=args.lokal)
         if args.mandant:
@@ -481,12 +901,17 @@ def main():
     try:
         reservierung_tage(cfg)              # ungültiges „team“ in config.yaml ebenso sofort melden
         einstellungen(cfg, BASIS)           # ungültiges „sicherung“ in config.yaml sofort melden, nicht erst bei der Sicherung
+        datenrechte.frist_aus(cfg)          # ebenso „datenschutz“
+        pruefe_eingaenge(cfg)               # und „eingaenge“ (P2-04)
+        deal_einstellungen(cfg)             # und „deal_score“ (P5-07)
         db = Datenbank(str(BASIS / cfg["ausgabe"]["datenbank"]), str(sicherung_ordner(cfg, BASIS)), wal=wal_aktiv(cfg))
     except (MigrationsFehler, ValueError, sqlite3.Error) as e:
         sys.exit(f"Datenbank-Start abgebrochen: {e}")
-    {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "rechne": cmd_rechne,
+    {"app": cmd_app, "lauf": cmd_lauf, "report": cmd_report, "import": cmd_import, "quellen": cmd_quellen, "rechne": cmd_rechne,
      "nutzer": cmd_nutzer, "status": cmd_status, "standort": cmd_standort,
-     "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage, "audit": cmd_audit, "nutzung": cmd_nutzung}[args.cmd](cfg, db, args)
+     "auktion": cmd_auktion, "kalkulation": cmd_kalkulation, "anfrage": cmd_anfrage, "audit": cmd_audit, "nutzung": cmd_nutzung,
+     "inserat": cmd_inserat, "dubletten": cmd_dubletten, "qualitaet": cmd_qualitaet, "abdeckung": cmd_abdeckung,
+     "kalibrierung": cmd_kalibrierung, "datenschutz": cmd_datenschutz, "portal": cmd_portal}[args.cmd](cfg, db, args)
 
 
 if __name__ == "__main__":

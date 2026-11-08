@@ -355,7 +355,8 @@ def test_andere_orte_gelten_wie_seite_ohne_filter_und_ohne_hinweis(cfg, db, ordn
     assert suche_von(db, "3900000021") == IMPORT_SUCHE                                 # „Wohnmobil Beispiel 600 gepflegt“
     assert suche_von(db, "3900000022") == "Import Alkoven (vorläufig)"                  # „Hymer Alkoven Beispiel“
     assert suche_von(db, "3900000023") == "Import Wohnwagen (vorläufig)"                # „Wohnwagen Beispiel 450“
-    hinweise_je_id = {z["a"]["id"]: z["hinweise"] for z in bewerte_alle(cfg, db, BASIS)}
+    hinweise_je_id = {z["a"]["id"]: [h for h in z["hinweise"] if not h.startswith("Marke unbekannt")]      # Marke: P5-03, eigene Tests
+                      for z in bewerte_alle(cfg, db, BASIS)}
     assert hinweise_je_id == {"3900000021": [HINWEIS_ART_UNBEKANNT], "3900000022": [HINWEIS_ART_VORLAEUFIG],
                               "3900000023": [HINWEIS_ART_VORLAEUFIG]}
 

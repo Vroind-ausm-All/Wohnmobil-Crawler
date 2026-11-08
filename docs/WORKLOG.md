@@ -6,6 +6,749 @@ Wert „–“.
 
 ---
 
+## P7-04 – Serverbetrieb vorbereitet (02.11.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 02.11.2026: „Stelle bitte alles soweit fertig“ (Phase 7) – vorbereiten, nichts ausführen (Regel 13).
+- **Verantwortlicher Agent:** Orchestrator (im Stil von `windows-bootstrap`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `docs/SERVERBETRIEB.md` (neu), `betrieb/` (neu: systemd-Dienste für App, Portal, Sicherung, Aufbewahrungsfristen
+  mit Timern; `Caddyfile`; `logrotate-caddy-portal`; `umgebung.beispiel`; `config.local.beispiel.yaml`), `wmscout/web/api.py` (`GET /gesund`);
+  Tests `test_serverbetrieb.py` (neu); Doku ADR-069, README, PILOTBETRIEB (Verweis), ROADMAP (P7-04 REVIEW, P7-04b).
+- **Implementierte Funktionen:** siehe ADR-069 – Schritt-für-Schritt-Anleitung (Debian 13, Dienstbenutzer, Caddy für das Portal, Tailscale
+  fürs Team, Sicherung, Überwachung, Updates), gehärtete Dienste, Geheimnisse nur in der Umgebungsdatei, Health-Check ohne Daten.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Freigabe mit Auflagen** (keine kritischen Befunde). Korrekturrunde: B1 (hoch: Befehle als root → Datenbank
+  nicht mehr beschreibbar), B2–B9 behoben; B10 als P7-04b ins Backlog. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiber:** Server mieten, Domain/DNS, AV-Vertrag, Tailscale, Sicherung außer Haus, Freischaltung des Portals und des Fristen-Timers.
+- **Nächster sinnvoller Schritt:** Phase 7 ist damit vorbereitet; Inbetriebnahme durch den Betreiber.
+
+## P7-03 – Öffentliches Ankaufsportal (B4) (02.11.2026) · Status: DONE (PR #58 gemergt)
+
+- **Auftrag:** Betreiber 02.11.2026: „Stelle bitte alles soweit fertig“ (Phase 7, B4 aus der Antwort zur Verkaufsplattform).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer` und `source-integrations`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/web/portal.py` (neu), `scout.py` (`portal`), `config.yaml` (Abschnitt `portal`, aus), `vorlagen/verkaufen.html`
+  (Portal-Variante), `vorlagen/portal_*.html` (neu: Kopf, Fuß, Seitenkopf, Status, Impressum, Datenschutz), `wmscout/verkauf.py` (`_text`);
+  Tests `test_portal.py` (neu); Doku ADR-068, DATENRECHTE, README.
+- **Implementierte Funktionen:** siehe ADR-068 – eigener Prozess nur mit Formular, Statusseite (Stand, „Meine Daten löschen“), Impressum,
+  Datenschutz; signierte Status-/Upload-Links ohne Schemaänderung; Spamschutz ohne Fremddienste; Start nur mit Freigabe und vollständiger
+  Konfiguration. Keine automatische Nachricht an Verkäufer.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Freigabe mit Auflagen** (keine kritischen Befunde). Korrekturrunde: B1 (hoch: Rollback außerhalb der Sperre),
+  B2–B10 behoben; B11 (fehlende `docs/SERVERBETRIEB.md`) kommt mit P7-04. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiber:** Impressum/Datenschutz/Einwilligung rechtlich prüfen lassen, Server und Domain (P7-04), Freischaltung `portal → aktiv`.
+- **Nächster sinnvoller Schritt:** P7-04 Serverbetrieb.
+## P7-02 – Verkaufsanfragen im Dashboard (02.11.2026) · Status: DONE (PR #57 gemergt)
+
+- **Auftrag:** Betreiber 02.11.2026: „Stelle bitte alles soweit fertig“ (Phase 7 „Inbetriebnahme vorbereiten“).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/bewertung/meldungen.py` (Art „Verkaufsanfrage“), `wmscout/verkauf.py` (`offene_kurz`), `wmscout/web/api.py`
+  (`offene_anfragen`, `/api/meldungen`, Startseite), `wmscout/ausgabe.py`, `vorlagen/report.html` (Kachel, Link „öffnen“), `wmscout/kennzahlen.py`
+  und `vorlagen/kennzahlen.html` (Anfragen-Trichter), `wmscout/web/static/mobil.js`, `sw.js` (Version 24); Tests `test_anfragen_dashboard.py`
+  (neu); Doku ADR-067, README.
+- **Implementierte Funktionen:** siehe ADR-067 – Meldung je eingegangener Anfrage (ohne Personendaten, dringend nach 24 h, Link zur
+  Anfrage), Kachel „Verkaufsanfragen offen“, Anfragen-Trichter in den Kennzahlen. Keine Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Freigabe mit Auflagen** (keine kritischen Befunde). Korrekturrunde: B4 (schlanke Abfrage ohne Verkäuferdaten),
+  B5 (`//`-Links), B6 (Ankauf zählt als Angebot), B7 (fristgelöschte/widerrufene Anfragen), B8 (Quellenbezeichnung), B9 (Konstante) behoben.
+  Korrekturen nicht erneut von der QA geprüft.
+- **Nächster sinnvoller Schritt:** P7-03 Öffentliches Ankaufsportal.
+
+## P7-01 – Nacharbeiten aus Phase 5/6 (02.11.2026) · Status: DONE (PR #56 gemergt)
+
+- **Auftrag:** Betreiber 02.11.2026: „Stelle bitte alles soweit fertig“ – Phase 7 (ADR-066), erstes Paket.
+- **Verantwortlicher Agent:** Orchestrator; QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/bewertung/auswertung.py`, `wmscout/verhandlung.py` (`zusammen`), `wmscout/preisverlauf.py`
+  (`verlaeufe(ids)`), `wmscout/ausgabe.py`, `vorlagen/report.html`, `vorlagen/kennzahlen.html`, `wmscout/audit.py`, `wmscout/web/api.py`,
+  `wmscout/datenrechte.py`, `wmscout/web/static/mobil.js`, `sw.js` (Version 24); Tests `test_nacharbeiten.py` (neu), `test_kennzahlen.py`;
+  Doku ADR-066, ROADMAP (Phase 7, P5-06b/P6-0xb DONE, P6-05 DONE, P7-01b), README.
+- **Implementierte Funktionen:** siehe ADR-066 Nr. 2–4.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Ablehnung** (B1 kritisch: `test_kennzahlen.py` rot nach Textänderung; B2/B3 hoch: Fahrzeug doppelt bzw. gekauftes
+  Fahrzeug über die Dublette wieder offen) – B1–B5, B7, B8 behoben, B6 → P7-01b, B9 beim Commit beachtet, B10 diese Einträge. Korrekturen nicht
+  erneut von der QA geprüft.
+- **Nächster sinnvoller Schritt:** P7-02 (Anfragen im Dashboard).
+
+## P6-05 – Kennzahlen-Ansicht (02.11.2026) · Status: DONE (PR #55 gemergt)
+
+- **Auftrag:** Betreiber 02.11.2026: „Entwickle P6-05 fertig“.
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer` und `scout-data-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/kennzahlen.py` (neu), `vorlagen/kennzahlen.html` (neu), `wmscout/web/api.py` (`/kennzahlen`,
+  `/api/kennzahlen`), `vorlagen/report.html`, `vorlagen/status.html`, `vorlagen/abdeckung.html` (Links), `wmscout/web/static/mobil.js`
+  (Link), `sw.js` (Version 23); Tests `test_kennzahlen.py` (neu); Doku ADR-065, ARCHITECTURE, ROADMAP (P6-04 DONE, P6-05 REVIEW, Kennzahlen,
+  P6-05b), README.
+- **Implementierte Funktionen:** siehe ADR-065 – eine Seite mit allen Kennzahlen der ROADMAP (7/30/90 Tage): Eingang (aus der Abdeckung),
+  Bewertungslage, Ankaufstrichter je Fahrzeug mit Quoten und Median-Antwortzeit ab 5 Fällen; ohne Preise und Personendaten. Keine
+  Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Freigabe mit Auflagen** (keine kritischen Befunde). Korrekturrunde: B1 (hoch: stornierter Ankauf zählte als
+  gekauft), B2 (Trichter je Fahrzeug), B3 (Anteile unter 5 Fällen als „n von m“), B4 (Verkäufer statt Kontakte), B6 (abgebrochene
+  Besichtigungen) behoben; B5 diese Einträge; B7 beim Commit beachtet; B8 und der Rechte-HTTP-Test als P6-05b ins Backlog. Korrekturen nicht
+  erneut von der QA geprüft.
+- **Nächster sinnvoller Schritt:** Phase 6 ist damit inhaltlich abgeschlossen; nächste Hauptphase nach Freigabe des Betreibers.
+
+## P6-04 – Meldungen im Dashboard: Antwort fällig, Besichtigung, Nachfassen, Preissenkung, neu (02.11.2026) · Status: DONE (PR #54 gemergt)
+
+- **Auftrag:** Betreiber 02.11.2026: „P6-04 fertigstellen“.
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/bewertung/meldungen.py` (neu), `wmscout/bewertung/auswertung.py` (`nachfass_grund(beantwortet=…)`),
+  `wmscout/web/api.py` (`/api/meldungen`), `wmscout/ausgabe.py`, `vorlagen/report.html`, `wmscout/web/static/mobil.js`, `mobil.css`,
+  `sw.js` (Version 22); Tests `test_meldungen.py` (neu); Doku ADR-064, ROADMAP (P6-03 DONE, P6-04 REVIEW), README.
+- **Implementierte Funktionen:** siehe ADR-064 – Meldungsliste im Dashboard (aufklappbar, „ungelesen“ markiert, „alle gelesen“, „öffnen“)
+  und auf der Handy-Startseite; kein „seit n Tagen keine Antwort“ mehr, wenn eine Antwort eingetragen ist. Keine Schemaänderung.
+- **Klicktest-Fund behoben:** „alle gelesen“ ließ Meldungen mit Zeitpunkt in der Zukunft (Besichtigung morgen) ungelesen.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Freigabe mit Auflagen**. Korrekturrunde: B1 (hoch: Termin mit Zeitzone → Startseite 500), B2 (hoch: „alle
+  gelesen“ bei Zukunftszeitpunkten – schon nach dem Klicktest behoben, zusätzlich Zeitpunkt der Preissenkung), B3 (Serverzeit statt
+  Geräteuhr), B4 (Notiz nach der Antwort erledigt „Antwort fällig“), B5 (Vortag nicht „morgen“), B6 (beantwortet unabhängig von der Stufe),
+  B7 (fehlender Fahrzeugname) behoben; B8 beim Commit beachtet; B9 diese Einträge. Korrekturen nicht erneut von der QA geprüft.
+- **Nächster sinnvoller Schritt:** P6-05 (Kennzahlen-Ansicht) – nach Freigabe.
+
+## P6-03 – Kontaktstatus, Verhandlungsnotizen und Besichtigungsstatus im Dashboard (01.11.2026) · Status: DONE (PR #53 gemergt)
+
+- **Auftrag:** Betreiber 01.11.2026: „P6-03 fertigstellen“.
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer` und `scout-data-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/verhandlung.py` (neu), `wmscout/migrationen.py` (v23 `verhandlung`), `wmscout/datenrechte.py`,
+  `wmscout/bewertung/auswertung.py`, `wmscout/web/api.py`, `wmscout/ausgabe.py`, `vorlagen/report.html`, `wmscout/web/static/mobil.js`,
+  `mobil.css`, `sw.js` (Version 21); Tests `test_verhandlung.py` (neu), `test_deal_score.py` (Migrationserwartung bis zur aktuellen Version);
+  Doku ADR-063, ARCHITECTURE, DATENRECHTE, ROADMAP (P6-02 DONE, P6-03 REVIEW, P6-03b), README.
+- **Implementierte Funktionen:** siehe ADR-063 – Antworten des Verkäufers und Verhandlungsnotizen von Hand eintragen (Desktop und Handy,
+  nichts wird gesendet, kein Statuswechsel); Kontaktlage je Inserat (Text kopiert, wartet seit n Tagen, Antwort erhalten, Besichtigung mit
+  Termin); Desktop-Bereich „Ankauf in Arbeit“, Abzeichen auf den Karten, Verlauf im Fenster. Schema v23 additiv mit Sicherung.
+- **Eigener Fund:** Das CSS enthielt `{#ankauf-arbeit` – Jinja las es als Kommentaranfang und verschluckte die Vorlage bis zum nächsten `#}`
+  (`AMPEL` undefiniert). Leerzeichen eingefügt, Test prüft das CSS auf `{#`.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Freigabe mit Auflagen** (keine kritischen Befunde). Korrekturrunde: B1 (hoch: abgesagte/gekaufte Inserate
+  weiter als „wartet“ im Dashboard), B2 (nach Anonymisierung neue Texte nie wieder fällig), B3 (Volltexte in Listen und Gerätespeicher),
+  B4 (wirkungslose Escape-Prüfung), B8 (Auszüge im statischen Bericht), B9 (Doppelklick) behoben; B5/B6 als P6-03b ins Backlog, B7
+  angenommen (ADR-063). Korrekturen nicht erneut von der QA geprüft.
+- **Nächster sinnvoller Schritt:** P6-04 (Benachrichtigungen im Dashboard: neu, Preissenkung, Antwort fällig) – nach Freigabe.
+
+## P6-02 – Dublettengruppen und Preisverläufe in der Ankaufsliste (01.11.2026) · Status: DONE (PR #52 gemergt)
+
+- **Auftrag:** Betreiber 01.11.2026: „Starte P6-02“.
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/bewertung/gruppen.py` (neu), `wmscout/preisverlauf.py` (`verlaeufe`, `kurz`; Datenbank nur für Typen),
+  `wmscout/bewertung/auswertung.py`, `wmscout/web/api.py`, `wmscout/ausgabe.py`, `vorlagen/report.html`, `wmscout/web/static/mobil.js`,
+  `mobil.css`, `sw.js` (Version 20); Tests `test_gruppen_preise.py` (neu), `test_dubletten_oberflaeche.py` (Handy zeigt die Gruppe aus den
+  Fahrzeugdaten); Doku ADR-062, ROADMAP (P6-01 DONE, P6-02 REVIEW, P6-02b), README.
+- **Implementierte Funktionen:** siehe ADR-062 – Abzeichen „⧉ n Inserate“, „gleiches Fahrzeug nur einmal“ (Desktop, Handy, API `einmal`),
+  Fenster „Gleiches Fahrzeug“ mit Quelle, Preis, Status, bestätigt/vermutet, Fahrzeugstatus und Wechsel zum Mitglied; Preiszeile auf der
+  Karte, Preisverlauf-Tabelle im Detail. Keine Schemaänderung.
+- **Klicktest-Fund behoben:** Der Wechsel zu einem anderen Inserat der Gruppe ließ das Fenster leer (verzögertes `close`-Ereignis nach
+  `dlg.close()`); betraf auch den bestehenden Knopf „Details“ der Entscheidungsbox – beide öffnen jetzt ohne Schließen.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Freigabe mit Auflagen**. Korrekturrunde: B1 (hoch: Gruppen über Heuristik-Ketten hinweg trotz „verschieden“)
+  – jetzt eine Stufe wie ADR-040 und Auswahl „nur einmal“ nur gegen gezeigte Karten; B2 (Arbeit nie versteckt), B3 (abgesagt/uninteressant
+  keine Arbeit), B5 (Fahrzeugstatus wieder sichtbar), B6 (Handy-Link nur bei http/https) behoben; B4/B7 als P6-02b ins Backlog; B8 beim
+  Commit beachtet. Fehlende Tests ergänzt (Kette mit „verschieden“, zwei Mitglieder mit Arbeit, `verlaeufe` = `preisverlauf` je Quelle
+  und Altbestand). Korrekturen nicht erneut von der QA geprüft.
+- **Nebenbei behoben:** `test_aufbewahrung.py::test_anfrage_wieder_faellig_und_auktion_und_storno` lief am 01.11.2026 ab (fester
+  Zeitpunkt im Test, auch auf dem Integrationszweig rot) – Testdaten relativ zum Löscheintrag, Fachcode unverändert.
+- **Nächster sinnvoller Schritt:** P6-03 (Kontaktstatus, Verhandlungsnotizen, Besichtigungsstatus im Dashboard) – nach Freigabe.
+
+## P6-01 – Kombinierte Ankaufsliste: alle Quellen, Deal-Score-Sortierung, Risikofaktoren (31.10.2026) · Status: DONE (PR #51 gemergt)
+
+- **Auftrag:** Betreiber 31.10.2026: „Starte P6-01“ (Freigabe Phase 6, erstes Paket).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-ui-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/bewertung/risikofaktoren.py` (neu), `wmscout/bewertung/auswertung.py`, `wmscout/domaene.py`,
+  `wmscout/web/api.py`, `wmscout/ausgabe.py`, `vorlagen/report.html`, `wmscout/web/static/mobil.js`, `mobil.css`, `sw.js` (Version 19);
+  Tests `test_liste.py` (neu); Doku ADR-061, ROADMAP, README.
+- **Implementierte Funktionen:** siehe ADR-061 – Quelle als Abzeichen und Filter (Desktop, Handy, API `quelle`), API und Handy-App nach
+  Deal-Score sortiert, Liste „Top-Deals“ und Deal-Score-Abzeichen in der Handy-App, Risikofaktoren (Karte: bis zu drei, Detail: alle).
+  Keine Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Freigabe mit Auflagen** (keine kritischen Befunde). Korrekturrunde: B1 (unvollständige Strukturen ohne
+  Ausnahme), B2 (keine doppelten Warnungen auf der Karte: Mängel, Verfügbarkeit, Ausland, Anbieter nur im Detail, Feld `karte`), B3
+  (verkauft/offline und gewerblich als Risikofaktor), B4 (Entfernung gerundet), B5 (Kommentar) behoben; B6 Quellenliste der Handy-App per
+  Test an `domaene.PLATTFORM_TEXT` gebunden; B7 beim Commit beachtet; B8 diese Einträge. Fehlende Tests teilweise ergänzt (Grenzwert 400 km,
+  genau ein Faktor je Fall, Sortierung auch für „bereit“, Escaping im Desktop). Korrekturen nicht erneut von der QA geprüft.
+- **Beobachtet, nicht Teil des Pakets:** Im ersten Handy-Klicktest einmal „Cannot read properties of null (reading 'team')“ – Wechsel auf
+  `#/liste/…` unmittelbar nach dem Login, bevor `/api/ich` geladen war (bestehender Code); im zweiten Lauf nicht aufgetreten. Als Backlog-Punkt notiert.
+- **Nächster sinnvoller Schritt:** P6-02 (Dublettengruppen und Preisverläufe anzeigen) – nach Freigabe.
+
+## P5-07 – Deal-Score 0–100 und Bewertungsverlauf (30.10.2026) · Status: DONE (PR #50 gemergt)
+
+- **Auftrag:** Betreiber 30.10.2026: „Stelle P5-07 fertig“ (nach der Erklärung des Pakets; Vorschlag Gewichte 40/20/15/10/10/5, Ampel
+  bleibt, Schwelle 70 übernommen).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `acquisition-analyst` und `scout-data-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/bewertung/deal_score.py` und `wmscout/bewertungsverlauf.py` (neu), `wmscout/bewertung/auswertung.py`,
+  `wmscout/migrationen.py` (v22), `wmscout/ausgabe.py`, `wmscout/app.py`, `wmscout/web/api.py`, `scout.py`, `vorlagen/report.html`,
+  `config.yaml`; Tests `test_deal_score.py` (neu), `test_neuigkeiten.py` (CSV-Reihenfolge); Doku ADR-060, ARCHITECTURE, ROADMAP, README.
+- **Implementierte Funktionen:** siehe ADR-060. Schema v22 (additiv: `bewertungen`, Sicherung vor der Migration).
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Ablehnung** (keine kritischen Befunde) wegen B1–B4 (hoch: Ausland, unsichere Bewertung und „vermutlich
+  offline“/„reserviert“ wurden Top-Deal; Inserate in Bearbeitung verloren ihren Score) – behoben; B5–B11 behoben, B12 beim Commit
+  beachtet, B13 begründet (ADR-060 Nr. 5). Regressionstests ergänzt; Korrekturen nicht erneut von der QA geprüft.
+- **Nächster sinnvoller Schritt:** Phase 6 (Ankaufs-Dashboard) – neue Hauptphase, Freigabe des Betreibers nötig.
+
+## F10 / P1-14c – Aufbewahrungsfristen, vorbereitet für den Server (27.10.2026) · Status: DONE (PR #48 gemergt)
+
+- **Auftrag:** Betreiber 27.10.2026: „F10 Aufbewahrungsfristen nach DSGVO etablieren und vorbereiten für spätere Serveranbindung.“
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-data-engineer`); QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/aufbewahrung.py` (neu), `wmscout/datenrechte.py`, `wmscout/verkauf.py`, `wmscout/datenbank.py`,
+  `wmscout/eingang/seiten.py`, `wmscout/web/api.py`, `scout.py`, `config.yaml`, `vorlagen/status.html`; Tests `test_aufbewahrung.py` (neu),
+  `conftest.py` (Import- und Sicherungsordner der Tests im Temp-Ordner), `test_email_betrieb.py`; Doku ADR-058, `docs/DATENRECHTE.md`,
+  `docs/MANDANTEN.md`, `docs/PILOTBETRIEB.md`, ROADMAP (P1-14c), README.
+- **Implementierte Funktionen:** siehe ADR-058. Keine Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Ablehnung** wegen B1 (kritisch: Sicherung vor jedem Fristlauf über die allgemeine Rotation verdrängte manuelle
+  Vollsicherungen und Migrationssicherungen) und B2 (kritisch: Kommandozeilen-Tests legten Sicherungen im Projektordner an) – beide behoben;
+  B3–B10 behoben (u. a. ausgeliefert `nur_bericht` mit Bericht auf der Statusseite, B4); B11 beim Commit beachtet. Die von Tests angelegten
+  Dateien im Arbeitsbaum wurden entfernt. Regressionstests ergänzt; Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen:** Fristen (6/12 Monate, 30 Tage, 24 Monate, 10 Jahre) bestätigen bzw. mit Datenschutzbeauftragtem/Steuerberatung
+  abstimmen; nach Prüfung des ersten Berichts `automatisch: ja` setzen.
+- **Nächster sinnvoller Schritt:** F4 (Händlerzugänge der Kunden, einfacher Login).
+## F4 / P2-08a – Kunden-Zugänge: Einladungslink und Händlerzugänge mobile.de/AutoScout24 (27.10.2026) · Status: DONE (PR #49 gemergt)
+
+- **Auftrag:** Betreiber 27.10.2026: „F4 Kunden sind als Händler registriert (soll vorbereitet sein zum Einpflegen und einfachen Login
+  für Kunden der fertigen Software. Test wird dann durchgeführt.“
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `source-integrations` und `scout-ui-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/migrationen.py` (v21), `wmscout/team.py`, `wmscout/zugaenge.py` (neu), `wmscout/quellen/api_rahmen.py`
+  (`versuche`), `wmscout/web/api.py`, `wmscout/audit.py`, `scout.py`, `vorlagen/einladung.html` und `vorlagen/zugaenge.html` (neu),
+  `vorlagen/report.html`; Tests `test_zugaenge.py` (neu); Doku ADR-059, `docs/SOURCES.md`, `docs/DATENRECHTE.md`, `docs/MANDANTEN.md`,
+  ROADMAP (P2-08, P2-08a), README.
+- **Implementierte Funktionen:** siehe ADR-059. Schema v21 (additiv: `einladungen`, `plattform_zugaenge`; Sicherung vor der Migration).
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“ – B1–B3 (hoch), B4–B6, B8, B10 behoben, B7 dokumentiert, B9 beim Commit beachtet.
+  Regressionstests ergänzt; Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen:** Verbindungstest gegen mobile.de freigeben (eine Suchanfrage, Inhalte verworfen)? Sollen Kunden ihr Passwort später
+  selbst in der App eintragen können (dann verschlüsselte Ablage mit Server-Schlüssel – neue Abhängigkeit)?
+- **Nächster sinnvoller Schritt:** Test mit echtem API-Account durch den Betreiber; danach P2-08 (Adapter) bzw. P5-07.
+## P5-06 – Abholung: Auto ab Besigheim oder Bahn ab Stuttgart Hbf (27.10.2026) · Status: DONE (PR #47 gemergt)
+
+- **Auftrag:** Betreiber 27.10.2026: „P5-06 ausarbeiten – ausgehend von Besigheim 74534 (mit dem Auto) oder von Stuttgart HBF mit dem
+  Zug (berechne hier ungefähre Ticketpreise mit dem ICE und Reisezeit mit öffentlichen Verkehrsmitteln). Die Werte aus P5-05 sollen
+  erstmal so beibehalten werden. … F6/F7 Vorschlag bestätigen.“ Besigheim hat die PLZ 74354 (74534 gibt es nicht) – verwendet 74354.
+  P5-05-Werte unverändert; F6/F7 in der ROADMAP als bestätigt eingetragen, F4/F10 mit der Antwort des Betreibers (eigene Pakete).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `acquisition-analyst`); QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/bewertung/rechner.py`, `bewertung/kalkulation.py` (E6), `wmscout/deal.py`, `wmscout/web/api.py`,
+  `wmscout/ausgabe.py` (Filter `stunden`), `config.yaml` (Firmensitz 74354, `rechner.kosten.abholung`), `vorlagen/report.html`; Tests
+  `test_abholung.py` (neu), `test_bewertung.py` (alte Formel ohne Abschnitt), `test_risiko.py` (Rechenstand numerisch),
+  `test_anschreiben.py`, `test_ausland.py`, `test_suchgebiete.py` (Firmensitz Besigheim); Doku ADR-057, `docs/RECHNER-ANALYSE.md` (S6),
+  ROADMAP (P5-06 REVIEW, F4/F6/F7/F10), README.
+- **Implementierte Funktionen:** siehe ADR-057. Keine Schemaänderung, keine Netzabrufe.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“. B1 (hoch: Firmensitz eines Mandanten weit weg von Stuttgart Hbf → Bahn zu billig)
+  → Bahn entfällt ab 80 km Abstand mit Hinweis; B2 (mittel: zwei genaue Entfernungen in gespeicherten Kalkulationen verrieten die PLZ)
+  → auf 10 km gerundet; B3 (mittel: NaN, Tippfehler, unbekannte Bahnhofs-PLZ still) → verständliche Fehler; B4 „Nahverkehrsticket“ unter
+  50 km; B5 „60 Min.“ behoben; B6 km mit Tausenderpunkt; B7 .venv-Link nicht committet; B8 Doku-Änderungen F4/F6/F7/F10 im PR genannt;
+  B9 Handy-Ansicht ohne Abholvarianten → Backlog. Regressionstests ergänzt; Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (vorbelegt, in `config.yaml` änderbar):** Stundensatz 25 €/h, Übergabe 1 Std., Übernachtung 90 € ab 10 Std. je
+  Person, PKW 0,30 €/km, Wohnmobil 0,25 €/km, ICE grob 0,30 €/km (12–160 €).
+- **Nächster sinnvoller Schritt:** F10 Aufbewahrungsfristen, danach F4 Händlerzugänge der Kunden (vom Betreiber am 27.10.2026 beauftragt).
+
+## P5-05 – Ausstattung, Mängel und Kostenrisiken; Spannen auf 100 € (25.10.2026) · Status: DONE (PR #45 gemergt)
+
+- **Auftrag:** Betreiber 25.10.2026 nach dem Merge von PR #44: „1. Spannen sollen nur auf 100er gerundet werden. 2. Was ist mit der
+  Händlerobergrenze gemeint? … Arbeite im Anschluss den nächsten Punkt p5-05 komplett aus.“ Zu 2 erklärt: Die Obergrenze betrifft nur den
+  eigenen geplanten Wiederverkaufspreis in der Bewertung; Gebote im Händlerportal und in Auktionen sind dadurch nicht begrenzt (geprüft:
+  `auktion.gebot_abgeben` kennt nur Mindestgebot und Höchstbetrag).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `acquisition-analyst`); QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/bewertung/rechner.py`, `bewertung/anschreiben.py`, `bewertung/kalkulation.py` (E5), `bewertung/kalibrierung.py`, `bewertung/ergebnis.py`,
+  `wmscout/ankauf.py`, `config.yaml`, `vorlagen/report.html`; Tests `test_risiko.py` (neu), `test_spannen.py`, `test_preisarten.py`,
+  `test_kalibrierung.py`, `test_vergleichsauswahl.py`; Doku ADR-056 (+ Hinweis in ADR-054), `docs/RECHNER-ANALYSE.md`, ROADMAP (P5-04 DONE, P5-05 REVIEW), README.
+- **Implementierte Funktionen:** siehe ADR-056. Keine Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“ (nein bis B1). B1 (hoch: „Zylinderkopfdichtung neu“ galt als Motorschaden −15 %) →
+  nur bei defekt/kaputt/durch; B2 (Schwere und Mängelrisiko erst nach der Deckelung – mehrere schwere Mängel zählten nicht) → nach vollem
+  Wert, zwei schwere = Sicherheit niedrig, Deckel 25 %; B3 (rechnerische Kapitalbindung in den Plankosten verzerrte die Kalibrierung) →
+  getrennt gespeichert und herausgerechnet; B4 (Webasto-Dachluke als Heizung) → Muster enger; B5 dokumentiert; B6 (Plan-Standzeit nach
+  heutigem Monat) → aus Bewertung/Kalkulation; B7 (Tippfehler in der Saison ließ jede Bewertung abstürzen) → verständliche Meldung;
+  B8 Versionsvergleich numerisch; B9 .bat-Artefakte nicht committet. Regressionstests ergänzt; Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Staffel 2,0/2,5/3,5/4,5 %, Saison Sep +1, Okt/Nov +2, Dez/Jan +1, Zins 5 % auf 80 % des VK,
+  Mängelrisiko höchstens 15 %.
+- **Nächster sinnvoller Schritt:** Rückmeldung des Betreibers, danach P5-06 (Transportkosten ab konfigurierbarer Standort-PLZ).
+
+## Statuspflege – P5-05 abgeschlossen, Stand für P5-06 (26.10.2026)
+
+- **Erledigt:** PR #45 (P5-05) ist gemergt; alle CI-Prüfungen waren grün (Tests Linux und Windows, Start-Skripte, pip-audit). Der
+  Arbeitsbaum des Pakets ist entfernt.
+- **Nicht geprüft:** Handy-Ansicht, echter Datenbestand (wie im TEST-REPORT vermerkt).
+- **Nächster Schritt:** P5-06 (Transportkosten ab konfigurierbarer Standort-PLZ). Start erst nach Freigabe durch den Betreiber.
+- **Offene Betreiberfragen aus P5-05:** Gewährleistungsstaffel, Saisonzuschläge, Zinssatz 5 % auf 80 % des VK, Mängelrisiko höchstens 15 %.
+
+## P5-04 – Angebots- gegen Abschlusspreise, Händler- gegen Privatpreise (25.10.2026) · Status: REVIEW
+
+- **Auftrag:** „Arbeite p5-04 komplett aus“ (Betreiber, 25.10.2026, nach dem Merge von PR #43).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `acquisition-analyst`); QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/bewertung/rechner.py` (Händlerangebote, `haendlermarkt`, Obergrenze in `kette`), `bewertung/kalkulation.py`
+  (E4, Auszug mit Händlern), `bewertung/kalibrierung.py` (`preissenkungen`, `marktbeobachtung`), `web/api.py`, `scout.py`,
+  `vorlagen/kalibrierung.html`, `vorlagen/report.html`, `web/static/mobil.js`, `sw.js` (wm-scout-18), `config.yaml`; Tests
+  `test_preisarten.py` (neu), `test_anbieter.py` (Auszug enthält Händlerangebote), `test_spannen.py` (Rechenstand ≥ E3); Doku ADR-055,
+  `docs/RECHNER-ANALYSE.md`, ROADMAP (P5-03 DONE, P5-04 REVIEW), README.
+- **Implementierte Funktionen:** siehe ADR-055. Keine Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Ablehnung** wegen B1 (kritisch: drei Miet-, Raten- oder Lockangebote von Händlern drückten den Max-EK auf 0
+  bzw. −57 %) → Händlerangebote unter 80 % des Privatniveaus zählen nicht, Händlerniveau unter dem Privatniveau = Datenkonflikt ohne
+  Obergrenze, Händler-VK nie unter dem Marktwert privat; B2 (hoch: Spanne und Szenarien fielen bei aktiver Obergrenze zusammen,
+  Sicherheit blieb „hoch“) → Obergrenze am unteren/oberen Viertel der Händlerangebote, Szenarien je Viertel, Sicherheit höchstens
+  „mittel“; B3 (Marktbeobachtung je Inserat, wieder eingestellte Fahrzeuge als verschwunden) → je Fahrzeug, Verfügbarkeitsregel der App;
+  B4 ADR angepasst; B5 Schalter streng; B6 (.bat-Artefakte, .venv-Link) beim Commit beachtet. Regressionstests ergänzt; Korrekturen
+  nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Obergrenze ab 3 Händlerangeboten, 5 % Verhandlung beim Händler; Marktbeobachtung nur als
+  Hinweis.
+- **Nächster sinnvoller Schritt:** Rückmeldung des Betreibers, danach P5-05 (Ausstattung und Mängel; Reparatur-, Gewährleistungs-, Standkostenrisiko).
+
+## P5-03 – Spannen statt Punktwerte, Abschlag bei unbekannter Marke, Mängelliste (25.10.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 25.10.2026 nach dem Merge von PR #42 (Antwort auf die Fragen zu P5-02): unbekannte Marke schmälert den
+  Verkaufspreis, nur Hinweis an den Ankäufer; Bepreisung als Spanne; Mängel als Liste beim Inserat. Rückfrage beantwortet: unbekannte
+  Marke, 5 %.
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `acquisition-analyst` und `scout-ui-engineer`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/bewertung/rechner.py` (`kette`, `marke_unbekannt`, Spannen, Mängel), `bewertung/auswertung.py`
+  (unbekannte Art), `bewertung/anschreiben.py` (Hinweis), `bewertung/kalkulation.py` (E3), `bewertung/ergebnis.py` und
+  `bewertung/kalibrierung.py` (Abschlag im Plan), `normalisierung/fahrzeug.py` (Werks-Camper), `web/api.py`, `vorlagen/report.html`, `vorlagen/anfragen.html`,
+  `web/static/mobil.js`, `sw.js` (wm-scout-17), `config.yaml`; Tests `test_spannen.py` (neu), `test_anschreiben.py` (Hinweislisten der
+  Testfahrzeuge ohne Marke), `test_vergleichsauswahl.py`, `test_statusseite.py` (Service-Worker-Version als Mindestwert), `test_seitenimport.py`,
+  `test_kleinanzeigen_echt.py`, `test_mobilede.py` (Art-Hinweise ohne den neuen Markenhinweis geprüft); Doku ADR-054,
+  `docs/RECHNER-ANALYSE.md`, ROADMAP (P5-02 DONE, P5-03 REVIEW), README.
+- **Implementierte Funktionen:** siehe ADR-054. Keine Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“ (nein bis B1/B2), kein kritischer Befund. B1 (hoch: VW California, Marco Polo,
+  Nugget als „Marke unbekannt“ → −5 % und falscher Hinweis) → Werks-Camper haben eine Marke; B2 (Spanne umschloss den Punktwert bei
+  dichten Daten nicht, Breite 0) → nach außen gerundet, mindestens 500 €; B3 (Kalibrierung hätte den Markenabschlag dem Händleraufschlag
+  zugeschlagen) → Abschlag im Plan gespeichert, Fälle getrennt, eigener Vorschlag; B4 (Abschlag in Kalkulation und Verkaufsanfrage
+  unsichtbar) → Annahmen-Zeile, Anfrage-Ansicht mit Spanne, Hinweis, Mängeln; B5 (Max-EK 0 uneinheitlich) → Spanne nur bei oberer
+  Grenze > 0; B6 (alte E2-Kalkulationen gelten als andere Version) dokumentiert. Regressionstests ergänzt; Korrekturen nicht erneut von
+  der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Spannen auf 500 € gerundet; Verkäufer- und Händlerportal unverändert.
+- **Nächster sinnvoller Schritt:** Rückmeldung des Betreibers, danach P5-04 (Angebots- vs. Transaktionspreise, Händler- vs. Privatpreise).
+
+## P5-02 – Vergleichsauswahl nach Marke, Modellreihe und Fahrzeugklasse (25.10.2026) · Status: REVIEW
+
+- **Auftrag:** „Stelle 5-02 fertig“ (Betreiber, 25.10.2026, nach dem Merge von PR #41).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `acquisition-analyst`); QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/normalisierung/fahrzeug.py` (Länge, Basisfahrzeug), `wmscout/bewertung/rechner.py` (Ähnlichkeitsstufen,
+  Fahrzeugklasse, Erklärung), `wmscout/bewertung/kalkulation.py` (Rechenstand E2, Feld `modell`, Gewichte eingefroren), `config.yaml`
+  (`rechner.vergleich_aehnlichkeit`), Tests `test_vergleichsauswahl.py` (neu), `test_deal.py` (Versionsprüfung unabhängig von „E1“);
+  Doku ADR-053, `docs/RECHNER-ANALYSE.md`, ROADMAP (P5-01 DONE, P5-02 REVIEW), README.
+- **Implementierte Funktionen:** siehe ADR-053. Keine Schemaänderung; kein Angebot wird ausgeschlossen, nur gewichtet.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA **Ablehnung** wegen B1 (hoch: ein einzelnes gleiches Modell mit Wunschpreis überstimmte 7 andere Angebote,
+  Max-EK +15–20 %, Sicherheit stieg auf „hoch“) → flachere Gewichte, Deckel 25 % je Angebot, Streuung mindestens ungewichtet;
+  B2 (Basismarke Fiat/Ducato als „gleiches Modell“, Modell ohne Grundriss) → keine Markenstufe bei Basismarke, „Modell“ nur mit Grundriss;
+  B3 (Längen von Markise/Kabel/Stellplatz/Anhänger) → Zubehörfilter, Bindestrich; B4 (Basisfahrzeug nach Listenreihenfolge) → erste
+  Nennung; B5 (Knaus/Dethleffs ohne Klasse) → Klasse „Mittel“; B6 Hinweis an den Mustern; B7 Einzahl. Alle mit Regressionstests.
+  Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Gewichte 2,5/1,8/1,0/0,7/0,5, Einzelangebot höchstens 25 %, Länge −40 % je Meter (bis 40 %),
+  anderes Basisfahrzeug ×0,8; bekannte Marken ohne Klasseneintrag gelten untereinander als „Mittel“.
+- **Bekannte Risiken:** Länge/Basisfahrzeug nur, wenn der Text sie nennt; gespeicherte Kalkulationen mit Rechenstand E1 gelten beim
+  Nachrechnen als „andere Version“.
+- **Nächster sinnvoller Schritt:** Rückmeldung des Betreibers, danach P5-03 (Marktwertspannen und Unsicherheit).
+
+## P5-01 – Rechner analysieren, Kalibrierung mit tatsächlichen Ankaufspreisen (25.10.2026) · Status: REVIEW
+
+- **Freigabe:** Phase 5 vom Betreiber freigegeben (25.10.2026, „Phase 5 beginnen Schritt für Schritt“) – damit Phase 4 abgenommen;
+  „Schritt für Schritt“: nach P5-01 Bericht und Rückmeldung abwarten.
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `acquisition-analyst`, Migration wie `scout-data-engineer`); QA
+  `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `docs/RECHNER-ANALYSE.md` (neu: Formelkette, gerechnete Empfindlichkeit, Schwächen S1–S8 mit Paketen),
+  `wmscout/bewertung/kalibrierung.py` (neu), `wmscout/migrationen.py` (v20 `kalibrierung_faelle`), `wmscout/web/api.py`
+  (`/kalibrierung`, `/api/kalibrierung`, Nachtragen/Löschen), `wmscout/audit.py`, `vorlagen/kalibrierung.html` (neu),
+  `vorlagen/ankaeufe.html` (Link für den Inhaber), `wmscout/ankauf.py` (Plan speichert den Parameterstand), `scout.py` (`kalibrierung`),
+  Tests `test_kalibrierung.py` (neu); Doku ADR-052,
+  ROADMAP (Phase 4 DONE, Phase 5 freigegeben, P4-05 DONE, P5-01 REVIEW), ARCHITECTURE, README.
+- **Implementierte Funktionen:** siehe ADR-052. Keine Wirkung auf die Bewertung; Vorschläge ändern nichts automatisch.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. B1 (hoch: Altfälle mit heutigen Vergleichsangeboten zum
+  früheren Kaufdatum nachgerechnet → Plan systematisch zu niedrig, Vorschläge verzerrt) → nur Marktmodell; B2 (eingefrorener Plan:
+  übernommene Korrektur würde erneut vorgeschlagen) → Parameterstand im Plan gespeichert, Vorschläge je Fall relativ dazu; B3 (unterer
+  Median bei gerader Anzahl) → Interpolation; B4 (verkauft ohne erfasste Kosten zählte als 0) → unbekannt; B5 (unplausible Vorschläge,
+  falsche Genauigkeit) → Warnung außerhalb des üblichen Bereichs, Rundung 0,01; B6 (Banker's Rounding) → kaufmännisch; B7
+  (Bezugsdaten) dokumentiert; B8 (Max-EK 0 fiel still heraus) → gesondert gezählt. Eigene Funde im Browser: B4 ebenso, Prozenttext
+  „-6%“ → „−6 %“. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Vorschläge ab 5 Fällen, Toleranzen VK 5 %, Kosten 300 €, Standzeit 30 Tage; den Bericht
+  sieht im Team nur der Inhaber; Kostenabweichung wird als Vorschlag der Aufbereitung zugeschlagen (Alternative genannt).
+- **Bekannte Risiken:** Nachgerechnete Altfälle nutzen die heutige Vergleichsbasis; wenige Fälle sagen wenig (Belastbarkeit wird
+  ausgewiesen).
+- **Nächster sinnvoller Schritt:** Rückmeldung des Betreibers zu P5-01, danach P5-02 (Vergleichsauswahl nach Marke/Modellreihe/Fahrzeugklasse).
+
+## P4-05 – Abdeckung und Suchlücken messen (25.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-data-engineer`); QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/abdeckung.py` (neu), `wmscout/bewertung/auswertung.py` (`bewerte_alle(…, erstmals_seit=…)`),
+  `wmscout/datenbank.py` (`erstmals_seit`), `wmscout/normalisierung/geo.py` (`plz_bereiche`), `wmscout/web/api.py` (`/abdeckung`,
+  `/api/abdeckung`, Zwischenspeicher), `vorlagen/abdeckung.html` (neu), `vorlagen/status.html` (Link), `scout.py` (`abdeckung`), Tests
+  `test_abdeckung.py` (neu); Doku ADR-051, ROADMAP (P4-04 DONE, P4-05 REVIEW, Kennzahl Importerfolg), README.
+- **Implementierte Funktionen:** siehe ADR-051. Keine Schemaänderung, nur lesen.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. B1 (hoch: Bearbeitungsstatus senkte „relevante
+  Privatangebote“) → Filter ohne Status; B2 (wieder eingestellte Altfahrzeuge als neu, nicht transitive Gruppen) → Zusammenhangskomponenten,
+  nur Fahrzeuge mit allen Inseraten im Zeitraum; B3 (39 s unter der App-Sperre bei 6.000 Inseraten/365 Tagen) → Zwischenspeicher 5 min,
+  App höchstens 90 Tage; B4 (Detailabruf/„gelöscht“ zählten als Eingang) → nur neu/geändert; B5 (Zeitraum nicht kalendertagsgenau) → ab
+  Mitternacht; B6 Kennzahl in der ROADMAP angepasst; B7 Kommentar. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Standardzeitraum 30 Tage; „unklar“-Hinweis ab 50 % (mind. 4 Treffer); Lücken ab 2 Tagen;
+  keine gespeicherte Zeitreihe der Kennzahlen.
+- **Bekannte Risiken:** Laufzeit bei großen Beständen (siehe ADR-051); ohne Pull-Quelle spiegeln Gebietslücken vor allem die eigenen Suchaufträge.
+- **Nächster sinnvoller Schritt:** Abnahme von Phase 4 durch den Betreiber (P4-06 bleibt BLOCKED bis API-Zugang), danach Freigabe Phase 5.
+
+## P4-04 – Laufprotokoll, Intervalle je Quelle, Pause nach Sperre, Statusseite (24.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `source-integrations`, Migration wie `scout-data-engineer`); QA
+  `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/migrationen.py` (v19), `wmscout/laufprotokoll.py` (neu), `wmscout/importer.py`, `wmscout/app.py`,
+  `scout.py` (`lauf --sofort`, `quellen liste`), `wmscout/web/api.py` (`/status`, `/api/status`), `vorlagen/status.html` (neu),
+  `vorlagen/report.html`, `wmscout/web/static/mobil.js`, `sw.js` (wm-scout-16), `config.yaml`, Tests `test_statusseite.py` (neu),
+  `test_app_threads.py` (Ersatz-Suchlauf nimmt den Auslöser), `test_reimport.py` (Laufprotokoll nicht im Bestandsvergleich),
+  `test_neuigkeiten.py` (Versionsprüfung ≥ 15); Doku ADR-050, ROADMAP (P4-03 DONE, P4-04 REVIEW), ARCHITECTURE, README.
+- **Implementierte Funktionen:** siehe ADR-050.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“. B1 (hoch: Pause/Intervall werteten nur die letzten 200 Zeilen aus – nach vielen
+  übersprungenen Läufen endete die Pause zu früh) → Auswertung über das Zeitfenster ohne Anzahlgrenze, Test mit 250 Läufen; B2 (geändertes
+  Layout zählte nicht als Fehler der Quelle) → Fehler je Quelle; B3 (beschädigte JSON-Zeile ließ Läufe scheitern) → überspringen und
+  melden; B5 (letzter Import nur aus 200 Zeilen) → eigene Abfrage je Eingang; B4, B7 dokumentiert; B6 (Symlink/.bat nicht stagen)
+  beachtet. Eigene Funde im Browser: Datum der Warnung im ISO-Format, rechtsbündige Spalte. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Pause nach Sperre 24 h; keine Intervalle je Quelle voreingestellt; Läufe von Hand warten
+  nicht; die Statusseite sehen alle Team-Mitglieder (ohne Personendaten), nicht der Händler-Zugang.
+- **Bekannte Risiken:** Ohne freigegebene Pull-Quelle zeigt die Seite vor allem Importe; die Intervalle wirken erst mit einer Freigabe.
+- **Nächster sinnvoller Schritt:** P4-05 Suchlücken und Abdeckung messen.
+
+## P4-03 – Neuigkeiten: frisch eingegangen und Preissenkungen hervorheben, priorisieren, melden (24.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `source-integrations`/`scout-ui-engineer`); QA `qa-security-reviewer`;
+  Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/bewertung/neuigkeit.py` (neu), `bewertung/auswertung.py`, `datenbank.py` (Erhöhung setzt Senkung zurück),
+  `web/api.py`, `app.py`, `benachrichtigung.py`, `scout.py`, `ausgabe.py`, `vorlagen/report.html`, `web/static/mobil.js`, `mobil.css`,
+  `sw.js` (wm-scout-15), `config.yaml` (`neuigkeiten`, `email.preissenkungen_melden`), Tests `test_neuigkeiten.py` (neu); Doku ADR-049,
+  ROADMAP (P4-02 DONE, P4-03 REVIEW), README.
+- **Implementierte Funktionen:** siehe ADR-049. Keine Schemaänderung, keine Wirkung auf die Bewertung, kein Netzabruf.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. B1 (gesperrte Inserate, z. B. gewerblich, als „jetzt im Rahmen“
+  ganz oben und in der Mail) → keine Neuigkeit bei Sperre; B2 (Dubletten doppelt gemeldet) → je Fahrzeug einmal in Hinweis und Mail;
+  B3 (kleine Senkung über die Max-EK-Grenze ging verloren) → „im Rahmen“ ohne Deutlichkeitsschwelle; B4 (nach Erhöhung weiter „gesenkt“,
+  auch im Nachfassen) → Import setzt die gemerkte Senkung zurück; B5 („Max-EK 0 €“, „None“ in der Mail) → „–“, „Ort ?“; B6 Einzahl/Mehrzahl,
+  Doku zum Mailverhalten; B7 CSV-Spalte dokumentiert; B8 nur Hinweis (Zeitumstellung). Eigener Fund im Browser: Tooltip mit Dezimalpunkt →
+  Komma. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Schwellen 48 h / 14 Tage / 3 % oder 500 € in `config.yaml`; Preissenkungen per Mail
+  standardmäßig an; keine WhatsApp-Meldung für Senkungen (Vorlage bei Meta nötig); Bewertung unverändert.
+- **Bekannte Risiken:** Nur Eingänge mit Preis lassen eine Senkung erkennen; der Hinweis nach Mail-/Seiten-Importen fehlt (nur Kachel/Filter).
+- **Nächster sinnvoller Schritt:** P4-04 Intervalle je Quelle, Suchläufe und Fehler überwachen (Statusseite).
+
+## P4-02 – Suchgebiete: bundesweit, Umkreis, PLZ-Bereiche (24.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `source-integrations`/`scout-ui-engineer`, Migration wie `scout-data-engineer`);
+  QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/migrationen.py` (v18), `wmscout/normalisierung/geo.py` (`plz_bereich_bekannt`), `wmscout/suchprofile.py`,
+  `wmscout/web/api.py`, `wmscout/web/static/suchprofile.js`, `vorlagen/report.html` (CSS), Tests `test_suchgebiete.py` (neu),
+  `test_suchprofile.py` (erwartete Felder); Doku ADR-048, ROADMAP (P4-01 DONE, P4-02 REVIEW), ARCHITECTURE, README.
+- **Implementierte Funktionen:** siehe ADR-048. Suchgebiet je Suchprofil, Filter über eingegangene Daten, kein Abruf, keine Wirkung auf die
+  Bewertung. Handy ohne Änderung (Filter wirkt über die Profilauswahl).
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, keine kritischen oder hohen Befunde. B1 (`gebiet=False` still „bundesweit“) → nur
+  leer/fehlend; B2 (sehr lange Fehlermeldung, leerer Eintrag) → Meldung gekürzt, „leerer Eintrag“; B3 (verstecktes Radiusfeld geprüft) →
+  nur beim Umkreis; B4 („None km um None“ bei unvollständiger Zeile) → Ersatztext; B5 (genäherte PLZ knapp außerhalb hart „nein“) → bis
+  20 km „unklar“; B6 Doku. Eigener Fund im Browser: ein ungültiger Wert im versteckten Radiusfeld blockierte über die Formularprüfung des
+  Browsers das Speichern → versteckte Felder werden deaktiviert. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** „bundesweit“ schließt Orte im Ausland nicht aus (wie bisher); Umkreis in km Fahrstrecke
+  wie die angezeigte Entfernung; keine Bundesländer (fehlende amtliche Zuordnung).
+- **Bekannte Risiken:** Entfernungen sind Schätzungen über PLZ-Mittelpunkte.
+- **Nächster sinnvoller Schritt:** P4-03 neue Angebote priorisieren, Preissenkungen erkennen und melden.
+
+## P4-01 – Suchprofile als Filter, Abdeckungscheckliste je Plattform (24.10.2026) · Status: REVIEW
+
+- **Freigabe:** Betreiber am 24.10.2026: „Phase 4 starten mit P4-01“ (zugleich Abnahme von Phase 3, ROADMAP aktualisiert).
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `source-integrations`/`scout-ui-engineer`, Migration wie `scout-data-engineer`);
+  QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/migrationen.py` (v17), `wmscout/suchprofile.py` (neu), `wmscout/web/api.py`, `wmscout/audit.py`,
+  `vorlagen/report.html`, `wmscout/web/static/suchprofile.js` (neu), `mobil.js`, `sw.js` (wm-scout-14), Tests `test_suchprofile.py` (neu),
+  `test_datenqualitaet.py` (Versionsprüfung ≥ 13); Doku ADR-047, ROADMAP, ARCHITECTURE, README.
+- **Implementierte Funktionen:** siehe ADR-047. Profile filtern nur, kein Netzabruf, keine Wirkung auf die Bewertung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. B1 (Desktop-Filter endete bei 200 Treffern) → eigener Endpunkt
+  `/api/suchprofil/<id>/treffer` ohne Grenze, Test mit 260 Inseraten; B2 (`profil=²` → 500) → nur ASCII-Ziffern; B3 (Notiz der Checkliste
+  beim Speichern gelöscht) → bleibt ohne Schlüssel erhalten; B4 (Modell als Teiltext) → ganze Wörter; B5 (Leerzeichen in Adressen) → abgelehnt;
+  B6 („letzter Treffer“ zählte „unklar“) → nur „passt“; B7 (Zahlen im Formular) → `valueAsNumber`, ganze Zahlen; B8 Doku; B9 (AutoScout24
+  per API als angelegt) → abgelehnt. Eigener Fund im Browser: geöffnetes Profil klappte nach dem Speichern zu → bleibt offen.
+  Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** Pflege nur durch den Inhaber (Mitarbeiter lesen und filtern); „unklar“ wird standardmäßig
+  angezeigt; Profile wirken nur als Filter, nicht auf Ampel, Max-EK oder Sperre; `config.yaml → suchen` bleibt für den Suchlauf unverändert.
+- **Bekannte Risiken:** Zuordnung nutzt die erkannte Fahrzeugart und Marke – Fehler der Erkennung wirken auf den Filter („Sonstige“ → unklar).
+- **Nächster sinnvoller Schritt:** P4-02 Suchgebiete und PLZ-Regionen (bauen auf den Profilen auf).
+
+## P3-08 – Datenqualität: Markierungen und Wert je Fahrzeug (23.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-data-engineer`, kleine Oberflächenteile); QA `qa-security-reviewer`;
+  Doku Orchestrator. Schließt P2-10 (Datenqualität je Quelle) mit ab.
+- **Geänderte Dateien:** `wmscout/normalisierung/qualitaet.py` (neu), `wmscout/bewertung/auswertung.py`, `wmscout/web/api.py`
+  (`datenqualitaet`, `GET /api/datenqualitaet`), `wmscout/ausgabe.py` (CSV), `scout.py` (`qualitaet`), `vorlagen/report.html`, `mobil.js`,
+  `mobil.css`, `sw.js` (wm-scout-13), Tests `test_datenqualitaet.py` (neu), `test_kontakte.py` (Versionsprüfung); Doku ADR-046, ROADMAP
+  (P3-07 DONE, P3-08 REVIEW, P2-10 DONE), ARCHITECTURE, README.
+- **Implementierte Funktionen:** siehe ADR-046. Keine Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. B1 (km aus Beschreibung, z. B. „5.000 km seit Inspektion“) → nur
+  Titel; B2 (Baujahr = Modelljahr) → erst ab > 1 Jahr; B3 (beliebiges Wort zwischen „EZ“ und Jahr) → enges Muster, TT.MM.JJJJ ergänzt;
+  B4 (quadratischer Aufwand bei Gruppen) → je Inserat einmal; B5 (ohne Datum als älter gewertet) → nicht verglichen; B6 Preisgrenze 750.000 €;
+  B7 Zahlen als Text. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** keine Wirkung auf Ampel, Max-EK oder Sperre (nur Anzeige); Schwellen im Code, nicht in
+  `config.yaml`.
+- **Bekannte Risiken:** Regeln an nachgebauten Texten geprüft; echte Anzeigentexte können weitere Falschmarkierungen zeigen.
+- **Nächster sinnvoller Schritt:** Abschluss Phase 3 (Abnahme durch den Betreiber), danach Freigabe Phase 4.
+
+## P3-07 – Indizes nach Abfrageplan, Vorfilter der Vergleichsauswahl (23.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Orchestrator (Messung und Umsetzung im Stil von `scout-data-engineer`); QA `qa-security-reviewer`; Doku Orchestrator.
+- **Vorgehen:** Profil der Bewertung auf nachgebautem Bestand (90 % in `Rechner.vergleiche`); alle in 13 Testmodulen ausgeführten
+  SQL-Anweisungen mitgeschnitten (370 verschiedene) und mit `EXPLAIN QUERY PLAN` auf 3.000 Inseraten auf Tabellendurchläufe geprüft.
+- **Geänderte Dateien:** `wmscout/bewertung/rechner.py` (`Vergleichsliste`), `wmscout/bewertung/auswertung.py`, `wmscout/migrationen.py`
+  (Schritt 16), Tests `test_vorfilter.py` (neu); Doku ADR-045, ROADMAP (P3-06 DONE, P3-07 REVIEW), ARCHITECTURE (R12).
+- **Implementierte Funktionen:** siehe ADR-045.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, nur NIEDRIG. B1 (nicht ganzzahliges Jahr fiel still heraus) → Restliste; B2 (Änderung bei
+  gleicher Länge) → jede Listenänderung verwirft den Index; B3 (Kalkulations-Auszug ohne Vorfilter) → Backlog; B4 kein Handlungsbedarf.
+  Korrekturen nicht erneut von der QA geprüft.
+- **Bekannte Risiken:** Messung auf nachgebauten Daten; gespeicherte Bewertungen und die fachliche Abgrenzung der Vergleichsbasis offen (P5).
+- **Nächster sinnvoller Schritt:** P3-08 (Markierungen für unvollständige/widersprüchliche Angaben, Datenqualitätswert).
+
+## P3-06 – Kontakte als Ereignisse (23.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-data-engineer`, inkl. kleiner Oberflächenteile); QA
+  `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/kontakte.py` (neu), `wmscout/migrationen.py` (Schritt 15), `wmscout/datenbank.py` (Ereignisse in
+  `setze_status`/`nachgefasst`, `bestaetige_kontakt`, `kontakte_zu`), `wmscout/web/api.py` (`kanal`, `kontakte`, `GET /api/kontakte/<id>`,
+  `POST /api/kontakt/<id>/bestaetigen`), `wmscout/audit.py`, `wmscout/datenrechte.py` (Anonymisierung), `vorlagen/report.html`, `mobil.js`,
+  `mobil.css`, `sw.js` (wm-scout-12), Tests `test_kontakte.py` (neu), `test_anbieter.py` (Schritt-14-Tests bis 14); Doku ADR-044 (+ Verweis
+  in ADR-012), ROADMAP (P3-05 DONE, P3-06 REVIEW, F7), ARCHITECTURE.
+- **Implementierte Funktionen:** siehe ADR-044.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. B1 HOCH (bestätigtes Nachfassen an einem noch nicht kontaktierten
+  Inserat setzte weder Status noch Team-Kontakt) → läuft als erster Kontakt über den Status; B2 (älteres offenes Anschreiben blieb ewig
+  offen) und B3 (Rückgängig ließ den alten Text bestätigbar) → `verworfen_am`; B4 (neuer Brief überschrieb ein offenes Nachfassen) →
+  eigenes Anschreiben; B5 (Altbestand nach App-Bestätigung) → Herkunft „app“; B6 Desktop-Hinweis nach dem Nachfassen; B7 `.bat`-Zeilenenden
+  nicht gestaged; B8 Versionsprüfung wieder exakt. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** F7 – alte Kontakte bleiben im Status, im Verlauf als „Altbestand“ (Kanal unbekannt);
+  Nachfassen gilt erst nach „gesendet ✓“ als gesendet (die Erinnerung über `nachgefasst_am` bleibt wie bisher); Kanalwahl nur per API.
+- **Bekannte Risiken:** Ein irrtümlich bestätigter Kontakt lässt sich nicht stornieren; nachgebaute Daten.
+- **Nächster sinnvoller Schritt:** P3-07 (Indizes, Vorfilter der Vergleichsauswahl).
+
+## P3-05 – Privat/Händler mit Herkunft der Einstufung (23.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Orchestrator (Umsetzung im Stil von `scout-data-engineer`, inkl. kleiner Oberflächenteile und P2-05d aus dem
+  Bereich `acquisition-analyst`); QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/anbieter.py` (neu), `wmscout/migrationen.py` (Schritt 14), `wmscout/datenbank.py` (Übernahmeregel,
+  `setze_anbieter`, `gewerblich_zu` entfällt), `wmscout/importer.py` (Sonderregel Detailseite entfällt, steckt in der Regel),
+  `wmscout/quellen/basis.py` (`Inserat.anbieter_herkunft`), Parser Kleinanzeigen/mobile.de, Kleinanzeigen-Adapter (Privatfilter),
+  `wmscout/eingang/text.py`, `wmscout/bewertung/rechner.py` + `kalkulation.py` (P2-05d), `auswertung.py`, `ausgabe.py` (CSV),
+  `wmscout/web/api.py` (`anbieter`, `POST /api/anzeige/<id>/anbieter`), `vorlagen/report.html`, `mobil.js`, `mobil.css`, `sw.js`
+  (wm-scout-11), Tests `test_anbieter.py` (neu), `test_reimport.py`, `test_fahrzeuge.py`; Doku ADR-043, ROADMAP, ARCHITECTURE (R13),
+  QUELLEN, README.
+- **Implementierte Funktionen:** siehe ADR-043.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. B1 HOCH (Auswahl „privat“ beim Text-Import hielt ein späteres
+  PRO-Kennzeichen auf) → Händlerbeleg schlägt jedes „privat“ außer der App-Korrektur; B2 (Korrektur „unbekannt“ hielt nur bis zum nächsten
+  Suchlauf) → eigene Herkunft `korrektur`; B3 (Testbericht fehlte) → nachgetragen; B4 („privat“ im Namen galt als Beleg) → nur feste
+  Wendungen; B5 (Rechte) → Betreiberfrage; B6 (`.venv`-Verweis) → nicht gestaged. Fehlende Tests (Team-Betrieb: Token, Mitarbeiter, Händler,
+  Audit) ergänzt. Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** F6 – Altbestand bleibt privat/gewerblich mit Herkunft „Altbestand“, kein Hinweis;
+  Korrektur dürfen alle Team-Mitglieder (protokolliert) und sie bleibt gegen spätere Importe stehen; „privat“ im Text-Import hebt
+  „gewerblich“ weiter nicht auf, nur die Korrektur.
+- **Bekannte Risiken:** nachgebaute Seiten; schwache Einstufungen ohne Hinweis; gespeicherte Suchseiten zeigen ihren Privatfilter nicht.
+- **Nächster sinnvoller Schritt:** P3-06 (`kontakte` als Ereignisse).
+
+## P3-04 – Verfügbarkeit und zuletzt_bestaetigt (23.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** `scout-data-engineer` (inkl. kleiner Oberflächenteile); QA `qa-security-reviewer` mit Browser-Check;
+  Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/migrationen.py` (Schritt 13), `wmscout/verfuegbarkeit.py` (neu), `wmscout/datenbank.py`,
+  `wmscout/ereignis_speicher.py`, `wmscout/importer.py`, `wmscout/bewertung/anschreiben.py`, `wmscout/bewertung/auswertung.py`,
+  `wmscout/ausgabe.py` (CSV, KPI), `wmscout/web/api.py`, `config.yaml` (`verfuegbarkeit`), `vorlagen/report.html`, `mobil.js`,
+  `mobil.css`, `sw.js` (wm-scout-10), Tests `test_verfuegbarkeit.py` (neu) und Anpassungen; Doku ADR-042, ROADMAP.
+- **Implementierte Funktionen:** siehe ADR-042.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“. F1 HOCH (typische Privat-Titel wie „Rentner verkauft …“ wurden als verkauft
+  gesperrt und ausgeblendet) → Positivliste; F2 (Team-Reservierung bei offline ausgeblendet) → laufende Arbeit bleibt sichtbar,
+  Regel nur im Server; F3, F4 (ältere gespeicherte Seite/alte Mail hob offline auf) behoben; Abbruchtest Schritt 13 übernommen.
+  Korrekturen nicht erneut von der QA geprüft.
+- **Betreiberfragen (konservativ entschieden):** „reserviert“ sperrt nicht (nur Hinweis); Schwelle „vermutlich offline“ 14 Tage, nur
+  Hinweis; „nur verfügbare“ standardmäßig an.
+- **Bekannte Risiken:** Portal-eigene Reserviert-/Verkauft-Kennzeichen werden nicht gelesen; nachgebaute Testdaten.
+- **Nächster sinnvoller Schritt:** P3-05 (Privat/Händler mit Herkunft).
+
+## P3-03 – Vollständiger Preisverlauf und Re-Import-Test (21.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** `scout-data-engineer`; QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/datenbank.py` (Mail-Zeitpunkt, Detailpreis mit Historie in einer Transaktion, `_ohne_personendaten`),
+  `wmscout/importer.py` (Mail-Altersregel gegen Preisverlauf, Untergrenze Mail-Datum), `wmscout/preisverlauf.py` (neu),
+  `wmscout/web/api.py` (`GET /api/preisverlauf`), Tests `test_reimport.py`, `test_preisverlauf.py` (neu), Doku ADR-041, ROADMAP.
+- **Implementierte Funktionen:** siehe ADR-041. Keine Schemaänderung; P3-02c (Index) bleibt offen, weil keine Migration nötig war.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. M1 (Detailpreis ohne Transaktion), M2 (Mail zwischen
+  Suche und Detailabruf setzte Preis zurück), N1–N3 behoben. Vorab vom Orchestrator entschieden: Personendaten kommen nach
+  Anonymisierung beim erneuten Einlesen nicht zurück (Lücke gefunden und geschlossen). Korrekturen nicht erneut von der QA geprüft.
+- **Bekannte Risiken:** nachgebaute Seiten, Mails und Texte; Reihenfolgeschutz für Ereignisse offen.
+- **Nächster sinnvoller Schritt:** P3-04 (Verfügbarkeit) oder Abschluss-Prüfung der Phase-3-Abnahme.
+
+## P3-02b – Dubletten bestätigen, ablehnen, aufheben mit Wirkung (20.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Backend `scout-data-engineer`, Oberfläche `scout-ui-engineer`, QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/dubletten.py` (Entscheiden, Wirkung, Rechte), `wmscout/domaene.py` (`fahrzeug_status`),
+  `wmscout/bewertung/auswertung.py` (Wirkung in `dubletten_ids`, `bewerte_alle`, `bewerte_zeilen`, Vergleichsbasis),
+  `wmscout/datenbank.py` (Gruppe in der Team-Sperre, `anzeigen_zu`), `wmscout/web/api.py` (`POST /api/dubletten/bestaetigen|ablehnen|aufheben`,
+  `GET /api/dubletten/entscheidungen`), `wmscout/audit.py`, `wmscout/verkauf.py`, `scout.py` (CLI, nur Einzelplatz),
+  `wmscout/web/static/dubletten.js/.css` (neu), `vorlagen/report.html`, `vorlagen/mobil.html`, `mobil.js`, `sw.js` (wm-scout-9),
+  Tests `test_dubletten_entscheiden.py`, `test_dubletten_oberflaeche.py` (neu), README, HANDY-APP, ADR-040 (Nachtrag), ROADMAP.
+- **Implementierte Funktionen:** siehe ADR-040 Nachtrag P3-02b. Rechte: bestätigen Inhaber/Mitarbeiter, ablehnen/aufheben Inhaber,
+  Händler nie. Keine Schemaänderung.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. H1 (Gruppenmitglied ohne Preis sperrte Anschreiben nicht)
+  und M1 (heuristische Nachbarn der Gruppenmitglieder fehlten in der Gruppenwirkung) behoben, N2 behoben; N1/N3 als P3-02c im Backlog.
+  Korrekturen nicht erneut von der QA geprüft (Gegenproben durch den Agenten).
+- **Bekannte Risiken:** Trefferqualität nur an synthetischen Daten; Service-Worker-Update im Browser und echte Geräte nicht geprüft.
+- **Nächster sinnvoller Schritt:** P3-03 (Preisverlauf, Re-Import-Test).
+
+## P3-02a – Fahrzeugidentität: Grundlage, Vorschläge nur lesend (20.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Plan `scout-architect`; Umsetzung `scout-data-engineer`; QA `qa-security-reviewer`; Doku Orchestrator.
+  Betreiberentscheidungen 20.10.2026: Rechte (bestätigen alle, ablehnen/aufheben Inhaber), Ablehnung hebt Sperre auf, nie automatisch,
+  keine FIN/Personenmerkmale (ADR-040).
+- **Geänderte Dateien:** `wmscout/migrationen.py` (Schritt 12), `wmscout/normalisierung/identitaet.py` (neu), `wmscout/dubletten.py`
+  (neu), `wmscout/normalisierung/geo.py` (vorberechnete PLZ-Näherung, ab 2 Stellen ergebnisgleich), `wmscout/web/api.py`
+  (`GET /api/dubletten-vorschlaege`), `scout.py` (`dubletten`), Tests `test_identitaet.py`, `test_dubletten_vorschlaege.py` (neu),
+  `test_fahrzeuge.py`; Doku ADR-040, Nachtrag ADR-039, ROADMAP (P3-02 geteilt in a/b).
+- **Implementierte Funktionen:** Schema v12 (Entscheidungen mit Lösch- und Änderungsschutz, Zuordnungen nur anfügbar); Vergleich zweier
+  Inserate mit Stufe „hoch“/„mittel“ und Gründen; Blockbildung mit Obergrenze; Vorschlagsliste lesend für Inhaber und Mitarbeiter.
+  Bewertung, Anschreiben und Team-Sperre unverändert.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein kritischer Befund. B1 (verschiedene Grundrisse als „hoch“), B2 (quadratische
+  Laufzeit ohne Grenze unter der App-Sperre), B3 (gleichzeitig aktive Händlerinserate), B4 (tautologischer Wirkungstest), B6, B7 behoben,
+  B5 (Schutz der Entscheidungen) im Schema ergänzt; `PRAGMA foreign_keys` und Rechnen außerhalb der App-Sperre offen für P3-02b.
+  Korrekturen nicht erneut von der QA geprüft (Gegenproben durch den Agenten).
+- **Bekannte Risiken:** Trefferqualität nur an synthetischen Daten; Modellnummer-Erkennung heuristisch; flakiger Zeittest in
+  `test_text_import_korrektur.py` (QA B8, Backlog).
+- **Nächster sinnvoller Schritt:** P3-02b.
+
+## P3-01 – Fahrzeuge getrennt von Inseraten, Schema v11 (20.10.2026) · Status: REVIEW
+
+- **Phase:** 3 (Datenbank und Marktbeobachtung), freigegeben vom Betreiber am 18.10.2026; Phase 2 abgeschlossen (PR #23–#25).
+  Betreiberentscheidungen: Ankaufsstatus bleibt am Inserat; Rückweg = Sicherung `vor-v11` (ADR-039).
+- **Verantwortlicher Agent:** Plan `scout-architect`; Umsetzung `scout-data-engineer`; QA `qa-security-reviewer`; Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/migrationen.py` (Schritt 11, Invarianten), `wmscout/datenbank.py` (lesend: `fahrzeug_id_zu`,
+  `inserate_von_fahrzeug`), Tests `test_fahrzeuge.py` (19, neu), `test_migration.py`/`test_ereignisse.py` (Versionslisten über
+  `AKTUELLE_VERSION`), Doku ADR-039 (ADR-011 teilweise ersetzt), ROADMAP, ARCHITECTURE.
+- **Implementierte Funktionen:** Tabelle `fahrzeuge`, Spalte `inserate.fahrzeug_id` mit Index; jedes vorhandene Inserat bekommt genau ein
+  Fahrzeug, neue Inserate per Trigger; nichts wird zusammengeführt; keine bestehenden Daten verändert. Sicherung vorher, eine
+  Transaktion, idempotent, Invarianten (Zeilenzahlen, 1:1, keine Lücken) mit Rollback.
+- **Tests:** siehe TEST-REPORT.
+- **Review-Ergebnis:** QA FREIGABE, kein kritischer/hoher/mittlerer Befund. Abbruch an allen 27 Stellen des Schritts → vollständiger
+  Rollback; alter Code lehnt v11-Datenbank ab, ohne zu schreiben; Trigger-ID-Rückgabe korrekt. 4 niedrige Hinweise: zwei Testmängel
+  behoben, zwei als Hinweis in ADR-039 bzw. als Code-Kommentar festgehalten.
+- **Bekannte Risiken:** Windows-CI und echte Betreiberdatenbank nicht geprüft (Datenbankgröße F5 offen).
+- **Nächster sinnvoller Schritt:** P3-02 (Fahrzeugidentität, Dublettenvorschläge mit Bestätigung).
+
+## P2-06 – E-Mail-Suchagenten (.eml) (17.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** `source-integrations`; zwei QA-Runden `qa-security-reviewer`; Abschluss der dritten Runde (Tests zu K1,
+  Doku, PR) Orchestrator, auf Wunsch des Betreibers ohne weitere QA-Runde.
+- **Geänderte Dateien:** `wmscout/eingang/email/` (neu: `nachricht.py`, `htmlbaum.py`, `treffer.py`, `kleinanzeigen.py`, `mobilede.py`),
+  `wmscout/importer.py` (`importiere_mails`), `wmscout/datenrechte.py` (Frist für Mails), `wmscout/datenbank.py` (vb unbekannt
+  überschreibt nichts), `wmscout/schalter.py`, `wmscout/web/api.py` (`POST /api/import/mails`), `scout.py` (`import --mails`),
+  `vorlagen/report.html`, `config.yaml`, Tests `test_email_eingang.py`, `test_email_haertung.py`, `test_email_betrieb.py`,
+  `nachgebildet_mails.py` (neu), Doku README, QUELLEN (Abschnitt 6), DATENRECHTE, ARCHITECTURE, ADR-037.
+- **Implementierte Funktionen:** Suchagent-Mails von Kleinanzeigen und mobile.de als `.eml` einlesen; Links werden nie abgerufen, die
+  Adresse wird aus der Anzeigen-ID neu gebildet; Absender, Betreff und Tracking werden nicht gespeichert. Preis nur aus einer eigenen
+  Preiszeile; Mails älter als die letzte Beobachtung ändern den Preis nicht (Dateien nach Mail-Datum sortiert). Eine Mail ergänzt
+  bekannte Anzeigen nur. Grenzen für Größe, Kopf, MIME-Teile, HTML-Knoten und Ebenen. Löschfrist für eingelesene, nicht erkannte
+  und fehlerhafte Mails; unverarbeitete werden gemeldet. Nur Inhaber, Schalter `eingaenge.email` (Standard aus).
+- **Tests:** siehe TEST-REPORT (Gesamtsuite vom Orchestrator nachgestellt).
+- **Review-Ergebnis:** QA Runde 1 „Freigabe mit Auflagen“ (4× HOCH: Laufzeit, Speicher, falscher Preis) → behoben, gemessen;
+  Runde 2 ABLEHNUNG (K1: ältere Mail überschreibt neueren Preis) → in Runde 3 behoben, Test mit Gegenprobe (Altersprüfung aus → rot).
+  Runde 3 nicht mehr von der QA nachgeprüft.
+- **Bekannte Risiken:** keine echten Mails geprüft (F3); Mail-Layout-Annahmen in QUELLEN.md; Gesuch-/Preisregeln doppelt zu P2-05
+  (Backlog P2-05e); Seitenimport hat dieselbe Löschfrist-Lücke für `import/eingelesen/` (Backlog).
+- **Nächster sinnvoller Schritt:** echte Beispiel-Mails (F3) einlesen und Parser nachziehen; P2-05e.
+## P2-05 – Import per URL + eingefügtem Text, Desktop und Handy (17.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Backend `source-integrations`, Oberfläche `scout-ui-engineer`, zwei QA-Runden `qa-security-reviewer`;
+  Abschluss (Tests, Doku, PR) Orchestrator. Die dritte Korrekturrunde wurde auf Wunsch des Betreibers ohne weitere QA-Runde beendet.
+- **Geänderte Dateien:** `wmscout/eingang/text.py` (neu: Adressprüfung, Bereinigung, Felder, Gesuche), `wmscout/eingang/basis.py`
+  (`Lesung.nur_leere_felder`), `wmscout/importer.py`, `wmscout/datenbank.py` (`nur_leere`), `wmscout/web/api.py`
+  (`POST /api/import/text`), `wmscout/web/live.py`, `wmscout/web/static/textimport.js/.css` (neu), `mobil.js`, `sw.js` (wm-scout-8),
+  `vorlagen/report.html`, `vorlagen/mobil.html`, Tests `test_text_import.py`, `test_text_import_korrektur.py`, `test_text_import_r2.py`,
+  `test_text_import_oberflaeche.py` (neu), Doku README, QUELLEN, SOURCES, ROLLEN, DATENRECHTE, ARCHITECTURE, HANDY-APP, ADR-038.
+- **Implementierte Funktionen:** Formular „Inserat einlesen (Link + Text)“ auf Desktop und Handy für Inhaber und Mitarbeiter; die
+  Adresse wird nie abgerufen, nur Plattform und ID werden daraus gelesen. Kontaktdaten werden vor dem Speichern entfernt.
+  Preise nur, wenn sicher erkannt (VB, Preis-Label, allein in einer Zeile) oder vom Nutzer im Formular eingetragen – sonst kein Preis
+  und keine Preisänderung, mit Hinweis. Gesuche werden nicht gespeichert. Angaben aus Suchlauf, Seiten- und Mail-Import bleiben
+  erhalten; ein Text-Import ergänzt nur Leeres und den Preis. Schalter `eingaenge.text`.
+- **Tests:** siehe TEST-REPORT (Gesamtsuite vom Orchestrator nachgestellt).
+- **Review-Ergebnis:** QA Runde 1 ABLEHNUNG (K1 falscher Preis aus Fließtext, H1 Regex-Laufzeit 17 s) → behoben; Runde 2 ABLEHNUNG
+  (R2-K1 geschätzter Preis überschreibt bestätigten, R2-H1 „24 900“ → 900) → in Runde 3 behoben (Preisfeld, keine geschätzten Preise,
+  Tausenderleerzeichen). Runde 3 nicht mehr von der QA nachgeprüft.
+- **Bekannte Risiken:** nur nachgebaute Texte; Namen im Fließtext ohne Anker werden nicht erkannt (DATENRECHTE.md); Gesuch- und
+  Preisregeln doppelt zu P2-06 (Backlog P2-05e).
+- **Nächster sinnvoller Schritt:** P2-06 (E-Mail-Eingang) auf diesen Stand bringen und abschließen.
+
+## P2-04 – Quellen und Eingänge schaltbar (17.10.2026) · Status: REVIEW
+
+- **Verantwortlicher Agent:** Umsetzung `source-integrations`; QA `qa-security-reviewer`; Prüfung und Doku Orchestrator.
+- **Geänderte Dateien:** `wmscout/schalter.py` (neu), `wmscout/importer.py` (Quellen vor dem Abruf prüfen, `uebersprungen`,
+  Detailabruf nur laufender Quellen), `wmscout/datenbank.py` (`ohne_details` filtert nach Quelle in SQL),
+  `wmscout/ereignis_speicher.py` (auch Code-Freigabe der Adapterklasse), `wmscout/web/api.py` (`/api/import` → 409
+  `deaktiviert`, Prüfung der Konfiguration beim Start), `wmscout/mandanten.py`, `wmscout/app.py` (Meldung „übersprungen“),
+  `scout.py` (`quellen liste|an|aus`, Seitenimport respektiert den Schalter), `vorlagen/report.html` (Warnhinweis bei 409),
+  `config.yaml` (Abschnitt `eingaenge`), Tests `test_schalter.py` (31, neu), `test_mandanten.py`, `test_import.py`,
+  `test_ereignisse.py`, `test_v4_abgleich.py`, Doku README, QUELLEN.md, ADR-036.
+- **Implementierte Funktionen:** Eingänge `seiten`/`text`/`email` in `config.yaml` schaltbar (Standard: an/an/aus), ungültige
+  Werte brechen den Start ab (auch je Mandant). Pull-Quellen laufen nur mit Code-Freigabe (Regel 12) und ohne Abschaltung in
+  der Tabelle `quellen`; Übersprungenes ist kein Fehler und wird gemeldet. `quellen an` für nicht freigegebene Quellen und
+  `quellen aus` für nicht freigegebene Quellen werden abgelehnt (Tabelle unverändert). Keine Schemaänderung.
+- **Tests:** `pytest -q` → **940 passed**; `ruff check .` → grün (vom Orchestrator nachgestellt). Gegenproben: 7 nach dem
+  QA-Durchgang (F1, F2 ×2, F3, F4 ×2, F9) – alle erkannt, dazu die Gegenproben der ersten Runde.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein Weg gefunden, auf dem eine nicht freigegebene Quelle abgerufen wird.
+  F1 HOCH (`quellen aus` für gesperrte Quelle wirkungslos gespeichert) → abgelehnt mit Meldung; F2 (Mandanten) → Prüfung im
+  `Kontext` und in `mandanten.alle`; F3 (Detail-Limit durch gesperrte Zeilen verbraucht) → Filter in SQL; F4 (Ereignis-Eingang
+  ohne Code-Freigabe) → zusätzlich Klassenfreigabe, `zugriffsart` wird gesetzt; F6 (Doku zum Standard) → angeglichen;
+  F7 → Warnhinweis 15 s; F9 → klare CLI-Meldungen; F8 (Report nennt Übersprungenes nicht) bewusst offen, in ADR-036.
+- **Bekannte Risiken:** Warnhinweis im Browser nicht geprüft; Merge-Konflikte mit P2-05 in `api.py`/`scout.py` möglich (kleine
+  Blöcke).
+- **Nächster sinnvoller Schritt:** P2-05 auf `schalter.eingang_pruefen(cfg, "text")` umstellen, P2-06 Teil 2 (Schalter `email`).
+
+## P2-00 – Eingang-Schnittstelle (17.10.2026) · Status: REVIEW
+
+- **Phase:** 2 (Multi-Quellen-System), freigegeben vom Betreiber am 17.10.2026 („Starte Phase 2“). Betreiberentscheidungen zu
+  Phase 2: E-Mails als `.eml` (Thunderbird/Webmail), Import per URL + Text für alle Teammitglieder, eingelesene Mails mit der
+  Datenschutz-Frist löschen, Beispiel-Mails folgen (bis dahin Parser-Gerüst mit nachgebildeten Mails).
+- **Verantwortlicher Agent:** Analyse `scout-architect`; Umsetzung `source-integrations`; QA-Korrekturen Orchestrator.
+- **Geänderte Dateien:** `wmscout/eingang/basis.py` (neu: `Rohdaten`, `Lesung`, `Eingang`, `SeitenEingang`), `wmscout/importer.py`
+  (`importiere(lesung, kanal)`, Seitenimport darüber), `wmscout/domaene.py` (Plattformen, Kanäle, Prüfungen),
+  `wmscout/ereignisse.py`, `wmscout/ereignis_speicher.py` (Push-Kanäle abgewiesen), `wmscout/datenbank.py` (Docstring),
+  Tests `test_eingang.py` (16, neu), `test_ereignisse.py`/`test_v4_abgleich.py` (Testdaten „mobilede“ → „mobile.de“, Ereignisse
+  über den freigegebenen Kanal `api`), Doku ADR-035, ARCHITECTURE (Modul, R20 behoben, Diagramm), EREIGNIS-ENGINE, ROADMAP.
+- **Implementierte Funktionen:** ein Schreibweg für Push-Eingänge; Plattform/Kanal/Anzeigen-ID werden vor dem ersten Schreiben
+  geprüft; Herkunft der Fahrzeugart geht über die `Lesung` mit; Ereignisspeicher nur noch für `api`/`stream`.
+- **Tests:** `pytest -q` → **907 passed**; `ruff check .` → grün. Gegenproben: 7 durch den Agenten, 2 durch den Orchestrator
+  (Push-Abweisung im Ereignisspeicher, Zeitzone in `Rohdaten`) – alle erkannt.
+- **Review-Ergebnis:** QA „Freigabe mit Auflagen“, kein KRITISCH/HOCH. B1 (ADR nicht erzwungen) → erzwungen; B2 (Zeitpunkt)
+  → entschieden in ADR-035 Nr. 6, Zeitzone geprüft; B3 (Doku) → nachgezogen; B5/B6 → Kommentar, Test; B4 (ganze Seite wird
+  bei unpassender ID abgewiesen) bewusst so, mit Test; B7 (Mehraufwand Dekodierung) nicht gemessen, vernachlässigbar.
+- **Bekannte Risiken:** Verhalten mit echten Betreiberdatenbanken nicht geprüft (kein Produktivbestand hier); `mobilede` wurde laut
+  Code-Historie nie produktiv geschrieben.
+- **Nächster sinnvoller Schritt:** P2-04 (Quellen schaltbar) und P2-05 (URL + Text, Desktop und Handy).
+
+## Phase 1 – Abschluss (17.10.2026) · Status: REVIEW
+
+- **Anlass:** Betreiber „Schließe Phase 1 komplett ab“. Entscheidungen: F9 „Nur 3.13“, F10 „Befehl + einstellbare Frist,
+  Standard aus“, F11 „Lesen frei, Schreiben nur zuständig“ (ADR-034).
+- **Pakete:** P1-12 (ohne EZ keine Beträge, Besichtigung nur mit manuellem Marktwert), P1-07 (Versionsprüfung beim Speichern
+  der Besichtigung, Konfliktdialog in der Handy-App, Planen nach Abschluss → 409), P1-15 (Rollenmatrix `docs/ROLLEN.md`;
+  „gekauft“, Suchlauf und Seitenimport nur Inhaber), P1-14a (`scout.py inserat anonymisieren`, Frist
+  `datenschutz.inserate_anonymisieren_nach_monaten`), P1-05 (WhatsApp-Zuweisung nicht mehr unter der globalen Sperre; eng
+  umgesetzt, siehe ADR-034), P1-08 (`wmscout/domaene.py`, `bewerte_zeilen` ohne Datenbank), P1-09 (`config.local.yaml`,
+  Passwort nie als Argument), P1-10 (nur Python 3.13, Lock-Dateien ohne Versionswechsel neu erzeugt), P1-11a/b (Tests für
+  `netz.py`, Suchlauf, Auto-Suche, Mail; die Auto-Suche beendet sich bei einem Fehler nicht mehr still).
+- **Unabhängige QA-Prüfung** (`qa-security-reviewer`): Freigabe mit Auflagen, kein KRITISCH. Behoben: N1 (HOCH, Ankauf eines
+  Inserats ohne EZ plante mit 0 €), N2 („gekauft“ verlassen nur Inhaber), Q6/N3 (Weiterleitung nach Login – serverseitig, der
+  bisherige Test prüfte nur eine Zeichenkette), Q15 (ICS), Q18 (Kommentar), N4/N5/N8–N10 (Frist auch nach Seitenimport und beim
+  Start, Umfang wie Widerruf, robust gegen gesperrte Dateien und kaputtes JSON, Prüfung in der Transaktion), N6 (Termin
+  verschieben ohne Versionskonflikt), N11 (null statt 0), N12–N14, N16, Q11 (Diagnose-Rohseiten mit Frist), P1-14b (keine
+  abgeschlossenen Besichtigungen und keine Unterschriften auf dem Gerät).
+- **Keine Schemaänderung**, keine Migration.
+- **Eigene Fehler:** Die Ankaufsplanung ohne EZ (N1) und die Weiterleitung (Q6, fälschlich als erledigt angenommen) hätte ich
+  selbst prüfen müssen. Ein Klickskript fing zunächst die eigene Login-Seite ab (Muster passte auf den Abfrageparameter). Nach P1-15 lief die Gesamtsuite zunächst nicht; drei ältere Tests ließen einen Mitarbeiter „gekauft“
+  setzen bzw. importieren und wurden angepasst (eigener Commit). Zwei Gegenproben waren zunächst wirkungslos (eine Prüfung,
+  die schon anderswo greift; ein KeyError statt echter Fehlleitung) und wurden ersetzt.
+- **Tests:** siehe TEST-REPORT.
+- **Nicht geprüft:** Windows-Installer mit vorhandener 3.12-Umgebung (nur CI mit 3.13), Betrieb mit echter WhatsApp-/SMTP-
+  Verbindung, Safari/iOS.
+
 ## Phase G2 – Mandantenfähigkeit (17.10.2026) · Status: REVIEW
 
 - **Anlass:** Betreiber „Phase G“ / „Beides nacheinander“ (G0, dann Mandanten), nach Merge von G1. Entscheidungen ADR-033:

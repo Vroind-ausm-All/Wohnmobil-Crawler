@@ -264,7 +264,10 @@ def test_setze_status_kontaktiert_setzt_kontaktiert_von_und_rollback_bei_fremdem
         db.setze_status(a, "kontaktiert", nutzer_id=anna, inhaber=True)
     # Bearbeiter nachfassen: erster Kontakt bleibt, Zähler läuft
     assert db.nachgefasst(a, "Nachfrage", nutzer_id=ben)
-    assert bearbeitung(db, a) == vorher_bearb and db.con.execute("SELECT nachfass_anzahl FROM anzeigen WHERE id=?", (a,)).fetchone()[0] == 1
+    nachher = bearbeitung(db, a)
+    # Bearbeiter und erster Kontakt bleiben; uebernommen_am verlängert die eigene Reservierung (kann eine Sekunde später liegen)
+    assert (nachher[0], nachher[2], nachher[3]) == (vorher_bearb[0], vorher_bearb[2], vorher_bearb[3]) and nachher[1] >= vorher_bearb[1]
+    assert db.con.execute("SELECT nachfass_anzahl FROM anzeigen WHERE id=?", (a,)).fetchone()[0] == 1
 
 
 def test_fehler_mitten_in_der_transaktion_rollt_uebernahme_und_status_zurueck(db, team, importiert, monkeypatch):
@@ -851,7 +854,7 @@ def test_service_worker_speichert_team_stand_nicht_zwischen():
     for pfad in ("/api/team", "/api/suchlauf", "/api/verkaufsanfrage/1", "/api/verkaufsanfragen", "/api/ankauf/1", "/api/ankaeufe",
                  "/api/kalkulation/1", "/anfrage-fotos/1/a.jpg", "/protokoll/1", "/api/haendler/fahrzeuge", "/api/auktion/1", "/mx"):
         assert not lesbar(pfad), pfad
-    assert "antwort.status === 401" in sw and "wm-scout-4" in sw
+    assert "antwort.status === 401" in sw and int(re.search(r"VERSION = .wm-scout-(\d+)", sw).group(1)) >= 7   # 7: Inserat einlesen (P2-05)
 
 
 def test_zwischenspeicher_wird_von_uebernahme_nicht_verworfen_team_aber_frisch(server, team, db):
@@ -888,6 +891,7 @@ def test_csv_team_spalten_am_ende_ohne_team_leer(cfg, db, importiert, team, tmp_
 
 
 def _ohne_zeit(html: str) -> str:
+    html = re.sub(r'data-jetzt="[^"]*"', 'data-jetzt="<ZEIT>"', html)               # Serverzeit der Meldungen (P6-04)
     return re.sub(r"\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}", "<ZEIT>", html)           # „Stand“ des Reports
 
 

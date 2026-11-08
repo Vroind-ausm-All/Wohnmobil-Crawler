@@ -18,7 +18,7 @@ Der Integrationszweig bleibt `claude/gifted-heisenberg-d1cjlr`. `main` wird nich
     -> inserate + beobachtungen + preis_historie (Schema v4)
 ```
 
-- `plattform` bezeichnet den Markt (z. B. mobilede), `kanal` den Eingang (email, manuell, api, stream).
+- `plattform` bezeichnet den Markt (`kleinanzeigen`, `mobile.de`, vorgemerkt `autoscout24`; Konstanten in `wmscout/domaene.py`), `kanal` den Eingang (email, manuell, api, stream).
 - Eindeutige Inserate nutzen `UNIQUE(plattform, anzeigen_id)`.
 - Bekannte Zustände werden nicht erneut protokolliert; optionale externe `ereignis_id` wird dedupliziert.
 - Löschereignisse ändern nur die **Verfügbarkeit** des Inserats, nicht dessen Ankaufstatus.

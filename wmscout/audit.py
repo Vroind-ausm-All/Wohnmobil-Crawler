@@ -25,17 +25,23 @@ _LESEN = (
     (re.compile(r"/ankauf/(\d+)/vertrag"), "ankauf"),
     (re.compile(r"/ankauf-dokumente/(\d+)/.+"), "ankauf"),
     (re.compile(r"/api/audit"), "audit"),
+    (re.compile(r"/api/verhandlung/([\w-]+)"), "anzeige"),     # Antworten und Notizen können Namen/Telefon enthalten (P6-03b)
+    (re.compile(r"/api/kontakte/([\w-]+)"), "anzeige"),         # Kontakttexte (P7-01, QA B4)
+    (re.compile(r"/api/fahrzeug/([\w-]+)"), "anzeige"),         # Fahrzeugdetail mit Notiz, Kontakten und Verhandlung (nach anfrage-…)
 )
-_OBJEKT = re.compile(r"/(verkaufsanfrage|besichtigung|ankauf|auktion|anzeige|bearbeitung|nutzer|standorte|kalkulation)/([\w-]+)")
+_OBJEKT = re.compile(r"/(verkaufsanfrage|besichtigung|ankauf|auktion|anzeige|bearbeitung|nutzer|standorte|kalkulation|dubletten|kontakt|suchprofil"
+                     r"|kalibrierung)/([\w-]+)")
 
 
 def einordnen(methode: str, pfad: str) -> tuple[str, str | None] | None:
     """(Aktion, Objekt) oder None, wenn der Zugriff nicht protokolliert wird. Jede Änderung (POST) zählt; gelesen nur Personendaten."""
     if methode == "POST":
-        if pfad in ("/api/login", "/api/logout"):
+        if pfad in ("/api/login", "/api/logout", "/api/einladung"):
             return pfad.rsplit("/", 1)[1], None
+        if pfad == "/api/einladung/pruefen":
+            return None                                    # liest nur Name und Rolle zur Einladung (F4)
         m = _OBJEKT.search(pfad)
-        return "aendern", (f"{m.group(1)}:{m.group(2)}" if m else None)
+        return "aendern", (f"{'dublette' if m.group(1) == 'dubletten' else m.group(1)}:{m.group(2)}" if m else None)
     if methode == "GET":
         for muster, art in _LESEN:
             if m := muster.fullmatch(pfad):

@@ -8,6 +8,7 @@ Kleinanzeigen wird nur erkannt, wenn die Seite nicht von mobile.de stammt.
 """
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from pathlib import Path
@@ -51,10 +52,10 @@ class BegleitordnerFehler(OSError):
     """Die Datei ist verschoben, der zugehörige Begleitordner (<name>_files) aber nicht."""
 
 
-def import_ordner(cfg: dict) -> Path:
-    """Import-Ordner laut config.yaml (Standard „import“, relativ zum Projektordner)."""
+def import_ordner(cfg: dict, basis: Path | None = None) -> Path:
+    """Import-Ordner laut config.yaml (Standard „import“, relativ zum Projektordner bzw. zu `basis`, wenn angegeben)."""
     ordner = Path(str((cfg.get("import") or {}).get("ordner") or "import")).expanduser()
-    return (ordner if ordner.is_absolute() else PROJEKT / ordner).resolve()
+    return (ordner if ordner.is_absolute() else Path(basis or PROJEKT) / ordner).resolve()
 
 
 def html_dateien(ordner: Path) -> list[Path]:
@@ -309,6 +310,7 @@ def verschiebe(datei: Path, ziel: Path) -> Path:
     name = _freier_name(ziel, datei.stem, datei.suffix)
     neu = ziel / f"{name}{datei.suffix}"
     shutil.move(str(datei), str(neu))
+    os.utime(neu)                    # ab dem Ablegen zählt die Datenschutz-Frist (wie bei Mails) – nicht ab dem Speichern im Browser
     for s in BEGLEITORDNER:
         begleiter = datei.with_name(f"{datei.stem}{s}")
         if begleiter.is_dir():

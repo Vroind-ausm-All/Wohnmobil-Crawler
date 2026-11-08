@@ -1,0 +1,33 @@
+# Wohnmobil-Scout – Team-App (P7-04, docs/SERVERBETRIEB.md). Lauscht nur auf 127.0.0.1:8765.
+# Kopieren nach /etc/systemd/system/, dann: systemctl daemon-reload && systemctl enable --now wohnmobil-scout-app
+[Unit]
+Description=Wohnmobil-Scout Team-App (127.0.0.1:8765)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=scout
+Group=scout
+WorkingDirectory=/opt/wohnmobil-scout
+# Geheimnisse (SMTP-Passwort, WhatsApp-Token …) nur hier, nie im Repository: Datei mit Rechten 600 (betrieb/umgebung.beispiel)
+EnvironmentFile=-/etc/wohnmobil-scout/umgebung
+ExecStart=/opt/wohnmobil-scout/.venv/bin/python scout.py app --kein-browser
+Restart=on-failure
+RestartSec=10
+# Härtung: nur Daten-, Ausgabe- und Importordner beschreibbar
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/wohnmobil-scout/daten /opt/wohnmobil-scout/ausgabe /opt/wohnmobil-scout/import
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

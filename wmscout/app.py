@@ -7,11 +7,11 @@ Der Server lauscht nur auf 127.0.0.1 – er ist von anderen Rechnern aus nicht e
 """
 from __future__ import annotations
 
+import contextlib
 import logging
 import secrets
 import sys
 import threading
-import time
 import webbrowser
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
@@ -19,6 +19,7 @@ from pathlib import Path
 
 from .ausgabe import schreibe_ausgaben
 from .benachrichtigung import sende_mail
+from .bewertung.neuigkeit import gesenkt_seit
 from .bearbeitung import reservierung_tage
 from .bewertung.auswertung import bewerte_alle
 from .datenbank import Datenbank, wal_aktiv
@@ -28,7 +29,7 @@ from .sicherung import sicherung_ordner
 from .team import lade_team_sicht
 from .web.api import Kontext, bearbeite
 from .web.sicherheit import SICHERHEITS_KOPF
-from . import mandanten
+from . import bewertungsverlauf, datenrechte, mandanten
 from .sicherung import sicherung_ordner as _sicherung_ordner
 
 log = logging.getLogger("scout")
@@ -42,7 +43,7 @@ class Suchlauf:
         self.thread: threading.Thread | None = None
         self.letzter_start: str | None = None
         self.bei_ende: list = []           # Rückrufe mit den bewerteten Zeilen (Cache leeren, WhatsApp …)
-        self.stand = {"laeuft": False, "meldung": "", "fehler": None, "ende": None, "neue_treffer": 0,
+        self.stand = {"laeuft": False, "meldung": "", "fehler": None, "ende": None, "neue_treffer": 0, "preissenkungen": 0,
                       "nachfassen": 0, "naechste_auto": None}
         stand = self.stand
 
@@ -57,7 +58,8 @@ class Suchlauf:
         """Eigene Verbindung; Sicherungsordner aus config.yaml (sicherung -> ordner), nicht der Standard neben der Datenbank."""
         return Datenbank(self.db_pfad, sicherung_ordner(self.cfg, self.basis), wal=wal_aktiv(self.cfg))
 
-    def starte(self) -> bool:
+    def starte(self, ausloeser: str = "manuell") -> bool:
+        """``ausloeser``: „manuell“ (Knopf) oder „auto“ (Auto-Suche: beachtet Intervalle je Quelle und die Pause nach einer Sperre, P4-04)."""
         if self.thread and self.thread.is_alive():
             return False
         sperre = Laufsperre(self.db_pfad)          # auch gegen „scout.py lauf“ aus der Aufgabenplanung (anderer Prozess)
@@ -66,7 +68,7 @@ class Suchlauf:
             return False
         self.letzter_start = datetime.now().isoformat(timespec="seconds")
         self.stand.update(laeuft=True, meldung="Suche startet …", fehler=None, ende=None)
-        self.thread = threading.Thread(target=self._lauf, args=(sperre,), daemon=True)
+        self.thread = threading.Thread(target=self._lauf, args=(sperre, ausloeser), daemon=True)
         try:
             self.thread.start()
         except BaseException:
@@ -75,23 +77,30 @@ class Suchlauf:
             raise
         return True
 
-    def _lauf(self, sperre: Laufsperre | None = None):
+    def _lauf(self, sperre: Laufsperre | None = None, ausloeser: str = "manuell"):
         try:
             db = self.oeffne_datenbank()
-            stat = Importer(self.cfg, db).lauf(self.cfg["suchen"])
+            importer = Importer(self.cfg, db)
+            importer.ausloeser, importer.intervall_beachten = ausloeser, ausloeser == "auto"
+            stat = importer.lauf(self.cfg["suchen"])
+            datenrechte.frist_anwenden(db, self.cfg, self.basis, (self.basis / self.db_pfad).parent / "fotos")
             # wie „python scout.py lauf“: Report/CSV/Anschreiben-Dateien aktualisieren, ggf. Mail
             zeilen = bewerte_alle(self.cfg, db, self.basis, lauf_start=self.letzter_start)
+            bewertungsverlauf.merken(db, zeilen)                   # Verlauf von Bewertung und Deal-Score (P5-07)
             sende_mail(self.cfg, zeilen, schreibe_ausgaben(self.cfg, zeilen, self.basis, fehler=stat["fehler"],
-                                                team=lade_team_sicht(db, reservierung_tage(self.cfg))))
+                                                team=lade_team_sicht(db, reservierung_tage(self.cfg))), seit=self.letzter_start)
             for rueckruf in self.bei_ende:
                 try:
                     rueckruf(zeilen)
                 except Exception:  # noqa: BLE001 – Benachrichtigungen dürfen den Lauf nicht stören
                     log.exception("Nachbearbeitung nach Suchlauf fehlgeschlagen")
             neue = sum(1 for z in zeilen if z["neu"] and z["bereit"])
-            self.stand.update(fehler=stat["fehler"], neue_treffer=neue,
+            gesenkt = len(gesenkt_seit(zeilen, self.letzter_start))        # deutliche Preissenkungen in diesem Lauf (P4-03)
+            uebersprungen = "".join(f" · übersprungen: {u['quelle']} ({u['grund']})" for u in stat.get("uebersprungen", []))
+            self.stand.update(fehler=stat["fehler"], neue_treffer=neue, preissenkungen=gesenkt,
                               nachfassen=sum(1 for z in zeilen if z["nachfassen"]), meldung=(
-                f"Fertig: {stat['neu']} neue Anzeigen, davon {neue} mit Anschreiben · {stat['preis']} Preissenkungen"))
+                f"Fertig: {stat['neu']} neue Anzeigen, davon {neue} mit Anschreiben · {stat['preis']} Preissenkungen"
+                f"{f', davon {gesenkt} deutlich' if gesenkt else ''}{uebersprungen}"))
         except Exception as e:  # noqa: BLE001 – Fehler in der Oberfläche anzeigen statt Thread sterben lassen
             log.exception("Suchlauf fehlgeschlagen")
             self.stand.update(fehler=str(e), meldung="Suchlauf fehlgeschlagen")
@@ -109,6 +118,7 @@ class AutoSuche:
         self.stunden = float(a.get("auto_suche_stunden") or 0)
         self.von, self.bis = int(a.get("auto_suche_von", 7)), int(a.get("auto_suche_bis", 21))
         self.suchlauf = suchlauf
+        self.halt = threading.Event()               # nur für Tests und geordnetes Beenden
 
     def naechste(self, letzter: datetime | None, jetzt: datetime) -> datetime:
         t = max(jetzt, letzter + timedelta(hours=self.stunden)) if letzter else jetzt
@@ -122,18 +132,33 @@ class AutoSuche:
         if self.stunden > 0:
             threading.Thread(target=self._schleife, daemon=True).start()
 
+    def _schritt(self, db: Datenbank) -> bool:
+        """Ein Durchgang: nächsten Termin berechnen und anzeigen, bei Fälligkeit den Suchlauf starten."""
+        ende = self.suchlauf.stand["ende"]
+        letzter = max(filter(None, [db.letzter_lauf(), datetime.fromisoformat(ende) if ende else None]),
+                      default=None)
+        jetzt = datetime.now()
+        faellig = self.naechste(letzter, jetzt)
+        self.suchlauf.stand["naechste_auto"] = faellig.isoformat(timespec="minutes")
+        if faellig <= jetzt and not self.suchlauf.stand["laeuft"] and self.suchlauf.starte("auto"):
+            log.info("Automatische Suche startet")
+            return True
+        return False
+
     def _schleife(self):
-        db = self.suchlauf.oeffne_datenbank()       # eigene Verbindung für diesen Thread
+        db = None
         while True:
-            ende = self.suchlauf.stand["ende"]
-            letzter = max(filter(None, [db.letzter_lauf(), datetime.fromisoformat(ende) if ende else None]),
-                          default=None)
-            jetzt = datetime.now()
-            faellig = self.naechste(letzter, jetzt)
-            self.suchlauf.stand["naechste_auto"] = faellig.isoformat(timespec="minutes")
-            if faellig <= jetzt and not self.suchlauf.stand["laeuft"] and self.suchlauf.starte():
-                log.info("Automatische Suche startet")
-            time.sleep(60)
+            try:
+                if db is None:
+                    db = self.suchlauf.oeffne_datenbank()    # eigene Verbindung für diesen Thread
+                self._schritt(db)
+            except Exception:  # noqa: BLE001 – ein Fehler darf die Auto-Suche nicht dauerhaft beenden (P1-11b)
+                log.exception("Automatische Suche: Durchgang fehlgeschlagen – nächster Versuch in einer Minute")
+                with contextlib.suppress(Exception):     # Verbindung beim nächsten Durchgang neu öffnen
+                    db.con.close()
+                db = None
+            if self.halt.wait(60):
+                return
 
 
 def baue_handler(k: Kontext | None = None, waehle=None):
@@ -194,6 +219,7 @@ def _kontext(cfg: dict, db: Datenbank, basis: Path) -> tuple[Kontext, Suchlauf]:
     suchlauf = Suchlauf(cfg, str(db_pfad), basis)
     k = Kontext(cfg, db, basis, secrets.token_urlsafe(18), suchlauf, db_pfad.parent / "fotos")
     suchlauf.bei_ende.append(lambda zeilen: (k.veraendert(), k.whatsapp.neue_treffer(zeilen), k.live.melde("suchlauf")))
+    datenrechte.frist_anwenden(db, cfg, basis, db_pfad.parent / "fotos")      # auch ohne Suchlauf/Import (P1-14a)
     return k, suchlauf
 
 

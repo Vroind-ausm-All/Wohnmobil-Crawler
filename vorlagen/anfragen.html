@@ -172,6 +172,9 @@ var TOKEN = {{ token | tojson }}, STATUS = {{ status | tojson }}, KANAELE = {{ k
         '</b></div><div><span>Max-EK</span>' + eur(b.max_ek) + '</div></div>' +
         '<p class="leise">Marktniveau ' + eur(b.marktwert) + (b.spanne_von ? ' (Spanne ' + eur(b.spanne_von) + ' – ' + eur(b.spanne_bis) + ')' : '') +
         ' · Sicherheit ' + esc(b.sicherheit) + ' · ' + esc(b.vergleich_basis || '') + '</p>' +
+        (b.max_ek_von !== null && b.max_ek_von !== undefined && b.max_ek_bis ? '<p class="leise" data-maxek-spanne>Max-EK als Spanne: ' + eur(b.max_ek_von) + ' – ' + eur(b.max_ek_bis) + '</p>' : '') +
+        (b.abschlag_marke ? '<p class="hinweis info" data-marke-unbekannt>⚠ Marke unbekannt – Händler-VK ' + Math.round(b.abschlag_marke * 100) + ' % niedriger angesetzt; Marke beim Verkäufer erfragen</p>' : '') +
+        ((b.maengel || []).length ? '<p class="hinweis warn" data-maengel>Mängel laut Angaben: ' + esc(b.maengel.map(function(m){ return m.name; }).join(', ')) + '</p>' : '') +
         (s ? '<p class="leise">Dem Verkäufer gezeigt: ' + eur(s[0]) + ' – ' + eur(s[1]) + '</p>' : '<p class="leise">Dem Verkäufer wurde keine Spanne gezeigt (Datenlage zu unsicher oder abgeschaltet).</p>') + '</div>' +
         '<div class="karte"><h3>Verkäufer</h3><p>' + esc(a.name) + ' · ' + esc(a.plz) + ' ' + esc(a.ort || '') + '</p><p>' +
         (a.telefon ? '<a href="tel:' + esc(a.telefon) + '">' + esc(a.telefon) + '</a> ' : '') + (a.email ? '<a href="mailto:' + esc(a.email) + '">' + esc(a.email) + '</a>' : '') + '</p>' +

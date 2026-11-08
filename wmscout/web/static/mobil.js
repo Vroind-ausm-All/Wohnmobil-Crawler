@@ -28,6 +28,32 @@
     el.textContent = t; el.classList.add("zeigen");
     clearTimeout(toastUhr); toastUhr = setTimeout(function () { el.classList.remove("zeigen"); }, 4000);
   }
+  // Verfügbarkeit des Inserats (P3-04): Abzeichen nur bei reserviert/verkauft/offline/„vermutlich offline“; Text nur über esc()
+  function verfTag(f) {
+    if (!f.verfuegbarkeit_text) return "";
+    return '<span class="tag verf ' + esc(f.vermutlich_offline ? "vermutlich" : f.verfuegbarkeit) + '" data-verfuegbarkeit="">' + esc(f.verfuegbarkeit_text) + "</span>";
+  }
+  // Anbieterart mit Herkunft (P3-05): gewerblich rot, unbekannt/unbelegt gelb; Text nur über esc()
+  function anbTag(f) {
+    var a = f.anbieter;
+    if (!a) return "";
+    return '<span class="tag anb ' + esc(a.typ) + (a.belegt ? "" : " unbelegt") + '" data-anbieter="">' + esc(a.text) + "</span>";
+  }
+  // Datenqualität (P3-08): Abzeichen nur bei schwacher Datenlage; Markierungen im Detail; Text nur über esc()
+  function dqTag(f) {
+    return f.datenqualitaet && f.datenqualitaet.stufe === "schwach" ? '<span class="tag dq" data-dq="">Daten lückenhaft</span>' : "";
+  }
+  // Neuigkeit (P4-03): frisch eingegangen / Preis deutlich gesenkt / jetzt im Rahmen – Text nur über esc()
+  function neuTag(f) {
+    var n = f.neuigkeit;
+    return n ? '<span class="tag ' + (n.im_rahmen ? "gruen" : "neu") + '" data-neuigkeit="">' + esc(n.im_rahmen ? "jetzt im Rahmen" : n.senkung ? "Preis gesenkt" : "neu") + "</span>" : "";
+  }
+  function dqKarte(f) {
+    var q = f.datenqualitaet;
+    if (!q) return "";
+    return '<div class="karte dq"><div class="zeile"><span class="leise">Datenqualität</span><span class="tag dq-' + esc(q.stufe) + '">' + esc(q.wert) + "/100 (" +
+      esc(q.stufe) + ")</span></div>" + q.markierungen.map(function (m) { return '<p class="leise dq-m dq-' + esc(m.art) + '">' + esc(m.text) + "</p>"; }).join("") + "</div>";
+  }
   function ampelTag(a) { return '<span class="tag ' + esc(a) + '">' + esc({ gruen: "Grün", gelb: "Gelb", rot: "Rot" }[a] || "–") + "</span>"; }
 
   function api(pfad, daten, nochmal) {
@@ -119,8 +145,25 @@
   window.addEventListener("offline", syncAnzeige);
 
   // ---------------------------------------------------------------- Seiten
+  // Meldungen (P6-04): Antwort fällig, Besichtigung, Nachfassen, Preissenkung, neu; „gelesen“ merkt dieses Gerät (localStorage), Texte nur über esc()
+  var MELDUNG_GELESEN = "scout-meldungen-gelesen";
+  function meldungenGelesen() { try { return localStorage.getItem(MELDUNG_GELESEN) || ""; } catch (e) { return ""; } }
+  function meldungenAbschnitt(l) {
+    if (!l.length) return "";
+    var bis = meldungenGelesen(), neu = l.filter(function (m) { return m.zeit > bis; }).length;
+    return '<h2>Meldungen' + (neu ? ' <span class="tag neu" data-meldungen-neu="">' + neu + " neu</span>" : "") + "</h2>" +
+      '<div class="karte" data-meldungen="">' + l.slice(0, 12).map(function (m) {
+        // Verkaufsanfragen (P7-02) öffnen die Anfragenseite (nur Pfade dieses Servers), Inserate das Fahrzeugdetail
+        var ziel = m.link && /^\/(?!\/)[\w#/-]*$/.test(m.link) ? esc(m.link) : "#/fahrzeug/" + encodeURIComponent(m.id);
+        return '<a class="zeile meldung' + (m.zeit > bis ? " ungelesen" : "") + (m.dringend ? " dringend" : "") + '" href="' + ziel + '">' +
+          '<span><span class="tag">' + esc(m.art_text) + "</span> <b>" + esc(m.fahrzeug || "Fahrzeug") + '</b><br><span class="leise">' + esc(m.text) + "</span></span></a>";
+      }).join("") + (l.length > 12 ? '<p class="leise">… und ' + (l.length - 12) + " weitere am Büro-PC</p>" : "") +
+      '<button class="knopf klein" data-aktion="meldungen-gelesen">alle gelesen</button></div>';
+  }
   function heute() {
-    return api("/api/heute").then(function (d) {
+    return Promise.all([api("/api/heute"), api("/api/meldungen").catch(function () { return { meldungen: [] }; })]).then(function (r) {
+      var d = r[0], meldungenListe = r[1].meldungen || [];
+      S.meldungen = meldungenListe; S.meldungenJetzt = r[1].jetzt || "";
       var t = heuteIso(), ich = S.ich.nutzer;
       var heutige = d.termine.filter(function (b) { return (b.termin || "").slice(0, 10) === t; });
       inhalt.innerHTML =
@@ -129,15 +172,34 @@
         '<div class="kacheln">' +
         '<a class="kachel" href="#/liste/bereit"><b>' + d.bereit + "</b><span>Anschreiben bereit</span></a>" +
         '<a class="kachel" href="#/liste/nachfassen"><b>' + d.nachfassen + "</b><span>Nachfassen</span></a>" +
-        '<a class="kachel" href="#/liste/arbeit"><b>' + d.arbeit + "</b><span>In Arbeit</span></a></div>" +
+        '<a class="kachel" href="#/liste/arbeit"><b>' + d.arbeit + "</b><span>In Arbeit</span></a>" +
+        '<a class="kachel" href="#/liste/neuigkeiten"><b>' + (d.neuigkeiten || 0) + "</b><span>Neu &amp; gesenkt</span></a></div>" +
+        meldungenAbschnitt(meldungenListe) +
+        (textDarf() ? '<div class="reihe"><a class="knopf primaer" href="#/einlesen">＋ Inserat einlesen (Link + Text)</a></div>' : "") +
         '<p><a class="knopf klein" href="/anfragen">Verkaufsanfragen</a> <a class="knopf klein" href="/verkaufen">+ Anfrage erfassen</a></p>' +
         "<h2>Besichtigungen heute</h2>" + (heutige.length ? heutige.map(terminKarte).join("") : '<p class="leise">Keine Termine für heute.</p>') +
         (d.termine.length > heutige.length ? '<p><a href="#/termine">Alle ' + d.termine.length + " offenen Besichtigungen →</a></p>" : "") +
         "<h2>Suche</h2>" + '<p class="leise">' + esc(d.suchlauf.laeuft ? "Läuft: " + (d.suchlauf.meldung || "") : (d.suchlauf.meldung || "Bereit")) +
-        (d.suchlauf.naechste_auto ? " · nächste automatische Suche " + esc(d.suchlauf.naechste_auto.slice(11, 16)) + " Uhr" : "") + "</p>" +
-        '<div class="reihe"><button class="knopf" data-aktion="suchen">↻ Neue Anzeigen suchen</button></div>' +
+        (d.suchlauf.naechste_auto ? " · nächste automatische Suche " + esc(d.suchlauf.naechste_auto.slice(11, 16)) + " Uhr" : "") +
+        ' · <a href="/status">Status &amp; letzte Läufe</a> · <a href="/kennzahlen">Kennzahlen</a></p>' +
+        (S.ich.team && S.ich.nutzer && S.ich.nutzer.rolle !== "inhaber" ? "" :       // P1-15: Suchlauf nur Inhaber
+          '<div class="reihe"><button class="knopf" data-aktion="suchen">↻ Neue Anzeigen suchen</button></div>') +
         (S.ich.team ? '<p class="leise mitte"><a href="#" data-aktion="abmelden">Abmelden</a></p>' : "");
     });
+  }
+
+  // Inserat einlesen (P2-05): jedes Teammitglied, nie Standort-Zugänge (der Server prüft die Rolle ohnehin). Online-Aktion, nichts wird gepuffert.
+  function textDarf() { var n = S.ich && S.ich.nutzer; return !!n && (n.rolle === "inhaber" || n.rolle === "mitarbeiter"); }
+  function einlesen() {
+    if (!textDarf()) { inhalt.innerHTML = '<p class="hinweis warn">Inserate einlesen dürfen nur Inhaber und Mitarbeiter.</p>'; return Promise.resolve(); }
+    if (!window.TextImport) { inhalt.innerHTML = '<p class="hinweis warn">Das Formular konnte nicht geladen werden – bitte die Seite neu laden.</p>'; return Promise.resolve(); }
+    inhalt.innerHTML = '<h1>Inserat einlesen</h1><div id="ti-wurzel"></div>';
+    var f = window.TextImport.baue(document.getElementById("ti-wurzel"), {
+      post: function (pfad, daten) { return api(pfad, daten); },
+      aktionen: function (d) { return [{ text: "Fahrzeug öffnen", href: d.fahrzeug_url }, { text: "Zur Startseite", href: "/m#/heute" }]; }
+    });
+    f.fokus();
+    return Promise.resolve();
   }
 
   function terminKarte(b) {
@@ -158,11 +220,84 @@
     });
   }
 
-  var LISTEN = { bereit: "Anschreiben bereit", nachfassen: "Nachfassen", arbeit: "In Arbeit", alle: "Alle Fahrzeuge" };
+  var LISTEN = { top: "Top-Deals", bereit: "Anschreiben bereit", nachfassen: "Nachfassen", neuigkeiten: "Neu & gesenkt", arbeit: "In Arbeit", alle: "Alle Fahrzeuge" };
   var WER = { alle: "Alle", meine: "Meine", frei: "Frei" };
+  // Suchprofile (P4-01): aktive Profile als Filter über die eingegangenen Inserate; einmal je Sitzung geladen
+  function profile() {
+    return S.profile ? Promise.resolve(S.profile) : api("/api/suchprofile").then(function (d) {
+      S.profile = d.profile.filter(function (p) { return p.aktiv; }); return S.profile;
+    }, function () { S.profile = []; return S.profile; });
+  }
+  function profilAuswahl() {
+    if (!S.profile || !S.profile.length) return "";
+    return '<label class="leise">Suchprofil <select id="profil"><option value="">alle Fahrzeuge</option>' + S.profile.map(function (p) {
+      return '<option value="' + esc(p.id) + '"' + (String(p.id) === String(S.profil || "") ? " selected" : "") + ">" + esc(p.name) + "</option>";
+    }).join("") + "</select></label>";
+  }
+  // Kombinierte Liste (P6-01): alle Quellen, nach Deal-Score sortiert (Server); Quelle wählbar, Risikofaktoren als Chips
+  // feste Liste wie domaene.PLATTFORM_TEXT (test_liste prüft den Gleichlauf); AutoScout24 bleibt leer, bis ein Zugang freigegeben ist
+  var QUELLEN = { kleinanzeigen: "Kleinanzeigen", "mobile.de": "mobile.de", autoscout24: "AutoScout24" };
+  function quelleAuswahl() {
+    return '<label class="leise">Quelle <select id="quelle"><option value="">alle Quellen</option>' + Object.keys(QUELLEN).map(function (q) {
+      return '<option value="' + q + '"' + (q === (S.quelle || "") ? " selected" : "") + ">" + QUELLEN[q] + "</option>";
+    }).join("") + "</select></label>";
+  }
+  function dealTag(f) {
+    if (f.deal_score === null || f.deal_score === undefined) return "";
+    return '<span class="tag deal' + (f.priorisiert ? " top" : "") + '" data-deal="" title="Deal-Score 0–100' + (f.priorisiert ? ", Top-Deal" : "") + '">' +
+      (f.priorisiert ? "★ " : "") + esc(f.deal_score) + "</span>";
+  }
+  function quelleTag(f) { return f.quelle_text ? '<span class="tag quelle" data-quelle-tag="">' + esc(f.quelle_text) + "</span>" : ""; }
+  // Karte: höchstens drei Risiken ohne die, die dort schon eigens stehen (karte=false: Mängel, Hinweise, Abzeichen), Detail: alle
+  function risikoZeile(f, detail) {
+    var r = (f.risiken || []).filter(function (x) { return detail || x.karte; });
+    if (!r.length) return "";
+    if (detail) return '<div class="karte" data-risiken-detail=""><b>Risikofaktoren</b> – vor einem Angebot prüfen:<ul class="risikoliste">' +
+      r.map(function (x) { return '<li class="' + esc(x.stufe) + '">' + esc(x.text) + (x.stufe === "hoch" ? " (klären)" : "") + "</li>"; }).join("") + "</ul></div>";
+    return '<p class="risiken" data-risiken="">' + r.slice(0, 3).map(function (x) { return '<span class="risk ' + esc(x.stufe) + '">' + esc(x.text) + "</span>"; }).join("") +
+      (r.length > 3 ? '<span class="risk">+' + (r.length - 3) + "</span>" : "") + "</p>";
+  }
+  // Dublettengruppe und Preisverlauf (P6-02): Abzeichen und Preiszeile auf der Karte, Abschnitte im Detail; Texte nur über esc(), Links nur http(s)
+  function tagDatum(iso) { return iso ? new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }) : "–"; }
+  function eurDiff(d) { return d === null || d === undefined ? "–" : (d > 0 ? "+" : d < 0 ? "−" : "±") + eur(Math.abs(d)); }
+  function gruppeTag(f) { return (f.gruppe || []).length ? '<span class="tag dub" data-gruppe-tag="">⧉ ' + (f.gruppe.length + 1) + " Inserate</span>" : ""; }
+  function preisZeile(f) {
+    var p = f.preisverlauf;
+    if (!p || !(p.senkungen || p.erhoehungen)) return "";
+    return '<p class="leise" data-preisverlauf="">Preis ' + eur(p.erstpreis) + " → " + eur(p.aktuell) + " (" + eurDiff(p.differenz) +
+      (p.senkungen ? ", " + p.senkungen + "× gesenkt" : "") + (p.erhoehungen ? ", " + p.erhoehungen + "× erhöht" : "") + ")</p>";
+  }
+  function preisverlaufKarte(f) {
+    var p = f.preisverlauf;
+    if (!p || p.punkte.length < 2) return "";
+    return '<h2>Preisverlauf</h2><div class="karte" data-preisverlauf-detail=""><table class="verlauf">' + p.punkte.map(function (x) {
+      return "<tr><td>" + esc(tagDatum(x.zeitpunkt)) + "</td><td><b>" + eur(x.preis) + '</b></td><td class="leise">' + (x.differenz === null ? "Erstpreis" : eurDiff(x.differenz)) + "</td></tr>";
+    }).join("") + '</table><p class="leise">Seit ' + esc(tagDatum(p.seit)) + ": " + eurDiff(p.differenz) + (p.prozent !== null ? " (" + esc(String(p.prozent).replace("-", "−")) + " %)" : "") +
+      (p.gekuerzt ? " · nur die letzten " + p.punkte.length + " Preisstände" : "") + "</p></div>";
+  }
+  function gruppeKarte(f) {
+    var g = f.gruppe || [], status = S.ich.status || {};
+    if (!g.length) return "";
+    return '<h2>Gleiches Fahrzeug</h2><div class="karte" data-gruppe-detail=""><p class="leise" data-fahrzeug-status="">Fahrzeugstatus (höchster aller Inserate): ' +
+      esc(status[f.fahrzeug_status] || f.fahrzeug_status) + "</p>" + g.map(function (m) {
+      var p = m.preisverlauf;
+      return '<div class="zeile gruppe"><span><b>' + esc(m.quelle_text) + "</b> · " + eur(m.preis) + " · " + esc(status[m.status] || m.status) +
+        (m.verfuegbarkeit_text ? " · " + esc(m.verfuegbarkeit_text) : "") + " · " + (m.bestaetigt ? "bestätigt" : "vermutet") +
+        (p && (p.senkungen || p.erhoehungen) ? " · Preis " + eur(p.erstpreis) + " → " + eur(p.aktuell) : "") + "</span>" +
+        '<span><a class="knopf klein" href="#/fahrzeug/' + encodeURIComponent(m.id) + '">Ansehen</a>' +
+        (link(m.url) !== "#" ? ' <a class="knopf klein" href="' + link(m.url) + '" target="_blank" rel="noopener noreferrer">↗</a>' : "") + "</span></div>";
+    }).join("") + '<p class="leise">„vermutet“ = automatisch erkannt, entschieden wird am Büro-PC. Preise verschiedener Plattformen sind nicht direkt vergleichbar.</p></div>';
+  }
+  function einmalAuswahl() {
+    return '<label class="leise"><input type="checkbox" id="einmal"' + (S.einmal === false ? "" : " checked") + "> gleiches Fahrzeug nur einmal</label>";
+  }
   function liste(filter, suche) {
     var wer = S.ich.team ? (S.wer || "alle") : "alle";
-    return api("/api/fahrzeuge?filter=" + encodeURIComponent(filter) + "&q=" + encodeURIComponent(suche || "") + (wer !== "alle" ? "&wer=" + wer : "")).then(function (l) {
+    return profile().then(function () {
+      if (S.profil && !S.profile.some(function (p) { return String(p.id) === String(S.profil); })) S.profil = "";
+      return api("/api/fahrzeuge?filter=" + encodeURIComponent(filter) + "&q=" + encodeURIComponent(suche || "") + (wer !== "alle" ? "&wer=" + wer : "") +
+                 (S.profil ? "&profil=" + encodeURIComponent(S.profil) : "") + (S.quelle ? "&quelle=" + encodeURIComponent(S.quelle) : "") + "&einmal=" + (S.einmal === false ? "nein" : "ja"));
+    }).then(function (l) {
       inhalt.innerHTML = "<h1>" + esc(LISTEN[filter] || "Fahrzeuge") + " (" + l.length + ")</h1>" +
         '<input type="search" id="suche" placeholder="Marke, Modell, Ort …" value="' + esc(suche || "") + '">' +
         '<div class="reihe">' + Object.keys(LISTEN).map(function (f) {
@@ -170,23 +305,91 @@
         }).join("") + "</div>" +
         (S.ich.team ? '<div class="reihe" role="group" aria-label="Wer">' + Object.keys(WER).map(function (w) {
           return '<button class="knopf klein' + (w === wer ? " primaer" : "") + '" data-aktion="wer" data-wer="' + w + '" aria-pressed="' + (w === wer) + '">' + WER[w] + "</button>";
-        }).join("") + "</div>" : "") +
+        }).join("") + "</div>" : "") + profilAuswahl() + quelleAuswahl() + einmalAuswahl() +
         (l.length ? l.map(function (f) {
-          return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + teamBadge(f.team) + ampelTag(f.ampel) + "</div>" +
-            '<p class="leise">EZ ' + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") + (f.entfernung_km !== null ? " · " + tsd(f.entfernung_km) + " km entfernt" : "") + "</p>" +
-            hinweisZeilen(f) +
+          return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + dealTag(f) + gruppeTag(f) + teamBadge(f.team) + neuTag(f) + verfTag(f) + dqTag(f) +
+            (f.profil_treffer === "unklar" ? '<span class="tag dq" data-profil-unklar="">Profil unklar</span>' : "") + ampelTag(f.ampel) + "</div>" +
+            '<p class="leise">' + quelleTag(f) + " EZ " + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") + (f.entfernung_km !== null ? " · " + tsd(f.entfernung_km) + " km entfernt" : "") + "</p>" +
+            kontaktZeile(f) + preisZeile(f) + risikoZeile(f) + maengelZeile(f) + hinweisZeilen(f) +
+            (f.neuigkeit && f.neuigkeit.senkung ? '<p class="leise" data-senkung="">' + esc(f.neuigkeit.text) + "</p>" : "") +
             (f.nachfassen ? '<p class="leise" style="color:var(--gelb)">Nachfassen: ' + esc(f.nachfassen) + "</p>" : "") +
             '<div class="zahlen"><div><span>Wunschpreis</span>' + eur(f.preis) + "</div><div><span>Erstangebot</span><b>" + eur(f.erstangebot) +
-            "</b></div><div><span>Max-EK</span>" + eur(f.max_ek) + "</div></div></a>";
+            "</b></div>" + maxEkZelle(f) + "</div></a>";
         }).join("") : '<p class="leise">Nichts gefunden.</p>');
+      var pw = document.getElementById("profil");
+      if (pw) pw.onchange = function () { S.profil = pw.value; liste(filter, document.getElementById("suche").value); };
+      var qw = document.getElementById("quelle");
+      qw.onchange = function () { S.quelle = qw.value; liste(filter, document.getElementById("suche").value); };
+      var ew = document.getElementById("einmal");
+      ew.onchange = function () { S.einmal = ew.checked; liste(filter, document.getElementById("suche").value); };
       var feld = document.getElementById("suche"), uhr;
       feld.oninput = function () { clearTimeout(uhr); uhr = setTimeout(function () { liste(filter, feld.value).then(function () { var f = document.getElementById("suche"); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }); }, 400); };
     });
   }
 
   // Hinweise zum Fahrzeug (z. B. Fahrzeugart nicht bestätigt): gelbe Zeile, Text nur über esc()
+  // Kontaktverlauf (P3-06): vorbereitet/gesendet, Kanal, wer; andere Inserate desselben Fahrzeugs gekennzeichnet; Text nur über esc()
+  function kontaktZeilen(f) {
+    var k = f.kontakte || [];
+    if (!k.length) return "";
+    return '<h2>Kontaktverlauf</h2><div class="karte kontakte">' + k.map(function (x) {
+      return '<div class="zeile kontakt' + (x.bestaetigt || x.verworfen ? "" : " offen") + '"><span>' + esc(x.art_text) + (x.anzeige_id !== f.id ? " (anderes Inserat)" : "") +
+        " · " + esc(x.zustand) + '</span><span class="leise">' + esc(x.zeit_text || "") + (x.bestaetigt_von || x.vorbereitet_von ? " · " + esc(x.bestaetigt_von || x.vorbereitet_von) : "") +
+        " · " + esc(x.kanal_text) + (x.betrag ? " · " + eur(x.betrag) : "") + "</span>" +
+        (!x.bestaetigt && !x.verworfen && x.art === "nachfassen" ? '<button class="knopf klein" data-aktion="kontakt-gesendet" data-kontakt="' + esc(x.id) + '">gesendet ✓</button>' : "") + "</div>";
+    }).join("") + "</div>";
+  }
+  // Verhandlung (P6-03): Kontaktlage auf der Karte, Antworten und Notizen im Detail – von Hand eingetragen, nichts wird gesendet; Texte nur über esc()
+  var VH_ARTEN = { antwort: "Antwort des Verkäufers", notiz: "Notiz" };
+  var VH_KANAELE = { telefon: "Telefon", plattform: "Nachricht über die Plattform", email: "E-Mail", whatsapp: "WhatsApp", persoenlich: "persönlich" };
+  function kontaktZeile(f) {
+    var k = f.kontakt;
+    return k && k.stufe ? '<p class="kontaktlage ' + esc(k.stufe) + '" data-kontakt="">' + esc(k.text) + "</p>" : "";
+  }
+  function verhandlungKarte(f) {
+    var l = f.verhandlung || [];
+    return "<h2>Verhandlung</h2>" + '<div class="karte" data-verhandlung="">' + (l.length ? l.map(function (x) {
+      return '<p class="vh"><b>' + esc(x.art_text) + (x.anzeige_id !== f.id ? " (anderes Inserat)" : "") + " · " + esc(x.zeit_text || "") + (x.von ? " · " + esc(x.von) : "") +
+        (x.kanal_text ? " · " + esc(x.kanal_text) : "") + (x.betrag ? " · " + eur(x.betrag) : "") + ":</b> " + (x.text === null ? "(Text entfernt)" : esc(x.text)) + "</p>";
+    }).join("") : '<p class="leise">Noch nichts eingetragen.</p>') +
+      '<label>Eintragen<select id="vh-art">' + Object.keys(VH_ARTEN).map(function (k) { return '<option value="' + k + '">' + VH_ARTEN[k] + "</option>"; }).join("") + "</select></label>" +
+      '<div class="reihe"><select id="vh-kanal" aria-label="Kanal"><option value="">Kanal …</option>' +
+      Object.keys(VH_KANAELE).map(function (k) { return '<option value="' + k + '">' + VH_KANAELE[k] + "</option>"; }).join("") + "</select>" +
+      '<input id="vh-betrag" type="number" inputmode="numeric" min="1" step="100" placeholder="genannter Betrag €" aria-label="genannter Betrag"></div>' +
+      '<textarea id="vh-text" maxlength="2000" style="min-height:60px" placeholder="z. B. „will 34.500 €, Besichtigung Samstag möglich“"></textarea>' +
+      '<button class="knopf primaer voll" data-aktion="vh-eintragen">Eintragen</button><p class="leise">Nur von Hand – es wird nichts gesendet.</p></div>';
+  }
+  // Abholung (P5-06b): Auto ab Firmensitz bzw. Bahn ab Bahnhof – grobe Schätzung wie am Büro-PC, gerechnet wird der günstigere Weg
+  function stundenText(h) { var m = Math.round(h * 60), s = Math.floor(m / 60); m = m % 60; return s ? s + " Std." + (m ? " " + m + " Min." : "") : m + " Min."; }
+  function abholZeile(b) {
+    var ab = b && b.abholung;
+    if (!ab || !(ab.varianten || []).length) return "";
+    return '<div class="leise" data-abholung=""><b>Abholung</b> – grobe Schätzung, gerechnet wird der günstigere Weg:<ul>' + ab.varianten.map(function (v) {
+      var t = v.art === "auto"
+        ? "Auto ab Firmensitz (2 Personen): ca. " + eur(v.euro) + " – " + tsd(v.km) + " km, zusammen ca. " + stundenText(v.stunden || 0)
+        : "Bahn ab " + esc(v.ab) + ": ca. " + eur(v.euro) + " – " + esc(v.ticket_art || "Ticket") + " ca. " + eur(v.ticket) + ", Anreise ca. " +
+          stundenText(v.reise_stunden || 0) + ", Rückfahrt im Wohnmobil ca. " + stundenText(v.rueck_stunden || 0);
+      return "<li>" + t + (v.uebernachtungen ? " · " + v.uebernachtungen + " Übernachtung" + (v.uebernachtungen > 1 ? "en" : "") : "") +
+        (v.art === ab.gewaehlt ? " <b>✓ gerechnet</b>" : "") + "</li>";
+    }).join("") + "</ul>" + (ab.hinweis ? "<span>" + esc(ab.hinweis) + "</span>" : "") + "</div>";
+  }
   function hinweisZeilen(f) {
     return (f.hinweise || []).map(function (h) { return '<p class="hinweis info">⚠ ' + esc(h) + "</p>"; }).join("");
+  }
+
+  // P5-03: Max-EK als Spanne (500 €), Punktwert nur klein; im Inserat genannte Mängel deutlich als Liste
+  function maxEkZelle(f) {
+    if (f.max_ek_von === null || f.max_ek_von === undefined || !f.max_ek_bis || f.max_ek === null) return "<div><span>Max-EK</span>" + eur(f.max_ek) + "</div>";
+    return '<div data-maxek-spanne=""><span>Max-EK (Spanne)</span>' + Number(f.max_ek_von).toLocaleString("de-DE") + "–" + eur(f.max_ek_bis) +
+      '<small class="leise" style="display:block">Mitte ' + eur(f.max_ek) + "</small></div>";
+  }
+
+  function maengelZeile(f, liste) {
+    var m = f.maengel || [];
+    if (!m.length) return "";
+    return liste ? '<div class="hinweis warn" data-maengel-liste=""><b>Im Inserat genannte Mängel</b> – bei der Besichtigung prüfen:<ul>' +
+      m.map(function (x) { return "<li>" + esc(x.name) + "</li>"; }).join("") + "</ul></div>"
+      : '<p class="hinweis warn" data-maengel="">Mängel laut Inserat: ' + esc(m.map(function (x) { return x.name; }).join(", ")) + "</p>";
   }
 
   // ---------------------------------------------------------------- Team (nur mit angelegten Nutzern, T2)
@@ -225,13 +428,21 @@
       var fremd = !!t && !t.mein && !teamFrei(t), sperr = fremd ? " disabled" : "";
       inhalt.innerHTML =
         "<h1>" + esc(f.fahrzeug) + "</h1>" +
-        '<p class="leise">' + ampelTag(f.ampel) + " EZ " + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") +
+        '<p class="leise">' + dealTag(f) + ampelTag(f.ampel) + verfTag(f) + quelleTag(f) + " EZ " + esc(f.ez_jahr || "?") + " · " + tsd(f.km) + " km · " + esc(f.ort || "") +
         (f.entfernung_km !== null ? " · " + tsd(f.entfernung_km) + " km entfernt" : "") + "</p>" +
         '<div class="karte"><div class="zahlen"><div><span>Wunschpreis</span>' + eur(f.preis) + "</div><div><span>Erstangebot</span><b>" + eur(f.erstangebot) +
-        "</b></div><div><span>Max-EK</span>" + eur(f.max_ek) + "</div></div>" +
+        "</b></div>" + maxEkZelle(f) + "</div>" +
+        (b.privat_von ? '<p class="leise" data-privat-spanne="">Marktwert privat ' + Number(b.privat_von).toLocaleString("de-DE") + "–" + eur(b.privat_bis) + "</p>" : "") +
         '<p class="leise">Marktniveau ' + eur(b.marktwert_angebote) + " · Sicherheit " + esc(b.sicherheit) + "</p>" +
+        (b.haendler_anzahl ? '<p class="leise" data-haendlermarkt="">Händlermarkt: ' + b.haendler_anzahl + " Händlerangebote" +
+          (b.haendler_niveau ? ", Niveau " + eur(b.haendler_niveau) + (b.vk_gedeckelt ? " – Händler-VK darauf begrenzt" : "") + (b.haendler_konflikt ? " – billiger als privat (Datenkonflikt), keine Obergrenze" : "") : " – zu wenige für eine Obergrenze") + "</p>" : "") +
+        abholZeile(b) +
         '<a class="knopf klein" href="' + link(f.url) + '" target="_blank" rel="noopener">Anzeige öffnen ↗</a></div>' +
-        hinweisZeilen(f) +
+        risikoZeile(f, true) + maengelZeile(f, true) + hinweisZeilen(f) + preisverlaufKarte(f) + gruppeKarte(f) +
+        (f.anbieter ? '<div class="karte"><div class="zeile"><span class="leise">Anbieter</span>' + anbTag(f) + "</div>" +
+          '<label>Anbieter korrigieren<select id="anbieter"><option value="">–</option><option value="privat">privat</option>' +
+          '<option value="gewerblich">gewerblich</option><option value="unbekannt">unbekannt</option></select></label></div>' : "") +
+        dqKarte(f) +
         (t ? '<div class="karte team"><div class="zeile">' + (teamBadge(t) || '<span class="tb tb-frei">frei</span>') + '<span class="leise">' + esc(teamText(t)) + "</span></div>" +
           '<div class="reihe">' + (darf.uebernehmen && !t.mein ? '<button class="knopf klein" data-aktion="uebernehmen">Ich übernehme</button>' : "") +
           (darf.abgeben ? '<button class="knopf klein" data-aktion="abgeben">Abgeben</button>' : "") +
@@ -247,7 +458,7 @@
         "<h2>Status</h2><div class=\"reihe\">" + Object.keys(status).map(function (k) {
           return '<button class="knopf klein' + (k === f.status ? " primaer" : "") + '" data-status="' + esc(k) + '">' + esc(status[k]) + "</button>";
         }).join("") + "</div>" +
-        '<label>Notiz<textarea id="notiz" style="min-height:70px">' + esc(f.notiz || "") + "</textarea></label>" +
+        '<label>Notiz<textarea id="notiz" style="min-height:70px">' + esc(f.notiz || "") + "</textarea></label>" + kontaktZeilen(f) + verhandlungKarte(f) +
         "<h2>Besichtigung</h2>" + f.besichtigungen.map(terminKarte).join("") +
         '<div class="karte"><label>Termin<input type="datetime-local" id="b-termin"></label>' +
         '<label>Adresse beim Verkäufer<input id="b-adresse" placeholder="Straße, Ort" value="' + esc(f.ort || "") + '"></label>' +
@@ -257,6 +468,14 @@
         '<button class="knopf primaer voll" style="margin-top:12px" data-aktion="planen">Besichtigung planen</button></div>';
       inhalt.dataset.id = f.id; inhalt.dataset.url = f.url; inhalt.dataset.quelle = f.quelle || ""; inhalt.dataset.erst = f.brief_betrag || "";
       inhalt.dataset.nfbetrag = f.nachfass_betrag || "";
+      var anb = document.getElementById("anbieter");
+      if (anb) anb.onchange = function (e) {
+        var v = e.target.value;
+        if (!v) return;
+        api("/api/anzeige/" + encodeURIComponent(f.id) + "/anbieter", { anbieter: v === "unbekannt" ? null : v })
+          .then(function () { toast("Anbieter gespeichert"); return fahrzeug(f.id); })
+          .catch(function (err) { toast(err.message || "Anbieter konnte nicht gespeichert werden"); e.target.value = ""; });
+      };
       document.getElementById("notiz").onchange = function (e) { api("/api/notiz", { id: f.id, notiz: e.target.value }).then(function () { toast("Notiz gespeichert"); }); };
     });
   }
@@ -269,7 +488,9 @@
     return Promise.all([api("/api/besichtigung/" + id), katalog()]).then(function (r) {
       var srv = r[0], lokal = entwurfLesen(id);
       B = { id: srv.id, basis: srv.basis, daten: srv.daten || {}, version: srv.version, fotos: srv.fotos, info: srv, katalog: r[1] };
-      if (lokal && lokal.offen) { B.daten = lokal.daten; toast("Lokale Änderungen werden übertragen …"); }
+      if (lokal && lokal.offen) {                  // Entwurf: Version, auf der die Eingaben beruhen (P1-07)
+        B.daten = lokal.daten; if (lokal.version != null) B.version = lokal.version; toast("Lokale Änderungen werden übertragen …");
+      }
       var d = B.daten;
       d.pruefpunkte = d.pruefpunkte || {}; d.messungen = d.messungen || {}; d.maengel = d.maengel || [];
       d.fahrzeug = d.fahrzeug || {}; d.anpassung = d.anpassung || { betrag: "", grund: "" };
@@ -413,7 +634,7 @@
 
   function geaendert() {
     rechne();
-    entwurfSchreiben(B.id, { daten: B.daten, offen: true, zeit: Date.now() });
+    entwurfSchreiben(B.id, { daten: B.daten, offen: true, zeit: Date.now(), version: B.version });
     syncAnzeige();
     clearTimeout(speicherUhr);
     speicherUhr = setTimeout(speichern, 1200);
@@ -421,18 +642,37 @@
   function speichereServer(bid) {
     var e = entwurfLesen(bid);
     if (!e || !e.offen) return Promise.resolve();
-    return api("/api/besichtigung/" + bid + "/speichern", { daten: e.daten }).then(function (antwort) {
+    return api("/api/besichtigung/" + bid + "/speichern", { daten: e.daten, version: e.version }).then(function (antwort) {
       var aktuell = entwurfLesen(bid);
-      if (aktuell && aktuell.zeit === e.zeit) entwurfSchreiben(bid, { daten: e.daten, offen: false, zeit: e.zeit });
+      if (aktuell && aktuell.zeit === e.zeit) entwurfSchreiben(bid, { daten: e.daten, offen: false, zeit: e.zeit, version: antwort.version });
+      else if (aktuell) { aktuell.version = antwort.version; entwurfSchreiben(bid, aktuell); }   // inzwischen weiter getippt
       if (B && String(B.id) === String(bid)) B.version = antwort.version;
       return antwort;
     });
+  }
+  // P1-07: Ein anderes Gerät hat inzwischen gespeichert – nichts still überschreiben, sondern fragen
+  function versionsKonflikt(bid, fehler) {
+    var mein = entwurfLesen(bid), fremd = fehler.daten || {};
+    if (fremd.status === "abgeschlossen" || fremd.status === "abgebrochen") { toast("Besichtigung ist bereits abgeschlossen"); return Promise.resolve(); }
+    if (mein && confirm("Diese Besichtigung wurde inzwischen auf einem anderen Gerät gespeichert.\n\n" +
+                        "OK = deine Eingaben behalten (der andere Stand wird überschrieben)\nAbbrechen = den anderen Stand laden")) {
+      entwurfSchreiben(bid, { daten: mein.daten, offen: true, zeit: Date.now(), version: fremd.version });
+      return speichereServer(bid);
+    }
+    entwurfSchreiben(bid, { daten: fremd.daten || {}, offen: false, zeit: Date.now(), version: fremd.version });
+    if (B && String(B.id) === String(bid)) return besichtigung(bid);
+    return Promise.resolve();
   }
   function speichern() {
     clearTimeout(speicherUhr);
     if (!B) return Promise.resolve();
     if (!navigator.onLine) { syncAnzeige(); return Promise.resolve(); }
-    return speichereServer(B.id).then(syncAnzeige, function (e) { if (e.status === 409) toast(e.message); syncAnzeige(); });
+    var bid = B.id;
+    return speichereServer(bid).then(syncAnzeige, function (e) {
+      if (e.status === 409 && e.grund === "version") return versionsKonflikt(bid, e).then(syncAnzeige, syncAnzeige);
+      if (e.status === 409) toast(e.message);
+      syncAnzeige();
+    });
   }
 
   function bildVerkleinern(datei) {
@@ -515,7 +755,7 @@
       if (!daten.verkaeufer.eigentum_frei) { fehler.textContent = "Erklärung zu Eigentum/Rechten Dritter bestätigen"; return; }
     }
     if (!navigator.onLine) { fehler.textContent = "Für den Abschluss wird Netz gebraucht – alle Eingaben sind lokal gesichert."; return; }
-    entwurfSchreiben(B.id, { daten: B.daten, offen: true, zeit: Date.now() });
+    entwurfSchreiben(B.id, { daten: B.daten, offen: true, zeit: Date.now(), version: B.version });
     speichereServer(B.id).then(function () { return api("/api/besichtigung/" + B.id + "/abschluss", daten); }).then(function (r) {
       // kein automatisches Fenster (Handy-Browser blockieren das) – Protokoll-Knopf steht in der Besichtigung
       toast(r && r.ankauf ? "Abgeschlossen – Ankaufsvorgang angelegt (Ankäufe)" : "Abgeschlossen – Protokoll oben öffnen"); location.hash = "#/besichtigung/" + B.id;
@@ -542,6 +782,23 @@
         toast(ok ? "Text kopiert ✓ – in " + (inhalt.dataset.quelle === "mobile.de" ? "mobile.de im „E-Mail“/„Nachricht“-Formular" : inhalt.dataset.quelle === "kleinanzeigen" ? "Kleinanzeigen" : "der Anzeige") + " einfügen, senden, dann „gesendet ✓“" : "Bitte Text markieren und kopieren");
         fahrzeug(id);
       }, function (err) { if (fenster) fenster.close(); teamFehler(err, id); });
+    } else if (a === "meldungen-gelesen") {
+      // bis jetzt – und mindestens bis zur jüngsten gezeigten Meldung (eine Besichtigung morgen trägt einen Zeitpunkt in der Zukunft)
+      var bis = S.meldungenJetzt || "";                                        // maßgeblich ist die Zeit des Servers, nicht die Geräteuhr (QA B3)
+      (S.meldungen || []).forEach(function (m) { if (m.zeit > bis) bis = m.zeit; });
+      try { localStorage.setItem(MELDUNG_GELESEN, bis); } catch (x) { /* privat */ }
+      heute();
+    } else if (a === "vh-eintragen") {
+      var art = document.getElementById("vh-art").value, txt = document.getElementById("vh-text").value, bet = document.getElementById("vh-betrag").value;
+      if (!txt.trim()) { toast("Bitte einen Text eintragen"); return; }
+      if (t.disabled) return;
+      t.disabled = true;                                                       // kein Doppel-Eintrag per Doppelklick
+      api("/api/verhandlung", { id: id, art: art, text: txt, betrag: bet ? Number(bet) : null, kanal: art === "antwort" ? (document.getElementById("vh-kanal").value || null) : null })
+        .then(function () { toast(art === "antwort" ? "Antwort eingetragen ✓ – Status bei Bedarf selbst setzen" : "Notiz eingetragen ✓"); fahrzeug(id); },
+              function (err) { t.disabled = false; toast(err.message || "Konnte nicht gespeichert werden"); });
+    } else if (a === "kontakt-gesendet") {
+      api("/api/kontakt/" + encodeURIComponent(t.getAttribute("data-kontakt")) + "/bestaetigen", {})
+        .then(function () { toast("Nachfassen als gesendet gespeichert ✓"); fahrzeug(id); }, function (err) { toast(err.message); });
     } else if (a === "gesendet") {
       api("/api/status", { id: id, status: "kontaktiert" }).then(function () { toast("Als gesendet gespeichert ✓"); fahrzeug(id); }, function (err) { teamFehler(err, id); });
     } else if (a === "uebernehmen" || a === "erzwingen" || a === "abgeben") {
@@ -557,10 +814,19 @@
                                                                            function (err) { teamFehler(err, id); });
     } else if (a === "planen") {
       var termin = document.getElementById("b-termin").value;
-      api("/api/besichtigung", { anzeige_id: id, termin: termin || null, adresse: document.getElementById("b-adresse").value,
-                                  zustaendig_id: document.getElementById("b-wer").value || null })
-        .then(function (b) { toast("Besichtigung geplant"); fahrzeug(id); if (b.zustaendig && b.zustaendig.id !== S.ich.nutzer.id && b.whatsapp) window.open(b.whatsapp, "_blank", "noopener"); },
-              function (err) { toast(err.message); });
+      var planen = function (marktwert) {
+        return api("/api/besichtigung", { anzeige_id: id, termin: termin || null, adresse: document.getElementById("b-adresse").value,
+                                          zustaendig_id: document.getElementById("b-wer").value || null, marktwert: marktwert });
+      };
+      var geplant = function (b) { toast("Besichtigung geplant"); fahrzeug(id); if (b.zustaendig && b.zustaendig.id !== S.ich.nutzer.id && b.whatsapp) window.open(b.whatsapp, "_blank", "noopener"); };
+      planen(undefined).then(geplant, function (err) {
+        if (err.grund !== "marktwert") return toast(err.message);
+        // P1-12: Erstzulassung fehlt – ohne eigenen Marktwert keine Beträge
+        var eingabe = prompt(err.message + "\n\nMarktwert in €:");
+        var mw = parseInt(String(eingabe || "").replace(/[^0-9]/g, ""), 10);
+        if (!mw) return;
+        planen(mw).then(geplant, function (e2) { toast(e2.message); });
+      });
     } else if (a === "suchen") {
       api("/api/suchlauf", {}).then(function () { toast("Suche gestartet – dauert einige Minuten"); });
     } else if (a === "abmelden") {
@@ -616,6 +882,7 @@
 
   // ---------------------------------------------------------------- Router
   function route() {
+    if (!S.ich) return;                                 // Hash-Wechsel vor dem Laden von /api/ich: der Start ruft route() danach selbst (P6-01b)
     var teile = (location.hash.replace(/^#\/?/, "") || "heute").split("/");
     inhalt.classList.remove("mit-leiste"); inhalt.removeAttribute("data-id");
     if (teile[0] !== "besichtigung") { if (B) speichern(); B = null; }
@@ -630,6 +897,7 @@
     else if (teile[0] === "besichtigung" && teile[2] === "abschluss") seite = abschluss(teile[1]);
     else if (teile[0] === "besichtigung") seite = besichtigung(teile[1]);
     else if (teile[0] === "termine") seite = termine();
+    else if (teile[0] === "einlesen") seite = einlesen();
     else seite = heute();
     window.scrollTo(0, 0);
     seite.catch(function (e) {

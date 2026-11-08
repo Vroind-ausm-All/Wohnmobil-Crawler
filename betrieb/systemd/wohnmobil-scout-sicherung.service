@@ -1,0 +1,17 @@
+# Tägliche Sicherung von Datenbank und Fotos (scout.py sichern, geprüft und rotiert: config.yaml → sicherung).
+# Ausgelöst von wohnmobil-scout-sicherung.timer. Kopie außer Haus: siehe docs/SERVERBETRIEB.md, Abschnitt 8.
+[Unit]
+Description=Wohnmobil-Scout Sicherung
+
+[Service]
+Type=oneshot
+User=scout
+Group=scout
+WorkingDirectory=/opt/wohnmobil-scout
+ExecStart=/opt/wohnmobil-scout/.venv/bin/python scout.py sichern
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/wohnmobil-scout/daten /opt/wohnmobil-scout/ausgabe
+UMask=0077

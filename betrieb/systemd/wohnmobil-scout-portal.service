@@ -1,0 +1,35 @@
+# Wohnmobil-Scout – öffentliches Ankaufsportal (P7-03/P7-04, ADR-068). Lauscht nur auf 127.0.0.1:8770, öffentlich nur über Caddy.
+# Startet erst mit config.local.yaml → portal → aktiv: true, Impressum und SCOUT_PORTAL_SCHLUESSEL (sonst beendet es sich mit Begründung).
+# Kopieren nach /etc/systemd/system/, dann: systemctl daemon-reload && systemctl enable --now wohnmobil-scout-portal
+[Unit]
+Description=Wohnmobil-Scout Ankaufsportal (127.0.0.1:8770)
+After=network-online.target wohnmobil-scout-app.service
+Wants=network-online.target
+# Fehlkonfiguration (Exit-Code 1) nicht endlos neu starten
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=scout
+Group=scout
+WorkingDirectory=/opt/wohnmobil-scout
+EnvironmentFile=/etc/wohnmobil-scout/umgebung
+ExecStart=/opt/wohnmobil-scout/.venv/bin/python scout.py portal
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/wohnmobil-scout/daten /opt/wohnmobil-scout/ausgabe
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

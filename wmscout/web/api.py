@@ -30,11 +30,12 @@ from ..verkauf import Eingabefehler, VerkaufSpeicher
 from ..haendler import STANDORT_STATUS, HaendlerSpeicher
 from ..auktion import STANDARD as MINDESTPREIS_STANDARD
 from ..auktion import AuktionSpeicher, AuktionsFehler
-from .. import datenrechte
+from .. import aufbewahrung, bewertungsverlauf, datenrechte
+from ..schalter import EingangDeaktiviert, eingang_pruefen, pruefe_eingaenge
 from ..audit import AuditSpeicher, einordnen
 from ..nutzung import nutzung
 from ..deal import DealSpeicher
-from ..team import pruefe_passwort
+from ..team import hash_passwort, pruefe_passwort
 from .live import Ereignisse, art_fuer, sse_block
 from .sicherheit import SICHERHEITS_KOPF, LoginBremse
 from ..ankauf import DOKUMENTARTEN, AnkaufFehler, AnkaufSpeicher
@@ -45,22 +46,48 @@ from ..bearbeitung import (IN_ARBEIT, OFFEN, VORBEREITET, BearbeitungsKonflikt, 
                            darf_zuweisen, reservierung_tage)
 from ..benachrichtigung import WhatsAppCloud, whatsapp_link
 from ..bewertung.anschreiben import euro, tsd
-from ..bewertung.auswertung import bewerte_alle, dubletten_ids
+from ..bewertung.kalkulation import stunden_text
+from ..bewertung.auswertung import bewerte_alle, bewerte_anzeige, dubletten_ids
+from ..verfuegbarkeit import fahrzeug_von, offline_nach_tagen
+from ..anbieter import einstufung
+from .. import kontakte
+from .. import suchprofile as sp
+from .. import laufprotokoll as lp
+from .. import abdeckung
+from .. import kennzahlen
+from ..bewertung.deal_score import einstellungen as deal_einstellungen
+from ..bewertung.gruppen import nur_einmal
+from .. import verhandlung
+from ..bewertung.meldungen import meldungen
+from ..zugaenge import PLATTFORMEN as ZUGANG_PLATTFORMEN
+from ..zugaenge import ZugangSpeicher
+from ..domaene import PLATTFORM_TEXT, PLATTFORMEN
+from ..normalisierung.qualitaet import je_quelle
+from ..bewertung import kalibrierung as kal
 from ..bewertung import kalkulation as kalk
 from ..bewertung.besichtigung import berechne, lade_katalog
 from ..datenbank import STATUS, Datenbank
-from ..eingang import import_ordner, relativ_zum_projekt
+from ..domaene import fahrzeug_status
+from ..dubletten import (MAX_LIMIT, STANDARD_LIMIT, DublettenFehler, DublettenKonflikt, Ergebnis, bestaetige, darf_ablehnen, darf_aufheben,
+                         darf_bestaetigen, entscheidungen_zu, gruppe, halter_der_gruppe, hebe_auf, inserat_zu_anzeige, lehne_ab, pruefe_dubletten)
+from ..normalisierung.identitaet import REGEL_VERSION
+from ..preisverlauf import inserat_zu_anzeigen_id, preisverlauf
+from ..eingang import TextEingang, ergebnis_der, import_ordner, relativ_zum_projekt
+from ..eingang.text import ANBIETER, MAX_PREIS, MAX_TEXT, MAX_URL, widerspricht_marke
+from ..eingang.email import mail_ordner
 from ..importer import Importer
-from ..team import BESICHTIGUNG_STATUS, LEERLAUF_STUNDEN, ROLLEN, TeamSpeicher
+from ..team import BESICHTIGUNG_STATUS, EINLADUNG_TAGE, LEERLAUF_STUNDEN, ROLLEN, TeamSpeicher, ZugangVorhanden
 
 log = logging.getLogger("scout")
 STATIC = Path(__file__).with_name("static")
 COOKIE = "scout_sitzung"
-OFFENE_PFADE = {"/login", "/api/login", "/manifest.webmanifest", "/sw.js", "/favicon.ico"}
+OFFENE_PFADE = {"/login", "/api/login", "/einladung", "/api/einladung", "/api/einladung/pruefen", "/manifest.webmanifest", "/sw.js",
+                "/favicon.ico", "/gesund"}
 MAX_JSON = 1_000_000
 MAX_FOTO = 12_000_000          # Base64-kodiert, entspricht ca. 8 MB Bild
 MAX_IMPORT_DATEIEN = 25        # gespeicherte Seiten je Klick, der Rest beim nächsten Mal
 MAX_IMPORT_SEKUNDEN = 20       # Zeitbudget je Klick (die Anfrage hält die Datenbanksperre)
+TEXT_IMPORT_ROLLEN = ("inhaber", "mitarbeiter")     # Import per Adresse + Text: jedes Teammitglied, nie Standort-Zugänge (ADR-026)
 
 
 # Maschinenlesbarer Grund einer Ablehnung (Feld ``grund`` in der JSON-Antwort), damit Oberflächen z. B. ein fehlendes CSRF-Token
@@ -69,8 +96,36 @@ MAX_IMPORT_SEKUNDEN = 20       # Zeitbudget je Klick (die Anfrage hält die Date
 #   recht     403  fachlich nicht erlaubt (Erzwingen/Zuweisen nur Inhaber, fremde Besichtigung, fremdes Inserat abgeben)
 #   zugriff   403  Hostname/Zugang nicht freigegeben
 #   konflikt  409  Zustand passt nicht (Kollege hält das Inserat bzw. eine Dublette, Besichtigung abgeschlossen, Suchlauf läuft)
+#   deaktiviert 409  Eingang ist in config.yaml abgeschaltet (eingaenge → … → aktiv) – nichts wurde gelesen
 #   belegt    503  Datenbank kurz von einem anderen Vorgang gesperrt – später erneut versuchen
 GRUENDE = {403: "recht", 409: "konflikt", 503: "belegt"}
+
+
+# Unterschriften und Kontaktdaten des Verkäufers nur im Protokoll-Dokument (/protokoll/ID), nie in der Handy-API (P1-14b)
+OHNE_GERAET = ("unterschrift_verkaeufer", "unterschrift_ankaeufer", "verkaeufer")
+BETRAEGE = ("marktwert_privat", "haendler_vk", "kosten", "ziel_marge", "max_ek", "erstangebot", "max_ek_von", "max_ek_bis", "privat_von",
+            "privat_bis")
+
+
+def bewertung_json(b) -> dict:
+    """Bewertung für die Oberfläche; ohne unabhängigen Marktwert (Sicherheit „keine“) Beträge als ``null`` statt 0 (P1-12)."""
+    d = b.dict()
+    if b.sicherheit == "keine":
+        d.update(dict.fromkeys(BETRAEGE))
+    return d
+
+
+def sicheres_ziel(weiter: str | None, standard: str = "/m") -> str:
+    """Ziel nach der Anmeldung (Q6): nur ein Pfad auf diesem Server. Abgelehnt werden fremde Adressen, „//…“, „/\\…“, Punkt-
+    Segmente („/.//x“ würde der Browser zu „//x“ machen) und Steuerzeichen – dann gilt der Standard."""
+    if not weiter or len(weiter) > 500 or not weiter.startswith("/") or "//" in weiter or "\\" in weiter:
+        return standard
+    if any(ord(c) < 33 or ord(c) == 127 for c in weiter):
+        return standard
+    pfad = urlparse(weiter)
+    if pfad.scheme or pfad.netloc or any(teil in (".", "..") for teil in pfad.path.split("/")):
+        return standard
+    return weiter
 
 
 class Antwort(Exception):
@@ -94,6 +149,9 @@ class Kontext:
         self.live_lebensdauer, self.live_ping = 300.0, 15.0      # Sekunden; Tests verkürzen
         self.verkauf = VerkaufSpeicher(db, foto_ordner / "anfragen")     # im Fotoordner: mit gesichert
         self.haendler = HaendlerSpeicher(db)
+        self.zugaenge = ZugangSpeicher(db, cfg)              # Händlerzugänge mobile.de/AutoScout24 (F4) – ohne Geheimnisse
+        self.suchprofile = sp.SuchprofilSpeicher(db)
+        self.kalibrierung = kal.KalibrierungSpeicher(db)
         self.auktion = AuktionSpeicher(db, cfg)             # ValueError bei falscher Konfiguration (Abschnitt auktion)
         self.bremse = LoginBremse(int(app.get("login_max_fehlversuche", 5)), int(app.get("login_max_fehlversuche_je_ip", 20)),
                                   int(app.get("login_sperre_minuten", 15)) * 60)
@@ -102,14 +160,18 @@ class Kontext:
         self.deal = DealSpeicher(db, cfg)                   # ValueError bei falscher Konfiguration (Abschnitt kalkulation)
         self.ankauf = AnkaufSpeicher(db, cfg, foto_ordner / "ankaeufe")    # im Fotoordner: mit gesichert
         self.reservierung_tage = reservierung_tage(cfg)     # ValueError mit verständlicher Meldung bei falscher Konfiguration
+        pruefe_eingaenge(cfg)                               # ebenso „eingaenge“ (Einzel- und Mandantenbetrieb, P2-04)
+        deal_einstellungen(cfg)                             # ebenso „deal_score“ (P5-07)
         self.katalog_pfad = basis / "maengel.yaml"
         self.sperre = threading.Lock()          # Datenbankzugriffe nacheinander, Netzwerk parallel
         self._zeilen: tuple[float, list[dict]] | None = None
         self._dubletten: tuple[tuple, float, dict[str, list[str]]] | None = None
+        self._vorschlaege: tuple[int, float, Ergebnis] | None = None
         self.whatsapp = WhatsAppCloud(cfg)
         self.env = Environment(loader=FileSystemLoader(str(basis / "vorlagen")), autoescape=True)
         self.env.filters["euro"] = euro
         self.env.filters["tsd"] = tsd
+        self.env.filters["stunden"] = stunden_text
 
     # Bewertung aller Inserate ist teuer → 30 s zwischenspeichern, bei Änderungen verwerfen
     def zeilen(self) -> list[dict]:
@@ -120,6 +182,16 @@ class Kontext:
 
     def veraendert(self):
         self._zeilen = None
+
+    def abdeckung(self, tage: int) -> dict:
+        """Messung (P4-05) bis zu 5 Minuten zwischenspeichern, solange sich der Bestand nicht ändert: sie bewertet alle Inserate des Zeitraums
+        und läuft unter der Datenbanksperre der App."""
+        stand = (tage, self.db.daten_version(), self.db.con.total_changes, datetime.now().date())
+        gemerkt = getattr(self, "_abdeckung", None)
+        if not gemerkt or gemerkt[0] != stand or time.monotonic() - gemerkt[1] > 300:
+            gemerkt = (stand, time.monotonic(), abdeckung.messe(self.cfg, self.db, self.basis, tage))
+            self._abdeckung = gemerkt
+        return gemerkt[2]
 
     def dubletten_von(self, anzeige_id: str) -> list[str]:
         """IDs der Dubletten ohne die teure Bewertung (`bewerte_alle`). Eigener Zwischenspeicher: Statuswechsel und Reservierungen
@@ -132,6 +204,14 @@ class Kontext:
 
     def dubletten_verwerfen(self):
         self._dubletten = None
+        self._vorschlaege = None
+
+    def dubletten_vorschlaege(self) -> Ergebnis:
+        """Offene Dublettenvorschläge (P3-02a); wie `dubletten_von` zwischengespeichert (Datenbankstand, 30 s)."""
+        schluessel = self.db.daten_version()
+        if not self._vorschlaege or self._vorschlaege[0] != schluessel or time.monotonic() - self._vorschlaege[1] > 30:
+            self._vorschlaege = (schluessel, time.monotonic(), pruefe_dubletten(self.db))
+        return self._vorschlaege[2]
 
     def zeile(self, anzeige_id: str) -> dict:
         for z in self.zeilen():
@@ -169,6 +249,15 @@ def basis_fuer(z: dict, cfg: dict) -> dict:
     }
 
 
+QUELLE_TEXT = PLATTFORM_TEXT
+
+
+def nach_deal_score(z: dict) -> tuple:
+    """Sortierschlüssel der Ankaufsliste (P6-01): Deal-Score absteigend, ohne Score ans Ende, dann Preis ÷ Max-EK."""
+    s = (z.get("deal") or {}).get("score")
+    return (s is None, -(s or 0), z["b"].verhaeltnis or 99)
+
+
 def fahrzeug_kurz(z: dict, team: dict | None = None) -> dict:
     a, b = z["a"], z["b"]
     return {"id": a["id"], "fahrzeug": a["fahrzeug"], "titel": a["titel"], "ort": a.get("ort"), "url": a["url"],
@@ -178,7 +267,28 @@ def fahrzeug_kurz(z: dict, team: dict | None = None) -> dict:
             "ampel": b.ampel, "erstangebot": b.erstangebot if b.sicherheit != "keine" else None,
             "brief_betrag": z.get("brief_betrag"),
             "max_ek": b.max_ek if b.sicherheit != "keine" else None, "bereit": z["bereit"], "nachfassen": z["nachfassen"],
-            "sperre": z["sperre"], "hinweise": z["hinweise"], "neu": z["neu"], "team": team}
+            # Spannen und Mängelliste (P5-03): Max-EK von–bis (500 €), im Inserat genannte Mängel [{name, wert}]
+            "max_ek_von": b.max_ek_von if b.sicherheit != "keine" else None, "max_ek_bis": b.max_ek_bis if b.sicherheit != "keine" else None,
+            "maengel": b.maengel,
+            "sperre": z["sperre"], "hinweise": z["hinweise"], "neu": z["neu"], "team": team,
+            # frisch / Preis deutlich gesenkt / jetzt im Rahmen (P4-03): {stufe, text, frisch, senkung, im_rahmen} oder None
+            "neuigkeit": z.get("neuigkeit"),
+            # Verfügbarkeit des Inserats (Markt), getrennt vom Ankaufsstatus; „vermutlich offline“ ist abgeleitet, nicht gespeichert (P3-04)
+            "verfuegbarkeit": a.get("verfuegbarkeit") or "unbekannt", "zuletzt_bestaetigt": a.get("zuletzt_bestaetigt"),
+            "vermutlich_offline": bool(a.get("vermutlich_offline")), "verfuegbarkeit_text": a.get("verfuegbarkeit_text"),
+            # Anbieterart mit Herkunft der Einstufung (P3-05): {typ, herkunft, belegt, text}
+            "anbieter": a.get("anbieter") or einstufung(a.get("gewerblich"), a.get("anbieter_herkunft")),
+            # Datenqualität des Fahrzeugs (P3-08): {wert 0–100, stufe, markierungen[{code, art, text}], widersprueche} – nur Anzeige
+            "datenqualitaet": a.get("datenqualitaet"),
+            # Deal-Score (P5-07): 0–100 oder None (gesperrt, keine Bewertung); priorisiert = ab Schwelle, privat, verfügbar
+            "deal_score": (z.get("deal") or {}).get("score"), "priorisiert": bool((z.get("deal") or {}).get("priorisiert")),
+            # Risikofaktoren (P6-01): [{code, text, stufe hoch|mittel}] – hohe zuerst; Quelle als Anzeigename
+            "risiken": z.get("risiken") or [], "quelle_text": QUELLE_TEXT.get(a.get("quelle") or "kleinanzeigen", a.get("quelle")),
+            # Dublettengruppe und Preisverlauf (P6-02): andere Inserate desselben Fahrzeugs (Quelle, Preis, Status, bestätigt) und Preisstände
+            "gruppe": z.get("gruppe") or [], "fahrzeug_status": z.get("fahrzeug_status") or a.get("status") or "neu",
+            "preisverlauf": z.get("preisverlauf"),
+            # Kontaktlage (P6-03): stufe (besichtigung, antwort, wartet, vorbereitet), text, tage, letzte Antwort/Notiz, Besichtigung
+            "kontakt": verhandlung.kurz(z.get("kontakt"))}
 
 
 def ics(b: dict, cfg: dict, link: str | None) -> str:
@@ -186,7 +296,8 @@ def ics(b: dict, cfg: dict, link: str | None) -> str:
     ende = start + timedelta(hours=1)
 
     def esc(t: str) -> str:
-        return (t or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+        return (t or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\r\n", "\n").replace("\r", "\n") \
+            .replace("\n", "\\n")                         # nacktes \r (Q15) wie Zeilenumbruch behandeln
 
     beschreibung = f"Inserat: {b['basis'].get('url', '')}\nWunschpreis {euro(b['basis'].get('preis'))}, " \
                    f"vorbehaltliches Angebot {euro(b['basis'].get('angebot'))}" + (f"\nApp: {link}" if link else "")
@@ -210,6 +321,11 @@ def termin_text(b: dict, link: str | None) -> str:
 
 def karten_link(adresse: str | None) -> str | None:
     return f"https://www.google.com/maps/search/?api=1&query={quote(adresse)}" if adresse else None
+
+
+def audit_anzeige(wert) -> str | None:
+    """Audit-Objekt aus der ID im Inhalt – nur eine gültige Anzeigen-ID, nie sonstiger Text (P7-01, QA B7)."""
+    return f"anzeige:{wert}" if isinstance(wert, str) and re.fullmatch(r"[\w-]{1,64}", wert) else None
 
 
 def _haendler_erlaubt(pfad: str) -> bool:
@@ -238,6 +354,7 @@ class Anfrage:
         self.puffer: tuple | None = None   # Antwort erst nach dem Audit-Eintrag senden (bearbeite)
         self.puffern = False
         self.audit_name: str | None = None
+        self.audit_objekt: str | None = None           # Objekt aus dem Inhalt, wenn der Pfad keins nennt (z. B. /api/notiz, P6-03b)
 
     # ----- Antworten
     def senden(self, status: int, body: bytes, typ: str, kopf: dict | None = None):
@@ -413,14 +530,27 @@ class Anfrage:
     # ----- GET
     def get(self):
         k, p = self.k, self.pfad
+        if p == "/gesund":                                # Health-Check für Überwachung/Reverse-Proxy (P7-04): ohne Anmeldung, ohne Daten
+            k.db.con.execute("SELECT 1 FROM schema_version LIMIT 1").fetchone()
+            return self.json(200, {"ok": True})
         if p == "/login":
-            return self.html(k.env.get_template("login.html").render(firma=k.cfg["anschreiben"]["firma"]))
+            ziel = sicheres_ziel((self.query.get("weiter") or [None])[0])
+            return self.html(k.env.get_template("login.html").render(firma=k.cfg["anschreiben"]["firma"], ziel=ziel))
+        if p == "/einladung":                             # F4: Token steht im #-Teil des Links – er erreicht den Server nie per GET
+            return self.html(k.env.get_template("einladung.html").render(firma=k.cfg["anschreiben"]["firma"]))
+        if p in ("/zugaenge", "/api/zugaenge"):            # F4: Zugänge einladen, Händlerzugänge der Plattformen – nur der Inhaber
+            self.nur_inhaber()
+            if p == "/zugaenge":
+                return self.html(k.env.get_template("zugaenge.html").render(firma=k.cfg["anschreiben"]["firma"], token=k.token,
+                                                                            rollen={r: ROLLEN[r] for r in ("inhaber", "mitarbeiter")}))
+            return self.json(200, {"plattformen": k.zugaenge.liste(), "nutzer": k.team.nutzer_liste(nur_aktive=False)})
         if self.nutzer.get("rolle") == HAENDLER and p in ("/", "/m"):
             return self.weiterleiten("/haendler")
         if p == "/":
             zeilen = k.zeilen()
             team = self.team_uebersicht() if self.team_aktiv else None
-            html, _ = render_html(k.cfg, zeilen, k.basis, fehler=k.suchlauf.stand["fehler"], app={"token": k.token}, team=team)
+            html, _ = render_html(k.cfg, zeilen, k.basis, fehler=k.suchlauf.stand["fehler"], app={"token": k.token}, team=team,
+                                  anfragen=self.offene_anfragen())
             return self.html(html)
         if p == "/m":
             return self.html(k.env.get_template("mobil.html").render(firma=k.cfg["anschreiben"]["firma"]))
@@ -440,12 +570,49 @@ class Anfrage:
             return self.json(200, k.katalog())
         if p == "/api/heute":
             return self.json(200, self.heute())
+        if p == "/api/meldungen":
+            # was jetzt Aufmerksamkeit braucht (P6-04): Antwort fällig, Besichtigung, Nachfassen, Preissenkung, neu – „gelesen“ merkt das Gerät
+            return self.json(200, {"meldungen": meldungen(k.zeilen(), datetime.now(), self.k.cfg, self.offene_anfragen()),
+                                   "jetzt": datetime.now().isoformat(timespec="seconds")})
+        if p == "/api/dubletten-vorschlaege":
+            if self.nutzer.get("rolle") not in TEXT_IMPORT_ROLLEN:       # Inhaber und Mitarbeiter; Standort-Zugänge nie
+                raise Antwort(403, "Nur für Inhaber und Mitarbeiter", grund="recht")
+            limit = (self.query.get("limit") or [str(STANDARD_LIMIT)])[0]
+            if not limit.isdigit() or not 1 <= int(limit) <= MAX_LIMIT:
+                raise Antwort(400, f"limit muss zwischen 1 und {MAX_LIMIT} liegen")
+            erg = k.dubletten_vorschlaege()
+            darf = {"darf_bestaetigen": darf_bestaetigen(self.nutzer.get("rolle")), "darf_ablehnen": darf_ablehnen(self.nutzer.get("rolle"))}
+            return self.json(200, {"vorschlaege": [{**v, **darf} for v in erg.vorschlaege[:int(limit)]], "anzahl": len(erg.vorschlaege), "limit": int(limit),
+                                   "unvollstaendig": bool(erg.gekuerzt), "hinweis": erg.hinweis, "regel_version": REGEL_VERSION})
+        if p == "/api/dubletten/entscheidungen":
+            return self.json(200, self.dubletten_entscheidungen((self.query.get("anzeige") or [""])[0]))
+        if p == "/api/preisverlauf":
+            return self.json(200, self.preisverlauf_antwort((self.query.get("anzeige") or [""])[0], (self.query.get("umfang") or ["inserat"])[0]))
         if p == "/api/fahrzeuge":
             return self.json(200, self.fahrzeuge())
         if m := re.fullmatch(r"/api/fahrzeug/([\w-]+)", p):
             return self.json(200, self.fahrzeug(m.group(1)))
+        if p == "/api/suchprofile":
+            return self.json(200, self.suchprofile())
+        if m := re.fullmatch(r"/api/suchprofil/([0-9]{1,9})/treffer", p):
+            # Desktop-Filter: alle Treffer ohne die 200er-Grenze von /api/fahrzeuge (die Desktop-Liste zeigt alle Zeilen)
+            if (profil := k.suchprofile.profil(int(m.group(1)))) is None:
+                raise Antwort(404, "Suchprofil nicht gefunden")
+            return self.json(200, {"treffer": self._profil_treffer(profil, k.zeilen())})
+        if p == "/api/datenqualitaet":
+            return self.json(200, {"quellen": je_quelle(k.zeilen())})
+        if m := re.fullmatch(r"/api/kontakte/([\w-]+)", p):
+            if k.db.status_von(m.group(1)) is None:
+                raise Antwort(404, "Anzeige nicht gefunden")
+            return self.json(200, self.kontakte(m.group(1)))
+        if m := re.fullmatch(r"/api/verhandlung/([\w-]+)", p):
+            if k.db.status_von(m.group(1)) is None:
+                raise Antwort(404, "Anzeige nicht gefunden")
+            return self.json(200, self.verhandlung(m.group(1)))
         if m := re.fullmatch(r"/api/besichtigung/(\d+)", p):
-            return self.json(200, self.besichtigung_voll(self.besichtigung(m.group(1))))
+            b = self.besichtigung(m.group(1))
+            # abgeschlossene Besichtigungen braucht niemand offline – nicht im Speicher des Geräts ablegen (P1-14b)
+            return self.json(200, self.besichtigung_voll(b), {"X-Scout-Offline": "nein"} if b["status"] in ("abgeschlossen", "abgebrochen") else None)
         if m := re.fullmatch(r"/api/besichtigung/(\d+)/ics", p):
             b = self.besichtigung(m.group(1))
             if not b.get("termin"):
@@ -488,6 +655,47 @@ class Anfrage:
             except LookupError as fehler:
                 raise Antwort(404, str(fehler)) from fehler
             return self.json(200, {"ergebnis": erg, "eingabe_hash": kalk.eingabe_hash(e)[:12]})
+        if p == "/api/status":                             # Statusseite (P4-04): Quellen, Eingänge, Läufe, Fehler – ohne Personendaten
+            return self.json(200, {**lp.uebersicht(k.db, k.cfg), "suchlauf": k.suchlauf.stand})
+        if p in ("/api/abdeckung", "/abdeckung"):           # Abdeckung und Suchlücken (P4-05): nur lesen, ohne Personendaten
+            try:
+                tage = abdeckung.tage_aus((self.query.get("tage") or [""])[0], abdeckung.MAX_TAGE_APP)
+            except ValueError as e:
+                raise Antwort(400, str(e)) from e
+            erg = k.abdeckung(tage)
+            if p == "/api/abdeckung":
+                return self.json(200, erg)
+            return self.html(k.env.get_template("abdeckung.html").render(firma=k.cfg["anschreiben"]["firma"], m=erg))
+        if p in ("/api/kennzahlen", "/kennzahlen"):         # Kennzahlen (P6-05): Eingang, Bewertung, Ankaufstrichter – nur Anzahlen, ohne Preise
+            try:
+                tage = abdeckung.tage_aus((self.query.get("tage") or [""])[0], abdeckung.MAX_TAGE_APP)
+            except ValueError as e:
+                raise Antwort(400, str(e)) from e
+            erg = kennzahlen.messe(k.cfg, k.db, k.abdeckung(tage), k.zeilen(), tage)
+            if p == "/api/kennzahlen":
+                return self.json(200, erg)
+            return self.html(k.env.get_template("kennzahlen.html").render(firma=k.cfg["anschreiben"]["firma"], m=erg))
+        if p in ("/api/kalibrierung", "/kalibrierung"):     # Kalibrierung (P5-01): Kaufpreise und Vorschläge – im Team nur der Inhaber
+            if self.team_aktiv:
+                self.nur_inhaber()
+            if p == "/kalibrierung":
+                return self.html(k.env.get_template("kalibrierung.html").render(
+                    firma=k.cfg["anschreiben"]["firma"], token=k.token, arten=kal.ARTEN, min_faelle=kal.MIN_FAELLE))
+            faelle = k.kalibrierung.faelle(k.cfg)
+            return self.json(200, {"bericht": kal.bericht(faelle, k.cfg), "faelle": faelle, "manuelle": k.kalibrierung.manuelle(),
+                                   "markt": k.kalibrierung.marktbeobachtung(k.cfg)})
+        if p == "/api/datenschutz":                         # Aufbewahrungsfristen (F10): was ist fällig – nur Anzahlen, nur der Inhaber
+            if self.team_aktiv:
+                self.nur_inhaber()
+            return self.json(200, {"einstellungen": aufbewahrung.einstellungen(k.cfg), "plan": aufbewahrung.bericht(k.db, k.cfg, k.basis)})
+        if p == "/status":
+            try:                                            # Aufbewahrungsfristen (F10): nur Anzahlen; Ausführen nur der Inhaber
+                ds = {"plan": aufbewahrung.bericht(k.db, k.cfg, k.basis), "automatisch": aufbewahrung.einstellungen(k.cfg)["automatisch"]}
+            except ValueError as e:
+                ds = {"fehler": str(e)}
+            return self.html(k.env.get_template("status.html").render(
+                firma=k.cfg["anschreiben"]["firma"], s=lp.uebersicht(k.db, k.cfg), suchlauf=k.suchlauf.stand, arten=lp.ARTEN,
+                ausloeser=lp.AUSLOESER, ergebnisse=lp.ERGEBNISSE, datenschutz=ds, inhaber=self.nutzer.get("rolle") == "inhaber"))
         if p == "/ankaeufe":
             return self.html(k.env.get_template("ankaeufe.html").render(
                 firma=k.cfg["anschreiben"]["firma"], token=k.token, ich=self.nutzer, kostenarten=KOSTENARTEN, status=ANKAUF_STATUS,
@@ -626,16 +834,95 @@ class Anfrage:
         log.info("Widerruf für Anfrage %s ausgeführt durch %s", anfrage_id, self.nutzer["name"])
         return {"ok": True, **erg}
 
+    # ----- Einladungen und Händlerzugänge (F4, ADR-059)
+    def nutzer_einladen(self, daten: dict) -> dict:
+        """Team-Zugang (Inhaber oder Mitarbeiter) anlegen oder erneut einladen; der Link geht nur an den Inhaber zurück, der ihn weitergibt."""
+        name, rolle = str(daten.get("name") or "").strip()[:60], str(daten.get("rolle") or "mitarbeiter")
+        telefon = str(daten.get("telefon") or "").strip()[:40] or None
+        if not name:
+            raise Antwort(400, "Name fehlt")
+        if rolle not in ("inhaber", "mitarbeiter"):
+            raise Antwort(400, "Rolle: Inhaber oder Mitarbeiter (Standort-Zugänge über die Kommandozeile mit --standort)")
+        erster = not self.team_aktiv                        # Einzelplatz ohne Nutzer: danach ist eine Anmeldung nötig (QA B1)
+        try:
+            _, token, rolle = self.k.team.einladen(name, rolle, telefon, erstellt_von=self.nutzer["id"], erneut=daten.get("erneut") is True)
+        except ZugangVorhanden as e:
+            raise Antwort(409, str(e), {"vorhanden": True}) from e
+        except ValueError as e:
+            raise Antwort(400, str(e)) from e
+        https = self.k.nur_https or (self.k.vertrauter_proxy and self.h.headers.get("X-Forwarded-Proto") == "https")
+        basis = self.k.app_link("") or f"{'https' if https else 'http'}://{self.h.headers.get('Host') or '127.0.0.1'}"
+        hinweise = []
+        if erster:
+            hinweise.append("Ab jetzt ist für die App eine Anmeldung nötig – den Link jetzt selbst öffnen (oder sicher weitergeben) und das "
+                            "Passwort setzen, sonst bleibt nur die Kommandozeile.")
+        if not self.k.app_link(""):
+            hinweise.append("Ohne öffentliche Adresse (config.yaml → app → oeffentliche_url) funktioniert der Link nur auf diesem Rechner.")
+        log.info("Einladung für %s angelegt durch %s", name, self.nutzer.get("name"))
+        return {"name": name, "rolle": ROLLEN.get(rolle, rolle), "link": f"{basis}/einladung#{token}", "gueltig_tage": EINLADUNG_TAGE,
+                "erster_zugang": erster, "hinweise": hinweise}
+
+    def _herkunft_pruefen(self, was: str):
+        if not (self.h.headers.get("Content-Type") or "").startswith("application/json"):
+            raise Antwort(415, f"{was} nur als JSON")
+        if self.h.headers.get("Sec-Fetch-Site") == "cross-site":
+            raise Antwort(403, f"{was} von fremden Seiten nicht erlaubt", grund="csrf")
+        herkunft = self.h.headers.get("Origin")
+        if herkunft and urlparse(herkunft).netloc not in self.k.erlaubte_hosts(self.h.server.server_address[1]):
+            raise Antwort(403, f"{was} von fremden Seiten nicht erlaubt", grund="csrf")
+
+    def _mit_sitzung(self, daten: dict, token: str):
+        https = self.k.nur_https or (self.k.vertrauter_proxy and self.h.headers.get("X-Forwarded-Proto") == "https")
+        return self.json(200, daten, {"Set-Cookie": f"{COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; "
+                                                    f"Max-Age={30 * 86400}{'; Secure' if https else ''}"})
+
+    def einladung_einloesen(self, daten: dict):
+        """Passwort selbst setzen und gleich angemeldet sein (F4) – wie die Anmeldung: Bremse je IP, Hash ohne globale Sperre."""
+        k = self.k
+        self._herkunft_pruefen("Einladung")
+        token, passwort, ip = str(daten.get("token") or "")[:100], str(daten.get("passwort") or ""), self.client_ip()
+        if warten := k.bremse.wartezeit(ip, "(einladung)"):
+            raise Antwort(429, f"Zu viele Fehlversuche – bitte in {max(1, warten // 60)} Minute(n) erneut versuchen", {"warten_sek": warten})
+        if not 8 <= len(passwort) <= 200:
+            raise Antwort(400, "Passwort: mindestens 8 Zeichen")
+        with k.sperre:
+            gueltig = k.team.einladung(token)
+        if not gueltig:
+            k.bremse.fehlschlag(ip, "(einladung)")
+            raise Antwort(410, "Einladung ungültig, abgelaufen oder schon eingelöst – bitte eine neue anfordern")
+        neu = hash_passwort(passwort)                                   # teuer – bewusst ohne Sperre
+        with k.sperre:
+            e = k.team.einladung_einloesen(token, neu)
+            if not e:
+                raise Antwort(410, "Einladung ungültig, abgelaufen oder schon eingelöst – bitte eine neue anfordern")
+            sitzung = k.team.sitzung_anlegen(e["nutzer_id"])
+        self.audit_name = e["name"]
+        log.info("Einladung eingelöst: %s von %s", e["name"][:40], ip)
+        return self._mit_sitzung({"ok": True, "name": e["name"]}, sitzung)
+
+    def zugang_testen(self, plattform: str):
+        """Verbindungstest (F4): Rechte und Daten unter der Sperre prüfen, die eine Anfrage an den Anbieter ohne Sperre, Ergebnis wieder
+        unter der Sperre merken – ein langsamer Anbieter blockiert die App nicht."""
+        k = self.k
+        with k.sperre:
+            self.pruefe_zugriff(aendernd=True)
+            self.nur_inhaber()
+            try:
+                vorbereitet = k.zugaenge.test_vorbereiten(plattform)
+            except LookupError as e:
+                raise Antwort(404, str(e)) from e
+            except ValueError as e:
+                raise Antwort(400, str(e)) from e
+        ergebnis = ZugangSpeicher.test_ausfuehren(vorbereitet)
+        with k.sperre:
+            k.zugaenge.test_merken(plattform, ergebnis)
+        log.info("Verbindungstest %s durch %s: %s", ZUGANG_PLATTFORMEN[plattform]["name"], self.nutzer.get("name"), "ok" if ergebnis["ok"] else "Fehler")
+        return self.json(200, ergebnis)
+
     # ----- Anmeldung (G0: Bremse je IP und Name, scrypt außerhalb der globalen Sperre, Herkunftsprüfung)
     def login(self, daten: dict):
         k = self.k
-        if not (self.h.headers.get("Content-Type") or "").startswith("application/json"):
-            raise Antwort(415, "Anmeldung nur als JSON")
-        if self.h.headers.get("Sec-Fetch-Site") == "cross-site":
-            raise Antwort(403, "Anmeldung von fremden Seiten nicht erlaubt", grund="csrf")
-        herkunft = self.h.headers.get("Origin")
-        if herkunft and urlparse(herkunft).netloc not in k.erlaubte_hosts(self.h.server.server_address[1]):
-            raise Antwort(403, "Anmeldung von fremden Seiten nicht erlaubt", grund="csrf")
+        self._herkunft_pruefen("Anmeldung")
         name, passwort, ip = str(daten.get("name") or "")[:100], str(daten.get("passwort") or ""), self.client_ip()
         self.audit_name = name
         warten = k.bremse.wartezeit(ip, name)
@@ -654,9 +941,7 @@ class Anfrage:
             token = k.team.sitzung_anlegen(nid)
         k.bremse.erfolg(ip, name)
         log.info("Anmeldung: %s von %s", name[:40], ip)
-        https = k.nur_https or (k.vertrauter_proxy and self.h.headers.get("X-Forwarded-Proto") == "https")
-        return self.json(200, {"ok": True}, {"Set-Cookie": f"{COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; "
-                                                           f"Max-Age={30 * 86400}{'; Secure' if https else ''}"})
+        return self._mit_sitzung({"ok": True}, token)
 
     # ----- Deal Intelligence (Phase E)
     def betrag_aus_query(self) -> int | None:
@@ -704,10 +989,16 @@ class Anfrage:
         keine = b.sicherheit == "keine"
         return {"ampel": b.ampel, "sicherheit": b.sicherheit, "marktwert": None if keine else b.marktwert_angebote,
                 "max_ek": None if keine else b.max_ek, "erstangebot": None if keine else b.erstangebot,
-                "spanne_von": b.spanne_von, "spanne_bis": b.spanne_bis, "art": b.art}
+                "spanne_von": b.spanne_von, "spanne_bis": b.spanne_bis, "art": b.art, "abschlag_marke": b.abschlag_marke}
 
     def _nutzer_namen(self) -> dict:
         return {n["id"]: n["name"] for n in self.k.team.nutzer_mit_kuerzel(False)} if self.team_aktiv else {}
+
+    def offene_anfragen(self) -> list[dict] | None:
+        """Offene Verkaufsanfragen für Meldungen und Dashboard (P7-02) – nur für Inhaber und Mitarbeiter, nur Fahrzeugangaben (keine Namen)."""
+        if self.nutzer.get("rolle") not in TEXT_IMPORT_ROLLEN:
+            return None
+        return self.k.verkauf.offene_kurz()
 
     def verkaufsanfragen(self) -> list[dict]:
         k = self.k
@@ -733,7 +1024,7 @@ class Anfrage:
         a["bearbeiter"] = namen.get(a["bearbeiter_id"])
         for v in a["verlauf"]:
             v["nutzer"] = namen.get(v["nutzer_id"])
-        return {**a, "bewertung": {**b.dict(), **self._bewertung_kurz(b)}, "spanne_verkaeufer": vk.spanne_fuer_verkaeufer(b, k.cfg),
+        return {**a, "bewertung": {**bewertung_json(b), **self._bewertung_kurz(b)}, "spanne_verkaeufer": vk.spanne_fuer_verkaeufer(b, k.cfg),
                 "interessen": k.verkauf.interessen(anfrage_id), "auktionen": k.auktion.fuer_anfrage(anfrage_id),
                 "kalkulationen": k.deal.liste(anfrage_id), "ankaeufe": k.ankauf.zu_anfrage(anfrage_id),
                 "besichtigungen": [self.besichtigung_kurz(b) for b in k.team.besichtigungen(offen=False, anzeige_id=f"anfrage-{anfrage_id}")]}
@@ -782,8 +1073,76 @@ class Anfrage:
             "bereit": sum(1 for z in zeilen if z["bereit"] and (z["a"].get("status") or "neu") == "neu"),
             "nachfassen": sum(1 for z in zeilen if z["nachfassen"]),
             "arbeit": sum(1 for z in zeilen if z["a"].get("status") in IN_ARBEIT),
+            "neuigkeiten": sum(1 for z in zeilen if z.get("neuigkeit")),
             "suchlauf": k.suchlauf.stand,
         }
+
+    # ---------------------------------------------------------------- Suchprofile (P4-01)
+    def _profil_treffer(self, profil: dict, zeilen: list[dict]) -> dict[str, str]:
+        """Anzeigen-ID → „passt“/„unklar“ für alle eingegangenen Inserate, die zum Profil passen (könnten)."""
+        erg = {}
+        for z in zeilen:
+            urteil, _ = sp.pruefe_inserat(profil, z["a"], z["b"].art)
+            if urteil != sp.NEIN:
+                erg[z["a"]["id"]] = urteil
+        return erg
+
+    def suchprofile(self) -> dict:
+        """Alle Profile mit Trefferzahlen (ohne ausgeblendete Inserate) und Abdeckungscheckliste je Plattform."""
+        k, jetzt = self.k, datetime.now()
+        zeilen = [z for z in k.zeilen() if not z["ausblenden"]]
+        nach_id = {z["a"]["id"]: z for z in zeilen}
+        profile = []
+        for p in k.suchprofile.liste():
+            treffer = self._profil_treffer(p, zeilen)
+            letzte: dict[str, str | None] = {}
+            for ad_id in (i for i, u in treffer.items() if u == sp.PASST):       # „letzter passender Treffer“: nur sicher passende
+                a = nach_id[ad_id]["a"]
+                quelle = a.get("quelle") or "kleinanzeigen"
+                letzte[quelle] = max(letzte.get(quelle) or "", a.get("erstmals_gesehen") or "") or None
+            profile.append({**p, "gebiet_text": sp.gebiet_text(p),
+                            "treffer": {"passt": sum(v == sp.PASST for v in treffer.values()), "unklar": sum(v == sp.UNKLAR for v in treffer.values())},
+                            "abdeckung": sp.abdeckung(p, k.suchprofile.auftraege(p["id"]), letzte, jetzt)})
+        return {"profile": profile, "arten": list(sp.ARTEN), "plattformen": list(PLATTFORMEN), "mit_eingang": list(sp.MIT_EINGANG),
+                "gebiete": list(sp.GEBIETE), "standort_plz": str(k.cfg["anschreiben"].get("plz") or "") or None,
+                "darf_aendern": not self.team_aktiv or self.nutzer.get("rolle") == "inhaber"}
+
+    def suchprofil_aendern(self, pfad: str, daten: dict) -> dict:
+        """Anlegen, Ändern, Löschen, Checkliste – im Team nur der Inhaber (wie Suchläufe, P1-15); protokolliert (Audit)."""
+        k = self.k
+        if self.team_aktiv:
+            self.nur_inhaber()
+        try:
+            if pfad == "/api/suchprofile":
+                return {"ok": True, "id": k.suchprofile.anlegen(sp.pruefe_profil(daten, datetime.now()))}
+            profil_id = int(pfad.split("/")[3])
+            if k.suchprofile.profil(profil_id) is None:
+                raise Antwort(404, "Suchprofil nicht gefunden")
+            if pfad.endswith("/loeschen"):
+                k.suchprofile.loeschen(profil_id)
+            elif pfad.endswith("/auftrag"):
+                k.suchprofile.setze_auftrag(profil_id, sp.pruefe_auftrag(daten))
+            else:
+                k.suchprofile.aendern(profil_id, sp.pruefe_profil(daten, datetime.now()))
+        except sp.Eingabefehler as e:
+            raise Antwort(400, str(e)) from e
+        return {"ok": True, "id": profil_id}
+
+    def kalibrierung_aendern(self, pfad: str, daten: dict) -> dict:
+        """Manuellen Kalibrierungsfall anlegen oder löschen – im Team nur der Inhaber; protokolliert (Audit). Ändert keine Parameter."""
+        k = self.k
+        if self.team_aktiv:
+            self.nur_inhaber()
+        if pfad == "/api/kalibrierung":
+            try:
+                f = kal.pruefe_fall(daten, datetime.now().date())
+            except kal.Eingabefehler as e:
+                raise Antwort(400, str(e)) from e
+            return {"ok": True, "id": k.kalibrierung.anlegen(f, self.nutzer.get("id"))}
+        fall_id = int(pfad.split("/")[3])
+        if not k.kalibrierung.loeschen(fall_id):
+            raise Antwort(404, "Fall nicht gefunden")
+        return {"ok": True, "id": fall_id}
 
     def fahrzeuge(self) -> list[dict]:
         f = (self.query.get("filter") or ["bereit"])[0]
@@ -791,31 +1150,123 @@ class Anfrage:
         wer = (self.query.get("wer") or ["alle"])[0]
         if wer not in ("alle", "meine", "frei"):
             raise Antwort(400, "wer muss alle, meine oder frei sein")
+        quelle = (self.query.get("quelle") or [""])[0]
+        if quelle and quelle not in QUELLE_TEXT:
+            raise Antwort(400, f"quelle: {', '.join(QUELLE_TEXT)}")
+        verfuegbar = (self.query.get("verfuegbar") or ["standard"])[0]
+        if verfuegbar not in ("standard", "alle", "nur"):
+            raise Antwort(400, "verfuegbar muss standard, alle oder nur sein")
+        einmal = (self.query.get("einmal") or ["nein"])[0]
+        if einmal not in ("ja", "nein"):
+            raise Antwort(400, "einmal muss ja oder nein sein")
         sicht = self.team_sicht()
         if wer != "alle" and not sicht:
             raise Antwort(400, "Team nicht aktiv (keine Nutzer angelegt) – „wer“ gibt es nur im Team")
+        profil_treffer = None
+        if (profil_param := (self.query.get("profil") or [""])[0]):          # Suchprofil als Filter über eingegangene Daten (P4-01)
+            profil = self.k.suchprofile.profil(int(profil_param)) if re.fullmatch(r"[0-9]{1,9}", profil_param) else None
+            if profil is None:
+                raise Antwort(400, "profil: unbekanntes Suchprofil")
+            profil_treffer = self._profil_treffer(profil, self.k.zeilen())
+            if (self.query.get("unklar") or ["ja"])[0] == "nein":
+                profil_treffer = {i: u for i, u in profil_treffer.items() if u == sp.PASST}
         auswahl = []
         for z in self.k.zeilen():
+            if profil_treffer is not None and z["a"]["id"] not in profil_treffer:
+                continue
+            if quelle and (z["a"].get("quelle") or "kleinanzeigen") != quelle:
+                continue
+            # standard: verkaufte/offline Anzeigen ohne Ankaufsarbeit ausgeblendet; nur: alle nicht verfügbaren; alle: nichts ausgeblendet
+            if (verfuegbar == "standard" and z["ausblenden"]) or (verfuegbar == "nur" and z["a"].get("nicht_verfuegbar")):
+                continue
             s = z["a"].get("status") or "neu"
             t = sicht.objekt(z) if sicht else None
             if (wer == "meine" and not t["mein"]) or (wer == "frei" and not sicht.ist_frei(t)):
                 continue
             # „Text kopiert“ bleibt unter „Anschreiben bereit“, bis „gesendet ✓“ bestätigt ist (ADR-012)
             ok = {"bereit": (z["bereit"] and s == "neu") or s == VORBEREITET, "nachfassen": bool(z["nachfassen"]),
-                  "arbeit": s in IN_ARBEIT, "offen": s in OFFEN, "alle": True}.get(f, False)
+                  "arbeit": s in IN_ARBEIT, "offen": s in OFFEN, "alle": True, "neuigkeiten": bool(z.get("neuigkeit")),
+                  "top": bool((z.get("deal") or {}).get("priorisiert"))}.get(f, False)
             text = f"{z['a']['fahrzeug']} {z['a']['titel']} {z['a'].get('ort') or ''}".lower()
             if ok and all(w in text for w in q):
                 auswahl.append((z, t))
-        auswahl.sort(key=lambda zt: zt[0]["b"].verhaeltnis or 99)
+        auswahl.sort(key=lambda zt: nach_deal_score(zt[0]))       # Deal-Score zuerst wie in der Desktop-Liste (P6-01)
+        if f == "neuigkeiten":                              # wichtigste zuerst: jetzt im Rahmen, neu und bereit, gesenkt, neu (P4-03)
+            auswahl.sort(key=lambda zt: zt[0]["neuigkeit"]["stufe"])
+        if einmal == "ja":                                  # gleiches Fahrzeug nur einmal – unter den Treffern, Bearbeitetes bleibt (P6-02)
+            gezeigt = nur_einmal([z for z, _ in auswahl])
+            auswahl = [(z, t) for z, t in auswahl if z["a"]["id"] in gezeigt]
+        if profil_treffer is not None:
+            return [{**fahrzeug_kurz(z, t), "profil_treffer": profil_treffer[z["a"]["id"]]} for z, t in auswahl[:200]]
         return [fahrzeug_kurz(z, t) for z, t in auswahl[:200]]
 
     def fahrzeug(self, anzeige_id: str) -> dict:
         z = self.k.zeile(anzeige_id)
         sicht = self.team_sicht()
-        return {**fahrzeug_kurz(z, sicht.objekt(z) if sicht else None), "bewertung": z["b"].dict(), "brief": z["brief"], "nachfass_text": z["nachfass_text"],
+        return {**fahrzeug_kurz(z, sicht.objekt(z) if sicht else None), "bewertung": bewertung_json(z["b"]), "brief": z["brief"],
+                "nachfass_text": z["nachfass_text"],
                 "nachfass_betrag": z["nachfass_betrag"], "anschreiben_text": z["a"].get("anschreiben_text"),
                 "notiz": z["a"].get("notiz"), "besichtigungen": [self.besichtigung_kurz(b, sicht) for b in
-                                                                 self.k.team.besichtigungen(offen=False, anzeige_id=anzeige_id)]}
+                                                                 self.k.team.besichtigungen(offen=False, anzeige_id=anzeige_id)],
+                "verfuegbarkeit_fahrzeug": self.verfuegbarkeit_fahrzeug(anzeige_id), "kontakte": self.kontakte(anzeige_id),
+                "verhandlung": self.verhandlung(anzeige_id),
+                "deal": z.get("deal"), "deal_verlauf": [{k: v[k] for k in ("zeitpunkt", "preis", "max_ek", "ampel", "deal_score")}
+                                                        for v in bewertungsverlauf.verlauf(self.k.db, anzeige_id, 10)]}
+
+    def kontakte(self, anzeige_id: str) -> list[dict]:
+        """Kontaktverlauf der Anzeige und ihres Fahrzeugs (P3-06): vorbereitete und bestätigte Anschreiben und Nachfassen, älteste zuerst."""
+        namen = {n["id"]: n["name"] for n in self.k.team.nutzer_liste(nur_aktive=False)} if self.team_aktiv else {}
+        return [kontakte.als_json(z, namen) for z in self.k.db.kontakte_zu(anzeige_id)]
+
+    def verhandlung(self, anzeige_id: str) -> list[dict]:
+        """Antworten und Verhandlungsnotizen der Anzeige und ihres Fahrzeugs (P6-03), älteste zuerst."""
+        namen = {n["id"]: n["name"] for n in self.k.team.nutzer_liste(nur_aktive=False)} if self.team_aktiv else {}
+        return [verhandlung.als_json(z, namen) for z in verhandlung.verlauf(self.k.db, anzeige_id)]
+
+    @staticmethod
+    def kanal(daten: dict) -> str | None:
+        try:
+            return kontakte.pruefe_kanal(daten.get("kanal"))
+        except ValueError as e:
+            raise Antwort(400, str(e)) from e
+
+    def kontakt_bestaetigen(self, kontakt_id: int, kanal: str | None, daten: dict) -> dict:
+        """„gesendet ✓“ für ein vorbereitetes Nachfassen. Das Anschreiben bestätigt „gesendet ✓“ über den Status (Reservierung, ADR-012).
+        Im Team: wer es vorbereitet hat oder der Inhaber. War das Inserat noch nicht kontaktiert, ist es der erste Kontakt: dann über den Status
+        „kontaktiert“ (Kontaktzeitpunkt, Team-Zuordnung, Konfliktprüfung wie bei „gesendet ✓“)."""
+        k = self.k
+        z = k.db.kontakt(kontakt_id)
+        if z is None:
+            raise Antwort(404, "Kontakt nicht gefunden")
+        if z["art"] != kontakte.NACHFASSEN:
+            raise Antwort(409, "Ein Anschreiben wird mit „gesendet ✓“ am Fahrzeug bestätigt")
+        if self.team_aktiv and self.nutzer.get("rolle") != "inhaber" and z["nutzer_id"] not in (None, self.nutzer.get("id")):
+            raise Antwort(403, "Nur wer das Nachfassen vorbereitet hat (oder der Inhaber) bestätigt es", grund="recht")
+        if z["verworfen_am"]:
+            raise Antwort(409, "Dieses Nachfassen wurde verworfen (nicht gesendet) – bitte neu kopieren")
+        ad_id = z["anzeige_id"]
+        erster = not z["bestaetigt_am"] and not k.db.con.execute("SELECT kontaktiert_am FROM anzeigen WHERE id=?", (ad_id,)).fetchone()[0]
+        if erster:
+            team = self.team_parameter(daten, ad_id)
+            vorher = self.vorheriger_halter(ad_id, team)
+            try:
+                k.db.setze_status(ad_id, "kontaktiert", kanal=kanal, kontakt_id=kontakt_id, **team)
+            except BearbeitungsKonflikt:
+                raise self.konflikt(ad_id, team.get("dubletten", ()), gruppe=team.get("erzwingen")) from None
+            self.logge_erzwingen(ad_id, vorher)
+        else:
+            k.db.bestaetige_kontakt(kontakt_id, self.nutzer.get("id") if self.team_aktiv else None, kanal)
+        k.veraendert()
+        namen = {n["id"]: n["name"] for n in k.team.nutzer_liste(nur_aktive=False)} if self.team_aktiv else {}
+        return {"ok": True, "kontakt": kontakte.als_json(k.db.kontakt(kontakt_id), namen)}
+
+    def verfuegbarkeit_fahrzeug(self, anzeige_id: str) -> dict | None:
+        """Abgeleitete Verfügbarkeit des Fahrzeugs über alle seine Inserate (bestätigte Dubletten, P3-02b/P3-04); None ohne v4-Gegenstück."""
+        db = self.k.db
+        fid = db.fahrzeug_id_zu(anzeige_id)
+        if fid is None:
+            return None
+        return fahrzeug_von(db.con, fid, datetime.now(), offline_nach_tagen(self.k.cfg))
 
     def besichtigung_kurz(self, b: dict, sicht: TeamSicht | None = None) -> dict:
         link = self.k.app_link(f"/m#/besichtigung/{b['id']}")
@@ -828,7 +1279,8 @@ class Anfrage:
     def besichtigung_voll(self, b: dict) -> dict:
         e = berechne(self.k.katalog(), b["daten"] or {}, b["basis"])
         return {**self.besichtigung_kurz(b), "basis": b["basis"], "daten": b["daten"], "ergebnis": e,
-                "protokoll": b["protokoll"], "version": b["version"], "fotos": self.k.team.fotos(b["id"])}
+                "protokoll": {k_: v for k_, v in b["protokoll"].items() if k_ not in OHNE_GERAET} if b["protokoll"] else None,
+                "version": b["version"], "fotos": self.k.team.fotos(b["id"])}
 
     def protokoll(self, b: dict) -> str:
         e = b["ergebnis"] or berechne(self.k.katalog(), b["daten"] or {}, b["basis"])
@@ -848,7 +1300,12 @@ class Anfrage:
         if p == "/api/status":
             if daten.get("status") not in STATUS:
                 raise Antwort(400, "unbekannter Status")
+            kanal = self.kanal(daten)
             ad_id = str(daten.get("id"))
+            if self.team_aktiv and self.nutzer["rolle"] != "inhaber" and "gekauft" in (daten["status"], k.db.status_von(ad_id)):
+                # P1-15: ein Kauf entsteht über den Abschluss der Besichtigung (mit Protokoll) – direkt nur durch den Inhaber;
+                # ebenso nimmt nur er einen Kauf wieder zurück
+                raise Antwort(403, "Status „gekauft“ setzt oder ändert der Inhaber – oder der Abschluss der Besichtigung", grund="recht")
             aktuell = k.db.status_von(ad_id) if daten["status"] == VORBEREITET else None
             if aktuell in (*IN_ARBEIT, "gekauft") and aktuell != VORBEREITET:
                 # veraltete Seite: „Text kopiert“ darf einen schon bestätigten Kontakt oder Kauf nicht zurücksetzen
@@ -857,18 +1314,18 @@ class Anfrage:
             uebernimmt = daten["status"] in IN_ARBEIT
             vorher = self.vorheriger_halter(ad_id, team) if uebernimmt else None
             try:
-                ok = k.db.setze_status(ad_id, daten["status"], text=text, betrag=betrag, **team)
+                ok = k.db.setze_status(ad_id, daten["status"], text=text, betrag=betrag, kanal=kanal, **team)
             except BearbeitungsKonflikt:
                 raise self.konflikt(ad_id, team["dubletten"] if uebernimmt else (), gruppe=team["erzwingen"]) from None
             self.logge_erzwingen(ad_id, vorher)
             k.veraendert()
             return self.json(200 if ok else 404, {"ok": ok})
         if p == "/api/nachgefasst":
-            ad_id = str(daten.get("id"))
+            ad_id, kanal = str(daten.get("id")), self.kanal(daten)
             team = {k_: v for k_, v in self.team_parameter(daten, ad_id).items() if k_ != "inhaber"}
             vorher = self.vorheriger_halter(ad_id, team) if text else None
             try:
-                ok = bool(text) and k.db.nachgefasst(ad_id, text, betrag, **team)
+                ok = bool(text) and k.db.nachgefasst(ad_id, text, betrag, kanal=kanal, **team)
             except BearbeitungsKonflikt:
                 raise self.konflikt(ad_id, team["dubletten"], gruppe=team["erzwingen"]) from None
             if ok:
@@ -877,14 +1334,56 @@ class Anfrage:
             return self.json(200 if ok else 400, {"ok": ok})
         if m := re.fullmatch(r"/api/bearbeitung/([\w-]+)/(uebernehmen|abgeben|zuweisen)", p):
             return self.json(200, getattr(self, f"bearbeitung_{m.group(2)}")(m.group(1), daten))
+        if p == "/api/suchprofile" or re.fullmatch(r"/api/suchprofil/\d+(?:/loeschen|/auftrag)?", p):
+            return self.json(200, self.suchprofil_aendern(p, daten))
+        if p == "/api/kalibrierung" or re.fullmatch(r"/api/kalibrierung/[0-9]{1,9}/loeschen", p):
+            return self.json(200, self.kalibrierung_aendern(p, daten))
+        if m := re.fullmatch(r"/api/kontakt/(\d+)/bestaetigen", p):
+            return self.json(200, self.kontakt_bestaetigen(int(m.group(1)), self.kanal(daten), daten))
         if p == "/api/notiz":
+            self.audit_objekt = audit_anzeige(daten.get("id"))
             ok = k.db.setze_notiz(str(daten.get("id")), str(daten.get("notiz") or "")[:2000])
             k.veraendert()
             return self.json(200 if ok else 404, {"ok": ok})
+        if p == "/api/verhandlung":
+            # Antwort des Verkäufers oder Verhandlungsnotiz von Hand eintragen (P6-03) – ändert keinen Status, sendet nichts
+            self.audit_objekt = audit_anzeige(daten.get("id"))
+            try:
+                eingabe = verhandlung.pruefe(daten)
+                eid = verhandlung.eintragen(k.db, str(daten.get("id") or ""), eingabe, self.nutzer.get("id"))
+            except ValueError as e:
+                raise Antwort(400, str(e)) from e
+            except LookupError as e:
+                raise Antwort(404, "Anzeige nicht gefunden") from e
+            k.veraendert()
+            return self.json(200, {"ok": True, "id": eid, "verlauf": self.verhandlung(str(daten["id"]))})
+        if m := re.fullmatch(r"/api/anzeige/([\w-]+)/anbieter", p):
+            # Korrektur der Anbieterart durch das Team (P3-05): ersetzt jede Einstufung, Herkunft „vom Team angegeben“; protokolliert (Audit)
+            wert = daten.get("anbieter")
+            if wert not in (None, "", *ANBIETER):
+                raise Antwort(400, "anbieter muss „privat“, „gewerblich“ oder leer (unbekannt) sein")
+            gewerblich = ANBIETER.get(wert or "")
+            if not k.db.setze_anbieter(m.group(1), gewerblich):
+                raise Antwort(404, "Anzeige nicht gefunden")
+            k.veraendert()
+            log.info("Anbieter von Anzeige %s auf „%s“ gesetzt (%s)", m.group(1), wert or "unbekannt", self.nutzer.get("name"))
+            return self.json(200, {"ok": True, "anbieter": einstufung(gewerblich, "korrektur")})
         if p == "/api/suchlauf":
+            if self.team_aktiv:
+                self.nur_inhaber()                     # P1-15: Suchläufe und Import steuert der Inhaber
             return self.json(200, {"gestartet": k.suchlauf.starte(), **k.suchlauf.stand})
         if p == "/api/import":
+            if self.team_aktiv:
+                self.nur_inhaber()
             return self.json(200, self.seiten_einlesen())
+        if p == "/api/import/mails":
+            if self.team_aktiv:
+                self.nur_inhaber()                     # wie der Seitenimport (P1-15)
+            return self.json(200, self.mails_einlesen())
+        if p == "/api/import/text":
+            return self.json(200, self.text_einlesen(daten))
+        if m := re.fullmatch(r"/api/dubletten/(bestaetigen|ablehnen|aufheben)", p):
+            return self.json(200, self.dublette_entscheiden(m.group(1), daten))
         if p == "/api/besichtigung":
             return self.json(200, self.besichtigung_anlegen(daten))
         if p == "/api/verkaufsanfrage":
@@ -915,6 +1414,35 @@ class Anfrage:
                 raise Antwort(404, str(fehler)) from fehler
             kid = k.deal.speichern(e, erg, anlass="gespeichert", anfrage_id=int(m.group(1)), standort_id=standort, nutzer_id=self.nutzer["id"])
             return self.json(200, {"id": kid})
+        if p == "/api/datenschutz/ausfuehren":              # F10: fällige Daten anonymisieren/löschen (vorher Sicherung), nur der Inhaber
+            if self.team_aktiv:
+                self.nur_inhaber()
+            if daten.get("bestaetigt") is not True:
+                raise Antwort(400, "Löscht fällige Personendaten unwiderruflich – Bestätigung fehlt (bestaetigt: true)")
+            plan = aufbewahrung.ausfuehren(k.db, k.cfg, k.basis, k.team.foto_ordner, audit=k.audit)
+            log.info("Aufbewahrungsfristen angewendet durch %s", (self.nutzer or {}).get("name") or "Einzelplatz")
+            return self.json(200, {"plan": plan})
+        if p == "/api/einladung/pruefen":                  # F4: Name zur Einladung anzeigen (offen, nur mit gültigem Token, gebremst)
+            self._herkunft_pruefen("Einladung")
+            ip = self.client_ip()
+            if warten := k.bremse.wartezeit(ip, "(einladung)"):
+                raise Antwort(429, f"Zu viele Fehlversuche – bitte in {max(1, warten // 60)} Minute(n) erneut versuchen", {"warten_sek": warten})
+            e = k.team.einladung(str(daten.get("token") or "")[:100]) if k.team.hat_nutzer() else None
+            if not e:
+                k.bremse.fehlschlag(ip, "(einladung)")
+                raise Antwort(410, "Einladung ungültig, abgelaufen oder schon eingelöst – bitte eine neue anfordern")
+            return self.json(200, {"name": e["name"], "rolle": ROLLEN.get(e["rolle"], e["rolle"])})
+        if p == "/api/nutzer/einladen":                    # F4: Zugang anlegen bzw. erneut einladen – Link zum Weitergeben
+            self.nur_inhaber()
+            return self.json(200, self.nutzer_einladen(daten))
+        if m := re.fullmatch(r"/api/zugaenge/(\w+)", p):
+            self.nur_inhaber()
+            try:
+                return self.json(200, k.zugaenge.speichern(m.group(1), daten, self.nutzer["id"]))
+            except LookupError as e:
+                raise Antwort(404, str(e)) from e
+            except ValueError as e:
+                raise Antwort(400, str(e)) from e
         if m := re.fullmatch(r"/api/verkaufsanfrage/(\d+)/widerruf", p):
             self.nur_inhaber()
             return self.json(200, self.anfrage_widerruf(int(m.group(1))))
@@ -1073,18 +1601,182 @@ class Anfrage:
             raise Antwort(404, "Anfrage nicht gefunden")
         return {"ok": True}
 
+    def dubletten_stand(self, inserat_id: int) -> dict:
+        """Gruppe (Inserate desselben Fahrzeugs), abgeleiteter Fahrzeugstatus und Entscheidungen zu einem Inserat."""
+        k = self.k
+        mitglieder = gruppe(k.db, inserat_id)
+        return {"inserat_id": inserat_id, "gruppe": mitglieder, "fahrzeug_status": fahrzeug_status(m["status"] for m in mitglieder),
+                "entscheidungen": entscheidungen_zu(k.db, *(m["inserat_id"] for m in mitglieder))}
+
+    def dubletten_entscheidungen(self, anzeige_id: str) -> dict:
+        """Entscheidungen und Gruppe zu einer Anzeige (``?anzeige=<Anzeigen-ID>``); Inhaber und Mitarbeiter."""
+        if self.nutzer.get("rolle") not in TEXT_IMPORT_ROLLEN:
+            raise Antwort(403, "Nur für Inhaber und Mitarbeiter", grund="recht")
+        iid = inserat_zu_anzeige(self.k.db, anzeige_id) if anzeige_id else None
+        if iid is None:
+            raise Antwort(404, "Inserat nicht gefunden")
+        rolle = self.nutzer.get("rolle")
+        return {"anzeige": anzeige_id, **self.dubletten_stand(iid), "darf_bestaetigen": darf_bestaetigen(rolle),
+                "darf_ablehnen": darf_ablehnen(rolle), "darf_aufheben": darf_aufheben(rolle)}
+
+    def preisverlauf_antwort(self, anzeige_id: str, umfang: str) -> dict:
+        """Preisverlauf einer Anzeige (``?anzeige=<Anzeigen-ID>``), chronologisch mit Kanal und Zeitpunkt (P3-03); nur lesend, Inhaber und Mitarbeiter.
+        ``umfang=inserat`` (Standard): nur dieses Inserat; ``umfang=fahrzeug``: alle Inserate desselben Fahrzeugs (bestätigte Dubletten) gemeinsam."""
+        if self.nutzer.get("rolle") not in TEXT_IMPORT_ROLLEN:
+            raise Antwort(403, "Nur für Inhaber und Mitarbeiter", grund="recht")
+        if umfang not in ("inserat", "fahrzeug"):
+            raise Antwort(400, "umfang muss inserat oder fahrzeug sein")
+        db = self.k.db
+        iid = inserat_zu_anzeigen_id(db, anzeige_id) if anzeige_id else None
+        if iid is None:
+            raise Antwort(404, "Inserat nicht gefunden")
+        fid = db.con.execute("SELECT fahrzeug_id FROM inserate WHERE id = ?", (iid,)).fetchone()[0]
+        if umfang == "fahrzeug" and fid is not None:
+            verlauf = preisverlauf(db, fahrzeug_id=fid)
+            inserate = [{"anzeigen_id": r["anzeigen_id"], "plattform": r["plattform"]} for r in db.inserate_von_fahrzeug(fid)]
+        else:
+            verlauf = preisverlauf(db, anzeige_id)
+            inserate = [{"anzeigen_id": r["anzeigen_id"], "plattform": r["plattform"]} for r in db.con.execute(
+                "SELECT anzeigen_id, plattform FROM inserate WHERE id = ?", (iid,))]
+        return {"anzeige": anzeige_id, "umfang": umfang, "inserat_id": iid, "fahrzeug_id": fid, "inserate": inserate, "anzahl": len(verlauf),
+                "verlauf": verlauf}
+
+    def dublette_entscheiden(self, aktion: str, daten: dict) -> dict:
+        """Bestätigen („gleich“), Ablehnen („verschieden“) und Aufheben einer Dublettenentscheidung (P3-02b, ADR-040). Rechte:
+        bestätigen Inhaber und Mitarbeiter, ablehnen und aufheben nur der Inhaber (403 „recht“); Widerspruch zum Stand 409 „konflikt“;
+        unbekannte oder unsinnige IDs 400. Danach sind Bewertung und Team-Sperre sofort neu (Zwischenspeicher verworfen)."""
+        k, rolle, nutzer_id = self.k, self.nutzer.get("rolle"), self.nutzer.get("id")
+        if not {"bestaetigen": darf_bestaetigen, "ablehnen": darf_ablehnen, "aufheben": darf_aufheben}[aktion](rolle):
+            raise Antwort(403, "Diese Entscheidung trifft der Inhaber" if aktion != "bestaetigen" else "Nur für Inhaber und Mitarbeiter", grund="recht")
+        try:
+            if aktion == "aufheben":
+                erg = hebe_auf(k.db, daten.get("entscheidung_id"), nutzer_id)
+                zeile = k.db.con.execute("SELECT inserat_a FROM dubletten_entscheidungen WHERE id = ?", (erg["entscheidung_id"],)).fetchone()
+                iid = zeile[0]
+            else:
+                erg = (bestaetige if aktion == "bestaetigen" else lehne_ab)(k.db, daten.get("a"), daten.get("b"), nutzer_id)
+                iid = min(daten["a"], daten["b"])
+        except DublettenFehler as e:
+            raise Antwort(400, str(e)) from e
+        except DublettenKonflikt as e:
+            raise Antwort(409, str(e)) from e
+        finally:
+            k.veraendert()
+            k.dubletten_verwerfen()
+        antwort = {"ok": True, **erg, **self.dubletten_stand(iid)}
+        if aktion == "bestaetigen":
+            _, grenze = self.jetzt_grenze()
+            halter = halter_der_gruppe(k.db, [m["anzeigen_id"] for m in antwort["gruppe"]], grenze)
+            if len({h["bearbeiter_id"] for h in halter}) > 1:
+                antwort["warnung"] = {"grund": "verschiedene_halter", "halter": halter,
+                                      "text": "Inserate dieser Gruppe werden von verschiedenen Kollegen gehalten – Reservierungen wurden nicht übertragen"}
+        return antwort
+
     def seiten_einlesen(self) -> dict:
         """Gespeicherte Seiten aus dem konfigurierten Import-Ordner – nie ein Pfad aus der Anfrage, kein Netzabruf."""
         k = self.k
         if k.suchlauf.stand["laeuft"]:
             raise Antwort(409, "Gerade läuft ein Suchlauf – bitte danach einlesen")
+        try:
+            eingang_pruefen(k.cfg, "seiten")                 # abgeschaltet: nichts lesen, Ordner nicht anlegen (ADR-036)
+        except EingangDeaktiviert as e:
+            raise Antwort(409, str(e), grund="deaktiviert") from e
         ordner = import_ordner(k.cfg)
         ordner.mkdir(parents=True, exist_ok=True)
         stat = Importer(k.cfg, k.db).importiere_seiten(ordner, max_dateien=MAX_IMPORT_DATEIEN,
                                                              max_sekunden=MAX_IMPORT_SEKUNDEN)
+        datenrechte.frist_anwenden(k.db, k.cfg, k.basis, k.team.foto_ordner)   # Verkäufernamen kommen über den Seitenimport
         k.veraendert()
         k.dubletten_verwerfen()
+        if stat["dateien"]:
+            bewertungsverlauf.merken(k.db, k.zeilen())                           # Verlauf (P5-07); die Liste lädt danach ohnehin neu
         return {**stat, "ordner": relativ_zum_projekt(ordner)}
+
+    def mails_einlesen(self) -> dict:
+        """E-Mail-Suchbenachrichtigungen (.eml) aus dem konfigurierten Mail-Ordner – nie ein Pfad aus der Anfrage, kein Netzabruf (P2-06)."""
+        k = self.k
+        if k.suchlauf.stand["laeuft"]:
+            raise Antwort(409, "Gerade läuft ein Suchlauf – bitte danach einlesen")
+        try:
+            eingang_pruefen(k.cfg, "email")                  # abgeschaltet (Standard): nichts lesen, Ordner nicht anlegen (ADR-036)
+        except EingangDeaktiviert as e:
+            raise Antwort(409, str(e), grund="deaktiviert") from e
+        ordner = mail_ordner(k.cfg, k.basis)
+        ordner.mkdir(parents=True, exist_ok=True)
+        stat = Importer(k.cfg, k.db).importiere_mails(ordner, max_dateien=MAX_IMPORT_DATEIEN, max_sekunden=MAX_IMPORT_SEKUNDEN)
+        offen = datenrechte.mails_unverarbeitet_gemeldet(k.cfg, ordner)
+        datenrechte.frist_anwenden(k.db, k.cfg, k.basis, k.team.foto_ordner)     # abgelegte Mails nach der Frist löschen
+        k.veraendert()
+        k.dubletten_verwerfen()
+        if stat["dateien"]:
+            bewertungsverlauf.merken(k.db, k.zeilen())
+        return {**stat, "ordner": relativ_zum_projekt(ordner), "unverarbeitet": offen}
+
+    def text_einlesen(self, daten: dict) -> dict:
+        """Eine Anzeige aus Adresse + eingefügtem Text (P2-05). Die Adresse wird nie abgerufen (ADR-010): sie liefert nur Plattform und
+        Anzeigen-ID. Gelesen wird mit `TextEingang` (rein, höchstens etwa eine halbe Sekunde), gespeichert allein über `Importer.importiere`
+        (Kanal „manuell“). Gespeichert wird nur ein sicher erkannter oder vom Nutzer eingetragener Preis (ADR-038); Angaben, die aus einem
+        anderen Kanal stammen, bleiben bestehen."""
+        k = self.k
+        if self.team_aktiv and self.nutzer.get("rolle") not in TEXT_IMPORT_ROLLEN:
+            raise Antwort(403, "Anzeigen einlesen dürfen nur Inhaber und Mitarbeiter", grund="recht")
+        try:
+            eingang_pruefen(k.cfg, "text")
+        except EingangDeaktiviert as e:
+            raise Antwort(409, str(e), grund="deaktiviert") from e
+        url, text, anbieter = daten.get("url"), daten.get("text"), daten.get("anbieter")
+        preis, vb = daten.get("preis"), daten.get("vb")
+        if not isinstance(url, str) or not isinstance(text, str) or not (anbieter is None or isinstance(anbieter, str)):
+            raise Antwort(400, "Adresse (url), Anzeigentext (text) und Anbieter (anbieter) werden als Text erwartet")
+        if preis is not None and (isinstance(preis, bool) or not isinstance(preis, int) or not 1 <= preis <= MAX_PREIS):
+            raise Antwort(400, f"Der Preis (preis) muss eine ganze Zahl von 1 bis {MAX_PREIS} sein oder fehlen")
+        if vb is not None and not isinstance(vb, bool):
+            raise Antwort(400, "VB (vb) muss wahr oder falsch sein")
+        if len(url) > MAX_URL or len(text) > MAX_TEXT:
+            raise Antwort(400, f"Adresse höchstens {MAX_URL}, Text höchstens {MAX_TEXT} Zeichen")
+        try:
+            (url + text).encode("utf-8")
+        except UnicodeEncodeError as e:
+            raise Antwort(400, "Adresse oder Text enthalten ungültige Zeichen") from e
+        if anbieter == "":
+            anbieter = None
+        elif anbieter is not None and anbieter not in ANBIETER:
+            raise Antwort(400, "anbieter muss „privat“, „gewerblich“ oder leer sein")
+        eingang = TextEingang()
+        lesung = eingang.lese(eingang.rohdaten(url, text, anbieter, preis=preis, vb=vb))
+        if lesung.art != "detail":
+            raise Antwort(422, lesung.hinweise[0], {"ergebnis": "nicht_gespeichert", "gespeichert": False, "hinweise": lesung.hinweise})
+        inserat, hinweise = lesung.inserate[0], list(lesung.hinweise)
+        alt = k.db.con.execute("SELECT preis, marke FROM anzeigen WHERE id=?", (inserat.anzeigen_id,)).fetchone()
+        if alt is not None and not k.db.ist_text_eigen(inserat.anzeigen_id) and lesung.preis_status != "eingetragen" \
+                and widerspricht_marke(inserat.marke, alt["marke"]):
+            # der Text gehört offenbar zu einer anderen Anzeige als die gespeicherte: keinen Preis daraus übernehmen
+            inserat.preis, inserat.vb, lesung.preis_status = None, False, "unsicher"
+            hinweise.append(f"Text passt offenbar nicht zur gespeicherten Anzeige (Marke {inserat.marke} statt {alt['marke']}) – Preis nicht übernommen")
+        try:
+            ergebnis = ergebnis_der(Importer(k.cfg, k.db).importiere(lesung, eingang.kanal))
+        except ValueError as e:
+            raise Antwort(400, str(e)) from e
+        k.veraendert()
+        k.dubletten_verwerfen()
+        z = k.db.con.execute("SELECT titel, preis, vb, km, ez_jahr, ort, marke, gewerblich FROM anzeigen WHERE id=?", (inserat.anzeigen_id,)).fetchone()
+        erkannt = {"titel": z["titel"], "preis": z["preis"], "vb": bool(z["vb"]), "km": z["km"], "ez_jahr": z["ez_jahr"], "ort": z["ort"],
+                   "marke": z["marke"], "gewerblich": None if z["gewerblich"] is None else bool(z["gewerblich"])}
+        vorher = alt["preis"] if alt is not None else None
+        aenderung = None if vorher is None or z["preis"] is None else ("gesenkt" if z["preis"] < vorher else
+                                                                      "gestiegen" if z["preis"] > vorher else "unveraendert")
+        if anbieter == "privat" and erkannt["gewerblich"]:
+            hinweise.append("Früher als gewerblich erkannt – Angabe „privat“ nicht übernommen")
+        if ergebnis != "neu":
+            anders = [name for feld, name in (("titel", "Titel"), ("km", "Kilometerstand"), ("ez_jahr", "Erstzulassung"), ("ort", "Ort"), ("marke", "Marke"))
+                      if getattr(inserat, feld) not in (None, "") and getattr(inserat, feld) != z[feld] and z[feld] not in (None, "")]
+            if anders:
+                hinweise.append(f"Bereits gespeicherte Angaben bleiben bestehen ({', '.join(anders)}); der Text ergänzte nur Fehlendes und den Preis")
+        log.info("Anzeige %s (%s) per Adresse + Text eingelesen: %s, Preis %s (%s)", inserat.anzeigen_id, lesung.plattform, ergebnis,
+                 lesung.preis_status, self.nutzer.get("name"))
+        return {"ergebnis": ergebnis, "gespeichert": True, "anzeige_id": inserat.anzeigen_id, "plattform": lesung.plattform,
+                "fahrzeug_url": f"/m#/fahrzeug/{quote(inserat.anzeigen_id)}", "hinweise": hinweise, "erkannt": erkannt,
+                "preis_status": lesung.preis_status, "preis_vorher": vorher, "preis_aenderung": aenderung}
 
     def _termin(self, wert) -> str | None:
         if not wert:
@@ -1128,7 +1820,16 @@ class Anfrage:
         ad_id = z["a"]["id"]
         termin, adresse = self._termin(daten.get("termin")), str(daten.get("adresse") or "").strip()[:200] or None
         zustaendig = self._zustaendig(daten.get("zustaendig_id"))              # prüfen, bevor etwas geändert wird (400)
+        if z["b"].sicherheit == "keine":
+            # P1-12: ohne Erstzulassung kein Marktwert – die Besichtigung braucht einen manuell angegebenen (Angebotsniveau)
+            mw = daten.get("marktwert")
+            if isinstance(mw, bool) or not isinstance(mw, int) or not 1000 <= mw <= 1_000_000:
+                raise Antwort(409, "Erstzulassung fehlt – ohne Marktwert keine Beträge. Bitte einen Marktwert (Angebotsniveau in €) "
+                                   "angeben, z. B. aus mobile.de oder DAT.", grund="marktwert")
+            z = {**z, "b": bewerte_anzeige(vk.Rechner(k.cfg), z["a"], [], marktwert_manuell=mw)}
         basis = basis_fuer(z, k.cfg)
+        if z["b"].sicherheit == "manuell":
+            basis["marktwert_manuell"] = z["b"].marktwert_angebote
         status = k.db.status_von(ad_id) or "neu"
         # Status/Übernahme und Besichtigungsdatensatz in EINER Transaktion: bei Konflikt, Fehler oder „database is locked“ bleibt
         # beides unverändert (nie ein Status „Besichtigung“ ohne Besichtigung).
@@ -1162,10 +1863,12 @@ class Anfrage:
         z = b["zustaendig"]
         if z and z["id"] != self.nutzer["id"] and z.get("telefon"):
             termin = datetime.fromisoformat(b["termin"]).strftime("%d.%m. %H:%M") if b.get("termin") else "offen"
-            self.k.whatsapp.sende(z["telefon"], self.k.cfg.get("whatsapp", {}).get("vorlage_zuweisung"),
+            self.k.whatsapp.sende_im_hintergrund(z["telefon"], self.k.cfg.get("whatsapp", {}).get("vorlage_zuweisung"),
                                   [b["basis"].get("fahrzeug", ""), termin, b.get("adresse") or b["basis"].get("ort") or ""])
 
     def b_planen(self, b: dict, daten: dict) -> dict:
+        if b["status"] in ("abgeschlossen", "abgebrochen"):
+            raise Antwort(409, "Besichtigung ist bereits abgeschlossen – Planen nicht mehr möglich")
         termin, adresse = self._termin(daten.get("termin")), str(daten.get("adresse") or "").strip()[:200] or None
         self.k.team.besichtigung_planen(b["id"], termin, adresse, self._zustaendig_planen(b, daten.get("zustaendig_id")))
         neu = self.k.team.besichtigung(b["id"])
@@ -1179,10 +1882,16 @@ class Anfrage:
         eingaben = daten.get("daten")
         if not isinstance(eingaben, dict):
             raise Antwort(400, "daten fehlen")
+        erwartet = daten.get("version")
+        if erwartet is not None and (isinstance(erwartet, bool) or not isinstance(erwartet, int)):
+            raise Antwort(400, "version muss eine Zahl sein")
         ergebnis = berechne(self.k.katalog(), eingaben, b["basis"])        # verbindlich: Server rechnet nach
-        version = self.k.team.besichtigung_speichern(b["id"], eingaben, ergebnis)
-        konflikt = isinstance(daten.get("version"), int) and daten["version"] != b["version"]
-        return {"ergebnis": ergebnis, "version": version, "konflikt": konflikt}
+        version = self.k.team.besichtigung_speichern(b["id"], eingaben, ergebnis, erwartet)
+        if version is None:                       # P1-07: inzwischen von jemand anderem gespeichert (oder abgeschlossen)
+            aktuell = self.k.team.besichtigung(b["id"])
+            raise Antwort(409, "Diese Besichtigung wurde inzwischen auf einem anderen Gerät gespeichert", grund="version",
+                          extra={"version": aktuell["version"], "daten": aktuell["daten"], "status": aktuell["status"]})
+        return {"ergebnis": ergebnis, "version": version, "konflikt": False}
 
     def b_foto(self, b: dict, daten: dict) -> dict:
         if daten.get("mangel_key") is not None and not isinstance(daten["mangel_key"], str):
@@ -1244,7 +1953,11 @@ class Anfrage:
         bewertung = None
         if not b.get("anfrage_id"):
             try:
-                bewertung = self.k.zeile(b["anzeige_id"])["b"]
+                z = self.k.zeile(b["anzeige_id"])
+                bewertung = z["b"]
+                mw = (b.get("basis") or {}).get("marktwert_manuell")
+                if mw:                            # ohne EZ: wie beim Anlegen mit dem manuellen Marktwert (P1-12)
+                    bewertung = bewerte_anzeige(vk.Rechner(self.k.cfg), z["a"], [], marktwert_manuell=mw)
             except Exception:  # noqa: BLE001 – Inserat nicht mehr in der Bewertung: Grundlage der Besichtigung genügt
                 bewertung = None
         try:
@@ -1343,7 +2056,7 @@ def _protokolliere(a: Anfrage, k: Kontext, methode: str):
             team = k.team.hat_nutzer()
         if team:
             k.audit.schreibe(a.nutzer if a.nutzer and a.nutzer.get("id") else None, a.client_ip(), methode, a.pfad, a.status,
-                             art[0], art[1], a.audit_name)
+                             art[0], art[1] or a.audit_objekt, a.audit_name)
     except Exception:  # noqa: BLE001
         log.exception("Audit-Eintrag fehlgeschlagen: %s %s", methode, a.pfad)
 
@@ -1372,6 +2085,10 @@ def _bearbeite(a: Anfrage, handler, k: Kontext, methode: str):
                 raise Antwort(400, "ungültige Anfrage")
             if a.pfad == "/api/login":
                 return a.login(daten)              # eigene Sperrführung (scrypt ohne globale Sperre)
+            if a.pfad == "/api/einladung":
+                return a.einladung_einloesen(daten)                # ebenso (F4)
+            if m := re.fullmatch(r"/api/zugaenge/(\w+)/test", a.pfad):
+                return a.zugang_testen(m.group(1))                 # Anfrage an den Anbieter ohne globale Sperre (F4)
         with k.sperre:
             try:
                 a.pruefe_zugriff(aendernd=methode == "POST" and a.pfad != "/api/login")

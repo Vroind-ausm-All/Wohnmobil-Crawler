@@ -9,7 +9,7 @@ from wmscout.normalisierung.fahrzeug import ergaenze_fahrzeug
 
 
 def test_suchlauf_und_ausgaben(cfg, db, importiert):
-    assert importiert == {"neu": 60, "preis": 0, "bekannt": 0, "details": 60, "fehler": None}
+    assert importiert == {"neu": 60, "preis": 0, "bekannt": 0, "details": 60, "fehler": None, "uebersprungen": []}   # P2-04: neues Feld
     assert finde_duplikate([ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()]) == {}, "Testdaten mit Dubletten"
     assert {r["quelle"] for r in db.alle_mit_preis()} == {"kleinanzeigen"}
 

@@ -7,36 +7,93 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
+from .anbieter import HERKUNFT_TEXT, einstufung
 from .bewertung.anschreiben import euro, tsd
+from .bewertung.deal_score import einstellungen as deal_einstellungen
+from .bewertung.kalkulation import stunden_text
 from .bearbeitung import IN_ARBEIT
-from .datenbank import STATUS
+from .domaene import PLATTFORM_TEXT as QUELLE_TEXT
+from .domaene import STATUS
+from .schalter import eingang_aktiv
+from . import verhandlung as vh
+from .bewertung.meldungen import ARTEN as MELDUNG_ARTEN
+from .bewertung.meldungen import meldungen
+from .bewertung.gruppen import nur_einmal
+from .kontakte import KANAELE
+
+PIPELINE_MAX = 60               # Zeilen im Bereich „Ankauf in Arbeit“; der Rest steht in der Liste (Filter „In Arbeit“)
+
+
+def euro_diff(d) -> str:
+    """Preisänderung mit Vorzeichen: „−3.500 €“, „+500 €“, „±0 €“ (P6-02)."""
+    return "–" if d is None else ("+" if d > 0 else "−" if d < 0 else "±") + euro(abs(d))
+
+
+def datum_lokal(iso: str | None) -> str:
+    """Zeitpunkt (ISO, UTC aus dem Preisverlauf) als lokales Datum „TT.MM.JJJJ“; nicht lesbar: „–“."""
+    try:
+        return datetime.fromisoformat(iso).astimezone().strftime("%d.%m.%Y") if iso else "–"
+    except (TypeError, ValueError):
+        return "–"
 
 
 def render_html(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None = None, app: dict | None = None,
-                team: dict | None = None) -> tuple[str, dict]:
+                team: dict | None = None, anfragen: list[dict] | None = None) -> tuple[str, dict]:
     """app = {"token": …} im Browser-Modus (python scout.py app), sonst statische Datei.
-    team = Antwort von ``/api/team`` (nur mit angelegten Nutzern, sonst None): dann zeigt die Seite Bearbeiter-Badges, Zähler und Filter."""
+    team = Antwort von ``/api/team`` (nur mit angelegten Nutzern, sonst None): dann zeigt die Seite Bearbeiter-Badges, Zähler und Filter.
+    anfragen = offene Verkaufsanfragen (nur Fahrzeugangaben, P7-02) für Meldungen und Kachel; None = nicht anzeigen (Bericht, ohne Recht)."""
     env = Environment(loader=FileSystemLoader(str(basis / "vorlagen")), autoescape=True)
     env.filters["euro"] = euro
     env.filters["tsd"] = tsd
+    env.filters["stunden"] = stunden_text
     env.filters["prozent"] = lambda x: f"{x:+.1%}".replace(".", ",") if x is not None else "–"
     env.filters["anteil"] = lambda x: f"{x:.0%}" if x is not None else "–"
+    env.filters["euro_diff"] = euro_diff
+    env.filters["datum"] = datum_lokal
     zaehl = {
-        "gruen": sum(z["b"].ampel == "gruen" for z in zeilen),
-        "gelb": sum(z["b"].ampel == "gelb" for z in zeilen),
+        "gruen": sum(z["b"].ampel == "gruen" and not z.get("ausblenden") for z in zeilen),
+        "gelb": sum(z["b"].ampel == "gelb" and not z.get("ausblenden") for z in zeilen),
         "neu": sum(z["neu"] for z in zeilen),
+        "neuigkeiten": sum(bool(z.get("neuigkeit")) for z in zeilen),
         "anschreiben": sum(z["bereit"] for z in zeilen),
         "kontaktiert": sum(z["a"].get("status") == "kontaktiert" for z in zeilen),
         "arbeit": sum(z["a"].get("status") in IN_ARBEIT for z in zeilen),
         "nachfassen": sum(bool(z["nachfassen"]) for z in zeilen),
+        "top": sum(bool((z.get("deal") or {}).get("priorisiert")) and not z.get("ausblenden") for z in zeilen),      # P5-07
     }
+    # Filterzähler als Fahrzeuge für „gleiches Fahrzeug nur einmal“ (P6-02b): dieselbe Auswahl wie die Liste (gruppen.nur_einmal)
+    teilmengen = {"top": [z for z in zeilen if (z.get("deal") or {}).get("priorisiert") and not z.get("ausblenden")],
+                  "neuigkeiten": [z for z in zeilen if z.get("neuigkeit")], "nachfassen": [z for z in zeilen if z["nachfassen"]]}
+    zaehl_fz = {k: len(nur_einmal(v)) for k, v in teilmengen.items()}
+    # Ankauf in Arbeit (P6-03): Inserate mit Kontaktlage, wichtigste Stufe zuerst; innerhalb „wartet“ die längste Wartezeit oben
+    # je Fahrzeug einmal: die Lage gilt für die ganze bestätigte Gruppe (P7-01, QA B2) – das erste Inserat in der Reihenfolge vertritt sie
+    pipeline, gezeigt = [], set()
+    for z in sorted((z for z in zeilen if (z.get("kontakt") or {}).get("stufe")),
+                    key=lambda z: (vh.REIHENFOLGE[z["kontakt"]["stufe"]], (z["kontakt"]["besichtigung"] or {}).get("termin") or "",
+                                   -(z["kontakt"]["tage"] or 0), z["a"]["id"])):
+        gruppe = {z["a"]["id"], *z.get("dubletten_ids", ())}
+        if not gruppe & gezeigt:
+            pipeline.append(z)
+        gezeigt |= gruppe
+    pipeline_zaehl = {s: sum(z["kontakt"]["stufe"] == s for z in pipeline) for s in vh.STUFEN}
     return env.get_template("report.html").render(
         stand=datetime.now().strftime("%d.%m.%Y %H:%M"), anzahl=len(zeilen), zeilen=zeilen, zaehl=zaehl,
-        fehler=fehler, app=app or {}, team=team if team and team.get("aktiv") else None,
+        fehler=fehler, app=app or {}, mails_aktiv=eingang_aktiv(cfg, "email"), team=team if team and team.get("aktiv") else None,
         ust_label="USt auf Marge (§25a, 19/119)" if cfg["rechner"]["differenzbesteuerung"] else "USt 19 % im Händler-VK",
         fair_untergrenze=cfg["rechner"].get("fair_untergrenze_privatwert", 0), status_liste=list(STATUS.items()),
         differenzbesteuerung=bool(cfg["rechner"]["differenzbesteuerung"]),
-        signatur={k: cfg["anschreiben"].get(k, "") for k in ("ansprechpartner", "firma", "telefon")}), zaehl
+        signatur={k: cfg["anschreiben"].get(k, "") for k in ("ansprechpartner", "firma", "telefon")},
+        deal_schwelle=deal_einstellungen(cfg)["schwelle"], QUELLEN=QUELLE_TEXT, STATUS_NAMEN=STATUS,
+        pipeline=pipeline[:PIPELINE_MAX], pipeline_mehr=max(0, len(pipeline) - PIPELINE_MAX), pipeline_zaehl=pipeline_zaehl, STUFEN=vh.STUFEN,
+        VH_ARTEN=vh.ARTEN, KANAELE=KANAELE, meldungen=meldungen(zeilen, datetime.now(), cfg, anfragen), MELDUNG_ARTEN=MELDUNG_ARTEN,
+        anfragen_offen=None if anfragen is None else {s: sum(a["status"] == s for a in anfragen) for s in ("eingegangen", "in_pruefung", "angebot")},
+        jetzt_iso=datetime.now().isoformat(timespec="seconds"), zaehl_fz=zaehl_fz,
+        quellen=sorted({z["a"].get("quelle") or "kleinanzeigen" for z in zeilen})), zaehl
+
+
+def _score_zelle(z: dict):
+    s = (z.get("deal") or {}).get("score")
+    return "" if s is None else s
 
 
 def _team_spalten(t: dict | None) -> list[str]:
@@ -44,6 +101,23 @@ def _team_spalten(t: dict | None) -> list[str]:
     if not t:
         return ["", "", ""]
     return [(t["bearbeiter"] or {}).get("name", ""), t["seit"] or "", (t["kontaktiert_von"] or {}).get("name", "")]
+
+
+def _verfuegbarkeit_zelle(a: dict) -> str:
+    """CSV: aktiv, reserviert, offline, verkauft, unbekannt – oder „vermutlich offline“ (abgeleitet, nicht gespeichert)."""
+    return "vermutlich offline" if a.get("vermutlich_offline") else a.get("verfuegbarkeit") or "unbekannt"
+
+
+def _anbieter_zellen(a: dict) -> list[str]:
+    """CSV: privat / gewerblich / unbekannt und die Herkunft der Einstufung (P3-05)."""
+    e = a.get("anbieter") or einstufung(a.get("gewerblich"), a.get("anbieter_herkunft"))
+    return [e["typ"], HERKUNFT_TEXT.get(e["herkunft"], "")]
+
+
+def _qualitaet_zellen(a: dict) -> list:
+    """CSV: Qualitätswert 0–100 und die Markierungen als Text (P3-08)."""
+    q = a.get("datenqualitaet")
+    return [q["wert"], " | ".join(m["text"] for m in q["markierungen"])] if q else ["", ""]
 
 
 def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | None = None, team=None) -> dict:
@@ -60,18 +134,22 @@ def schreibe_ausgaben(cfg: dict, zeilen: list[dict], basis: Path, fehler: str | 
                     "Marktniveau", "Spanne von", "Spanne bis", "Sicherheit", "Anz. Vergleiche", "Marktwert privat",
                     "Händler-VK", "Kosten", "Ziel-Marge", "Max-EK", "Erstangebot", "Erstangebot % Marktwert",
                     "Gewinn bei Angebotspreis", "Wertfaktoren", "Sperrgrund", "Hinweise", "Status", "Nachfassen", "Kontaktiert am",
-                    "Erstmals gesehen", "URL", "Bearbeiter", "Übernommen am", "Kontaktiert von"])
+                    "Verfügbarkeit", "Zuletzt bestätigt", "Anbieter", "Anbieter-Herkunft", "Datenqualität", "Datenmarkierungen",
+                    "Neuigkeit", "Deal-Score", "Top-Deal", "Erstmals gesehen", "URL", "Bearbeiter", "Übernommen am", "Kontaktiert von"])
         for z in sorted(zeilen, key=lambda z: z["b"].verhaeltnis or 99):
             a, b = z["a"], z["b"]
             t = team.objekt(z) if team else None
+            # P1-12: ohne Marktwert (Erstzulassung fehlt) keine Beträge – leere Zellen statt 0 €
+            betraege = ["", "", "", "", "", "", ""] if b.sicherheit == "keine" else \
+                [b.marktwert_privat, b.haendler_vk, b.kosten, b.ziel_marge, b.max_ek, b.erstangebot, b.potenzial]
             w.writerow([a["id"], b.ampel, a["titel"], a["marke"], a.get("modell"), b.art, a["ez_jahr"], a["km"],
                         a["ort"], a.get("entfernung_km"), a.get("tage_online"), a["preis"], b.marktwert_angebote, b.spanne_von, b.spanne_bis, b.sicherheit,
-                        b.vergleich_anzahl, b.marktwert_privat, b.haendler_vk, b.kosten, b.ziel_marge, b.max_ek,
-                        b.erstangebot, f"{b.fair_anteil:.0%}" if b.fair_anteil else "", b.potenzial,
+                        b.vergleich_anzahl, *betraege[:6], f"{b.fair_anteil:.0%}" if b.fair_anteil else "", betraege[6],
                         ", ".join(f"{n} {w:+.1%}" for n, w in b.wertfaktoren.items()), z["sperre"] or "",
                         " | ".join(z.get("hinweise") or []), a["status"], z["nachfassen"] or "", a.get("kontaktiert_am") or "",
-                        a["erstmals_gesehen"], a["url"],
-                        *_team_spalten(t)])
+                        _verfuegbarkeit_zelle(a), a.get("zuletzt_bestaetigt") or "", *_anbieter_zellen(a), *_qualitaet_zellen(a),
+                        (z.get("neuigkeit") or {}).get("text", ""), _score_zelle(z), "ja" if (z.get("deal") or {}).get("priorisiert") else "",
+                        a["erstmals_gesehen"], a["url"], *_team_spalten(t)])
 
     # --- Anschreiben als Textdateien ---
     for z in zeilen:

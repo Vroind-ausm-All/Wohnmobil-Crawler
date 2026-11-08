@@ -5,65 +5,24 @@ import hashlib
 import json
 import logging
 import sqlite3
+from collections.abc import Collection
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from . import anbieter, kontakte
 from .bearbeitung import IN_ARBEIT, VORBEREITET, BearbeitungsKonflikt
+from .domaene import (  # noqa: F401 – Kompatibilität: bisher hier definiert
+    _MARKE, BESTAETIGT, IMPORT_ARTEN, IMPORT_SUCHE, STATUS, UNBEKANNT, VORLAEUFIG, import_art, import_suche)
 from .migrationen import NEUE_SPALTEN, migriere  # noqa: F401 – NEUE_SPALTEN bleibt hier importierbar (Kompatibilität)
+from .verfuegbarkeit import OFFLINE, aus_signal, erkenne_signal, zu_utc
 
 log = logging.getLogger(__name__)
 # Sekunden, die ein Zugriff auf eine von anderen gesperrte Datenbank wartet. Mit WAL warten nur noch Schreibende aufeinander
 # (kurze Transaktionen); 10 s überbrücken auch einen langsamen Datenträger, ohne die App merklich hängen zu lassen.
 STANDARD_WARTEZEIT = 10.0
 
-# Ablauf eines Ankaufs (Schlüssel → Anzeige in der App)
-# „vorbereitet“ = Text kopiert/Anzeige geöffnet; erst „kontaktiert“ (Knopf „gesendet“) ist ein bestätigter Kontakt (ADR-012)
-STATUS = {"neu": "offen", "vorbereitet": "Text kopiert", "kontaktiert": "kontaktiert", "verhandlung": "in Verhandlung",
-          "besichtigung": "Besichtigung", "gekauft": "gekauft", "abgesagt": "abgesagt",
-          "uninteressant": "uninteressant"}
-
-# `suche` von Inseraten aus gespeicherten Seiten: werden nie per Detailabruf nachgeladen (ADR-010)
-IMPORT_SUCHE = "Import (gespeicherte Seite)"
-
-# Herkunft der Fahrzeugart eines importierten Inserats, in `suche` kodiert (keine Schemaänderung):
-#   „Import <Art> (bestätigt)“  Art stammt aus dem Art-Filter (art_s:) in der Haupttabelle einer Suchseite oder aus dem
-#                               Feld „Art“ der Detailseite (die Detailseite hat Vorrang)
-#   „Import <Art> (vorläufig)“  Art nur aus dem eigenen Titel bzw. einem Suchwort der Seite – Hinweis „nicht bestätigt“
-#   IMPORT_SUCHE                Art unbekannt (oder widersprüchlich) – Hinweis „unbekannt“
-#   „Import <Art>“              Altbestand früherer Zweigstände: gilt wie „vorläufig“
-# Erkannt werden nur genau diese Muster; jede andere `suche` (auch „Importfahrzeuge …“) ist eine Crawler-Suche und
-# bleibt unberührt. Bei nicht bestätigter Art wird trotzdem angeschrieben, die Zeile trägt aber einen Hinweis.
-IMPORT_ARTEN = ("Teilintegrierter", "Integrierter", "Alkoven", "Kastenwagen", "Wohnwagen")
-BESTAETIGT, VORLAEUFIG, UNBEKANNT = "bestaetigt", "vorlaeufig", "unbekannt"
-_MARKE = {BESTAETIGT: " (bestätigt)", VORLAEUFIG: " (vorläufig)"}
-
-
-def import_suche(art: str | None = None, status: str | None = None) -> str:
-    """`suche`-Wert für ein importiertes Inserat; ohne Art oder Status `IMPORT_SUCHE` (unbekannt)."""
-    if art not in IMPORT_ARTEN or status not in _MARKE:
-        return IMPORT_SUCHE
-    return f"Import {art}{_MARKE[status]}"
-
-
-def import_art(suche: str | None) -> tuple[str | None, str | None]:
-    """(Art, Herkunft) aus `suche`. Herkunft: BESTAETIGT, VORLAEUFIG, UNBEKANNT – oder None, wenn `suche` keine
-    Import-Suche ist (Crawler). „Import <unbekannte Art> (bestätigt|vorläufig)“ gilt als UNBEKANNT."""
-    if not suche:
-        return None, None
-    if suche == IMPORT_SUCHE:
-        return None, UNBEKANNT
-    if not suche.startswith("Import "):
-        return None, None
-    rest = suche[len("Import "):]
-    for status, marke in _MARKE.items():
-        if rest.endswith(marke):
-            art = rest[:-len(marke)]
-            return (art, status) if art in IMPORT_ARTEN else (None, UNBEKANNT)
-    if rest in IMPORT_ARTEN:
-        return rest, VORLAEUFIG                  # Altbestand ohne Markierung
-    return None, None
-
+# Fachbegriffe (STATUS, Import-Herkunft) liegen in domaene.py (P1-08) und sind oben importiert.
 
 # SQL-Gegenstück zu import_art() != (None, None): nur die exakten Muster, nicht jeder Name mit „Import“ am Anfang.
 # GLOB statt LIKE: LIKE ignoriert die Groß-/Kleinschreibung, Python (startswith/endswith) nicht. In den Mustern stehen keine
@@ -76,6 +35,16 @@ FELDER_UPDATE = ["url", "suche", "titel", "preis", "vb", "ort", "km", "ez_jahr",
                  "kurzbeschreibung", "gewerblich", "bild", "quelle"]
 
 
+# Markierung in ``details_json``: die Zeile stammt aus einem Text-Import (P2-05) und trägt nur grob gelesene Werte – ein neuer Text-Import darf
+# sie ersetzen. Jede andere Schreibweise (Suchlauf, Seitenimport, Mail) löscht die Markierung, danach gelten die Werte als geschützt.
+TEXT_MARKE = '{"eingang": "text"}'
+
+
+def _leer(feld: str, wert) -> bool:
+    """Leer im Sinn von „darf ein grob gelesener Wert füllen“: nichts, oder der Ersatztitel einer Anzeige ohne erkannten Titel."""
+    return wert in (None, "") or (feld == "titel" and str(wert).endswith("(Titel fehlt)"))
+
+
 STANDARD_PLATTFORM = "kleinanzeigen"          # ``anzeigen.quelle`` leer = Altbestand vor Mehrquellen
 
 
@@ -86,6 +55,11 @@ def inhalt_hash(signatur: tuple) -> str:
 
 def jetzt_utc() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _als_utc(zeit: str) -> str:
+    """ISO-Zeit nach UTC; ohne Zeitzone gilt die lokale (so speichert ``anzeigen``)."""
+    return datetime.fromisoformat(zeit).astimezone(timezone.utc).isoformat(timespec="seconds")
 
 
 def wal_aktiv(cfg: dict) -> bool:
@@ -107,7 +81,9 @@ class Datenbank:
         """
         Path(pfad).parent.mkdir(parents=True, exist_ok=True)
         migriere(pfad, sicherung_ordner)
-        # check_same_thread=False: die App bedient Anfragen nacheinander in einem Server-Thread
+        self.sicherung_ordner = Path(sicherung_ordner) if sicherung_ordner else Path(pfad).parent / "sicherungen"
+        # check_same_thread=False: die App bedient Anfragen in mehreren Threads (ThreadingHTTPServer); Zugriffe auf diese
+        # Verbindung serialisiert die Sperre des App-Kontexts, Suchlauf und Auto-Suche öffnen eigene Verbindungen
         self.con = sqlite3.connect(pfad, check_same_thread=False, timeout=timeout)
         self.con.row_factory = sqlite3.Row
         self._tiefe = 0          # >0: innerhalb von ``transaktion()`` – verschachtelte Schreibblöcke committen nicht selbst
@@ -133,78 +109,186 @@ class Datenbank:
             log.warning("Journalmodus %s nicht möglich; die Datenbank bleibt im Modus %s.", ziel, modus)
         return modus
 
-    def speichere_treffer(self, a: dict, suche: str, kanal: str = "suche") -> str:
+    def speichere_treffer(self, a: dict, suche: str, kanal: str = "suche", gesehen_am: str | None = None,
+                          nur_leere: bool = False, verfuegbar_am: str | None = None) -> str:
         """Fügt ein oder aktualisiert. Rückgabe: 'neu', 'preis' (Preis gesenkt) oder 'bekannt'.
 
         In derselben Transaktion wird der Treffer in die v4-Tabellen gespiegelt (``spiegle_inserat``), damit Ereigniseingang,
-        Preisverlauf und App dieselben Fahrzeuge kennen. ``kanal``: 'suche' (Suchlauf) oder 'manuell' (eingelesene Seite)."""
+        Preisverlauf und App dieselben Fahrzeuge kennen. ``kanal``: 'suche' (Suchlauf) oder ein Push-Kanal 'manuell'/'email' (über Importer.importiere).
+        ``gesehen_am`` (ISO, lokal, nicht in der Zukunft): Zeitpunkt der Beobachtung, wenn er nicht „jetzt“ ist (E-Mail: Datum der Mail);
+        ``zuletzt_gesehen`` wird damit nie zurückgesetzt, nur nach vorn bewegt.
+        ``nur_leere``: vorhandene Felder bleiben (siehe ``_vorhandenes_behalten``).
+        ``verfuegbar_am`` (ISO mit Zeitzone): Zeitpunkt, zu dem das Inserat wirklich zu sehen war, wenn er nicht „jetzt“ ist (Datum der gespeicherten
+        Seite, Datum der Mail – auch ein unplausibel altes). Er gilt nur für die Verfügbarkeit (Altersregel, ``zuletzt_bestaetigt``),
+        nicht für das Protokoll."""
         with self._exklusiv():
-            ergebnis = self.schreibe_anzeige(a, suche)
-            self.spiegle_inserat(a, kanal)
+            if nur_leere:
+                a = self._vorhandenes_behalten(a)
+            ergebnis = self.schreibe_anzeige(a, suche, gesehen_am, text_eigen=nur_leere)
+            self.spiegle_inserat(a, kanal, zeitpunkt=_als_utc(gesehen_am) if gesehen_am else None, verfuegbar_am=verfuegbar_am)
         return ergebnis
 
-    def schreibe_anzeige(self, a: dict, suche: str) -> str:
-        """Nur Tabelle ``anzeigen``, ohne eigenes Commit (Teil einer Transaktion des Aufrufers)."""
+    def _vorhandenes_behalten(self, a: dict) -> dict:
+        """Für Kanäle mit grob gelesenen Werten (``nur_leere``): bereits gespeicherte Felder bleiben, nur leere werden gefüllt. Preis, VB,
+        Anbietertyp, Suche und Quelle laufen wie immer (Preissenkung, Historie, Händlerhinweis)."""
+        alt = self.con.execute("SELECT * FROM anzeigen WHERE id=?", (a["id"],)).fetchone()
+        if alt is None or alt["details_json"] == TEXT_MARKE:           # neu, oder selbst aus einem Text-Import: der neue Text darf ersetzen
+            return a
+        return {**a, **{k: alt[k] for k in FELDER_UPDATE if k not in ("suche", "preis", "vb", "gewerblich", "quelle") and not _leer(k, alt[k])}}
+
+    def ist_text_eigen(self, ad_id: str) -> bool | None:
+        """None: keine solche Anzeige; True: ihre Werte stammen aus einem Text-Import (ersetzbar); False: aus anderem Kanal (geschützt)."""
+        z = self.con.execute("SELECT details_json FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+        return None if z is None else z["details_json"] == TEXT_MARKE
+
+    def schreibe_anzeige(self, a: dict, suche: str, gesehen_am: str | None = None, text_eigen: bool = False) -> str:
+        """Nur Tabelle ``anzeigen``, ohne eigenes Commit (Teil einer Transaktion des Aufrufers). ``text_eigen``: Aufruf aus dem Text-Import –
+        neue Zeilen erhalten ``TEXT_MARKE``; bei jedem anderen Aufruf verliert eine bestehende Zeile die Markierung."""
         jetzt = datetime.now().isoformat(timespec="seconds")
-        alt = self.con.execute("SELECT preis FROM anzeigen WHERE id=?", (a["id"],)).fetchone()
+        alt = self.con.execute("SELECT preis, zuletzt_gesehen, gewerblich, anbieter_herkunft FROM anzeigen WHERE id=?", (a["id"],)).fetchone()
         werte = {k: a.get(k) for k in FELDER_UPDATE}
         werte["suche"] = suche
         werte["vb"] = int(bool(a.get("vb")))
         # Ausdrücklich None (`Inserat.gewerblich`: Anbieter unbekannt, z. B. Anbieterkasten der Trefferliste fehlt) wird NULL, nicht
         # „privat“ (0) – sonst würde ein Händler ungeprüft wie ein Privatverkäufer behandelt; `anschreiben.hinweise` weist darauf hin.
-        # Fehlt der Schlüssel ganz (Aufrufer ohne Anbieterangabe), bleibt es wie bisher 0.
+        # Fehlt der Schlüssel ganz (Aufrufer ohne Anbieterangabe), bleibt es wie bisher 0 – mit der schwächsten Herkunft (P3-05).
         werte["gewerblich"] = None if "gewerblich" in a and a["gewerblich"] is None else int(bool(a.get("gewerblich")))
+        werte["anbieter_herkunft"] = anbieter.herkunft_fuer(werte["gewerblich"], a.get("anbieter_herkunft"))
         if alt is None:
-            spalten = ["id", *werte, "erstmals_gesehen", "zuletzt_gesehen"]
+            neu = {**werte, "details_json": TEXT_MARKE} if text_eigen else werte
+            spalten = ["id", *neu, "erstmals_gesehen", "zuletzt_gesehen"]
             self.con.execute(
                 f"INSERT INTO anzeigen ({','.join(spalten)}) VALUES ({','.join('?' * len(spalten))})",
-                [a["id"], *werte.values(), jetzt, jetzt])
+                [a["id"], *neu.values(), jetzt, gesehen_am or jetzt])
             ergebnis = "neu"
         else:
             # Werte aus der Detailseite nicht mit leeren Listenwerten überschreiben
             werte = {k: v for k, v in werte.items() if v not in (None, "")}
-            if a.get("gewerblich") is None:          # „unbekannt“ (z. B. Detailseite ohne Hinweis) überschreibt nichts
-                werte.pop("gewerblich", None)
+            if not anbieter.uebernehmen(alt["gewerblich"], alt["anbieter_herkunft"], werte.get("gewerblich"), werte.get("anbieter_herkunft")):
+                werte.pop("gewerblich", None)        # „unbekannt“, schwächere Herkunft oder gewerblich → privat: Gespeichertes bleibt (P3-05)
+                werte.pop("anbieter_herkunft", None)
+            if "vb" in a and a["vb"] is None:        # ausdrücklich „unbekannt“ (Mail ohne Preiszeile) überschreibt nichts; fehlt der Schlüssel: wie früher 0
+                werte.pop("vb", None)
             ergebnis = "bekannt"
             if a.get("preis") and alt["preis"] and a["preis"] < alt["preis"]:
                 werte["preis_vorher"] = alt["preis"]
                 werte["preis_geaendert_am"] = jetzt
                 ergebnis = "preis"
+            elif a.get("preis") and alt["preis"] and a["preis"] > alt["preis"]:
+                # wieder erhöht: die gemerkte Senkung gilt nicht mehr (sonst „Preis gesenkt“ bzw. Nachfassen trotz Erhöhung, P4-03)
+                werte["preis_vorher"] = werte["preis_geaendert_am"] = None
             sets = ", ".join(f"{k}=?" for k in werte) + ", zuletzt_gesehen=?"
-            self.con.execute(f"UPDATE anzeigen SET {sets} WHERE id=?", [*werte.values(), jetzt, a["id"]])
+            gesehen = max(alt["zuletzt_gesehen"] or "", gesehen_am) if gesehen_am else jetzt
+            self.con.execute(f"UPDATE anzeigen SET {sets} WHERE id=?", [*werte.values(), gesehen, a["id"]])
+            if not text_eigen:
+                self.con.execute("UPDATE anzeigen SET details_json=NULL WHERE id=? AND details_json=?", (a["id"], TEXT_MARKE))
         return ergebnis
 
-    def spiegle_inserat(self, a: dict, kanal: str) -> int:
+    def spiegle_inserat(self, a: dict, kanal: str, zeitpunkt: str | None = None, verfuegbar_am: str | None = None) -> int:
         """v4-Gegenstück eines ``anzeigen``-Datensatzes (ohne eigenes Commit). Schlüssel ist (Plattform, Anzeigen-ID); ein zuerst
         über den Ereigniseingang angelegtes Inserat wird verknüpft (``legacy_id``) statt verdoppelt. Gesehen in Suche oder
-        Seite heißt verfügbar. ``beobachtungen`` und ``preis_historie`` erhalten nur Änderungen. Rückgabe: ``inserate.id``."""
+        Seite heißt verfügbar. ``beobachtungen`` und ``preis_historie`` erhalten nur Änderungen. Rückgabe: ``inserate.id``.
+        ``zeitpunkt`` (ISO, UTC): Zeitpunkt der Beobachtung in ``beobachtungen``/``preis_historie``, wenn er nicht „jetzt“ ist (E-Mail: Datum der Mail)."""
         plattform, ad_id, jetzt = a.get("quelle") or STANDARD_PLATTFORM, a["id"], jetzt_utc()
+        beobachtet = zeitpunkt or jetzt
         alt = self.con.execute("SELECT * FROM inserate WHERE plattform=? AND anzeigen_id=?", (plattform, ad_id)).fetchone()
         url = a.get("url") or (alt["url"] if alt else None)
         titel = a.get("titel") or (alt["titel"] if alt else None)
         preis = a.get("preis") if a.get("preis") is not None else (alt["preis"] if alt else None)
-        signatur = (url, titel, preis, "aktiv")
+        # Gesehen heißt verfügbar, außer der Titel sagt „reserviert“/„verkauft“; eine ältere Beobachtung überschreibt keine neuere (Altersregel)
+        verfuegbar, bestaetigt = self.verfuegbarkeit_nach_regel(alt, aus_signal(erkenne_signal(titel)), verfuegbar_am or beobachtet)
+        signatur = (url, titel, preis, verfuegbar)
         if alt is None:
             self.con.execute(
                 """INSERT INTO inserate (plattform, anzeigen_id, legacy_id, url, titel, preis, verfuegbarkeit,
-                   erstmals_gesehen, zuletzt_gesehen)
-                   VALUES (?, ?, CASE WHEN EXISTS (SELECT 1 FROM inserate WHERE legacy_id=?) THEN NULL ELSE ? END, ?, ?, ?, 'aktiv', ?, ?)""",
-                (plattform, ad_id, ad_id, ad_id, url, titel, preis, jetzt, jetzt))
+                   erstmals_gesehen, zuletzt_gesehen, zuletzt_bestaetigt)
+                   VALUES (?, ?, CASE WHEN EXISTS (SELECT 1 FROM inserate WHERE legacy_id=?) THEN NULL ELSE ? END, ?, ?, ?, ?, ?, ?, ?)""",
+                (plattform, ad_id, ad_id, ad_id, url, titel, preis, verfuegbar, jetzt, jetzt, bestaetigt))
             inserat_id, typ = self.con.execute("SELECT last_insert_rowid()").fetchone()[0], "neu"
         else:
             inserat_id = alt["id"]
             typ = None if (alt["url"], alt["titel"], alt["preis"], alt["verfuegbarkeit"]) == signatur else "geaendert"
-            self.con.execute("UPDATE inserate SET url=?, titel=?, preis=?, verfuegbarkeit='aktiv', zuletzt_gesehen=? WHERE id=?",
-                             (url, titel, preis, jetzt, inserat_id))
+            self.con.execute("UPDATE inserate SET url=?, titel=?, preis=?, verfuegbarkeit=?, zuletzt_gesehen=?, zuletzt_bestaetigt=? WHERE id=?",
+                             (url, titel, preis, verfuegbar, jetzt, bestaetigt, inserat_id))
             self.verknuepfe_inserat(inserat_id, ad_id)
         if typ:
             self.con.execute(
                 """INSERT INTO beobachtungen (inserat_id, plattform, kanal, ereignis_typ, ereignis_id, zeitpunkt, preis, inhalt_hash)
-                   VALUES (?, ?, ?, ?, NULL, ?, ?, ?)""", (inserat_id, plattform, kanal, typ, jetzt, preis, inhalt_hash(signatur)))
+                   VALUES (?, ?, ?, ?, NULL, ?, ?, ?)""", (inserat_id, plattform, kanal, typ, beobachtet, preis, inhalt_hash(signatur)))
             if preis is not None and (alt is None or alt["preis"] != preis):
                 self.con.execute("INSERT INTO preis_historie (inserat_id, zeitpunkt, preis, kanal) VALUES (?, ?, ?, ?)",
-                                 (inserat_id, jetzt, preis, kanal))
+                                 (inserat_id, beobachtet, preis, kanal))
         return inserat_id
+
+    @staticmethod
+    def verfuegbarkeit_nach_regel(alt, neu: str, beobachtet: str) -> tuple[str, str]:
+        """(Verfügbarkeit, ``zuletzt_bestaetigt``) nach einer Beobachtung zum Zeitpunkt ``beobachtet`` (UTC-Text): Liegt sie vor der letzten
+        Bestätigung des Inserats, bleibt der gespeicherte Stand (z. B. eine Mail von gestern gegen ein Löschereignis von heute); sonst gilt ``neu``.
+        Ohne vorhandene Zeile oder ohne Bestätigung gilt immer ``neu``."""
+        zeit = zu_utc(beobachtet)
+        vorige = zu_utc(alt["zuletzt_bestaetigt"]) if alt is not None else None
+        if vorige is not None and zeit is not None and zeit < vorige:
+            return alt["verfuegbarkeit"], alt["zuletzt_bestaetigt"]
+        return neu, beobachtet if zeit is None else zeit.isoformat(timespec="seconds")
+
+    def markiere_offline(self, ad_id: str, kanal: str = "detail", zeitpunkt: str | None = None) -> bool:
+        """Die Quelle meldet das Inserat als nicht mehr vorhanden (Detailabruf: 404): Verfügbarkeit ``offline``, als Beobachtung vermerkt
+        (``ereignis_typ`` „geloescht“, ``kanal``). Der Ankaufsstatus in ``anzeigen`` bleibt unberührt; ``zuletzt_gesehen`` rückt nicht vor (nicht
+        gesehen). Eine neuere Bestätigung (Altersregel) gewinnt. Rückgabe: True, wenn sich die Verfügbarkeit geändert hat."""
+        with self._exklusiv():
+            z = self.con.execute("SELECT quelle FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+            if z is None:
+                return False
+            alt = self.con.execute("SELECT * FROM inserate WHERE plattform=? AND anzeigen_id=?", (z["quelle"] or STANDARD_PLATTFORM, ad_id)).fetchone()
+            if alt is None:
+                return False
+            beobachtet = zeitpunkt or jetzt_utc()
+            wert, bestaetigt = self.verfuegbarkeit_nach_regel(alt, OFFLINE, beobachtet)
+            if wert != OFFLINE:
+                return False
+            self.con.execute("UPDATE inserate SET verfuegbarkeit=?, zuletzt_bestaetigt=? WHERE id=?", (OFFLINE, bestaetigt, alt["id"]))
+            if alt["verfuegbarkeit"] == OFFLINE:
+                return False
+            self.con.execute(
+                """INSERT INTO beobachtungen (inserat_id, plattform, kanal, ereignis_typ, ereignis_id, zeitpunkt, preis, inhalt_hash)
+                   VALUES (?, ?, ?, 'geloescht', NULL, ?, ?, ?)""",
+                (alt["id"], alt["plattform"], kanal, bestaetigt, alt["preis"], inhalt_hash((alt["url"], alt["titel"], alt["preis"], OFFLINE))))
+            return True
+
+    def bestaetige_verfuegbarkeit(self, ad_id: str, titel: str | None, kanal: str = "detail", zeitpunkt: str | None = None) -> bool:
+        """Ein erfolgreicher Netz-Detailabruf hat das Inserat gesehen: ``aktiv`` (oder das Signal im Titel), mit Altersregel. Ändert sich der
+        Wert, entsteht eine Beobachtung; sonst rückt nur ``zuletzt_bestaetigt`` vor. Rückgabe: True, wenn sich die Verfügbarkeit geändert hat."""
+        with self._exklusiv():
+            z = self.con.execute("SELECT quelle FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+            alt = self.con.execute("SELECT * FROM inserate WHERE plattform=? AND anzeigen_id=?",
+                                   (z["quelle"] or STANDARD_PLATTFORM, ad_id)).fetchone() if z else None
+            if alt is None:
+                return False
+            beobachtet = zeitpunkt or jetzt_utc()
+            wert, bestaetigt = self.verfuegbarkeit_nach_regel(alt, aus_signal(erkenne_signal(titel or alt["titel"])), beobachtet)
+            self.con.execute("UPDATE inserate SET verfuegbarkeit=?, zuletzt_bestaetigt=? WHERE id=?", (wert, bestaetigt, alt["id"]))
+            if wert == alt["verfuegbarkeit"]:
+                return False
+            self.con.execute(
+                """INSERT INTO beobachtungen (inserat_id, plattform, kanal, ereignis_typ, ereignis_id, zeitpunkt, preis, inhalt_hash)
+                   VALUES (?, ?, ?, 'geaendert', NULL, ?, ?, ?)""",
+                (alt["id"], alt["plattform"], kanal, bestaetigt, alt["preis"], inhalt_hash((alt["url"], alt["titel"], alt["preis"], wert))))
+            return True
+
+    def anzeigen_mit_arbeit(self) -> set[str]:
+        """Anzeigen-IDs, an denen im Team schon gearbeitet wird, ohne dass der Ankaufsstatus es zeigt: Bearbeitung/Reservierung, Besichtigung oder
+        Ankauf. Solche Anzeigen werden bei offline/verkauft nicht ausgeblendet. Nur lesend."""
+        return {r[0] for r in self.con.execute(
+            "SELECT anzeige_id FROM bearbeitung UNION SELECT anzeige_id FROM besichtigungen UNION "
+            "SELECT anzeige_id FROM ankaeufe WHERE anzeige_id IS NOT NULL")}
+
+    def verfuegbarkeit_zu(self) -> dict[str, dict]:
+        """Rohwerte der Verfügbarkeit je Anzeigen-ID (``anzeigen.id``) für ``verfuegbarkeit.ergaenze``; Verbindung über (Plattform, Anzeigen-ID).
+        Eine einzige Abfrage über alle Inserate; nur lesend."""
+        return {r["anzeige_id"]: {k: r[k] for k in ("inserat_verfuegbarkeit", "inserat_bestaetigt", "inserat_gesehen")} for r in self.con.execute(
+            "SELECT a.id AS anzeige_id, i.verfuegbarkeit AS inserat_verfuegbarkeit, i.zuletzt_bestaetigt AS inserat_bestaetigt, "
+            "i.zuletzt_gesehen AS inserat_gesehen FROM anzeigen a JOIN inserate i "
+            "ON i.plattform = COALESCE(NULLIF(a.quelle, ''), ?) AND i.anzeigen_id = a.id", (STANDARD_PLATTFORM,))}
 
     def verknuepfe_inserat(self, inserat_id: int, ad_id: str):
         """``legacy_id`` setzen, sofern noch frei (dieselbe Anzeigen-ID auf zwei Plattformen: nur die erste wird verknüpft)."""
@@ -243,33 +327,93 @@ class Datenbank:
             log.info("v4-Abgleich: %d Inserate aus „anzeigen“ ergänzt.", neu)
         return neu
 
-    def speichere_details(self, ad_id: str, d: dict):
+    def speichere_details(self, ad_id: str, d: dict, nur_leere: bool = False, netz_abruf: bool = False):
+        """Details einer Anzeige speichern (Preis ggf. mit Historie). Eine Transaktion: bei jedem Fehler bleibt alles beim Alten.
+        ``netz_abruf``: die Details kommen aus einem Abruf der Detailseite – das Inserat war dort zu sehen (Verfügbarkeit bestätigt, Kanal ``detail``)."""
+        with self._exklusiv():
+            self._speichere_details(ad_id, d, nur_leere)
+            if netz_abruf and (d.get("titel") or d.get("details")):
+                self.bestaetige_verfuegbarkeit(ad_id, d.get("titel"))
+
+    def _speichere_details(self, ad_id: str, d: dict, nur_leere: bool):
         felder = {k: d.get(k) for k in ("titel", "preis", "km", "ez_jahr", "marke", "art", "leistung",
                                          "getriebe", "beschreibung")}
         felder = {k: v for k, v in felder.items() if v not in (None, "")}
-        if d.get("gewerblich"):
-            felder["gewerblich"] = 1
-        felder["details_json"] = json.dumps(d.get("details", {}), ensure_ascii=False)
-        felder["detail_geladen"] = 1
-        sets = ", ".join(f"{k}=?" for k in felder)
-        self.con.execute(f"UPDATE anzeigen SET {sets} WHERE id=?", [*felder.values(), ad_id])
-        self.con.commit()
+        if nur_leere:
+            # grob gelesene Werte (eingefügter Text): vorhandene Felder bleiben, Merkmalsliste und „Details geladen“ ebenso
+            alt = self.con.execute("SELECT * FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+            if alt is not None and alt["details_json"] != TEXT_MARKE:
+                felder = {k: v for k, v in felder.items() if k == "preis" or _leer(k, alt[k])}
+        else:
+            felder["details_json"] = json.dumps(self._ohne_personendaten(ad_id, d.get("details", {})), ensure_ascii=False)
+            felder["detail_geladen"] = 1
+        if d.get("gewerblich") is not None:      # Anbieterart nach denselben Regeln wie beim Treffer (P3-05)
+            gewerblich = int(bool(d["gewerblich"]))
+            herkunft = anbieter.herkunft_fuer(gewerblich, d.get("anbieter_herkunft"))
+            alt = self.con.execute("SELECT gewerblich, anbieter_herkunft FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+            if alt is not None and anbieter.uebernehmen(alt["gewerblich"], alt["anbieter_herkunft"], gewerblich, herkunft):
+                felder.update(gewerblich=gewerblich, anbieter_herkunft=herkunft)
+        if "preis" in felder:
+            self._preis_aus_details(ad_id, felder["preis"])
+        if felder:
+            sets = ", ".join(f"{k}=?" for k in felder)
+            self.con.execute(f"UPDATE anzeigen SET {sets} WHERE id=?", [*felder.values(), ad_id])
 
-    def ohne_details(self, limit: int) -> list[sqlite3.Row]:
-        """Inserate für den Detailabruf – ohne solche aus gespeicherten Seiten (kein Netzabruf, ADR-010)."""
+    def _ohne_personendaten(self, ad_id: str, details: dict) -> dict:
+        """Eine bereits anonymisierte Zeile (``anonymisiert_am`` in ``details_json``, ``datenrechte.inserat_anonymisieren``) bekommt beim erneuten
+        Einlesen keine Personendaten zurück: der Profilname fällt weg, die Marke bleibt. Fahrzeugmerkmale werden weiter aktualisiert."""
+        z = self.con.execute("SELECT details_json FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+        try:
+            alt = json.loads(z["details_json"] or "{}") if z else {}
+        except ValueError:
+            return details
+        if not isinstance(alt, dict) or "anonymisiert_am" not in alt:
+            return details
+        return {**{k: v for k, v in details.items() if k != "verkaeufer_name"}, "anonymisiert_am": alt["anonymisiert_am"]}
+
+    def _preis_aus_details(self, ad_id: str, preis: int):
+        """Nennt die Detailseite einen anderen Preis als gespeichert (Netzabruf nach dem Suchlauf), gehört die Änderung wie bei jedem
+        anderen Kanal in Preissenkung und Preisverlauf (Kanal „detail“); sonst bliebe sie ohne Spur und ``inserate.preis`` veraltet."""
+        z = self.con.execute("SELECT preis, quelle, url, titel FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+        if z is None or z["preis"] == preis:
+            return
+        jetzt = datetime.now().isoformat(timespec="seconds")
+        # Der Abruf ist eine Beobachtung: ``zuletzt_gesehen`` rückt vor, sonst setzte eine ältere Mail den Preis zurück (K1 vergleicht damit)
+        self.con.execute("UPDATE anzeigen SET zuletzt_gesehen=MAX(COALESCE(zuletzt_gesehen, ''), ?) WHERE id=?", (jetzt, ad_id))
+        if preis and z["preis"] and preis < z["preis"]:
+            self.con.execute("UPDATE anzeigen SET preis_vorher=?, preis_geaendert_am=? WHERE id=?", (z["preis"], jetzt, ad_id))
+        elif preis and z["preis"] and preis > z["preis"]:            # wieder erhöht: gemerkte Senkung zurücksetzen (wie schreibe_anzeige)
+            self.con.execute("UPDATE anzeigen SET preis_vorher=NULL, preis_geaendert_am=NULL WHERE id=?", (ad_id,))
+        self.spiegle_inserat({"id": ad_id, "quelle": z["quelle"], "url": z["url"], "titel": z["titel"], "preis": preis}, "detail")
+
+    def ohne_details(self, limit: int, kennungen: Collection[str] | None = None) -> list[sqlite3.Row]:
+        """Inserate für den Detailabruf – ohne solche aus gespeicherten Seiten (kein Netzabruf, ADR-010).
+        kennungen: nur Inserate dieser Quellen (leere Quelle = STANDARD_PLATTFORM), schon in SQL – Zeilen anderer Quellen
+        verbrauchen das LIMIT nicht."""
+        quelle_sql, quelle_param = "", ()
+        if kennungen is not None:
+            kennungen = sorted(kennungen)
+            if not kennungen:
+                return []
+            quelle_sql = f" AND COALESCE(NULLIF(quelle, ''), ?) IN ({','.join('?' * len(kennungen))})"
+            quelle_param = (STANDARD_PLATTFORM, *kennungen)
         return self.con.execute(
-            f"SELECT * FROM anzeigen WHERE detail_geladen=0 AND NOT COALESCE({_IMPORT_SQL}, 0) "
-            "ORDER BY erstmals_gesehen DESC LIMIT ?", (*_IMPORT_PARAMETER, limit)).fetchall()
+            f"SELECT * FROM anzeigen WHERE detail_geladen=0 AND NOT COALESCE({_IMPORT_SQL}, 0){quelle_sql} "
+            "ORDER BY erstmals_gesehen DESC LIMIT ?", (*_IMPORT_PARAMETER, *quelle_param, limit)).fetchall()
 
     def detail_art(self, ad_id: str) -> str | None:
         """Feld „Art“ der gespeicherten Detailseite (None ohne Detailseite oder ohne Angabe)."""
         zeile = self.con.execute("SELECT art, detail_geladen FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
         return zeile["art"] if zeile and zeile["detail_geladen"] and zeile["art"] else None
 
-    def gewerblich_zu(self, ad_id: str) -> int | None:
-        """Gespeicherter Anbietertyp (1 gewerblich, 0 privat); None, wenn die Anzeige neu oder der Anbieter unbekannt ist."""
-        zeile = self.con.execute("SELECT gewerblich FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
-        return zeile["gewerblich"] if zeile else None
+    def setze_anbieter(self, ad_id: str, gewerblich: bool | None) -> bool:
+        """Korrektur der Anbieterart durch das Team (P3-05): privat, gewerblich oder unbekannt (None) – ersetzt jede gespeicherte
+        Einstufung, Herkunft ``korrektur`` (auch bei „unbekannt“, damit der nächste Suchlauf sie nicht still zurücksetzt). False, wenn es die
+        Anzeige nicht gibt."""
+        wert = None if gewerblich is None else int(bool(gewerblich))
+        with self._exklusiv():
+            cur = self.con.execute("UPDATE anzeigen SET gewerblich=?, anbieter_herkunft=? WHERE id=?", (wert, anbieter.KORREKTUR, ad_id))
+        return cur.rowcount > 0
 
     def suche_zu(self, ad_id: str) -> str | None:
         zeile = self.con.execute("SELECT suche FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
@@ -279,8 +423,33 @@ class Datenbank:
         grenze = (datetime.now() - timedelta(days=tage)).isoformat(timespec="seconds")
         return self.con.execute("SELECT * FROM anzeigen WHERE zuletzt_gesehen >= ?", (grenze,)).fetchall()
 
+    def erstmals_seit(self, grenze: str) -> list[sqlite3.Row]:
+        """Alle Anzeigen, die ab ``grenze`` (ISO, lokal) zuerst eingingen – auch wenn sie inzwischen nicht mehr gesehen werden (P4-05)."""
+        return self.con.execute("SELECT * FROM anzeigen WHERE erstmals_gesehen >= ?", (grenze,)).fetchall()
+
+    def anzeigen_zu(self, ids) -> list[sqlite3.Row]:
+        """Zeilen von ``anzeigen`` zu den IDs (auch ohne Preis oder lange nicht gesehen)."""
+        ids, zeilen = sorted(set(ids)), []
+        for i in range(0, len(ids), 500):
+            teil = ids[i:i + 500]
+            zeilen += self.con.execute(f"SELECT * FROM anzeigen WHERE id IN ({','.join('?' * len(teil))})", teil).fetchall()
+        return zeilen
+
     def alle_mit_preis(self) -> list[sqlite3.Row]:
         return self.con.execute("SELECT * FROM anzeigen WHERE preis IS NOT NULL").fetchall()
+
+    def fahrzeug_id_zu(self, ad_id: str) -> int | None:
+        """Fahrzeug (``fahrzeuge.id``) der ``anzeigen``-Zeile; None, wenn die Anzeige oder ihr v4-Inserat fehlt. Verbindung über
+        (Plattform, Anzeigen-ID), nicht über ``legacy_id`` (bei Kollision NULL). Nur lesend."""
+        zeile = self.con.execute(
+            "SELECT i.fahrzeug_id FROM anzeigen a JOIN inserate i "
+            "ON i.plattform = COALESCE(NULLIF(a.quelle, ''), ?) AND i.anzeigen_id = a.id WHERE a.id = ?",
+            (STANDARD_PLATTFORM, ad_id)).fetchone()
+        return zeile[0] if zeile else None
+
+    def inserate_von_fahrzeug(self, fahrzeug_id: int) -> list[sqlite3.Row]:
+        """Alle Inserate (je Quelle eines) zu einem Fahrzeug, älteste zuerst. Nur lesend."""
+        return self.con.execute("SELECT * FROM inserate WHERE fahrzeug_id = ? ORDER BY id", (fahrzeug_id,)).fetchall()
 
     def letzter_lauf(self) -> datetime | None:
         """Zeitpunkt, zu dem zuletzt Anzeigen gesehen wurden (≈ letzter Suchlauf)."""
@@ -341,7 +510,7 @@ class Datenbank:
 
     def setze_status(self, ad_id: str, status: str, notiz: str | None = None, text: str | None = None,
                      betrag: int | None = None, *, nutzer_id: int | None = None, grenze: str = "", erzwingen: bool = False,
-                     inhaber: bool = False, dubletten=()) -> bool:
+                     inhaber: bool = False, dubletten=(), kanal: str | None = None, kontakt_id: int | None = None) -> bool:
         """Mit Text (= Anschreiben) werden Text und Angebot gespeichert, bei 'kontaktiert' auch der Zeitpunkt; 'neu' setzt zurück.
 
         'vorbereitet' (Text kopiert, Versand noch nicht bestätigt) speichert Text und Angebot, setzt aber weder ``kontaktiert_am`` noch
@@ -353,7 +522,10 @@ class Datenbank:
         erneut kontaktieren. Ausnahme: ``inhaber`` (Inhaber oder zugewiesener Besichtiger) ändert 'verhandlung'/'besichtigung'
         eines von einem Kollegen gehaltenen Inserats, ohne es zu übernehmen – außer mit ``erzwingen``, das übernimmt wirklich.
         'neu' leert den Kontakt (Bearbeiter bleibt); alle anderen Status verlangen: frei, eigene Reservierung oder ``inhaber``.
-        Sonst ``BearbeitungsKonflikt`` – dann ist nichts geändert."""
+        Sonst ``BearbeitungsKonflikt`` – dann ist nichts geändert.
+
+        In derselben Transaktion entsteht das Kontakt-Ereignis (P3-06, ``_kontakt_ereignis``); ``kanal`` (``kontakte.KANAELE``) und ``kontakt_id``
+        (welches vorbereitete Ereignis „kontaktiert“ bestätigt) nur dafür."""
         jetzt = datetime.now().isoformat(timespec="seconds")
         sets, werte = ["status=?", "status_am=?", "notiz=COALESCE(?, notiz)"], [status, jetzt, notiz]
         if status == "kontaktiert" and text:
@@ -373,11 +545,15 @@ class Datenbank:
             werte.append(betrag)
         sql = f"UPDATE anzeigen SET {', '.join(sets)} WHERE id=?"
         if nutzer_id is None:
-            with self._schreiben():
+            with self._exklusiv():
+                vorher = self.con.execute("SELECT kontaktiert_am FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
                 cur = self.con.execute(sql, [*werte, ad_id])
+                if vorher:
+                    self._kontakt_ereignis(ad_id, status, vorher["kontaktiert_am"], text, betrag, None, kanal, jetzt, kontakt_id)
             return cur.rowcount > 0
         with self._exklusiv():
-            if not self.con.execute("SELECT 1 FROM anzeigen WHERE id=?", (ad_id,)).fetchone():
+            vorher = self.con.execute("SELECT kontaktiert_am FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
+            if not vorher:
                 return False
             uebernehmen = status in IN_ARBEIT
             if uebernehmen and status not in ("kontaktiert", VORBEREITET) and inhaber and not erzwingen \
@@ -389,6 +565,7 @@ class Datenbank:
             elif status not in IN_ARBEIT and not inhaber and self._fremde_halter([ad_id], nutzer_id, grenze):
                 raise BearbeitungsKonflikt(ad_id)
             cur = self.con.execute(sql, [*werte, ad_id])
+            self._kontakt_ereignis(ad_id, status, vorher["kontaktiert_am"], text, betrag, nutzer_id, kanal, jetzt, kontakt_id)
             if uebernehmen and status != VORBEREITET:
                 self._trage_kontakt_ein(ad_id, nutzer_id, jetzt)
             elif status == "neu":
@@ -396,7 +573,7 @@ class Datenbank:
             return cur.rowcount > 0
 
     def nachgefasst(self, ad_id: str, text: str, betrag: int | None = None, *, nutzer_id: int | None = None,
-                    grenze: str = "", erzwingen: bool = False, dubletten=()) -> bool:
+                    grenze: str = "", erzwingen: bool = False, dubletten=(), kanal: str | None = None) -> bool:
         """Nachfass-Nachricht: Zeitpunkt merken, Text an den Verlauf anhängen.
 
         Ein noch offenes Inserat wird nur 'vorbereitet' (Text kopiert, kein bestätigter Kontakt, ADR-012); ein abgesagter Vorgang
@@ -411,8 +588,10 @@ class Datenbank:
                "ELSE COALESCE(kontaktiert_am, ?) END WHERE id=?")
         werte = (jetzt, f"--- nachgefasst am {jetzt[:10]} ---", text, betrag, jetzt, ad_id)
         if nutzer_id is None:
-            with self._schreiben():
+            with self._exklusiv():
                 cur = self.con.execute(sql, werte)
+                if cur.rowcount:
+                    self._kontakt_vorbereiten(ad_id, kontakte.NACHFASSEN, text, betrag, None, kanal, jetzt)
             return cur.rowcount > 0
         with self._exklusiv():
             vorher = self.con.execute("SELECT status FROM anzeigen WHERE id=?", (ad_id,)).fetchone()
@@ -421,9 +600,85 @@ class Datenbank:
             if not self._uebernimm(ad_id, nutzer_id, jetzt, grenze, erzwingen, dubletten):
                 raise BearbeitungsKonflikt(ad_id)
             cur = self.con.execute(sql, werte)
+            self._kontakt_vorbereiten(ad_id, kontakte.NACHFASSEN, text, betrag, nutzer_id, kanal, jetzt)
             if (vorher["status"] or "neu") not in ("neu", VORBEREITET):
                 self._trage_kontakt_ein(ad_id, nutzer_id, jetzt)
             return cur.rowcount > 0
+
+    # ---------- Kontakte als Ereignisse (P3-06, ADR-044) ----------
+    def _kontakt_ereignis(self, ad_id: str, status: str, kontaktiert_vorher: str | None, text: str | None, betrag: int | None,
+                          nutzer_id: int | None, kanal: str | None, jetzt: str, kontakt_id: int | None = None):
+        """Ereignis zum Statuswechsel (ohne eigenes Commit): „Text kopiert“ (``vorbereitet`` mit Text) legt ein vorbereitetes Anschreiben an;
+        „kontaktiert“ bestätigt beim ersten bestätigten Kontakt und bei jedem neu gesendeten Text (siehe ``_kontakt_bestaetigen``); „neu“
+        verwirft offene Ereignisse (Rückgängig). Andere Status (auch ein erneutes „kontaktiert“ ohne Text) erzeugen kein Ereignis."""
+        if status == VORBEREITET and text:
+            self._kontakt_vorbereiten(ad_id, kontakte.ANSCHREIBEN, text, betrag, nutzer_id, kanal, jetzt)
+        elif status == "kontaktiert" and (text or not kontaktiert_vorher):
+            self._kontakt_bestaetigen(ad_id, text, betrag, nutzer_id, kanal, jetzt, kontakt_id)
+        elif status == "neu":
+            self._kontakte_verwerfen(ad_id, jetzt)
+
+    def _kontakte_verwerfen(self, ad_id: str, jetzt: str, ausser: int | None = None):
+        self.con.execute("UPDATE kontakte SET verworfen_am=? WHERE anzeige_id=? AND bestaetigt_am IS NULL AND verworfen_am IS NULL AND id IS NOT ?",
+                         (jetzt, ad_id, ausser))
+
+    def _kontakt_vorbereiten(self, ad_id: str, art: str, text: str | None, betrag: int | None, nutzer_id: int | None, kanal: str | None,
+                             jetzt: str):
+        """Ein noch nicht bestätigtes Ereignis derselben Art wird ersetzt (erneut kopiert), sonst ein neues angefügt."""
+        offen = self.con.execute("SELECT id FROM kontakte WHERE anzeige_id=? AND art=? AND bestaetigt_am IS NULL AND verworfen_am IS NULL "
+                                 "ORDER BY id DESC LIMIT 1", (ad_id, art)).fetchone()
+        if offen:
+            self.con.execute("UPDATE kontakte SET text=?, betrag=?, nutzer_id=?, kanal=?, vorbereitet_am=?, herkunft='app' WHERE id=?",
+                             (text, betrag, nutzer_id, kanal or kontakte.PLATTFORM, jetzt, offen["id"]))
+        else:
+            self.con.execute("INSERT INTO kontakte (anzeige_id, art, kanal, text, betrag, nutzer_id, vorbereitet_am) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                             (ad_id, art, kanal or kontakte.PLATTFORM, text, betrag, nutzer_id, jetzt))
+
+    def _kontakt_bestaetigen(self, ad_id: str, text: str | None, betrag: int | None, nutzer_id: int | None, kanal: str | None, jetzt: str,
+                             kontakt_id: int | None = None):
+        """„gesendet ✓“: bestätigt ``kontakt_id`` bzw. das zuletzt vorbereitete offene Ereignis – mit neuem Text nur ein offenes Anschreiben (ein
+        Nachfassen wird nie mit einem Brief überschrieben). Gibt es keines, entsteht ein bestätigtes Anschreiben. Alle anderen offenen Ereignisse
+        der Anzeige gelten danach als verworfen (es wurde nur eines gesendet)."""
+        bedingung, werte = "anzeige_id=? AND bestaetigt_am IS NULL AND verworfen_am IS NULL", [ad_id]
+        if kontakt_id is not None:
+            bedingung, werte = bedingung + " AND id=?", [ad_id, kontakt_id]
+        offen = self.con.execute(f"SELECT id, art FROM kontakte WHERE {bedingung} ORDER BY id DESC LIMIT 1", werte).fetchone()
+        if offen and not (text and offen["art"] != kontakte.ANSCHREIBEN):
+            self.con.execute("UPDATE kontakte SET bestaetigt_am=?, bestaetigt_von=?, kanal=COALESCE(?, kanal), text=COALESCE(?, text), "
+                             "betrag=COALESCE(?, betrag), herkunft='app' WHERE id=?", (jetzt, nutzer_id, kanal, text, betrag, offen["id"]))
+            neu_id = offen["id"]
+        else:                                     # ohne „Text kopiert“ bestätigt (z. B. Status direkt gesetzt): Kanal nur bekannt, wenn angegeben
+            neu_id = self.con.execute("INSERT INTO kontakte (anzeige_id, art, kanal, text, betrag, nutzer_id, bestaetigt_am, bestaetigt_von) "
+                                      "VALUES (?, 'anschreiben', ?, ?, ?, ?, ?, ?)",
+                                      (ad_id, kanal or (kontakte.PLATTFORM if text else kontakte.UNBEKANNT), text, betrag, nutzer_id, jetzt,
+                                       nutzer_id)).lastrowid
+        self._kontakte_verwerfen(ad_id, jetzt, ausser=neu_id)
+
+    def kontakt(self, kontakt_id: int):
+        return self.con.execute("SELECT * FROM kontakte WHERE id=?", (kontakt_id,)).fetchone()
+
+    def bestaetige_kontakt(self, kontakt_id: int, nutzer_id: int | None, kanal: str | None = None) -> bool:
+        """„gesendet ✓“ für ein vorbereitetes Nachfassen an einem schon kontaktierten Inserat (sonst über ``setze_status`` mit ``kontakt_id``,
+        damit Status, Kontaktzeitpunkt und Team-Zuordnung mitgehen). Schon bestätigt: unverändert (True). False: unbekannt oder verworfen."""
+        jetzt = datetime.now().isoformat(timespec="seconds")
+        with self._exklusiv():
+            z = self.con.execute("SELECT anzeige_id FROM kontakte WHERE id=? AND verworfen_am IS NULL", (kontakt_id,)).fetchone()
+            if z is None:
+                return False
+            cur = self.con.execute("UPDATE kontakte SET bestaetigt_am=?, bestaetigt_von=?, kanal=COALESCE(?, kanal), herkunft='app' "
+                                   "WHERE id=? AND bestaetigt_am IS NULL", (jetzt, nutzer_id, kanal, kontakt_id))
+            if cur.rowcount:
+                self._kontakte_verwerfen(z["anzeige_id"], jetzt, ausser=kontakt_id)
+        return True
+
+    def kontakte_zu(self, ad_id: str) -> list:
+        """Kontakt-Ereignisse der Anzeige und aller Inserate desselben Fahrzeugs (bestätigte Dubletten), älteste zuerst. Nur lesend."""
+        ids = {ad_id}
+        fid = self.fahrzeug_id_zu(ad_id)
+        if fid is not None:
+            ids |= {r[0] for r in self.con.execute("SELECT anzeigen_id FROM inserate WHERE fahrzeug_id=?", (fid,))}
+        return self.con.execute(f"SELECT * FROM kontakte WHERE anzeige_id IN ({','.join('?' * len(ids))}) "
+                                "ORDER BY COALESCE(bestaetigt_am, vorbereitet_am), id", sorted(ids)).fetchall()
 
     def setze_notiz(self, ad_id: str, notiz: str) -> bool:
         with self._schreiben():
@@ -478,11 +733,27 @@ class Datenbank:
                 "AND bearbeiter_id IN (SELECT id FROM nutzer WHERE aktiv=1) AND COALESCE(uebernommen_am, '')>=?",
                 (ziel_id, jetzt, *ids, ziel_id, grenze))
 
+    def bestaetigte_gruppe(self, ad_id: str, weitere=()) -> list[str]:
+        """Anzeigen-IDs der übrigen Inserate desselben Fahrzeugs wie ``ad_id`` und wie die ``weitere``n (bestätigte Dubletten, P3-02b). Liest
+        die Datenbank selbst – innerhalb derselben Transaktion wie die Sperrprüfung, damit eine gleichzeitige Bestätigung nicht an der
+        Prüfung vorbeikommt (TOCTOU)."""
+        ids = sorted({ad_id, *weitere})
+        gruppe = [r[0] for r in self.con.execute(
+            "SELECT DISTINCT i2.anzeigen_id FROM inserate i1 JOIN inserate i2 ON i2.fahrzeug_id = i1.fahrzeug_id AND i2.id <> i1.id "
+            f"WHERE i1.anzeigen_id IN ({','.join('?' * len(ids))}) ORDER BY i2.anzeigen_id", ids)]
+        return [g for g in gruppe if g != ad_id]
+
+    def _mit_gruppe(self, ad_id: str, dubletten) -> list[str]:
+        """``dubletten`` (aus dem Zwischenspeicher) ∪ bestätigte Fahrzeuggruppe von ``ad_id`` und der Listenmitglieder aus der Datenbank,
+        ohne ``ad_id``."""
+        liste = [d for d in dubletten if d != ad_id]
+        return sorted({*liste, *self.bestaetigte_gruppe(ad_id, liste)})
+
     def _uebernimm(self, ad_id: str, nutzer_id: int, jetzt: str, grenze: str, erzwingen: bool, dubletten) -> bool:
         """Nur innerhalb von ``_exklusiv``: Dubletten prüfen (liest), dann EIN bedingtes UPSERT (rowcount 0 = Konflikt).
         Mit ``erzwingen`` wandern nicht kontaktierte Reservierungen der Dubletten auf den Übernehmer; eine kontaktierte Dublette
-        eines anderen verhindert es (False)."""
-        andere = [d for d in dubletten if d != ad_id]
+        eines anderen verhindert es (False). Die bestätigte Fahrzeuggruppe kommt hier aus der Datenbank dazu (``bestaetigte_gruppe``)."""
+        andere = self._mit_gruppe(ad_id, dubletten)
         if andere:
             if not erzwingen and self._fremde_halter(andere, nutzer_id, grenze):
                 return False
@@ -523,8 +794,8 @@ class Datenbank:
         ``dubletten``: nicht kontaktierte Reservierungen der Gruppe gehen mit auf ``ziel_id`` über (``grenze`` wie bei
         ``uebernimm``); hat ein anderer Kollege eine Dublette bereits kontaktiert, ``BearbeitungsKonflikt`` mit deren ID und
         nichts geändert – erst dort zuweisen."""
-        andere = [d for d in dubletten if d != anzeige_id]
         with self._exklusiv():
+            andere = self._mit_gruppe(anzeige_id, dubletten)
             d = self._kontaktierte_dublette_anderer(andere, ziel_id)
             if d:
                 raise BearbeitungsKonflikt(d)

@@ -21,6 +21,7 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
+from ...anbieter import ANZEIGE, OHNE_KENNZEICHEN
 from ...normalisierung.fahrzeug import ist_basismarke, marke_aus_text, normalisiere_marke
 from ...normalisierung.person import profilname
 
@@ -164,6 +165,7 @@ def _parse_treffer_neu(art, ld: tuple[dict, dict]) -> dict | None:
         "marke": marke_aus_text(titel + " " + beschreibung),
         "bild": bild_url(art) or _http_url(eintrag.get("contentUrl")),
         "gewerblich": gewerblich,
+        "anbieter_herkunft": ANZEIGE if gewerblich else OHNE_KENNZEICHEN,     # kein PRO-Kennzeichen ist kein Beleg für „privat“
         "ist_gesuch": any(t.lower() == "gesuch" for t in tags),
     }
 
@@ -203,6 +205,7 @@ def _parse_treffer_alt(art) -> dict | None:
         "marke": marke_aus_text(titel + " " + beschreibung),
         "bild": bild_url(art.select_one(".aditem-image, .imagebox")),
         "gewerblich": gewerblich,
+        "anbieter_herkunft": ANZEIGE if gewerblich else OHNE_KENNZEICHEN,
         "ist_gesuch": "Gesuch" in _text(art),
     }
 
@@ -284,6 +287,10 @@ def name_in_details(d: dict) -> dict:
     return d
 
 
+# Wendungen des Verkäuferkastens für Privatanbieter – nicht jedes „privat“ (ein Händlername wie „Privat-Camper-Center“ ist kein Beleg)
+_PRIVAT_KASTEN = re.compile(r"\bprivate[rn]?\s+(?:nutzer|anbieter)\b|\bprivatanbieter\b", re.I)
+
+
 def parse_detailseite(html: str) -> dict:
     """Merkmale einer Anzeigenseite. Zusätzlich `anzeigen_id` (aus dem Kasten „Anzeigen-ID“) und `ort`."""
     soup = BeautifulSoup(html, "html.parser")
@@ -312,6 +319,9 @@ def parse_detailseite(html: str) -> dict:
 
     # Händlerhinweis nur aus dem Verkäuferbereich – „ähnliche Anzeigen“ unten auf der Seite können PRO-Links tragen
     pro_link = any(not a.find_parent("article") for a in soup.select("a[href*='/pro/']"))
+    gewerblich = "gewerblich" in verkaeufer_box.lower() or pro_link
+    # „Privater Nutzer“ im Verkäuferkasten ist eine Angabe der Anzeige; ohne Kasten bleibt „privat“ nur eine Vermutung
+    herkunft = ANZEIGE if gewerblich or _PRIVAT_KASTEN.search(verkaeufer_box) else OHNE_KENNZEICHEN
 
     return {
         "anzeigen_id": id_treffer.group(1) if id_treffer else None,
@@ -327,6 +337,7 @@ def parse_detailseite(html: str) -> dict:
         "leistung": detail("Leistung") or None,
         "getriebe": detail("Getriebe") or None,
         "verkaeufer_name": _verkaeufer_name(soup),
-        "gewerblich": "gewerblich" in verkaeufer_box.lower() or pro_link,
+        "gewerblich": gewerblich,
+        "anbieter_herkunft": herkunft,
         "details": details,
     }

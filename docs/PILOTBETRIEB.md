@@ -4,6 +4,7 @@ Der Scout ist für den Betrieb **auf einem Rechner im Büro** gebaut: Server nur
 `tailscale serve` (HTTPS im eigenen Tailnet, docs/HANDY-APP.md). Für diesen Betrieb reicht die Härtung aus Phase G0.
 Diese Liste gilt, **bevor** die App über ein öffentliches Netz, für weitere Firmen oder mit fremden Nutzern läuft.
 Sie ist eine technische Checkliste, keine Rechtsberatung.
+Umsetzung auf einem eigenen Server (systemd, Caddy, Tailscale, Sicherung): `docs/SERVERBETRIEB.md` (P7-04).
 
 ## 1. Erreichbarkeit
 
@@ -61,11 +62,13 @@ Die App begrenzt selbst: JSON 1 MB, Fotos/Dokumente ca. 8 MB je Bild, Lesezeitli
 
 | Punkt | Stand |
 |---|---|
-| Lesezugriff nach Bedarf (Need-to-know) | Team liest firmenweit alle Anfragen – gewollt für eine Firma; Trennung zwischen Firmen **erledigt (G2):** je Firma eigene Datenbank, `docs/MANDANTEN.md` |
+| Lesezugriff nach Bedarf (Need-to-know) | Team liest firmenweit alle Anfragen – Betreiberentscheidung F11 „Lesen frei, Schreiben nur zuständig“ (`docs/ROLLEN.md`); Trennung zwischen Firmen **erledigt (G2):** je Firma eigene Datenbank, `docs/MANDANTEN.md` |
 | Inline-Skripte (CSP mit `'unsafe-inline'`) | Nonce/Auslagerung als Folgearbeit |
 | Sitzungs-Leerlaufzeit | **erledigt (G0b):** `app.sitzung_leerlauf_stunden` (Standard 72), spätestens nach 30 Tagen |
 | CSRF-Token je Sitzung | nicht umgesetzt; Schutz über SameSite-Cookie, JSON-Pflicht, Origin- und Sec-Fetch-Site-Prüfung |
 | WebP/HEIC-Metadaten | nur JPEG/PNG werden bereinigt (die App verkleinert Fotos im Browser zu JPEG) |
 | Audit-Protokoll wer was gesehen/geändert hat | **erledigt (G0b, Schema v10):** `scout.py audit`, `/api/audit` (Inhaber); Aufbewahrungsfrist festlegen |
 | Rechte je Ankaufsschritt, PDF als Anhang | **erledigt (G0b):** nur Zuständiger/Bearbeiter/Inhaber; Dokumente als Download in Sandbox |
-| Notizen frei für das ganze Team | bewusst so (bestehender Ablauf), Entscheidung des Betreibers offen |
+| Notizen frei für das ganze Team | bewusst so (F11, `docs/ROLLEN.md`) |
+| Löschfristen | **festgelegt (F10, 27.10.2026):** `config.yaml` → `datenschutz` – Inserate 6, Verkaufsanfragen 12 Monate, Sitzungen 30 Tage, Audit 24 Monate, Kaufunterlagen 10 Jahre (nur melden); vor dem Pilot mit Datenschutzbeauftragtem/Steuerberatung bestätigen (`docs/DATENRECHTE.md`) |
+| Handy-Offline-Speicher | **eingeschränkt (P1-14b):** keine abgeschlossenen Besichtigungen, keine Unterschriften; `/api/ich` und Fotos offener Besichtigungen bleiben offline |

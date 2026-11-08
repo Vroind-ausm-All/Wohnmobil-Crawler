@@ -25,17 +25,22 @@ stichprobenartig nachgeprüft (R1, R2, R3, R5, R14). Entscheidungen: `docs/DECIS
 
 | Modul | Aufgabe | Kopplung / Auffälligkeit |
 |---|---|---|
-| `scout.py` | CLI: `app`, `lauf`, `report`, `rechne`, `nutzer`, `status` | hängt an allen Schichten; `--passwort` als Argument möglich (Shell-Historie) |
+| `scout.py` | CLI: `app`, `lauf`, `report`, `rechne`, `nutzer`, `status` | hängt an allen Schichten; Passwörter nur per Abfrage bzw. `SCOUT_NEUES_PASSWORT` (P1-09), `config.local.yaml` überlagert `config.yaml` |
 | `wmscout/quellen/basis.py` | `Quelle`, `Inserat`, `Suchauftrag`, `Suchseite`, Fehlerklassen | gut; `als_datensatz` nutzt die Anzeigen-ID ohne Quelle als Schlüssel |
 | `wmscout/quellen/kleinanzeigen/` | Adapter + HTML-Parser | `freigegeben = False`, läuft aber standardmäßig (R1) |
 | `wmscout/quellen/mobilede/` (seit P2-05b) | nur Parser für gespeicherte Such-/Anzeigenseiten (kein Abruf, kein Adapter in `QUELLEN`); IDs `md-<Nummer>` | Selektoren über `data-testid`; Telefon/seller-IDs im RSC-Strom werden nicht gelesen |
 | `wmscout/eingang/seiten.py` (seit P2-05) | Plattform- und Seitentyp-Erkennung gespeicherter Seiten (Kleinanzeigen, mobile.de), Art-Herkunft | Erkennung nur über den Seitenkopf |
+| `wmscout/eingang/text.py` (seit P2-05) | `TextEingang`: Adresse + eingefügter Text → `Lesung` (Plattform/ID nur aus der Adresse, Bereinigung von Kontaktdaten, Gesuche und fremde Adressen nie speichern); API `POST /api/import/text` | rein, ohne Datenbank und Netz; die Adresse wird nie abgerufen (ADR-010) |
+| `wmscout/eingang/basis.py` (seit P2-00) | Schnittstelle der Push-Eingänge: `Rohdaten`, `Lesung`, `Eingang.lese`; `SeitenEingang` (ADR-035) | rein, ohne Datenbank und Netz; geschrieben wird nur über `Importer.importiere` |
+| `wmscout/eingang/email/` (seit P2-06) | E-Mail-Eingang: `nachricht.py` (.eml zerlegen, Grenzen), `htmlbaum.py` (nur lesender HTML-Baum mit Budget), `treffer.py` (Links → ID, Textblöcke, Felder, `PlattformParser`), `kleinanzeigen.py`/`mobilede.py` (Profile), `MailEingang` (Kanal `email`, ADR-037) | rein, ohne Datenbank und Netz; Links werden nie abgerufen, URL aus der ID; Abnahme mit echten Mails (F3) steht aus |
 | `wmscout/netz.py` | höflicher HTTP-Abruf, Abbruch bei 403/429/Captcha | User-Agent aus Konfiguration ist ein Chrome-Imitat (R2) |
 | `wmscout/importer.py` | Suchlauf, Detailseiten, Layout-Diagnose | Freigabe wird nur protokolliert, nicht erzwungen; ein `try` um alle Suchen (R8) |
 | `wmscout/datenbank.py` | SQLite, Tabelle `anzeigen`, Status, Nachfassen | `ALTER TABLE` bei jedem Öffnen, ohne Version/Backup (R3); ohne WAL/`busy_timeout` (R7) |
 | `wmscout/normalisierung/` | Marke/Serie/Modell/Art, PLZ-Entfernung | reine Funktionen |
 | `wmscout/bewertung/rechner.py` | Marktwert, Max-EK, Erstangebot (§25a) | rein; Cache-Schlüssel ohne Quelle |
 | `wmscout/bewertung/auswertung.py` | Dubletten, Vergleichsbasis, Nachfassen | liest direkt aus der DB (R15) |
+| `wmscout/kennzahlen.py` | Kennzahlen-Ansicht `/kennzahlen` (P6-05, ADR-065): Eingang aus der Abdeckung, Bewertungslage, Ankaufstrichter je Fahrzeug | Fachlogik rein, Einsammeln unten im Modul; nur lesen, keine Preise |
+| `wmscout/bewertung/kalibrierung.py` | Kalibrierung mit tatsächlichen Ankäufen (P5-01, ADR-052): Bericht, Vorschläge, Tabelle `kalibrierung_faelle` (v20) | Fachlogik rein, Speicher unten im Modul; ändert keine Parameter |
 | `wmscout/bewertung/anschreiben.py`, `ausgabe.py` | Texte, CSV, HTML | importieren `STATUS` aus `datenbank` |
 | `wmscout/bewertung/besichtigung.py` + `web/static/besichtigung.js` | Mängelabzug (Python verbindlich, JS offline) | Paritätstest |
 | `wmscout/team.py` | Nutzer, Sitzungen, Besichtigungen, Fotos | teilt die DB-Verbindung |
@@ -80,7 +85,7 @@ config.yaml (suchen) → Suchauftrag → KleinanzeigenQuelle.suche → Hoefliche
 | R1 | Nicht freigegebene Quelle (Kleinanzeigen-HTML) läuft standardmäßig, per Auto-Suche alle 3 h | `config.yaml:10-20,196`; `importer.py:39-40` nur Warnung | **KRITISCH** (Regel 11/12) | Importer verweigert Suche **und** Detailabruf für nicht freigegebene Quellen; Auto-Suche standardmäßig aus | P1-01a |
 | R3 | Keine Backups, keine Schema-Version; `ALTER TABLE` bei jedem Öffnen | vorher `datenbank.py` (ALTER TABLE beim Öffnen); **behoben** durch `wmscout/sicherung.py` und `wmscout/migrationen.py` (P1-02/P1-03) | **KRITISCH** (blockiert alle Migrationen) | `scout.py sichern`/`wiederherstellen` über SQLite-Backup-API inkl. Fotos, `integrity_check`, `schema_version` | P1-02, P1-03 |
 | R2 | User-Agent gibt sich als Chrome aus | `config.yaml:32`, `netz.py` | HOCH | ehrlicher User-Agent mit Projektname (Regel 11: keine gefälschten Browser-Fingerabdrücke) | P1-01a |
-| R4 | Schlüssel ohne Quelle | `migrationen.py:27`; `datenbank.py:36`; `basis.py:103`; `rechner.py:176` | HOCH | `UNIQUE(quelle, anzeigen_id)` **vor** der zweiten Quelle | P2-02 |
+| R4 | Schlüssel ohne Quelle | `migrationen.py:27`; `datenbank.py:36`; `wmscout/quellen/basis.py:103`; `rechner.py:176` | HOCH | `UNIQUE(quelle, anzeigen_id)` **vor** der zweiten Quelle | P2-02 |
 | R5 | „kontaktiert“ schon beim Kopieren; Nachfassen macht aus „abgesagt“ wieder „kontaktiert“ | `report.html:406`, `mobil.js:483`, `datenbank.py:117` | HOCH | Statuswert „vorbereitet“, Knopf „gesendet bestätigen“; später Kontakte als Ereignisse | P1-06, P3-06 |
 | R6 | Globaler Lock umfasst Bewertung, Antwortversand und WhatsApp-HTTP (Timeout 20 s) | `api.py:57,495-497` | HOCH | Lock nur um DB-Zugriffe, Verbindung je Thread; Versand außerhalb; WhatsApp asynchron | P1-05 |
 | R7 | ~~Mehrere SQLite-Verbindungen ohne WAL (nur Python-Standard-Wartezeit 5 s)~~ WAL + 10 s seit P1-04a, Laufsperre seit P1-04; alle HTTP-Threads teilen eine Verbindung; keine Laufsperre (App + `lauf.bat` parallel) | `app.py:59,102`; `scout.py:198`; `api.py:54`; `datenbank.py:30` | HOCH | WAL, `busy_timeout`, Laufsperre (Lease in `suchlaeufe`, Schema v3) | P1-04 |
@@ -88,15 +93,15 @@ config.yaml (suchen) → Suchauftrag → KleinanzeigenQuelle.suche → Hoefliche
 | R9 | Verfügbarkeit nur geschätzt; Inserate nach 21 Tagen in der App nicht mehr bearbeitbar | `datenbank.py:77`; `api.py:74-78` | MITTEL | Spalte `verfuegbarkeit` + `zuletzt_bestaetigt` | P3-04 |
 | R10 | Preisverlauf geht verloren | `datenbank.py:51-54` | MITTEL | `preis_historie` (nur anhängen) | P2-02 (Start), P3-03 |
 | R11 | Dubletten flüchtig/lückenhaft; Ankaufsstatus am Inserat | `auswertung.py:24,74-83` | MITTEL | `fahrzeuge` mit Fingerabdruck, Zusammenführung nur als Vorschlag | P3-02 |
-| R12 | Bewertung O(aktive × alle) im Lock; Vergleichsbasis enthält gelöschte/alte Inserate | `auswertung.py:59`; `rechner.py:200,217` | MITTEL | SQL-Vorfilter, Indizes, gespeicherte `bewertungen` | P3-07, P5 |
-| R13 | „gewerblich unbekannt“ wird als privat behandelt | `datenbank.py:40` | MITTEL | `anbieter_typ` privat/haendler/unbekannt | P2-02, P3-05 |
+| R12 | Bewertung O(aktive × alle) im Lock; Vergleichsbasis enthält gelöschte/alte Inserate | `auswertung.py:59`; `rechner.py:200,217` | MITTEL | SQL-Vorfilter, Indizes, gespeicherte `bewertungen` | P3-07, P5 – **teilweise behoben** (P3-07, ADR-045): Vorfilter nach Art/EZ im Speicher, Indizes v16; gespeicherte `bewertungen` und Abgrenzung alter/offline Inserate weiter offen (P5) |
+| R13 | „gewerblich unbekannt“ wird als privat behandelt | `datenbank.py:40` | MITTEL | `anbieter_typ` privat/haendler/unbekannt | P2-02, P3-05 – **behoben**: NULL seit P2-02, Herkunft und Rechner seit P3-05 (ADR-043) |
 | R14 | Besichtigung: letzter Schreiber gewinnt, Konflikt wird nur gemeldet | `api.py:434-437` | MITTEL | `UPDATE … WHERE version=?`, sonst 409 | P1-07 |
 | R15 | Bewertung hängt an der Datenbank | `auswertung.py:8,65`; `anschreiben.py:9` | MITTEL | `STATUS` in Domänenmodul; `bewerte_alle` bekommt Listen | P1-08 |
 | R16 | Firmen-/Mail-Daten in versionierter `config.yaml`; Passwort als CLI-Argument | `config.yaml:175-181,218-224`; `scout.py:189` | NIEDRIG | `config.local.yaml` (ignoriert) als Überlagerung | P1-09 |
 | R17 | Login-Bremse nur 1 s, Sitzungen 30 Tage | `api.py:352,500`; `team.py:21` | NIEDRIG | Sperre nach Fehlversuchen | P1-13 |
 | R18 | Python 3.10–3.12 zugelassen, CI testet nur 3.13 | `pyproject.toml:6`, `scout.py:21` | NIEDRIG | festlegen oder mittesten | P1-10 |
 | R19 | Detailabruf ohne Freigabeprüfung; Inserate ohne `quelle` fallen auf Kleinanzeigen zurück – auch künftig manuell importierte Inserate würden nachgeladen (verletzt ADR-010) | `importer.py:78-100` | HOCH | Freigabeprüfung auch in `details()`; nur pull-fähige, freigegebene Plattformen | P1-01a |
-| R20 | Quellen kennen nur den Pull-Weg `suche()`; Plattform und Eingangskanal nicht getrennt – dasselbe Inserat per E-Mail und manuell ergäbe zwei Datensätze | `basis.py:111-135` | HOCH | ADR-016 (Plattform ≠ Kanal), ADR-017 (Push-Eingang) | P2-00 |
+| R20 | ~~Plattform und Eingangskanal nicht getrennt~~ – **behoben (P2-00, ADR-035):** ein Schreibweg `Importer.importiere(lesung, kanal)`, kanonische Plattform-IDs | `importer.py`, `eingang/basis.py`, `domaene.py` | – | – | P2-00 |
 
 Weitere Befunde der QA-Bestandsaufnahme: `docs/TEST-REPORT.md`. R19/R20 stammen aus der Architekturprüfung der
 Planung (P0-07). Belege (Datei:Zeile) beziehen sich auf Commit 3f75f67 und werden von `tests/test_projekt.py` auf
@@ -110,10 +115,10 @@ Existenz der Zeilen geprüft.
                        ┌──────────────────────────── wmscout ────────────────────────────┐
  Suchprofile (DB) ───▶ │ quellen/      Pull-Quellen (suche/details): mobile_de_api, …;   │
                        │               kleinanzeigen (BLOCKED, standardmäßig aus)        │
- Benachrichtigungs-    │ eingang/      Push-Kanäle: Eingang.lese(roh, meta) → Inserate   │
+ Benachrichtigungs-    │ eingang/      Push-Kanäle: Eingang.lese(Rohdaten) → Lesung       │
  E-Mails (.eml/IMAP) ▶ │               email_kleinanzeigen, email_autoscout, manuell     │
  Nutzer-Import ──────▶ │ netz.py       Abruf nur für freigegebene Plattformen            │
-                       │ importer.py   importiere(inserate, kanal): einziger Schreibweg;  │
+                       │ importer.py   importiere(lesung, kanal): einziger Schreibweg;    │
                        │               Lauf je Quelle isoliert, Laufsperre, Kennzahlen    │
                        │ normalisierung/  Fahrzeug, Geo, Datenqualitäts-Markierungen      │
                        │ datenbank/    Schema, Migrationen, Backup, Fassade (Repository) │
@@ -134,14 +139,15 @@ manuellem Import nur einen Datensatz. In Tabellen und Texten unten steht „quel
 | Entität | Tabelle | Kernfelder | Herkunft |
 |---|---|---|---|
 | sources | `quellen` | kennung PK, name, zugriffsart, freigegeben, aktiv, intervall_min, zuletzt_ok, fehler_in_folge, gesperrt_bis | Adapter-Metadaten + Konfiguration |
-| search_profiles | `suchprofile` | id, name, quelle →, parameter_json, plz, radius_km, intervall_min, aktiv | `config.yaml → suchen` |
-| crawl_runs | `suchlaeufe` | id, quelle, suchprofil_id, start, ende, art, seiten, treffer, neu, fehler_art, fehler_text, parser_ok | neu |
+| search_profiles | `suchprofile` | **umgesetzt mit v17 (ADR-047) als gesuchtes Fahrzeug:** id, name, aktiv, arten, marken, modell, preis_min/max, ez_min/max, km_max, notiz; Suchgebiet (v18, ADR-048): gebiet, gebiet_plz, gebiet_radius_km, gebiet_regionen; Checkliste je Plattform in `suchauftraege` (angelegt, url). Geplant waren quelle →, parameter_json, intervall_min (erst mit Pull-Quelle) | App (Inhaber) |
+| crawl_runs | `suchlaeufe` | **umgesetzt mit v19 (ADR-050):** id, art (suchlauf/seiten/mails), ausloeser, start, ende, ergebnis, neu, preis, bekannt, details, dateien, fehler, je_quelle (JSON: Zahlen, Ergebnis, Fehler je Quelle), uebersprungen (JSON). Geplant waren quelle, suchprofil_id, seiten, parser_ok (je Quelle im JSON statt eigener Zeile) | Importer |
 | vehicles | `fahrzeuge` | id, fingerabdruck, fin NULL, marke, serie, modell, art, ez_jahr, km_letzter, plz, ankauf_status, status_am, notiz, zusammengefuehrt_in | Normalisierung, Status aus `anzeigen` |
-| listings | `inserate` | id INTEGER PK, quelle, anzeigen_id, UNIQUE(quelle, anzeigen_id), fahrzeug_id →, oeffentliche_id, url, titel, Texte, preis, vb, anbieter_typ, verfuegbarkeit, zuletzt_bestaetigt, erstmals/zuletzt_gesehen, detail_geladen, details_json, qualitaet_json | `anzeigen` |
+| listings | `inserate` | id INTEGER PK, quelle, anzeigen_id, UNIQUE(quelle, anzeigen_id), fahrzeug_id →, oeffentliche_id, url, titel, Texte, preis, vb, anbieter_typ, verfuegbarkeit, zuletzt_bestaetigt, erstmals/zuletzt_gesehen, detail_geladen, details_json, qualitaet_json (**nicht umgesetzt**: Datenqualität wird beim Lesen berechnet, ADR-046) | `anzeigen` |
 | price_history | `preis_historie` | inserat_id, zeitpunkt, preis, vb, suchlauf_id, herkunft | `preis_vorher` + `preis` |
 | observations | `beobachtungen` | inserat_id, suchlauf_id, zeitpunkt, kanal (suche/api/email/manuell/detail), preis, inhalt_hash | neu |
-| valuations | `bewertungen` | inserat_id, zeitpunkt, modell_version, marktwert, spanne_von, spanne_bis, max_ek, erstangebot, sicherheit, n_vergleich, deal_score, komponenten_json | heute nur flüchtig |
-| contacts | `kontakte` | fahrzeug_id, inserat_id, nutzer_id, art (anschreiben/nachfassen/antwort), kanal, text, betrag, vorbereitet_am, bestaetigt_am | `kontaktiert_am`, `anschreiben_text` |
+| negotiation | `verhandlung` | anzeige_id, art (antwort, notiz), zeitpunkt, nutzer_id, kanal, betrag, text | seit v23 (P6-03): von Hand eingetragen; Texte bei Anonymisierung geleert |
+| valuations | `bewertungen` | anzeige_id, zeitpunkt, modell_version, preis, marktwert, spanne_von, spanne_bis, max_ek, erstangebot, sicherheit, n_vergleich, ampel, deal_score, komponenten_json | seit v22 (P5-07): nur anfügbar, eine Zeile nur bei Änderung (nach Suchlauf, Import, Report) |
+| contacts | `kontakte` | **umgesetzt (v15, ADR-044):** anzeige_id (Fahrzeug beim Lesen über `inserate`), art (anschreiben/nachfassen), kanal, text, betrag, nutzer_id, vorbereitet_am, bestaetigt_am, bestaetigt_von, herkunft (app/altbestand) | `kontaktiert_am`, `anschreiben_text` (bleiben) |
 
 Grobschätzung `beobachtungen` (nicht gemessen): ~5.000 Zeilen/Tag bei heutiger Suchbreite, ~1,8 Mio./Jahr – mit
 Indizes für SQLite tragbar; alternativ nur Änderungen speichern (Entscheidung in Phase 3).
@@ -173,9 +179,10 @@ der ursprüngliche Plan.
 |---|---|---|
 | v3 | 1 | `schema_version` anlegen, Altbestände als v1/v2 erkennen; minimale `suchlaeufe` (id, quelle, start, ende, laeuft_bis, ergebnis) als Laufsperre; WAL, `busy_timeout`; Indizes nur nach `EXPLAIN QUERY PLAN` |
 | v4 | 2 | `quellen`, `suchprofile`, `suchlaeufe` vollständig; `inserate` aus `anzeigen` (`plattform = COALESCE(quelle, 'kleinanzeigen')`), `beobachtungen` mit `kanal`; `oeffentliche_id` = alte ID bei Kleinanzeigen, sonst `<quelle>_<id>` (passt zu Routen `\w+` und `besichtigungen.anzeige_id`); `preis_historie` mit Herkunft „migration“ |
-| v5 | 3 | je Inserat ein Fahrzeug; Ankaufsstatus → `fahrzeuge`; „gelöscht“ → `verfuegbarkeit = offline`; `gewerblich` → `anbieter_typ` (Altdaten-Regel: Betreiberfrage); `kontakte` aus `anschreiben_text`; `besichtigungen.fahrzeug_id`; Dubletten nur als bestätigte Vorschläge |
+| v11 | 3 | **umgesetzt (P3-01, ADR-039):** `fahrzeuge` + `inserate.fahrzeug_id`, je Inserat ein Fahrzeug, Trigger für neue Inserate; Status bleibt am Inserat |
+| später | 3 | (ursprünglich „v5“, Versionen 5–10 sind anderweitig belegt) Ankaufsstatus → `fahrzeuge`; „gelöscht“ → `verfuegbarkeit = offline`; `gewerblich` → `anbieter_typ` (Altdaten-Regel: Betreiberfrage); `kontakte` aus `anschreiben_text`; `besichtigungen.fahrzeug_id`; Dubletten nur als bestätigte Vorschläge |
 
-**Kompatibilitätsschicht:** Die Klasse `Datenbank` bleibt Fassade mit den bisherigen Methoden und Zeilen-Dicts.
+**Kompatibilitätsschicht (überholt durch ADR-039: `anzeigen` bleibt Tabelle, keine View):** Die Klasse `Datenbank` bleibt Fassade mit den bisherigen Methoden und Zeilen-Dicts.
 Die alte Tabelle wird zu `anzeigen_alt_v2` umbenannt; eine lesende View `anzeigen` mit den bisherigen Spalten hält
 `bewerte_alle`, Desktop-App, Handy-App und CSV unverändert lauffähig. Schreibzugriffe nur über die Fassade.
 

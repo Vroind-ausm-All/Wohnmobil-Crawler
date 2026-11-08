@@ -5,32 +5,47 @@ Einzige Stelle, die Quellen und Datenbank verbindet. Ablauf eines Laufs:
      schon bekannt, lohnt es sich nicht, tiefer zu suchen
   2. Detailseiten für Inserate ohne Details nachladen (begrenzt pro Lauf)
   3. Auffälligkeiten (Layout geändert, Sperre, Netzwerk) als Fehlertext zurückgeben
+Nicht freigegebene oder abgeschaltete Quellen (`wmscout/schalter.py`) werden vor dem Abruf übersprungen und unter
+`uebersprungen` gemeldet – das ist kein Fehler.
 
-Außerdem: `importiere_seiten()` liest im Browser gespeicherte Seiten (Kleinanzeigen, mobile.de) aus dem Import-Ordner –
-ohne Netzabruf (ADR-010).
+Außerdem: `importiere()` ist der einzige Schreibweg für Push-Eingänge (Lesung → Datenbank, ADR-035); `importiere_seiten()`
+liest im Browser gespeicherte Seiten (Kleinanzeigen, mobile.de) aus dem Import-Ordner – ohne Netzabruf (ADR-010).
 """
 from __future__ import annotations
 
 import logging
 import time
-from datetime import date
+from collections.abc import Collection
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from .datenbank import BESTAETIGT, IMPORT_SUCHE, VORLAEUFIG, Datenbank, import_art, import_suche
-from .eingang import (BegleitordnerFehler, SuchseitenArt, erkenne_seite_mit_hinweisen, fahrzeugart_der_suchseite, haupttabelle_ids,
-                      html_dateien, lies_html, plattform_der_seite, verschiebe)
+from .domaene import PUSH_KANAELE, pruefe_anzeigen_id, pruefe_kanal
+from .eingang import BegleitordnerFehler, Lesung, Rohdaten, SeitenEingang, SuchseitenArt, html_dateien, lies_html, verschiebe
+from .eingang.email import MAX_BYTES as MAX_MAIL_BYTES
+from .eingang.email import MailEingang, MailFehler, eml_dateien, mail_zeitpunkt, verschiebe_mail
 from .ereignisse import InseratEreignis
 from .ereignis_speicher import EreignisSpeicher
+from . import laufprotokoll as lp
 from .normalisierung.fahrzeug import art_schluessel
-from .quellen import (STANDARD_QUELLE, Abruf, InseratNichtGefunden, NetzwerkFehler, Quelle, QuelleGesperrt,
+from .quellen import (QUELLEN, STANDARD_QUELLE, Abruf, InseratNichtGefunden, NetzwerkFehler, Quelle, QuelleGesperrt,
                       QuellenFehler, Suchauftrag, erstelle_quelle)
+from .preisverlauf import preisverlauf
 from .quellen.basis import ART_QUELLE_KATEGORIE
+from .schalter import eingang_pruefen, quelle_laeuft
+from .verfuegbarkeit import utc_text
 
 log = logging.getLogger("scout")
+
+MAX_MAIL_ALTER_TAGE = 365          # ein älteres Mail-Datum gilt als unplausibel: als Beobachtungszeitpunkt zählt das Einlesen
 
 LAYOUT_HINWEIS = ("{quelle}-Seite geladen, aber keine Anzeigen erkannt – vermutlich wurde das Seitenlayout "
                   "geändert. Die Seite liegt zur Analyse in {datei}; die Selektoren stehen im Parser der Quelle "
                   "(wmscout/quellen/{kennung}/parser.py).")
+
+
+def _zu_alt(zeitpunkt: datetime | None) -> bool:
+    return zeitpunkt is not None and zeitpunkt.astimezone(timezone.utc) < datetime.now(timezone.utc) - timedelta(days=MAX_MAIL_ALTER_TAGE)
 
 
 def _art(text: str | None) -> str | None:
@@ -81,6 +96,11 @@ class Importer:
         ordner = Path(cfg.get("ausgabe", {}).get("ordner", "ausgabe"))
         self.diagnose_ordner = ordner if ordner.is_absolute() else Path(__file__).resolve().parent.parent / ordner
         self.layout_warnung: str | None = None
+        # Laufprotokoll (P4-04): Auslöser; Intervalle und Pause nach Sperre gelten nur, wenn ``intervall_beachten`` (Automatik, geplante Aufgabe)
+        self.ausloeser = "manuell"
+        self.intervall_beachten = False
+        self._aktuelle_quelle: str | None = None
+        self._layout_quellen: set[str] = set()
 
     def quelle(self, kennung: str) -> Quelle:
         if kennung not in self._quellen:
@@ -89,6 +109,14 @@ class Importer:
                 raise QuellenFehler(f"Quelle {q.name} nicht freigegeben ({q.zugriffsart}). {q.hinweis}")
             self._quellen[kennung] = q
         return self._quellen[kennung]
+
+    def laeuft(self, kennung: str) -> tuple[bool, str | None]:
+        """(läuft, Grund des Überspringens): Code-Freigabe der Quelle und Schalter in der Tabelle `quellen` (ADR-036)."""
+        try:
+            klasse = QUELLEN[kennung]
+        except KeyError:
+            raise QuellenFehler(f"Unbekannte Quelle „{kennung}“ – verfügbar: {', '.join(sorted(QUELLEN))}") from None
+        return quelle_laeuft(self.db, klasse)
 
     def importiere_ereignis(self, ereignis: InseratEreignis) -> str:
         """Ein normalisiertes Ereignis ohne Portalabruf in Schema v4 einlesen."""
@@ -125,14 +153,18 @@ class Importer:
         except OSError:
             pass
         self.layout_warnung = LAYOUT_HINWEIS.format(quelle=quelle.name, datei=datei, kennung=quelle.kennung)
+        self._layout_quellen.add(quelle.kennung)
         log.warning(self.layout_warnung)
 
     # ---------- Details ----------
-    def details(self) -> int:
-        offen = self.db.ohne_details(self.cfg["crawler"]["detailseiten_pro_lauf"])
+    def details(self, kennungen: Collection[str] | None = None) -> int:
+        """Detailseiten nachladen. kennungen: nur Inserate dieser Quellen (der Suchlauf übergibt die laufenden Quellen);
+        ohne Angabe gilt jede Quelle – eine nicht freigegebene wirft weiterhin QuellenFehler (`quelle`)."""
+        offen = self.db.ohne_details(self.cfg["crawler"]["detailseiten_pro_lauf"], kennungen)    # Filter in SQL: zählt nur Bearbeitetes
         leer = 0
         for i, zeile in enumerate(offen, 1):
             kennung = zeile["quelle"] if "quelle" in zeile.keys() and zeile["quelle"] else STANDARD_QUELLE
+            self._aktuelle_quelle = kennung
             quelle = self.quelle(kennung)
             if not quelle.unterstuetzt_details:
                 self.db.speichere_details(zeile["id"], {})       # nichts nachzuladen – Platz freigeben
@@ -144,10 +176,9 @@ class Importer:
                     if leer == 5 and leer == i:       # die ersten fünf Detailseiten alle leer
                         self._layout_problem(quelle, "diagnose_detailseite.html",
                                              getattr(quelle, "letzte_rohdaten", None) or "")
-                self.db.speichere_details(zeile["id"], inserat.als_datensatz())
+                self.db.speichere_details(zeile["id"], inserat.als_datensatz(), netz_abruf=True)
             except InseratNichtGefunden:
-                if zeile["status"] in (None, "neu"):      # Ankaufs-Status (kontaktiert …) nicht überschreiben
-                    self.db.setze_status(zeile["id"], "gelöscht")
+                self.db.markiere_offline(zeile["id"])         # Verfügbarkeit statt Ankaufsstatus „gelöscht“ (P3-04); der Ankaufsstatus bleibt
                 self.db.speichere_details(zeile["id"], {})
             except (QuelleGesperrt, NetzwerkFehler):
                 raise
@@ -158,7 +189,25 @@ class Importer:
         return len(offen)
 
     # ---------- Gespeicherte Seiten (ohne Netz) ----------
+    def _protokolliert(self, art: str, ausfuehren) -> dict:
+        """Import gespeicherter Seiten bzw. Mails im Laufprotokoll festhalten – nur, wenn Dateien gelesen wurden (P4-04)."""
+        start = datetime.now().isoformat(timespec="seconds")
+        protokoll = lp.Laufprotokoll(self.db)
+        try:
+            stat = ausfuehren()
+        except BaseException as e:
+            protokoll.eintrag(art, self.ausloeser, start, lp.ABGEBROCHEN, {}, f"{type(e).__name__}: {e}")
+            raise
+        if stat.get("dateien"):
+            protokoll.eintrag(art, self.ausloeser, start, lp.FEHLER if stat.get("fehlerhaft") else lp.OK, stat,
+                              "; ".join(stat.get("fehler") or []) or None)
+        return stat
+
     def importiere_seiten(self, ordner: Path, max_dateien: int | None = None, max_sekunden: float | None = None) -> dict:
+        eingang_pruefen(self.cfg, "seiten")                 # abgeschaltet: nichts lesen, nichts protokollieren
+        return self._protokolliert("seiten", lambda: self._importiere_seiten(ordner, max_dateien, max_sekunden))
+
+    def _importiere_seiten(self, ordner: Path, max_dateien: int | None = None, max_sekunden: float | None = None) -> dict:
         """Liest Such- und Detailseiten von Kleinanzeigen und mobile.de, die der Nutzer im Browser gespeichert hat, aus
         `ordner` (nicht rekursiv; beide Plattformen im selben Ordner).
 
@@ -170,11 +219,13 @@ class Importer:
         """
         stat = {"dateien": 0, "suchseiten": 0, "detailseiten": 0, "unbekannt": 0, "fehlerhaft": 0, "neu": 0,
                 "preis": 0, "bekannt": 0, "details": 0, "fehler": [], "uebrig": 0}
+        eingang_pruefen(self.cfg, "seiten")                 # abgeschaltet: nichts lesen, Dateien liegen lassen (ADR-036)
         dateien = html_dateien(ordner)
         if max_dateien is not None and len(dateien) > max_dateien:
             dateien, stat["uebrig"] = dateien[:max_dateien], len(dateien) - max_dateien
         eingelesen = ordner / "eingelesen" / date.today().isoformat()
         start = time.monotonic()
+        eingang = SeitenEingang()
 
         def melde(text: str):
             log.warning("Gespeicherte Seite %s", text)
@@ -187,24 +238,23 @@ class Importer:
             stat["dateien"] += 1
             try:
                 html = lies_html(datei)
-                art, inserate, hinweise = erkenne_seite_mit_hinweisen(html)
-                if art in ("unbekannt", "detail_ohne_id"):
+                lesung = eingang.lese(Rohdaten(html.encode("utf-8"), datei.name, datetime.now(timezone.utc)))
+                if lesung.art in ("unbekannt", "detail_ohne_id"):
                     verschiebe(datei, ordner / "nicht_erkannt")
                     stat["unbekannt"] += 1
-                    if art == "detail_ohne_id":
-                        grund = DETAIL_OHNE_ID.get(plattform_der_seite(html), DETAIL_OHNE_ID_STANDARD)
-                    elif hinweise:
-                        grund = f"{'; '.join(hinweise)} – verschoben nach nicht_erkannt/"
+                    if lesung.art == "detail_ohne_id":
+                        grund = DETAIL_OHNE_ID.get(lesung.plattform, DETAIL_OHNE_ID_STANDARD)
+                    elif lesung.hinweise:
+                        grund = f"{'; '.join(lesung.hinweise)} – verschoben nach nicht_erkannt/"
                     else:
                         grund = "keine Kleinanzeigen- oder mobile.de-Such- oder Detailseite erkannt – verschoben nach nicht_erkannt/"
                     melde(f"{datei.name}: {grund}")
                     continue
-                for h in hinweise:                                        # übersprungene Treffer, fehlende Anbieterkästen …
+                for h in lesung.hinweise:                                 # übersprungene Treffer, fehlende Anbieterkästen …
                     stat["fehler"].append(f"{datei.name}: {h}")
-                # Art-Filter (art_s:) und Haupttabelle gibt es nur bei Kleinanzeigen; mobile.de nennt die Art je Treffer
-                mit_filter = art == "suche" and plattform_der_seite(html) == STANDARD_QUELLE
-                self._speichere_seite(art, inserate, stat, fahrzeugart_der_suchseite(html) if mit_filter else None,
-                                      haupttabelle_ids(html) if mit_filter else None)
+                # Die Seite zeigt den Stand vom Speichern: die Verfügbarkeit gilt ab der Dateizeit, nicht ab dem Einlesen (Altersregel gegen ein späteres 404)
+                gespeichert = min(datetime.fromtimestamp(datei.stat().st_mtime, timezone.utc), datetime.now(timezone.utc))
+                self.importiere(lesung, eingang.kanal, stat, verfuegbar_am=gespeichert)
             except Exception as e:  # noqa: BLE001 – eine kaputte Datei darf die übrigen nicht aufhalten
                 stat["fehlerhaft"] += 1
                 melde(f"{datei.name}: nicht eingelesen ({e}) – Datei bleibt liegen")
@@ -221,9 +271,151 @@ class Importer:
                  stat["unbekannt"], stat["fehlerhaft"], stat["neu"], stat["preis"], stat["bekannt"])
         return stat
 
+    # ---------- E-Mail-Suchbenachrichtigungen (ohne Netz) ----------
+    def importiere_mails(self, ordner: Path, max_dateien: int | None = None, max_sekunden: float | None = None) -> dict:
+        eingang_pruefen(self.cfg, "email")                  # abgeschaltet (Standard): nichts lesen, nichts protokollieren
+        return self._protokolliert("mails", lambda: self._importiere_mails(ordner, max_dateien, max_sekunden))
+
+    def _importiere_mails(self, ordner: Path, max_dateien: int | None = None, max_sekunden: float | None = None) -> dict:
+        """Liest Benachrichtigungs-Mails (`.eml`) von Kleinanzeigen und mobile.de aus `ordner` (nicht rekursiv; Standard `import/email/`).
+
+        Wie `importiere_seiten`: kein Netzabruf, verlinkte Anzeigen werden nicht nachgeladen; gespeichert wird nur über
+        `importiere(lesung, "email")`. Alles, was der Scout ablegt, bekommt als Änderungszeit „jetzt“ (die Datenschutz-Frist zählt ab dem
+        Einlesen, `datenrechte.mails_nach_frist`): eingelesene Mails nach <ordner>/eingelesen/<Datum>/, nicht erkannte nach
+        <ordner>/nicht_erkannt/, unlesbare oder zu große (`MailFehler`, zählen als `fehlerhaft`) nach <ordner>/fehlerhaft/. Unerwartete
+        Fehler (z. B. gesperrte Datenbank) lassen die Datei liegen; ein Fehler bei einer Datei hält die übrigen nicht auf. Symbolische
+        Verknüpfungen werden nicht gelesen. Absender und Betreff werden nicht gespeichert.
+        **Reihenfolge und Alter (K1):** Die Dateien werden nach dem Zeitpunkt der Mail (Date-Kopf; fehlt er, ist er ungültig oder liegt er in der
+        Zukunft: Änderungszeit der Datei) aufsteigend gelesen, nicht nach dem Namen. Preis und VB einer Mail, die älter ist als die letzte Beobachtung
+        der Anzeige (`zuletzt_gesehen`), werden nicht übernommen (`aeltere` zählt solche Treffer, Hinweis je Mail); sonst würde eine nachträglich
+        eingelesene alte Mail einen neueren Preis überschreiben und eine falsche Preissenkung auslösen.
+        Ist der Eingang „email“ abgeschaltet (Standard), wirft sie `EingangDeaktiviert` und liest nichts.
+        Rückgabe wie `importiere_seiten` (`suchseiten` = eingelesene Mails mit Treffern, `detailseiten` immer 0)."""
+        eingang_pruefen(self.cfg, "email")                  # abgeschaltet (Standard): nichts lesen, Dateien liegen lassen (ADR-036)
+        stat = {"dateien": 0, "suchseiten": 0, "detailseiten": 0, "unbekannt": 0, "fehlerhaft": 0, "neu": 0,
+                "preis": 0, "bekannt": 0, "details": 0, "fehler": [], "uebrig": 0, "aeltere": 0}
+        dateien = []
+        for p in eml_dateien(ordner):
+            try:
+                dateien.append((mail_zeitpunkt(p), p.name.lower(), p))
+            except OSError:
+                dateien.append((datetime.now(timezone.utc), p.name.lower(), p))
+        dateien = [p for _, _, p in sorted(dateien, key=lambda e: e[:2])]       # älteste Mail zuerst: der neueste Preis gewinnt
+        if max_dateien is not None and len(dateien) > max_dateien:
+            dateien, stat["uebrig"] = dateien[:max_dateien], len(dateien) - max_dateien
+        eingelesen = ordner / "eingelesen" / date.today().isoformat()
+        start = time.monotonic()
+        eingang = MailEingang()
+
+        def melde(text: str):
+            log.warning("Mail %s", text)
+            stat["fehler"].append(text)
+
+        for n, datei in enumerate(dateien):
+            if max_sekunden is not None and n and time.monotonic() - start > max_sekunden:
+                stat["uebrig"] += len(dateien) - n
+                break
+            stat["dateien"] += 1
+            try:
+                groesse = datei.stat().st_size
+                if groesse > MAX_MAIL_BYTES:
+                    raise MailFehler(f"Mail zu groß ({groesse / 1_000_000:.1f} MB, erlaubt sind {MAX_MAIL_BYTES // 1_000_000} MB)")
+                lesung = eingang.lese(Rohdaten(datei.read_bytes(), datei.name, datetime.fromtimestamp(datei.stat().st_mtime, timezone.utc)))
+                if lesung.art in ("unbekannt", "detail_ohne_id"):
+                    verschiebe_mail(datei, ordner / "nicht_erkannt")
+                    stat["unbekannt"] += 1
+                    melde(f"{datei.name}: {'; '.join(lesung.hinweise) or 'keine Benachrichtigung erkannt'} – verschoben nach nicht_erkannt/")
+                    continue
+                for h in lesung.hinweise:
+                    stat["fehler"].append(f"{datei.name}: {h}")
+                if _zu_alt(lesung.zeitpunkt):
+                    stat["fehler"].append(f"{datei.name}: Datum der Mail liegt über {MAX_MAIL_ALTER_TAGE} Tage zurück – als Zeitpunkt gilt das Einlesen")
+                aeltere_vorher = stat["aeltere"]
+                self.importiere(lesung, eingang.kanal, stat)
+                if stat["aeltere"] > aeltere_vorher:
+                    stat["fehler"].append(f"{datei.name}: {stat['aeltere'] - aeltere_vorher} Treffer aus älteren Mails – Preis nicht übernommen "
+                                          "(die Anzeige wurde danach schon neuer gesehen)")
+            except MailFehler as e:
+                stat["fehlerhaft"] += 1
+                try:
+                    verschiebe_mail(datei, ordner / "fehlerhaft")
+                    melde(f"{datei.name}: nicht eingelesen ({e}) – verschoben nach fehlerhaft/")
+                except OSError as e2:
+                    melde(f"{datei.name}: nicht eingelesen ({e}), auch nicht verschoben ({type(e2).__name__}) – Datei bleibt liegen")
+                continue
+            except Exception as e:  # noqa: BLE001 – eine kaputte Datei darf die übrigen nicht aufhalten (nur der Fehlertyp: der Text könnte Mailinhalt enthalten)
+                stat["fehlerhaft"] += 1
+                melde(f"{datei.name}: nicht eingelesen ({type(e).__name__}) – Datei bleibt liegen")
+                continue
+            try:
+                verschiebe_mail(datei, eingelesen)
+            except OSError as e:
+                melde(f"{datei.name}: eingelesen, aber nicht verschoben ({type(e).__name__}) – Datei liegt noch im Ordner "
+                      "(wird beim nächsten Mal ohne Dubletten erneut gelesen)")
+        log.info("E-Mails: %d Dateien (%d mit Treffern, %d nicht erkannt, %d fehlerhaft) – %d neu, %d Preissenkungen, %d bekannt",
+                 stat["dateien"], stat["suchseiten"], stat["unbekannt"], stat["fehlerhaft"], stat["neu"], stat["preis"], stat["bekannt"])
+        return stat
+
+    def _mail_ergaenzt_nur(self, d: dict, zeitpunkt: datetime | None) -> tuple[dict, str | None, bool]:
+        """Kanal „email“: Eine Mail ergänzt Bekanntes nur. Bei vorhandener Zeile bleiben Adresse, Titel, Ort, km, EZ und Marke unverändert
+        (None = nicht überschreiben) – Mails kürzen Titel, nennen andere Adressformen und würden sonst bei jedem Wechsel zwischen Seite und
+        Mail eine Änderung auslösen und die Bewertung (Titel) beeinflussen. Preis und VB laufen über den normalen Weg – aber nur, wenn die Mail
+        nicht älter ist als die letzte Beobachtung der Anzeige (K1).
+        Rückgabe: (Datensatz, `gesehen_am` für die Datenbank, Preis wegen älterer Mail nicht übernommen)."""
+        jetzt = datetime.now()
+        gesehen_am = None
+        zu_alt = _zu_alt(zeitpunkt)
+        if zeitpunkt is not None:
+            gesehen_am = min(zeitpunkt.astimezone().replace(tzinfo=None), jetzt).isoformat(timespec="seconds")
+        alt = self.db.con.execute("SELECT url, titel, ort, km, ez_jahr, marke, zuletzt_gesehen FROM anzeigen WHERE id=?", (d["id"],)).fetchone()
+        if alt is None:
+            return d, None if zu_alt else gesehen_am, False
+        d = dict(d)
+        for feld in ("url", "titel", "ort", "km", "ez_jahr", "marke"):
+            if alt[feld] not in (None, ""):
+                d[feld] = None
+        aelter = bool(gesehen_am and alt["zuletzt_gesehen"] and gesehen_am < alt["zuletzt_gesehen"])
+        if gesehen_am and not aelter:             # zusätzlich gegen den jüngsten Eintrag im Preisverlauf (jeder Kanal, auch der Detailabruf)
+            try:
+                verlauf = preisverlauf(self.db, d["id"])
+            except LookupError:
+                verlauf = []
+            if verlauf and verlauf[-1]["zeitpunkt"]:
+                aelter = datetime.fromisoformat(gesehen_am).astimezone(timezone.utc) < datetime.fromisoformat(verlauf[-1]["zeitpunkt"])
+        if zu_alt:
+            gesehen_am = None                     # unplausibel altes Datum: als Zeitpunkt gilt das Einlesen (Preis zählt nur, wenn die Mail nicht älter ist)
+        if aelter:
+            d["preis"], d["vb"] = None, None
+        return d, gesehen_am, aelter
+
+    def importiere(self, lesung: Lesung, kanal: str, stat: dict | None = None, verfuegbar_am: datetime | None = None) -> dict:
+        """Einziger Schreibweg für Push-Eingänge (ADR-035): speichert eine `Lesung` über den Kanal `kanal` ('manuell', 'email').
+
+        Prüft Kanal, Plattform und Anzeigen-ID, bevor etwas geschrieben wird (ValueError). Gespeichert wird immer über
+        `speichere_treffer` mit den Regeln zur Fahrzeugart und zu „gewerblich“ von `_speichere_seite` – nie über den
+        `EreignisSpeicher` (der gilt nur für api/stream, `importiere_ereignis`). Nicht speicherbare Lesungen ('unbekannt',
+        'detail_ohne_id') behandelt der Aufrufer. `stat` (optional) wird fortlaufend ergänzt, auch wenn mittendrin ein Fehler
+        auftritt. Rückgabe: Zähler suchseiten, detailseiten, neu, preis, bekannt, details.
+        ``verfuegbar_am``: Zeitpunkt, ab dem die Verfügbarkeit gilt, wenn er nicht „jetzt“ ist (gespeicherte Seite: Dateizeit; Mail: ihr Datum, auch ein
+        unplausibel altes – dann ändert sie keine neuere Verfügbarkeit und ein neues Inserat gilt sofort als „vermutlich offline“). Text-Import: jetzt."""
+        if pruefe_kanal(kanal) not in PUSH_KANAELE:
+            raise ValueError(f"Eingangskanal {kanal!r} ist kein Push-Eingang (erlaubt: {', '.join(PUSH_KANAELE)})")
+        if lesung.art not in ("suche", "detail"):
+            raise ValueError(f"Lesung der Art {lesung.art!r} ist nicht speicherbar")
+        for inserat in lesung.inserate:
+            pruefe_anzeigen_id(inserat.quelle, inserat.anzeigen_id)
+        if stat is None:
+            stat = {}
+        for schluessel in ("suchseiten", "detailseiten", "neu", "preis", "bekannt", "details"):
+            stat.setdefault(schluessel, 0)
+        self._speichere_seite(lesung.art, lesung.inserate, stat, lesung.art_filter, lesung.haupttreffer, kanal, lesung.zeitpunkt,
+                             lesung.nur_leere_felder, verfuegbar_am)
+        return stat
+
     def _speichere_seite(self, art: str, inserate: list, stat: dict, seitenart: SuchseitenArt | None = None,
-                         haupttreffer: set[str] | None = None):
-        """Speichert die Inserate einer Such- oder Detailseite.
+                         haupttreffer: Collection[str] | None = None, kanal: str = "manuell", zeitpunkt: datetime | None = None,
+                         nur_leere: bool = False, verfuegbar_am: datetime | None = None):
+        """Speichert die Inserate einer Such- oder Detailseite (ungeprüft; Eintritt von außen ist `importiere`).
 
         Importierte Inserate bekommen die Suche „Import <Art> (bestätigt|vorläufig)“ bzw. `IMPORT_SUCHE` (Art unbekannt);
         die Herkunft steuert den Hinweis am Fahrzeug (`bewertung.anschreiben.hinweise`), sperrt aber nichts.
@@ -254,29 +446,92 @@ class Importer:
                 eigene = seitenart if d["id"] in (haupttreffer or ()) else SuchseitenArt()
                 neue_art, herkunft = eigene.fuer_treffer(d.get("titel"), d.get("kurzbeschreibung"))
             suche = _neue_suche(self.db.suche_zu(d["id"]), neue_art, herkunft)
-            if art == "detail" and not d.get("gewerblich") and self.db.gewerblich_zu(d["id"]):
-                d["gewerblich"] = None            # kein Hinweis auf der Detailseite ≠ „privat“: gewerblicher Listenwert bleibt
-            stat[self.db.speichere_treffer(d, suche, kanal="manuell")] += 1
+            gesehen_am = None
+            if kanal == "email":
+                d, gesehen_am, aelter = self._mail_ergaenzt_nur(d, zeitpunkt)
+                stat["aeltere"] = stat.get("aeltere", 0) + (aelter and inserat.preis is not None)
+            if kanal == "email" and zeitpunkt is not None:
+                verfuegbar_am = zeitpunkt                      # Datum der Mail, auch wenn es als Beobachtungszeitpunkt unplausibel alt ist
+            verfuegbar = utc_text(min(verfuegbar_am, datetime.now(timezone.utc))) if verfuegbar_am else None
+            stat[self.db.speichere_treffer(d, suche, kanal=kanal, gesehen_am=gesehen_am, nur_leere=nur_leere, verfuegbar_am=verfuegbar)] += 1
             if art == "detail":
-                self.db.speichere_details(d["id"], d)
+                self.db.speichere_details(d["id"], d, nur_leere=nur_leere)
                 stat["details"] += 1
 
     # ---------- Lauf ----------
+    def _darf_laufen(self, kennung: str, zeitsperren: dict[str, str]) -> tuple[bool, str | None]:
+        laeuft, grund = self.laeuft(kennung)
+        if laeuft and kennung in zeitsperren:
+            return False, zeitsperren[kennung]
+        return laeuft, grund
+
+    def _zeitsperren(self) -> dict[str, str]:
+        """Nur für automatische/geplante Läufe: Quellen im Intervall oder in der Pause nach einer Sperre → Grund (P4-04)."""
+        if not self.intervall_beachten:
+            return {}
+        jetzt = datetime.now()
+        e = lp.einstellungen(self.cfg, QUELLEN)
+        fenster = max([e["pause_nach_sperre_stunden"], *e["intervalle"].values()])
+        if not fenster:
+            return {}
+        # alle Läufe im längsten Fenster, ohne Anzahlgrenze: sonst endete eine Pause nach vielen übersprungenen Läufen zu früh (QA B1)
+        laeufe = lp.Laufprotokoll(self.db).letzte(None, art="suchlauf", seit=jetzt - timedelta(hours=fenster), nur_mit_quelle=True)
+        status = lp.quellen_status(laeufe, QUELLEN, e, jetzt)
+        return {k: g for k, s in status.items() if (g := lp.sperrgrund(s, jetzt))}
+
     def lauf(self, suchen: list[dict]) -> dict:
-        gesamt = {"neu": 0, "preis": 0, "bekannt": 0, "details": 0, "fehler": None}
+        """Ein Suchlauf über alle eingetragenen Suchen; wird im Laufprotokoll festgehalten (je Quelle Zahlen und Fehler, P4-04)."""
+        gesamt = {"neu": 0, "preis": 0, "bekannt": 0, "details": 0, "fehler": None, "uebersprungen": []}
         self.layout_warnung = None
+        self._layout_quellen = set()
+        protokoll = lp.Laufprotokoll(self.db)
+        lauf_id = protokoll.beginne("suchlauf", self.ausloeser)
+        je_quelle: dict[str, dict] = {}
+        ergebnis, unerwartet, zeitsperren = lp.OK, None, {}
+
+        def fehler_an_quelle(text: str, art: str):
+            q = je_quelle.setdefault(self._aktuelle_quelle or "?", {"neu": 0, "preis": 0, "bekannt": 0})
+            q.update(ergebnis=art, fehler=lp.kurz(text))
         try:
+            zeitsperren = self._zeitsperren()
             for eintrag in suchen:
                 auftrag = Suchauftrag.aus_config(eintrag)
+                laeuft, grund = self._darf_laufen(auftrag.quelle, zeitsperren)
+                if not laeuft:
+                    if all(u["quelle"] != auftrag.quelle for u in gesamt["uebersprungen"]):
+                        gesamt["uebersprungen"].append({"quelle": auftrag.quelle, "grund": grund})
+                        log.info("Quelle %s übersprungen: %s", auftrag.quelle, grund)
+                    continue
                 log.info("Suche: %s", auftrag.name)
+                self._aktuelle_quelle = auftrag.quelle
+                q = je_quelle.setdefault(auftrag.quelle, {"neu": 0, "preis": 0, "bekannt": 0})
                 for k, v in self.suche(auftrag).items():
                     gesamt[k] += v
-            gesamt["details"] = self.details()
+                    q[k] += v
+            # nur Quellen, die laufen dürfen
+            gesamt["details"] = self.details({k for k in QUELLEN if self._darf_laufen(k, zeitsperren)[0]})
             gesamt["fehler"] = self.layout_warnung
         except QuelleGesperrt as e:
             log.error(str(e))
             gesamt["fehler"] = str(e)
+            ergebnis = lp.GESPERRT
+            fehler_an_quelle(str(e), lp.GESPERRT)
         except QuellenFehler as e:
             log.error("%s", e)
             gesamt["fehler"] = str(e)
+            ergebnis = lp.FEHLER
+            fehler_an_quelle(str(e), lp.FEHLER)
+        except BaseException as e:
+            ergebnis, unerwartet = lp.ABGEBROCHEN, f"{type(e).__name__}: {e}"
+            fehler_an_quelle(unerwartet, lp.ABGEBROCHEN)
+            raise
+        finally:
+            for kennung, q in je_quelle.items():
+                if kennung in self._layout_quellen and q.get("ergebnis", lp.OK) == lp.OK:
+                    q.update(ergebnis=lp.FEHLER, fehler=lp.kurz(self.layout_warnung))    # Quelle liefert vermutlich nichts mehr (QA B2)
+                q.setdefault("ergebnis", lp.OK)
+            if self.layout_warnung and ergebnis == lp.OK:
+                ergebnis = lp.FEHLER                            # Layout geändert: Lauf lief, aber die Quelle liefert vermutlich nichts mehr
+            protokoll.beende(lauf_id, ergebnis, gesamt, je_quelle, gesamt["uebersprungen"], gesamt["fehler"] or unerwartet)
+            self._aktuelle_quelle = None
         return gesamt

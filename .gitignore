@@ -9,3 +9,6 @@ mandanten/
 .pytest_cache/
 .ruff_cache/
 .claude/settings.local.json
+# Eigene Einstellungen des Betriebs (P1-09) überlagern config.yaml – nie ins Repository
+config.local.yaml
+*.local.yaml

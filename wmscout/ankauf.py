@@ -19,7 +19,8 @@ from datetime import date, datetime
 from pathlib import Path
 
 from . import verkauf as vk
-from .bewertung import ergebnis
+from .bewertung import ergebnis, kalibrierung
+from .bewertung.rechner import Rechner
 from .datenbank import Datenbank
 from .deal import DealSpeicher
 from .team import MAX_FOTO_BYTES, bild_endung, ohne_metadaten
@@ -100,7 +101,8 @@ class AnkaufSpeicher:
 
     # ---------- Anlegen (beim Abschluss „gekauft“) ----------
     def _standzeit_tage(self) -> int:
-        return int(self.cfg["rechner"]["kosten"].get("standzeit_monate", 3)) * 30
+        """Plan-Standzeit wie im Rechner (inkl. Saisonzuschlag nach Kaufmonat, P5-05)."""
+        return Rechner(self.cfg).standzeit_monate() * 30
 
     def plan_vorbereiten(self, b: dict, kaufpreis: int, bewertung=None) -> dict:
         """Vor der Schreibsperre rechnen (liest alle Vergleichsangebote): Plan und – bei Anfragen – die Kalkulation zum Kaufpreis.
@@ -113,7 +115,10 @@ class AnkaufSpeicher:
             e, erg = deal.berechne(b["anfrage_id"], kaufpreis, z["standort_id"] if z else 0)
             return {"herkunft": "anfrage", "zuschlag": z, "kalkulation": (e, erg) if erg.get("moeglich") else None,
                     "plan": None if erg.get("moeglich") else ergebnis.plan_aus_basis(b["basis"], standzeit_tage=tage)}
-        plan = (ergebnis.plan_aus_bewertung(bewertung, kaufpreis, standzeit_tage=tage, differenzbesteuerung=steuer) if bewertung
+        if bewertung is not None and bewertung.sicherheit == "keine":
+            bewertung = None                      # ohne unabhängigen Marktwert keine Beträge (P1-12) – Grundlage der Besichtigung
+        plan = (ergebnis.plan_aus_bewertung(bewertung, kaufpreis, standzeit_tage=(bewertung.standzeit_monate or tage // 30) * 30,
+                                            differenzbesteuerung=steuer) if bewertung
                 else ergebnis.plan_aus_basis(b["basis"], standzeit_tage=tage))
         return {"herkunft": "anzeige", "zuschlag": None, "kalkulation": None, "plan": plan}
 
@@ -126,8 +131,10 @@ class AnkaufSpeicher:
                 kalk_id = self.deal.speichern(e, erg, anlass="gespeichert", anfrage_id=b["anfrage_id"],
                                               auktion_id=z["auktion_id"] if z else None, standort_id=z["standort_id"] if z else None,
                                               nutzer_id=nutzer_id)
-                plan = ergebnis.plan_aus_kalkulation(erg, kalk_id, standzeit_tage=self._standzeit_tage(),
+                plan = ergebnis.plan_aus_kalkulation(erg, kalk_id, standzeit_tage=(erg.get("standzeit_monate") or 0) * 30 or self._standzeit_tage(),
                                                      differenzbesteuerung=bool(self.cfg["rechner"]["differenzbesteuerung"]))
+            if plan.get("kosten") is not None:          # jetzt gerechnet (nicht die Grundlage der Besichtigung): Parameterstand für P5-01
+                plan = {**plan, "parameter": kalibrierung.parameter(self.cfg)}
             aid = self.con.execute(
                 "INSERT INTO ankaeufe (herkunft, anfrage_id, anzeige_id, besichtigung_id, auktion_id, standort_id, kalkulation_id, kaufpreis, "
                 "plan_json, erstellt_am, erstellt_von) VALUES (?,?,?,?,?,?,?,?,?,?,?)",

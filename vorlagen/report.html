@@ -37,7 +37,7 @@ h2,h3{margin:0}
   border-radius:50%;background:var(--akzent);color:var(--akzent-ink);font-size:12px;font-weight:700}
 kbd{font:12px ui-monospace,monospace;padding:1px 5px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;background:var(--feld)}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px}
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px} a.kpi{color:inherit;text-decoration:none}
 .kpi b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
 .kpi span{color:var(--mute);font-size:13px}
 .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}
@@ -56,7 +56,17 @@ kbd{font:12px ui-monospace,monospace;padding:1px 5px;border:1px solid var(--line
 .tag{font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px;background:var(--line);color:var(--ink)}
 .tag.gruen{background:var(--gruen-bg);color:var(--gruen)} .tag.gelb{background:var(--gelb-bg);color:var(--gelb)}
 .tag.rot{background:var(--rot-bg);color:var(--rot)} .tag.neu{background:var(--akzent);color:var(--akzent-ink)}
+.tag.score{background:var(--card);border:1px solid var(--line)} .tag.score.top{background:var(--akzent);color:var(--akzent-ink);border-color:var(--akzent)}
+.deal td{padding:2px 6px;font-size:13px} .deal td.z{text-align:right;white-space:nowrap}
+.tag.senkung{background:var(--gruen-bg);color:var(--gruen)}
 .tag.status{background:var(--ink);color:var(--card)}
+.tag.anb.gewerblich{background:var(--rot-bg);color:var(--rot)} .tag.anb.unbekannt,.tag.anb.unbelegt{background:var(--gelb-bg);color:var(--gelb)}
+.tag.dq,.tag.dq-schwach{background:var(--gelb-bg);color:var(--gelb)} .dq-m.dq-widerspruch,.dq-m.dq-unplausibel{color:var(--rot)}
+.sp-profil{margin:6px 0} .sp-form{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:end;margin:8px 0} .sp-feld{display:flex;flex-direction:column;font-size:13px} .sp-feld[hidden]{display:none}
+.sp-arten{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:13px} .sp-abdeckung{border-collapse:collapse;font-size:13px;margin:6px 0}
+.sp-abdeckung th,.sp-abdeckung td{border-bottom:1px solid var(--linie,#ddd);padding:4px 8px;text-align:left} .sp-pruefen td,.sp-fehlt td{color:var(--gelb)}
+.tag.verf{background:var(--rot-bg);color:var(--rot)} .tag.verf.reserviert,.tag.verf.vermutlich{background:var(--gelb-bg);color:var(--gelb)}
+.bar label.verfbox{font-size:14px;display:flex;align-items:center;gap:6px;cursor:pointer}
 .streif{height:4px;background:var(--line)}
 .gruen>.streif{background:var(--gruen)} .gelb>.streif{background:var(--gelb)} .rot>.streif{background:var(--rot)}
 .inhalt{padding:12px 14px 14px;display:flex;flex-direction:column;gap:6px;flex:1}
@@ -70,6 +80,18 @@ kbd{font:12px ui-monospace,monospace;padding:1px 5px;border:1px solid var(--line
 .karte-fuss{display:flex;gap:8px;align-items:center;margin-top:auto;padding-top:6px}
 .sperre{color:var(--rot);font-size:13px;margin:0}
 .hinweiszeile{background:var(--gelb-bg);color:var(--gelb);font-size:13px;margin:0 0 6px;padding:4px 8px;border-radius:8px}
+.risiken{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 6px} .risk{font-size:12px;padding:1px 7px;border-radius:99px;background:var(--gelb-bg);color:var(--gelb)}
+.risk.hoch{background:var(--rot-bg);color:var(--rot);font-weight:600} .tag.quelle{background:var(--card);border:1px solid var(--line)}
+.risikoliste li.hoch{color:var(--rot)}
+.tag.dub{background:var(--card);border:1px dashed var(--line)}
+.tag.kontakt.wartet{background:var(--gelb-bg);color:var(--gelb)} .tag.kontakt.antwort{background:var(--gruen-bg);color:var(--gruen)} .tag.kontakt.besichtigung{background:var(--akzent);color:var(--akzent-ink)}
+#ankauf-arbeit table{width:100%;border-collapse:collapse;font-size:13px} #ankauf-arbeit td,#ankauf-arbeit th{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+#ankauf-arbeit .stufen{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px} .vh-liste p{margin:4px 0} .vh-form{display:grid;gap:6px;margin-top:6px}
+#meldungen summary{cursor:pointer} .meldungsliste{list-style:none;margin:8px 0 0;padding:0} .meldungsliste li{padding:6px 0;border-bottom:1px solid var(--line)}
+.meldungsliste li.ungelesen{border-left:3px solid var(--akzent);padding-left:8px} .meldungsliste li.dringend .tag.meldung{background:var(--rot-bg);color:var(--rot)}
+.vh-form .zeile{display:flex;flex-wrap:wrap;gap:6px;align-items:center} @media (max-width:640px){ #ankauf-arbeit .weg{display:none} } .preiszeile{margin:0 0 6px;font-size:13px}
+table.verlauf td{padding:2px 8px 2px 0} .gruppenliste{list-style:none;padding:0;margin:0} .gruppenliste li{padding:6px 0;border-bottom:1px solid var(--line)}
+.gruppenliste .btn{padding:2px 8px;font-size:12px}
 .btn{font:inherit;font-size:14px;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);
   text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .btn:hover{border-color:var(--akzent)}
@@ -90,6 +112,8 @@ dialog::backdrop{background:rgba(10,12,10,.5)}
 .chip{font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--line)}
 .chip.plus{background:var(--gruen-bg);color:var(--gruen);border-color:transparent}
 .chip.minus{background:var(--rot-bg);color:var(--rot);border-color:transparent}
+.maengel{background:var(--rot-bg);color:var(--rot);font-size:13px;margin:0 0 6px;padding:4px 8px;border-radius:8px}
+.maengel ul{margin:4px 0 0;padding-left:18px} .zahlen small{display:block;font-size:11px;color:var(--mute);font-weight:400}
 table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums;margin-top:8px}
 td{padding:4px 0;border-bottom:1px dashed var(--line);vertical-align:top} td:last-child{text-align:right;padding-left:10px;white-space:nowrap}
 tr.zwischen td{font-weight:600}
@@ -154,9 +178,12 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
 #toast.warn{background:var(--warn-bg);color:var(--warn-ink);font-weight:600}
 @media (max-width:760px){ .spalten{grid-template-columns:1fr} .spalten>div:last-child{order:-1} .brief{min-height:300px} }
 </style>
+{% if app %}<link rel="stylesheet" href="/static/textimport.css"><link rel="stylesheet" href="/static/dubletten.css">{% endif %}
 </head>
 <body>
 {% set AMPEL = {'gruen':'Grün','gelb':'Gelb','rot':'Rot','grau':'ohne Bewertung'} %}
+{# Anzeige per Link + Text einlesen: jedes Teammitglied, nie Standort-Zugänge (der Server prüft die Rolle ohnehin) #}
+{% set text_darf = app and (not team or not team.ich or team.ich.rolle in ['inhaber', 'mitarbeiter']) %}
 <div class="wrap">
   <header class="top">
     <div>
@@ -167,15 +194,35 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <div class="suchlauf">
       <span id="suchstatus" class="hinweis" aria-live="polite"></span>
       <button id="glocke" class="btn" title="Browser-Hinweis bei neuen Treffern" hidden>🔔 Hinweise an</button>
-      <button id="einlesen" class="btn" title="Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten (Strg+S) einlesen – ohne Internetabruf">⤓ Gespeicherte Seiten einlesen</button>
-      <button id="suchen" class="btn">↻ Neue Anzeigen suchen</button>
+      <button id="einlesen" class="btn"{% if team and team.ich and team.ich.rolle != 'inhaber' %} hidden{% endif %} title="Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten (Strg+S) einlesen – ohne Internetabruf">⤓ Gespeicherte Seiten einlesen</button>
+      {% if mails_aktiv %}<button id="mails" class="btn"{% if team and team.ich and team.ich.rolle != 'inhaber' %} hidden{% endif %} title="Suchagent-Benachrichtigungen (.eml in import/email/) einlesen – ohne Internetabruf">✉ Mails einlesen</button>{% endif %}
+      <button id="suchen" class="btn"{% if team and team.ich and team.ich.rolle != 'inhaber' %} hidden{% endif %}>↻ Neue Anzeigen suchen</button>
+      {% if text_darf %}<button id="textimport-knopf" class="btn" aria-expanded="false" aria-controls="textimport" title="Eine einzelne Anzeige aus Link und kopiertem Anzeigentext einlesen – ohne Internetabruf">＋ Inserat einlesen (Link + Text)</button>{% endif %}
       <a class="btn" href="/anfragen" title="Fahrzeuge, die Verkäufer uns selbst anbieten">Verkaufsanfragen</a>
       <a class="btn" href="/ankaeufe" title="Gekaufte Fahrzeuge: Vertrag, Übergabe, Kosten, Verkauf, Plan gegen Ist">Ankäufe</a>
+      <a class="btn" href="/status" title="Quellen, Eingänge, letzte Suchläufe und Fehler">Status</a>
+      <a class="btn" href="/kennzahlen" title="Eingang, Bewertung und Ankaufstrichter im Zeitraum">Kennzahlen</a>
+      {% if not (team and team.ich and team.ich.rolle != 'inhaber') %}<a class="btn" href="/zugaenge" title="Team-Zugänge einladen, Händlerzugänge bei mobile.de und AutoScout24">Zugänge</a>{% endif %}
     </div>
     {% endif %}
   </header>
 
   <div class="banner" id="banner" hidden><span id="banner-text"></span><button class="btn" onclick="location.reload()">Liste aktualisieren</button></div>
+
+  {% if text_darf %}
+  <section class="kasten" id="textimport" aria-labelledby="textimport-titel" hidden>
+    <h3 id="textimport-titel">Inserat einlesen (Link + Text)</h3>
+    <div id="textimport-box"></div>
+  </section>
+  <section class="kasten" id="dubletten" aria-labelledby="dub-titel" hidden>
+    <div id="dubletten-box"></div>
+  </section>
+  {% endif %}
+
+  {% if app %}<section class="kasten" id="suchprofile" aria-labelledby="sp-titel" hidden>
+    <h3 id="sp-titel">Suchprofile</h3>
+    <div id="suchprofile-box"></div>
+  </section>{% endif %}
 
   <ol class="anleitung">
     <li><b>Wohnmobil anklicken</b> – faire Bewertung und fertiges Anschreiben ansehen (Text änderbar)</li>
@@ -190,9 +237,40 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <div class="kpi"><b>{{ zaehl.gruen }}</b><span>Grün – Wunschpreis nah am Max-EK</span></div>
     <div class="kpi"><b>{{ zaehl.gelb }}</b><span>Gelb – mit Verhandlung möglich</span></div>
     <div class="kpi"><b>{{ zaehl.neu }}</b><span>Neu seit letztem Lauf</span></div>
+    <div class="kpi"><b>{{ zaehl.neuigkeiten }}</b><span>Neu &amp; Preis gesenkt (Neuigkeiten)</span></div>
     <div class="kpi"><b>{{ zaehl.nachfassen }}</b><span>Nachfassen fällig</span></div>
     <div class="kpi"><b>{{ zaehl.arbeit }}</b><span>In Arbeit (Text kopiert, kontaktiert, Verhandlung, Besichtigung)</span></div>
+    {% if anfragen_offen is not none %}<a class="kpi" href="/anfragen" data-kpi-anfragen><b>{{ anfragen_offen.eingegangen + anfragen_offen.in_pruefung + anfragen_offen.angebot }}</b>
+      <span>Verkaufsanfragen offen ({{ anfragen_offen.eingegangen }} neu, {{ anfragen_offen.in_pruefung }} in Prüfung, {{ anfragen_offen.angebot }} mit Angebot)</span></a>{% endif %}
   </div>
+
+  {% if meldungen %}
+  <details class="kasten" id="meldungen" open data-jetzt="{{ jetzt_iso }}">
+    <summary><b>🔔 Meldungen</b> <span id="meldungen-zahl">({{ meldungen | length }})</span>
+      <button class="btn" type="button" id="meldungen-gelesen" style="margin-left:8px">alle gelesen</button></summary>
+    <ul class="meldungsliste">{% for m in meldungen %}
+      <li data-meldung="{{ m.art }}" data-zeit="{{ m.zeit }}" data-id="{{ m.id }}"{% if m.dringend %} class="dringend"{% endif %}>
+        <span class="tag meldung {{ m.art }}">{{ m.art_text }}</span> <b>{{ m.fahrzeug or 'Fahrzeug' }}</b> <span class="meta">{{ 'Verkaufsanfrage' if m.quelle == 'anfrage' else QUELLEN.get(m.quelle, m.quelle) }}</span><br>
+        <span>{{ m.text }}</span> {% if m.link and m.link.startswith('/') and not m.link.startswith('//') %}<a class="btn" href="{{ m.link }}" data-meldung-link>öffnen</a>{% else %}<button class="btn" type="button" data-meldung-oeffnen="{{ m.id }}">öffnen</button>{% endif %}</li>{% endfor %}</ul>
+    <p class="meta">„gelesen“ merkt sich dieser Browser; es wird nichts versendet.</p>
+  </details>
+  {% endif %}
+
+  {% if pipeline %}
+  <section class="kasten" id="ankauf-arbeit" aria-labelledby="aa-titel">
+    <h2 id="aa-titel" style="margin:0 0 8px;font-size:17px">Ankauf in Arbeit</h2>
+    <div class="stufen">{% for s, name in STUFEN.items() %}{% if pipeline_zaehl[s] %}<span class="tag kontakt {{ s }}" data-stufe-zaehl="{{ s }}">{{ name }}: {{ pipeline_zaehl[s] }}</span>{% endif %}{% endfor %}</div>
+    <table><thead><tr><th>Fahrzeug</th><th>Lage</th><th class="weg">Status</th>{% if app %}<th class="weg">Letzte Antwort / Notiz</th>{% endif %}<th></th></tr></thead><tbody>
+    {% for z in pipeline %}{% set kl = z.kontakt %}{% set letzte = kl.antwort if kl.antwort and (not kl.notiz or kl.antwort.zeitpunkt >= kl.notiz.zeitpunkt) else kl.notiz %}
+      <tr data-pipeline="{{ z.a.id }}" data-stufe="{{ kl.stufe }}"><td>{{ z.a.fahrzeug }}<br><span class="meta">{{ QUELLEN.get(z.a.quelle or 'kleinanzeigen', z.a.quelle) }} · {{ z.a.preis | euro }}</span></td>
+        <td><span class="tag kontakt {{ kl.stufe }}">{{ STUFEN[kl.stufe] }}</span><br><span class="meta">{{ kl.text }}</span></td>
+        <td class="weg">{{ STATUS_NAMEN.get(z.a.status or 'neu', z.a.status) }}</td>
+        {% if app %}<td class="weg meta">{% if letzte %}{{ letzte.zeitpunkt[8:10] }}.{{ letzte.zeitpunkt[5:7] }}.: {{ (letzte.text or '(Text entfernt)') | truncate(90) }}{% if letzte.betrag %} · {{ letzte.betrag | euro }}{% endif %}{% else %}–{% endif %}</td>{% endif %}
+        <td><button class="btn" type="button" data-pipeline-oeffnen="{{ z.a.id }}">öffnen</button></td></tr>
+    {% endfor %}</tbody></table>
+    {% if pipeline_mehr %}<p class="meta">… und {{ pipeline_mehr }} weitere – Filter „In Arbeit“.</p>{% endif %}
+  </section>
+  {% endif %}
 
   {% if team %}
   <div class="zaehlerleiste" id="zaehler" role="region" aria-label="Team-Übersicht">
@@ -205,18 +283,27 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
 
   <div class="bar" role="toolbar">
     <button data-f="anschreiben" class="an">Anschreiben bereit</button>
+    <button data-f="top" title="Deal-Score ab {{ deal_schwelle }}, offen, privat, verfügbar, Ampel grün, Bewertung mindestens „mittel“">Top-Deals{% if zaehl.top %} <span data-zahl data-inserate="{{ zaehl.top }}" data-fahrzeuge="{{ zaehl_fz.top }}">({{ zaehl.top }})</span>{% endif %}</button>
     <button data-f="gruen">Grün</button>
     <button data-f="gelb">Gelb</button>
     <button data-f="neu">Neu</button>
-    <button data-f="nachfassen">Nachfassen{% if zaehl.nachfassen %} ({{ zaehl.nachfassen }}){% endif %}</button>
+    <button data-f="neuigkeiten" title="Frisch eingegangen oder Preis deutlich gesenkt – wichtigste zuerst">Neu &amp; gesenkt{% if zaehl.neuigkeiten %} <span data-zahl data-inserate="{{ zaehl.neuigkeiten }}" data-fahrzeuge="{{ zaehl_fz.neuigkeiten }}">({{ zaehl.neuigkeiten }})</span>{% endif %}</button>
+    <button data-f="nachfassen">Nachfassen{% if zaehl.nachfassen %} <span data-zahl data-inserate="{{ zaehl.nachfassen }}" data-fahrzeuge="{{ zaehl_fz.nachfassen }}">({{ zaehl.nachfassen }})</span>{% endif %}</button>
     <button data-f="arbeit">In Arbeit</button>
     <button data-f="alle">Alle</button>
+    {% if app %}<select id="profil-filter" aria-label="Suchprofil" hidden></select><button type="button" id="profil-knopf" aria-expanded="false" aria-controls="suchprofile" title="Gesuchte Fahrzeuge als Filter über die eingegangenen Inserate, mit Abdeckungscheckliste je Plattform">Suchprofile</button>{% endif %}
+    {% if text_darf %}<button type="button" id="dub-knopf" aria-expanded="false" aria-controls="dubletten" title="Inserate, die dasselbe Fahrzeug sein könnten – der Mensch entscheidet">Dublettenvorschläge<span id="dub-n"></span></button>{% endif %}
     {% if team %}<div class="wer" role="group" aria-label="Wer"><span>Wer:</span>
       <button type="button" data-wer="alle" class="an" aria-pressed="true">Alle</button><button type="button" data-wer="meine" aria-pressed="false">Meine</button><button type="button" data-wer="frei" aria-pressed="false">Frei</button>
     </div>{% endif %}
+    <select id="quelle" aria-label="Quelle"><option value="">alle Quellen</option>{% for q in quellen %}<option value="{{ q }}">{{ QUELLEN.get(q, q) }}</option>{% endfor %}</select>
+    <label class="verfbox" title="Blendet verkaufte und nicht mehr online stehende Anzeigen aus, an denen noch nichts bearbeitet wurde"><input type="checkbox" id="nurverf" checked>nur verfügbare</label>
+    <label class="verfbox" title="Inserate desselben Fahrzeugs (auf mehreren Plattformen oder doppelt eingestellt) nur einmal zeigen – die übrigen stehen im Fahrzeugfenster unter „Gleiches Fahrzeug“"><input type="checkbox" id="einmal" checked>gleiches Fahrzeug nur einmal</label>
     <select id="sort" aria-label="Sortierung">
-      <option value="verh">Sortierung: beste Chance</option>
+      <option value="score">Sortierung: Deal-Score</option>
+      <option value="verh">beste Chance (Preis ÷ Max-EK)</option>
       <option value="pot">Gewinnpotenzial</option>
+      <option value="prio">Neuigkeiten zuerst (im Rahmen, neu, gesenkt)</option>
       <option value="neu">Neueste zuerst</option>
       <option value="preis">Preis aufsteigend</option>
       <option value="entf">Entfernung</option>
@@ -227,9 +314,11 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
 
   <div class="raster" id="liste">
   {% for z in zeilen %}{% set a = z.a %}{% set b = z.b %}
-    <article class="karte {{ b.ampel }}" tabindex="0" data-id="{{ a.id }}" data-url="{{ a.url }}" data-quelle="{{ a.quelle or 'kleinanzeigen' }}" data-ampel="{{ b.ampel }}"
-         data-neu="{{ 1 if z.neu else 0 }}" data-bereit="{{ 1 if z.bereit else 0 }}" data-status="{{ a.status or 'neu' }}"
+    <article class="karte {{ b.ampel }}" tabindex="0" data-id="{{ a.id }}" data-url="{{ a.url }}" data-quelle="{{ a.quelle or 'kleinanzeigen' }}" data-dub="{{ z.dubletten_ids | join(' ') }}" data-grang="{{ z.gruppe_rang or 0 }}" data-garbeit="{{ 1 if z.gruppe_arbeit else 0 }}" data-ampel="{{ b.ampel }}"
+         data-neu="{{ 1 if z.neu else 0 }}" data-prio="{{ z.neuigkeit.stufe if z.neuigkeit else 9 }}" data-bereit="{{ 1 if z.bereit else 0 }}" data-status="{{ a.status or 'neu' }}"
+         data-verf="{{ a.verfuegbarkeit }}" data-ausblenden="{{ 1 if z.ausblenden else 0 }}"
          data-verh="{{ b.verhaeltnis or 99 }}" data-pot="{{ b.potenzial or -999999 }}" data-preis="{{ a.preis or 0 }}"
+         data-score="{{ z.deal.score if z.deal and z.deal.score is not none else -1 }}" data-top="{{ 1 if z.deal and z.deal.priorisiert else 0 }}"
          data-zeit="{{ a.erstmals_gesehen }}" data-entf="{{ a.entfernung_km if a.entfernung_km is not none else 99999 }}"
          data-tage="{{ a.tage_online or 0 }}" data-nachfassen="{{ 1 if z.nachfassen else 0 }}" data-erst="{{ z.brief_betrag or 0 }}"
          {% if team %}{% set t = team.bearbeitung.get(a.id) %}data-zustand="{{ t.zustand if t else 'frei' }}" data-bearbeiter="{{ t.bearbeiter.kuerzel if t and t.bearbeiter else '' }}" data-mein="{{ 1 if t and t.mein else 0 }}" data-frei="{{ 1 if not t or (t.zustand in ['frei', 'ohne_zuordnung', 'verwaist'] and not t.dublette_von) else 0 }}"
@@ -240,9 +329,19 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
         {% if a.bild %}<img src="{{ a.bild }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}
         <div class="tags">
           <span class="tag {{ b.ampel }}">{{ AMPEL[b.ampel] }}</span>
+          <span class="tag quelle" data-quelle-tag>{{ QUELLEN.get(a.quelle or 'kleinanzeigen', a.quelle) }}</span>
+          {% if z.deal and z.deal.score is not none %}<span class="tag score{{ ' top' if z.deal.priorisiert }}" data-score-tag
+            title="Deal-Score {{ z.deal.score }}/100 – {% for t in z.deal.bestandteile %}{{ t.name }} {{ t.punkte | round | int }}/{{ t.gewicht | round | int }}{{ ', ' if not loop.last }}{% endfor %}">Deal {{ z.deal.score }}</span>{% endif %}
           {% if z.neu %}<span class="tag neu">neu</span>{% endif %}
-          {% if a.preis_vorher %}<span class="tag">Preis gesenkt</span>{% endif %}
+          {% set n = z.neuigkeit %}{% if n and n.im_rahmen %}<span class="tag gruen" data-im-rahmen title="Die Preissenkung hat den Preis unter den Max-EK gebracht">jetzt im Rahmen</span>{% endif %}
+          {% if n and n.senkung %}<span class="tag senkung" data-senkung title="{{ n.senkung.von | euro }} → {{ n.senkung.auf | euro }} ({{ ('%.1f' % n.senkung.prozent).replace('.', ',') }} %)">Preis −{{ n.senkung.euro | euro }} ({{ n.senkung.am[8:10] }}.{{ n.senkung.am[5:7] }}.)</span>
+          {% elif a.preis_vorher and a.preis and a.preis < a.preis_vorher %}<span class="tag">Preis gesenkt</span>{% endif %}
           {% if a.neu_eingestellt %}<span class="tag">neu eingestellt</span>{% endif %}
+          {% if z.kontakt and z.kontakt.stufe and z.kontakt.stufe != 'vorbereitet' %}<span class="tag kontakt {{ z.kontakt.stufe }}" data-kontakt-tag title="{{ z.kontakt.text }}">
+            {{- {'besichtigung': '📅 Besichtigung', 'antwort': '↩ Antwort'}.get(z.kontakt.stufe) or ('✉ ' ~ (z.kontakt.tage or 0) ~ ' T. ohne Antwort') }}</span>{% endif %}
+          {% if z.gruppe %}<span class="tag dub" data-gruppe-tag title="Gleiches Fahrzeug: {% for m in z.gruppe %}{{ m.quelle_text }} {{ m.preis | euro }}{{ ' (bestätigt)' if m.bestaetigt }}{{ ' · ' if not loop.last }}{% endfor %}">⧉ {{ z.gruppe | length + 1 }} Inserate</span>{% endif %}
+          {% if a.verfuegbarkeit_text %}<span class="tag verf {{ 'vermutlich' if a.vermutlich_offline else a.verfuegbarkeit }}" data-verfuegbarkeit>{{ a.verfuegbarkeit_text }}</span>{% endif %}
+          {% if a.datenqualitaet and a.datenqualitaet.stufe == 'schwach' %}<span class="tag dq" title="Datenqualität {{ a.datenqualitaet.wert }}/100" data-dq>Daten lückenhaft</span>{% endif %}
           {% if z.nachfassen %}<span class="tag nachfassen">nachfassen</span>{% endif %}
           <span class="tag status" hidden></span>
           {% if team %}<span class="tbbox" data-teambadge></span>{% endif %}
@@ -256,8 +355,15 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
         <div class="zahlen">
           <div><span>Wunschpreis</span><b>{{ a.preis | euro }}</b></div>
           <div class="betont"><span>Erstangebot</span><b>{{ b.erstangebot | euro if b.sicherheit != 'keine' else '–' }}</b></div>
-          <div><span>Max-EK</span><b>{{ b.max_ek | euro if b.sicherheit != 'keine' else '–' }}</b></div>
+          <div data-maxek-spanne><span>Max-EK{{ ' (Spanne)' if b.max_ek_bis and b.sicherheit != 'keine' }}</span>{% if b.sicherheit == 'keine' %}<b>–</b>
+            {%- elif b.max_ek_bis %}<b>{{ b.max_ek_von | tsd }}–{{ b.max_ek_bis | euro }}</b><small>Mitte {{ b.max_ek | euro }}</small>
+            {%- else %}<b>{{ b.max_ek | euro }}</b>{% endif %}</div>
         </div>
+        {% set pvk = z.preisverlauf %}{% if pvk and (pvk.senkungen or pvk.erhoehungen) %}<p class="meta preiszeile" data-preisverlauf
+          title="Preisverlauf seit {{ pvk.seit | datum }}">Preis {{ pvk.erstpreis | euro }} → {{ pvk.aktuell | euro }} ({{ pvk.differenz | euro_diff }}{% if pvk.senkungen %}, {{ pvk.senkungen }}× gesenkt{% endif %}{% if pvk.erhoehungen %}, {{ pvk.erhoehungen }}× erhöht{% endif %})</p>{% endif %}
+        {% if b.maengel %}<p class="maengel" data-maengel>Mängel laut Inserat: {{ b.maengel | map(attribute='name') | join(', ') }}</p>{% endif %}
+        {% set rk = z.risiken | selectattr('karte') | list %}{% if rk %}<p class="risiken" data-risiken title="Vor einem Angebot prüfen: {{ rk | map(attribute='text') | join(' · ') }}">
+          {%- for r in rk[:3] %}<span class="risk {{ r.stufe }}">{{ r.text }}</span>{% endfor %}{% if rk | length > 3 %}<span class="risk">+{{ rk | length - 3 }}</span>{% endif %}</p>{% endif %}
         {% for h in z.hinweise %}<p class="hinweiszeile">⚠ {{ h }}</p>{% endfor %}
         {% if z.nachfassen %}<p class="sperre" style="color:var(--gelb)">Nachfassen: {{ z.nachfassen }}</p>
         {% elif z.sperre and not a.anschreiben_text %}<p class="sperre">Kein Anschreiben: {{ z.sperre }}</p>{% endif %}
@@ -287,6 +393,11 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
         <h2>{{ a.fahrzeug }}</h2>
         <p class="meta">{{ b.art }} · EZ {{ a.ez_jahr or '?' }}{% if b.alter is not none %} ({{ b.alter }} J.){% endif %} · {{ (a.km | tsd ~ ' km') if a.km else 'km ?' }} · {{ a.ort }} · Wunschpreis {{ a.preis | euro }}{{ ' VB' if a.vb }}</p>
         <p class="meta">Anzeige: „{{ a.titel }}“{% if a.entfernung_km is not none %} · {{ a.entfernung_km | tsd }} km entfernt{% endif %} · {{ 'seit heute online' if not a.tage_online else 'seit ' ~ a.tage_online ~ (' Tag' if a.tage_online == 1 else ' Tagen') ~ ' online' }}{% if a.duplikat %} · <span class="warn">{{ a.duplikat }}</span>{% endif %}</p>
+        {% if a.verfuegbarkeit_text %}<p class="meta">Verfügbarkeit: <span class="tag verf {{ 'vermutlich' if a.vermutlich_offline else a.verfuegbarkeit }}">{{ a.verfuegbarkeit_text }}</span>{% if a.zuletzt_bestaetigt %} · zuletzt bestätigt {{ a.zuletzt_bestaetigt[:10] }}{% endif %}</p>{% endif %}
+        {% if a.anbieter %}<p class="meta">Anbieter: <span class="tag anb {{ a.anbieter.typ }}{{ '' if a.anbieter.belegt else ' unbelegt' }}" data-anbieter>{{ a.anbieter.text }}</span>
+          <select data-anbieter-setzen aria-label="Anbieter korrigieren" hidden><option value="">korrigieren ▾</option><option value="privat">privat</option>
+            <option value="gewerblich">gewerblich</option><option value="unbekannt">unbekannt</option></select></p>{% endif %}
+        {% if a.datenqualitaet %}<p class="meta">Datenqualität: <span class="tag dq-{{ a.datenqualitaet.stufe }}" data-dq-wert>{{ a.datenqualitaet.wert }}/100 ({{ a.datenqualitaet.stufe }})</span>{% if a.datenqualitaet.markierungen %} – {% for m in a.datenqualitaet.markierungen %}<span class="dq-m dq-{{ m.art }}">{{ m.text }}</span>{{ ' · ' if not loop.last }}{% endfor %}{% endif %}</p>{% endif %}
         {% if team %}<div class="teamzeile"><span class="tbbox" data-teambadge></span><span class="meta" data-teaminfo></span>
           <button class="btn" data-teamaktion="uebernehmen" hidden>Ich übernehme</button><button class="btn" data-teamaktion="abgeben" hidden>Abgeben</button>
           {% if team.ich.rolle == 'inhaber' %}<button class="btn" data-teamaktion="erzwingen" hidden>Übernahme erzwingen</button>
@@ -297,12 +408,52 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     </div>
     <div class="spalten">
       <div>
+        {% if z.deal %}<div data-deal>{% if z.deal.score is not none %}<h3>Deal-Score {{ z.deal.score }}/100{% if z.deal.priorisiert %} · Top-Deal{% endif %}</h3>
+          <table class="deal">{% for t in z.deal.bestandteile %}<tr><td>{{ t.name }}</td><td class="z">{{ t.punkte | round | int }} / {{ t.gewicht | round | int }}</td>
+            <td class="meta">{{ t.text }}</td></tr>{% endfor %}</table>
+          {% if z.deal.kein_top %}<p class="meta" data-kein-top>Kein Top-Deal: {{ z.deal.kein_top }}</p>{% endif %}
+          <p class="meta">Punkte gerundet · Top-Deal ab {{ z.deal.schwelle }} Punkten, offen, privat, verfügbar, Ampel grün und Bewertung
+            mindestens „mittel“ · Gewichte in <code>config.yaml → deal_score</code> · die Ampel bleibt daneben</p>
+          {% else %}<p class="meta">Kein Deal-Score – {{ z.deal.grund }}</p>{% endif %}</div>{% endif %}
+        {% if z.risiken %}<div data-risiken-detail><h3>Risikofaktoren – vor einem Angebot prüfen</h3>
+          <ul class="risikoliste">{% for r in z.risiken %}<li class="{{ r.stufe }}">{{ r.text }}{% if r.stufe == 'hoch' %} (klären){% endif %}</li>{% endfor %}</ul></div>{% endif %}
+        {% set pvk = z.preisverlauf %}{% if pvk and pvk.punkte | length > 1 %}<div data-preisverlauf-detail><h3>Preisverlauf</h3>
+          <table class="verlauf">{% for p in pvk.punkte %}<tr><td>{{ p.zeitpunkt | datum }}</td><td class="z">{{ p.preis | euro }}</td>
+            <td class="meta">{{ p.differenz | euro_diff if p.differenz is not none else 'Erstpreis' }}</td></tr>{% endfor %}</table>
+          <p class="meta">Seit {{ pvk.seit | datum }}: {{ pvk.erstpreis | euro }} → {{ pvk.aktuell | euro }} ({{ pvk.differenz | euro_diff }}{% if pvk.prozent is not none %}, {{ pvk.prozent | string | replace('-', '−') }} %{% endif %}){% if pvk.gekuerzt %} · nur die letzten {{ pvk.punkte | length }} Preisstände{% endif %}</p></div>{% endif %}
+        {% if z.gruppe %}<div data-gruppe-detail><h3>Gleiches Fahrzeug – {{ z.gruppe | length }} {{ 'weiteres Inserat' if z.gruppe | length == 1 else 'weitere Inserate' }}</h3>
+          <p class="meta" data-fahrzeug-status>Fahrzeugstatus (höchster aller Inserate): {{ STATUS_NAMEN.get(z.fahrzeug_status, z.fahrzeug_status) }}</p>
+          <ul class="gruppenliste">{% for m in z.gruppe %}<li data-gruppe-mitglied="{{ m.id }}"><b>{{ m.quelle_text }}</b> · {{ m.preis | euro }} · {{ STATUS_NAMEN.get(m.status, m.status) }}
+            {%- if m.verfuegbarkeit_text %} · {{ m.verfuegbarkeit_text }}{% endif %} · {{ 'bestätigt' if m.bestaetigt else 'vermutet' }}
+            {%- set mp = m.preisverlauf %}{% if mp and (mp.senkungen or mp.erhoehungen) %} · Preis {{ mp.erstpreis | euro }} → {{ mp.aktuell | euro }}{% endif %}
+            <button class="btn" type="button" data-gruppe-oeffnen="{{ m.id }}">Details</button>
+            {% if (m.url or '').lower().startswith(('http://', 'https://')) %}<a class="btn" href="{{ m.url }}" target="_blank" rel="noopener noreferrer">Anzeige ↗</a>{% endif %}</li>{% endfor %}</ul>
+          <p class="meta">„bestätigt“ = als gleiches Fahrzeug entschieden, „vermutet“ = automatisch erkannt (prüfen unter „Dublettenvorschläge“). Preise verschiedener
+            Plattformen sind nicht direkt vergleichbar.</p></div>{% endif %}
         <h3>Faire Bewertung</h3>
         {% if b.sicherheit == 'keine' %}
           <p class="warn">{{ b.vergleich_basis }}. Ohne Erstzulassung kein belastbarer Einkaufspreis – im Anschreiben wird deshalb nach EZ/km gefragt.</p>
         {% else %}
+          {% if b.max_ek_bis %}<p class="spanne" data-spannen>Max. Einkaufspreis <b>{{ b.max_ek_von | euro }} – {{ b.max_ek_bis | euro }}</b>
+            · Marktwert privat <b>{{ b.privat_von | euro }} – {{ b.privat_bis | euro }}</b>
+            <span class="meta">(Sicherheit {{ b.sicherheit }}; Punktwerte unten nur zur Herleitung)</span></p>{% endif %}
+          {% if b.haendler_anzahl %}<p class="meta" data-haendlermarkt>Händlermarkt: {{ b.haendler_anzahl }} vergleichbare Händlerangebote{% if b.haendler_niveau %},
+            Angebotsniveau {{ b.haendler_niveau | euro }}{% if b.vk_gedeckelt %} – <b>Händler-VK darauf begrenzt</b> (abzüglich Verhandlung){% endif %}
+            {%- if b.haendler_konflikt %} – billiger als der Privatmarkt (Datenkonflikt), keine Obergrenze{% endif %}{% else %}
+            – zu wenige für eine Obergrenze{% endif %}</p>{% endif %}
           <p class="spanne">Marktniveau <b>{{ b.marktwert_angebote | euro }}</b>{% if b.spanne_von %} <span class="meta">(plausibel {{ b.spanne_von | euro }} – {{ b.spanne_bis | euro }})</span>{% endif %}</p>
           <p class="meta">Sicherheit: <span class="sicherheit s-{{ b.sicherheit }}">{{ b.sicherheit }}</span> · {{ b.vergleich_basis }}</p>
+          {% if b.standzeit_monate %}<p class="meta" data-standzeit>Geplante Standzeit {{ b.standzeit_monate }} Monate (inkl. Saison nach Kaufmonat) – Standkosten, Kapitalbindung und Gewährleistungsrücklage nach Alter stehen in den Kosten.</p>{% endif %}
+          {% if b.abholung %}<div class="meta" data-abholung><b>Abholung</b> – grobe Schätzung, gerechnet wird der günstigere Weg:
+            <ul>{% for v in b.abholung.varianten %}<li>{% if v.art == 'auto' %}Auto ab Firmensitz (2 Personen): ca. {{ v.euro | euro }} – {{ v.km | tsd }} km,
+              zusammen ca. {{ v.stunden | stunden }}{% else %}Bahn ab {{ v.ab }}: ca. {{ v.euro | euro }} – {{ v.ticket_art }} ca. {{ v.ticket | euro }},
+              Anreise mit öffentlichen Verkehrsmitteln ca. {{ v.reise_stunden | stunden }}, Rückfahrt im Wohnmobil ca. {{ v.rueck_stunden | stunden }}{% endif %}
+              {%- if v.uebernachtungen %} · {{ v.uebernachtungen }} Übernachtung{{ 'en' if v.uebernachtungen > 1 }}{% endif %}
+              {%- if v.art == b.abholung.gewaehlt %} <b>✓ gerechnet</b>{% endif %}</li>{% endfor %}</ul>
+            {%- if b.abholung.hinweis %}<span data-abholhinweis>{{ b.abholung.hinweis }}</span>{% endif %}</div>{% endif %}
+          {% if b.maengel %}<div class="maengel" data-maengel-liste><b>Im Inserat genannte Mängel</b> – bei der Besichtigung prüfen:
+            <ul>{% for m in b.maengel %}<li>{{ m.name }} (−{{ (-m.wert * 100) | round | int }} % im Referenzwert)</li>{% endfor %}</ul>
+            {%- if b.maengel_risiko %}<span data-maengelrisiko>Ausmaß unklar: untere Spanne um {{ (b.maengel_risiko * 100) | round | int }} % weiter.</span>{% endif %}</div>{% endif %}
           {% if b.wertfaktoren or b.km_korrektur %}
           <div class="chips">
             {% if b.km_korrektur %}<span class="chip {{ 'plus' if b.km_korrektur > 0 else 'minus' }}">km-Stand für das Alter {{ b.km_korrektur | prozent }}</span>{% endif %}
@@ -313,7 +464,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
             {% if b.modellwert %}<tr><td>Referenzwert (Neupreis × Restwert, km, Ausstattung)</td><td>{{ b.modellwert | euro }}</td></tr>{% endif %}
             <tr><td>Marktniveau Angebote{% if b.marktfaktor %} (Faktor {{ '%.2f' | format(b.marktfaktor) | replace('.', ',') }}){% endif %}</td><td>{{ b.marktwert_angebote | euro }}</td></tr>
             <tr><td>Marktwert privat (nach Verhandlung)</td><td>{{ b.marktwert_privat | euro }}</td></tr>
-            <tr class="zwischen"><td>Händler-VK (Ziel)</td><td>{{ b.haendler_vk | euro }}</td></tr>
+            <tr class="zwischen"><td>Händler-VK (Ziel){% if b.abschlag_marke %} – darin −{{ (b.abschlag_marke * 100) | round | int }} % für unbekannte Marke{% endif %}{% if b.vk_gedeckelt %} – begrenzt auf den Händlermarkt{% endif %}</td><td>{{ b.haendler_vk | euro }}</td></tr>
             {% for name, wert in b.kosten_posten.items() %}<tr><td>− {{ name }}</td><td>{{ wert | euro }}</td></tr>{% endfor %}
             <tr><td>− Ziel-Marge (netto)</td><td>{{ b.ziel_marge | euro }}</td></tr>
             <tr><td>− {{ ust_label }}</td><td>{{ z.ust | euro }}</td></tr>
@@ -334,6 +485,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
         </div>
         {% endif %}
         {% for h in z.hinweise %}<p class="hinweiszeile">⚠ {{ h }}</p>{% endfor %}
+        {% if text_darf %}<div class="dub-platz" data-dub-gruppe hidden></div>{% endif %}
         <h3>Anschreiben</h3>
         {% if z.brief %}
           {% if not z.bereit %}<p class="warn" style="margin:0 0 8px">Ampel {{ AMPEL[b.ampel] }}: Das Erstangebot liegt deutlich unter dem Wunschpreis – nur senden, wenn du es trotzdem versuchen willst.</p>{% endif %}
@@ -372,8 +524,19 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
           </div>
         </div>
         {% endif %}
+        {% if z.kontakt and z.kontakt.text %}<p class="meta" data-kontakt-detail><b>{{ STUFEN.get(z.kontakt.stufe, 'Kontakt') }}:</b> {{ z.kontakt.text }}</p>{% endif %}
         {% if app %}
           <label class="notiz">Notiz (wird gespeichert)<textarea data-notiz rows="2">{{ a.notiz or '' }}</textarea></label>
+          <div class="kontaktverlauf" data-kontakte hidden></div>
+          <div class="kasten" data-verhandlung><h4 style="margin:0 0 6px">Verhandlung – Antworten und Notizen</h4>
+            <div class="vh-liste" data-vh-liste><p class="meta">Noch nichts eingetragen.</p></div>
+            <div class="vh-form">
+              <div class="zeile"><select data-vh-art aria-label="Art">{% for vs, vn in VH_ARTEN.items() %}<option value="{{ vs }}">{{ vn }}</option>{% endfor %}</select>
+                <select data-vh-kanal aria-label="Kanal"><option value="">Kanal …</option>{% for ks, kn in KANAELE.items() %}<option value="{{ ks }}">{{ kn }}</option>{% endfor %}</select>
+                <input data-vh-betrag type="number" inputmode="numeric" step="100" min="1" placeholder="genannter Betrag €" aria-label="genannter Betrag" style="width:150px"></div>
+              <textarea data-vh-text rows="2" maxlength="2000" aria-label="Text" placeholder="z. B. „Verkäufer will 34.500 €, Besichtigung Samstag möglich“"></textarea>
+              <div><button class="btn primaer" type="button" data-vh-eintragen>Eintragen</button> <span class="meta">nur von Hand – es wird nichts gesendet</span></div>
+            </div></div>
         {% else %}
           <p class="hinweis">Status wird nur in diesem Browser gemerkt. Dauerhaft: <code>python scout.py app</code> verwenden oder <code>python scout.py status {{ a.id }} kontaktiert</code>.</p>
         {% endif %}
@@ -385,6 +548,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
 
 <div id="toast" role="status" aria-live="polite"><span id="toast-text"></span><button id="toast-zurueck" hidden>Rückgängig</button></div>
 
+{% if text_darf %}<script src="/static/textimport.js"></script><script src="/static/dubletten.js"></script>{% endif %}
 <script>
 var SCOUT = {{ app | tojson }};
 var TEAM = {{ team | tojson }};
@@ -413,8 +577,9 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
   function zeigeStatus(id, status){
     var k = karte(id); if(!k) return;
     k.dataset.status = status;
+    if(status !== 'neu' && status !== 'gelöscht') k.dataset.ausblenden = '0';      // sobald daran gearbeitet wird, nie ausblenden (Regel serverseitig: z.ausblenden)
     var tag = k.querySelector('.tag.status');
-    tag.hidden = status === 'neu'; tag.textContent = STATUS_TEXT[status] || '';
+    tag.hidden = status === 'neu' || !STATUS_TEXT[status]; tag.textContent = STATUS_TEXT[status] || '';
     k.classList.toggle('erledigt', status !== 'neu');
     var d = abschnitt(id);
     if(d) d.querySelectorAll('[data-status]').forEach(function(b){ b.classList.toggle('an', b.dataset.status === status); });
@@ -427,6 +592,17 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     if(TEAM_AN) zeichneKarteTeam(id);
   }
   // Fehler tragen status (HTTP), grund (csrf|recht|zugriff|konflikt|belegt) und daten (ganze Antwort, bei 409 mit „team“)
+  // Anbieterart korrigieren (P3-05): gilt sofort für Sperre, Hinweise und Vergleichsbasis – sichtbar nach dem Neuladen der Liste
+  function anbieterSetzen(sel){
+    var sec = sel.closest('section'), wert = sel.value === 'unbekannt' ? '' : sel.value;
+    if(!sel.value) return;
+    post('/api/anzeige/' + encodeURIComponent(sec.dataset.id) + '/anbieter', {anbieter: wert || null}).then(function(d){
+      var tag = sec.querySelector('[data-anbieter]');
+      if(tag && d.anbieter){ tag.textContent = d.anbieter.text; tag.className = 'tag anb ' + d.anbieter.typ; }
+      toast('Anbieter gespeichert – Bewertung und Sperre gelten nach dem Neuladen');
+    }, function(err){ toast(err.message || 'Anbieter konnte nicht gespeichert werden'); }).then(function(){ sel.value = ''; });
+  }
+  if(APP) document.querySelectorAll('[data-anbieter-setzen]').forEach(function(s){ s.hidden = false; });
   function post(url, daten){
     return fetch(url, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','X-Scout-Token':APP.token}, body:JSON.stringify(daten)})
       .then(function(r){
@@ -532,7 +708,8 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     }, function(ok){
       k.dataset.nachfassen = '0';
       var tag = k.querySelector('.tag.nachfassen'); if(tag) tag.remove();
-      toast(ok ? 'Nachfass-Text kopiert ✓' + hinweisFuer(k) : 'Kopieren ging nicht – bitte Text markieren und kopieren.');
+      toast(ok ? 'Nachfass-Text kopiert ✓' + hinweisFuer(k) + (APP ? ' Danach im Kontaktverlauf „gesendet ✓“ klicken.' : '')
+               : 'Kopieren ging nicht – bitte Text markieren und kopieren.');
     });
   }
 
@@ -597,13 +774,71 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     var d = abschnitt(id); if(!d) return;
     if(dlg.firstElementChild) ablage.appendChild(dlg.firstElementChild);
     dlg.appendChild(d); zeigeStatus(id, karte(id).dataset.status);
-    dlg.showModal(); dlg.scrollTop = 0;
+    if(!dlg.open) dlg.showModal();
+    dlg.scrollTop = 0;
+    if(window.dubGruppe) window.dubGruppe(d);
+    ladeKontakte(d); ladeVerhandlung(d);
+  }
+  // Verhandlung (P6-03): Antworten und Notizen von Hand, aufgebaut mit textContent (Texte stammen aus Eingaben)
+  function zeigeVerhandlung(d, liste){
+    var box = d.querySelector('[data-vh-liste]'); if(!box) return;
+    box.textContent = '';
+    if(!liste.length){ var leer = document.createElement('p'); leer.className = 'meta'; leer.textContent = 'Noch nichts eingetragen.'; box.appendChild(leer); return; }
+    liste.forEach(function(x){
+      var p = document.createElement('p'), b = document.createElement('b');
+      b.textContent = x.art_text + (x.anzeige_id !== d.dataset.id ? ' (anderes Inserat)' : '') + ' · ' + (x.zeit_text || '') + (x.von ? ' · ' + x.von : '') +
+        (x.kanal_text ? ' · ' + x.kanal_text : '') + (x.betrag ? ' · ' + x.betrag.toLocaleString('de-DE') + ' €' : '') + ': ';
+      p.appendChild(b); p.appendChild(document.createTextNode(x.text === null ? '(Text entfernt)' : x.text)); box.appendChild(p);
+    });
+  }
+  function ladeVerhandlung(d){
+    if(!APP || !d.querySelector('[data-verhandlung]')) return;
+    fetch('/api/verhandlung/' + encodeURIComponent(d.dataset.id), {credentials:'same-origin'}).then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(l){ zeigeVerhandlung(d, l); }).catch(function(){});
+  }
+  function verhandlungEintragen(d){
+    var art = d.querySelector('[data-vh-art]').value, text = d.querySelector('[data-vh-text]'), betrag = d.querySelector('[data-vh-betrag]').value;
+    var kanal = art === 'antwort' ? d.querySelector('[data-vh-kanal]').value : '';
+    if(!text.value.trim()){ toast('Bitte einen Text eintragen'); text.focus(); return; }
+    var knopf = d.querySelector('[data-vh-eintragen]'); if(knopf.disabled) return;
+    knopf.disabled = true;                                                    // kein Doppel-Eintrag per Doppelklick
+    post('/api/verhandlung', {id: d.dataset.id, art: art, text: text.value, betrag: betrag ? Number(betrag) : null, kanal: kanal || null}).then(function(r){
+      knopf.disabled = false; text.value = ''; d.querySelector('[data-vh-betrag]').value = ''; zeigeVerhandlung(d, r.verlauf);
+      toast(art === 'antwort' ? 'Antwort eingetragen ✓ – Status bei Bedarf selbst setzen' : 'Notiz eingetragen ✓');
+    }, function(err){ knopf.disabled = false; toast(err.message, null, 8000, true); });
+  }
+  // Kontaktverlauf (P3-06) nur mit laufender App; aufgebaut mit textContent (Texte stammen aus Eingaben)
+  function ladeKontakte(d){
+    var box = d.querySelector('[data-kontakte]'); if(!APP || !box) return;
+    fetch('/api/kontakte/' + encodeURIComponent(d.dataset.id), {credentials:'same-origin'}).then(function(r){ return r.ok ? r.json() : []; }).then(function(liste){
+      box.textContent = ''; box.hidden = !liste.length;
+      if(!liste.length) return;
+      var h = document.createElement('h3'); h.textContent = 'Kontaktverlauf'; box.appendChild(h);
+      liste.forEach(function(x){
+        var p = document.createElement('p'); p.className = 'meta' + (x.bestaetigt || x.verworfen ? '' : ' warn');
+        p.textContent = x.art_text + (x.anzeige_id !== d.dataset.id ? ' (anderes Inserat)' : '') + ' · ' + x.zustand + ' · ' + (x.zeit_text || '') +
+          ((x.bestaetigt_von || x.vorbereitet_von) ? ' · ' + (x.bestaetigt_von || x.vorbereitet_von) : '') + ' · ' + x.kanal_text;
+        if(!x.bestaetigt && !x.verworfen && x.art === 'nachfassen'){
+          var b = document.createElement('button'); b.className = 'btn'; b.textContent = 'gesendet ✓'; b.style.marginLeft = '8px';
+          b.onclick = function(){ post('/api/kontakt/' + x.id + '/bestaetigen', {}).then(function(){ toast('Nachfassen als gesendet gespeichert ✓'); ladeKontakte(d); },
+                                                                                         function(err){ toast(err.message); }); };
+          p.appendChild(b);
+        }
+        box.appendChild(p);
+      });
+    }).catch(function(){ box.hidden = true; });
   }
   dlg.addEventListener('close', function(){ if(dlg.firstElementChild) ablage.appendChild(dlg.firstElementChild); });
   dlg.addEventListener('click', function(e){
     if(e.target === dlg || e.target.closest('[data-schliessen]')){ dlg.close(); return; }
     var d = e.target.closest('section'); if(!d) return;
-    var id = d.dataset.id;
+    var id = d.dataset.id, mitglied = e.target.closest('[data-gruppe-oeffnen]');
+    if(e.target.closest('[data-vh-eintragen]')){ verhandlungEintragen(d); return; }
+    if(mitglied){                                                           // anderes Inserat derselben Gruppe öffnen (P6-02)
+      var ziel = mitglied.getAttribute('data-gruppe-oeffnen');
+      if(karte(ziel)) oeffne(ziel); else toast('Dieses Inserat steht nicht in der Liste – bitte über „Anzeige ↗“ ansehen.');   // ohne dlg.close(): dessen verzögertes close-Ereignis leerte das Fenster
+      return;
+    }
     if(e.target.closest('[data-schreiben]')) anschreiben(id);
     else if(e.target.closest('[data-nachfassen-senden]')) nachfassen(id);
     else if(e.target.closest('[data-antwort-kopieren]')) antwortSenden(d);
@@ -619,11 +854,41 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
   dlg.addEventListener('input', function(e){ if(e.target.matches('[data-gegen]')) bewerteGegen(e.target.closest('section')); });
   dlg.addEventListener('change', function(e){
     if(TEAM_AN && e.target.matches('[data-zuweisen]')){ zuweisen(e.target.closest('section').dataset.id, e.target); return; }
+    if(APP && e.target.matches('[data-anbieter-setzen]')){ anbieterSetzen(e.target); return; }
     if(!APP || !e.target.matches('[data-notiz]')) return;
     post('/api/notiz', {id:e.target.closest('section').dataset.id, notiz:e.target.value})
       .then(function(){ toast('Notiz gespeichert'); }, function(){ toast('Notiz konnte nicht gespeichert werden'); });
   });
 
+  // Meldungen (P6-04): ungelesen = jünger als „alle gelesen“ (je Browser, localStorage); „öffnen“ führt ins Fahrzeugfenster
+  var meldungsBox = document.getElementById('meldungen');
+  if(meldungsBox){
+    var gelesenBis = function(){ try{ return localStorage.getItem('scout-meldungen-gelesen') || ''; }catch(e){ return ''; } };
+    var markiere = function(){
+      var bis = gelesenBis(), neu = 0;
+      meldungsBox.querySelectorAll('[data-meldung]').forEach(function(li){ var u = li.dataset.zeit > bis; li.classList.toggle('ungelesen', u); if(u) neu++; });
+      document.getElementById('meldungen-zahl').textContent = '(' + (neu ? neu + ' neu von ' : '') + meldungsBox.querySelectorAll('[data-meldung]').length + ')';
+    };
+    document.getElementById('meldungen-gelesen').addEventListener('click', function(e){
+      // bis jetzt – und mindestens bis zur jüngsten gezeigten Meldung (eine Besichtigung morgen trägt einen Zeitpunkt in der Zukunft)
+      var bis = meldungsBox.dataset.jetzt || jetztLokal();                      // maßgeblich ist die Zeit des Servers, nicht die Geräteuhr (QA B3)
+      meldungsBox.querySelectorAll('[data-meldung]').forEach(function(li){ if(li.dataset.zeit > bis) bis = li.dataset.zeit; });
+      e.preventDefault(); try{ localStorage.setItem('scout-meldungen-gelesen', bis); }catch(err){} markiere();
+    });
+    meldungsBox.addEventListener('click', function(e){
+      var b = e.target.closest('[data-meldung-oeffnen]'); if(!b) return;
+      var id = b.getAttribute('data-meldung-oeffnen');
+      if(karte(id)) oeffne(id); else toast('Dieses Inserat steht nicht in der Liste.');
+    });
+    markiere();
+  }
+  // Ankauf in Arbeit (P6-03): Zeile öffnet das Fahrzeugfenster
+  var ankaufArbeit = document.getElementById('ankauf-arbeit');
+  if(ankaufArbeit) ankaufArbeit.addEventListener('click', function(e){
+    var b = e.target.closest('[data-pipeline-oeffnen]'); if(!b) return;
+    var id = b.getAttribute('data-pipeline-oeffnen');
+    if(karte(id)) oeffne(id); else toast('Dieses Inserat steht nicht in der Liste.');
+  });
   liste.addEventListener('click', function(e){
     var k = e.target.closest('.karte'); if(!k) return;
     if(e.target.closest('[data-schreiben]')) anschreiben(k.dataset.id);
@@ -773,6 +1038,8 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
 {% endif %}
 
   // ---------- Filter & Sortierung ----------
+  var nurVerf = document.getElementById('nurverf'), einmal = document.getElementById('einmal'), quelleWahl = document.getElementById('quelle'), PROFIL_IDS = null;
+  window.scoutProfilFilter = function(ids){ PROFIL_IDS = ids; zeige(); };
   function zeige(){
     var q = document.getElementById('q').value.toLowerCase().trim(), sichtbar = 0;
     liste.dataset.filter = filter;
@@ -780,17 +1047,32 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
       var s = k.dataset.status;
       var ok = filter === 'alle' || (filter === 'anschreiben' && ((k.dataset.bereit === '1' && s === 'neu') || s === 'vorbereitet'))
             || (filter === 'nachfassen' && k.dataset.nachfassen === '1') || (filter === 'arbeit' && ARBEIT[s])
-            || (filter === 'neu' && k.dataset.neu === '1') || ((filter === 'gruen' || filter === 'gelb') && k.dataset.ampel === filter);
+            || (filter === 'neu' && k.dataset.neu === '1') || (filter === 'top' && k.dataset.top === '1') || (filter === 'neuigkeiten' && k.dataset.prio !== '9') || ((filter === 'gruen' || filter === 'gelb') && k.dataset.ampel === filter);
       if(q && q.split(/\s+/).some(function(w){ return k.dataset.text.indexOf(w) < 0; })) ok = false;
+      if(nurVerf.checked && k.dataset.ausblenden === '1') ok = false;      // verkauft/offline ohne Ankaufsarbeit (P3-04)
+      if(quelleWahl.value && k.dataset.quelle !== quelleWahl.value) ok = false;                // Quelle (P6-01)
+      if(PROFIL_IDS && !PROFIL_IDS[k.dataset.id]) ok = false;              // Suchprofil als Filter (P4-01, suchprofile.js)
       if(TEAM_AN && ((wer === 'meine' && k.dataset.mein !== '1') || (wer === 'frei' && k.dataset.frei !== '1'))) ok = false;
       k.hidden = !ok; if(ok) sichtbar++;
     });
+    // gleiches Fahrzeug nur einmal (P6-02, wie gruppen.nur_einmal): unter den nach allen Filtern sichtbaren Karten nach Rang; eine Karte
+    // entfällt nur, wenn schon eine gezeigte zu ihren Dubletten gehört – Karten mit offener Arbeit nie
+    if(einmal.checked){
+      var gezeigt = {};
+      karten.filter(function(k){ return !k.hidden; }).sort(function(x, y){ return x.dataset.grang - y.dataset.grang; }).forEach(function(k){
+        var dub = k.dataset.dub ? k.dataset.dub.split(' ') : [];
+        if(k.dataset.garbeit === '1' || !dub.some(function(i){ return gezeigt[i]; })) gezeigt[k.dataset.id] = true;
+        else { k.hidden = true; sichtbar--; }
+      });
+    }
     document.getElementById('leer').hidden = sichtbar > 0;
   }
   function sortiere(){
     var s = document.getElementById('sort').value;
     karten.sort(function(a, b){
+      if(s === 'score') return (b.dataset.score - a.dataset.score) || (a.dataset.verh - b.dataset.verh);      // P5-07
       if(s === 'verh') return a.dataset.verh - b.dataset.verh;
+      if(s === 'prio') return (a.dataset.prio - b.dataset.prio) || (a.dataset.verh - b.dataset.verh);     // P4-03
       if(s === 'pot') return b.dataset.pot - a.dataset.pot;
       if(s === 'preis') return a.dataset.preis - b.dataset.preis;
       if(s === 'entf') return a.dataset.entf - b.dataset.entf;
@@ -805,11 +1087,107 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     };
   });
   document.getElementById('q').oninput = zeige;
+  // Zähler an den Filtern: mit „gleiches Fahrzeug nur einmal“ Fahrzeuge, sonst Inserate (P6-02b)
+  var zaehler = function(){ document.querySelectorAll('.bar [data-zahl]').forEach(function(s){
+    s.textContent = '(' + (einmal.checked ? s.dataset.fahrzeuge : s.dataset.inserate) + ')'; }); };
+  nurVerf.onchange = zeige; einmal.onchange = function(){ zaehler(); zeige(); }; zaehler();
+  quelleWahl.onchange = zeige;
   document.getElementById('sort').onchange = sortiere;
 
   // Status beim Laden: Datenbank (App) bzw. Browser-Speicher (Datei)
   karten.forEach(function(k){ zeigeStatus(k.dataset.id, lokal[k.dataset.id] || k.dataset.status); });
   sortiere(); zeige();
+
+{% if text_darf %}
+  // ---------- Inserat einlesen (Link + Text), P2-05 ----------
+  var tiKnopf = document.getElementById('textimport-knopf');
+  if(APP && tiKnopf && window.TextImport){
+    var tiPanel = document.getElementById('textimport'), tiForm = null;
+    tiKnopf.onclick = function(){
+      var auf = tiPanel.hidden;
+      tiPanel.hidden = !auf; tiKnopf.setAttribute('aria-expanded', auf ? 'true' : 'false');
+      if(auf){
+        if(!tiForm) tiForm = TextImport.baue(document.getElementById('textimport-box'), {
+          post: function(url, daten){ return post(url, daten).catch(function(e){ if(e.status === 401) location.href = '/login?weiter=%2F'; throw e; }); },
+          nachErfolg: function(){ if(TEAM_AN) ladeTeam(); },
+          aktionen: function(d){
+            return [
+              {text:'In der Liste öffnen', klick: function(){ location.hash = '#fahrzeug=' + encodeURIComponent(d.anzeige_id); location.reload(); }},
+              {text:'Handy-Ansicht ↗', href: d.fahrzeug_url, neuesFenster: true},
+              {text:'Liste aktualisieren', klick: function(){ location.reload(); }}
+            ];
+          }
+        });
+        tiForm.fokus(); tiPanel.scrollIntoView({block:'nearest'});
+      }
+    };
+  }
+  // ---------- Dubletten (P3-02b, ADR-040): Vorschläge prüfen, „gleiches Fahrzeug“ / „verschieden“ entscheiden, im Fahrzeugfenster aufheben ----------
+  // Nie automatisch: jede Entscheidung braucht eine Bestätigung; Rechte prüft der Server (Bestätigen Inhaber + Mitarbeiter, Ablehnen/Aufheben nur Inhaber).
+  var dubKnopf = document.getElementById('dub-knopf');
+  if(APP && dubKnopf && window.Dubletten){
+    var dubPanel = document.getElementById('dubletten'), dubListe = null;
+    var dubFehler = function(e){ if(e.status === 401) location.href = '/login?weiter=%2F'; throw e; };
+    var dubPost = function(url, daten){ return post(url, daten).catch(dubFehler); };
+    var dubGet = function(url){
+      return fetch(url, {credentials:'same-origin'}).then(function(r){
+        return r.json().catch(function(){ return {}; }).then(function(d){
+          if(!r.ok){ var e = new Error(d.fehler || ('Fehler ' + r.status)); e.status = r.status; e.grund = d.grund || ''; throw e; }
+          return d;
+        });
+      }).catch(dubFehler);
+    };
+    var dubAktualisiert = function(){
+      if(TEAM_AN) ladeTeam();
+      document.getElementById('banner-text').textContent = 'Dublettenentscheidung gespeichert. Damit Bewertung, Vergleichsbasis und Anschreiben-Sperren stimmen, die Liste aktualisieren.';
+      document.getElementById('banner').hidden = false;
+    };
+    var dubVorschlaege = Dubletten.vorschlaege(document.getElementById('dubletten-box'), {
+      get: dubGet, post: dubPost, statusText: function(s){ return STATUS_TEXT[s] || s; },
+      meldung: function(t, warnung){ toast(t, null, warnung ? 12000 : 5000, !!warnung); },
+      nachAktion: dubAktualisiert,
+      zaehler: function(n, unvollstaendig){ document.getElementById('dub-n').textContent = ' (' + n + (unvollstaendig ? '+' : '') + ')'; }
+    });
+    dubVorschlaege.laden();
+    dubKnopf.onclick = function(){
+      var auf = dubPanel.hidden;
+      dubPanel.hidden = !auf; dubKnopf.setAttribute('aria-expanded', auf ? 'true' : 'false');
+      if(auf){ dubVorschlaege.laden(); dubPanel.scrollIntoView({block:'nearest'}); }
+    };
+    // Abschnitt „Gleiches Fahrzeug“ im Fahrzeugfenster: Gruppe, abgeleiteter Fahrzeugstatus, Verlauf, Aufheben (nur Inhaber, nur ohne spätere Zusammenführung)
+    window.dubGruppe = function(sektion){
+      var platz = sektion && sektion.querySelector('[data-dub-gruppe]'), id = sektion && sektion.dataset.id; if(!platz) return;
+      var zeige = function(){
+        return dubGet('/api/dubletten/entscheidungen?anzeige=' + encodeURIComponent(id)).then(function(d){
+          platz.textContent = '';
+          // die Mitglieder zeigt „Gleiches Fahrzeug“ im Fenster (P6-02) – hier nur Entscheidungsverlauf und Aufheben
+          var box = Dubletten.gruppeBox(Object.assign({}, d, {gruppe: []}), {
+            aktuell: id, verlauf: true, statusText: function(s){ return STATUS_TEXT[s] || s; },
+            oeffnen: function(anzeige){ if(karte(anzeige)){ oeffne(anzeige); } else toast('Dieses Inserat steht nicht in der Liste – bitte über „Anzeige öffnen ↗“ ansehen.'); },
+            aufheben: function(e, knopf){
+              if(!Dubletten.aufhebenFrage(e)) return;
+              knopf.disabled = true;
+              dubPost('/api/dubletten/aufheben', {entscheidung_id: e.id}).then(function(){
+                toast('Entscheidung aufgehoben ✓'); dubAktualisiert(); dubVorschlaege.laden(); zeige();
+              }, function(err){ knopf.disabled = false; toast(Dubletten.fehlerText(err), null, 14000, true); zeige(); });
+            }
+          });
+          if(box){ platz.appendChild(box); platz.hidden = false; } else platz.hidden = true;
+        }, function(){ platz.hidden = true; });
+      };
+      zeige();
+    };
+  }
+  // Sprung aus dem Ergebnis des Einlesens: Fahrzeugfenster öffnen (Liste ist nach dem Neuladen aktuell)
+  var sprung = /^#fahrzeug=(.+)$/.exec(location.hash);
+  if(sprung){
+    var wunschId = ''; try{ wunschId = decodeURIComponent(sprung[1]); }catch(e){}
+    history.replaceState(null, '', location.pathname + location.search);
+    var ziel = karten.filter(function(k){ return k.dataset.id === wunschId; })[0];
+    if(ziel){ document.querySelector('.bar button[data-f="alle"]').click(); oeffne(wunschId); }
+    else toast('Das Fahrzeug steht nicht in dieser Liste – bitte in der Handy-Ansicht öffnen.', null, 9000, true);
+  }
+{% endif %}
 
   // ---------- Suchlauf (manuell + automatisch) ----------
   var knopf = document.getElementById('suchen');
@@ -818,8 +1196,9 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     var manuell = false, bekanntesEnde, timer;   // undefined = noch nicht abgefragt
     var plane = function(ms){ clearTimeout(timer); timer = setTimeout(pruefe, ms); };
     var melde = function(s){
-      if(!('Notification' in window) || Notification.permission !== 'granted' || !(s.neue_treffer || s.nachfassen)) return;
+      if(!('Notification' in window) || Notification.permission !== 'granted' || !(s.neue_treffer || s.nachfassen || s.preissenkungen)) return;
       try{ new Notification('Wohnmobil-Scout', {body: s.neue_treffer + ' neue Wohnmobile mit fertigem Anschreiben'
+                                                + (s.preissenkungen ? ' · ' + s.preissenkungen + '× Preis deutlich gesenkt' : '')
                                                 + (s.nachfassen ? ' · ' + s.nachfassen + '× nachfassen' : '')}); }catch(e){}
     };
     var pruefe = function(){
@@ -857,7 +1236,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
       einlesen.disabled = true; einlesen.textContent = 'Wird eingelesen …';
       var fertig = function(){ einlesen.disabled = false; einlesen.textContent = '⤓ Gespeicherte Seiten einlesen'; };
       fetch('/api/import', {method:'POST', headers:{'Content-Type':'application/json','X-Scout-Token':APP.token}, body:'{}'})
-        .then(function(r){ return r.json().then(function(d){ if(!r.ok) throw new Error(d.fehler || r.status); return d; }); })
+        .then(function(r){ return r.json().then(function(d){ if(!r.ok){ var e = new Error(d.fehler || r.status); e.deaktiviert = d.grund === 'deaktiviert'; throw e; } return d; }); })
         .then(function(s){
           if(!s.dateien){
             fertig();
@@ -883,7 +1262,31 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
           toast(text + ' – Liste wird neu geladen.');
           setTimeout(function(){ location.reload(); }, 4000);
         })
-        .catch(function(e){ fertig(); toast('Einlesen fehlgeschlagen: ' + e.message); });
+        .catch(function(e){ fertig(); toast(e.deaktiviert ? e.message : 'Einlesen fehlgeschlagen: ' + e.message, null, e.deaktiviert ? 15000 : 0, !!e.deaktiviert); });
+    };
+    // Suchagent-Mails (.eml aus import/email/) einlesen – auch hier ruft der Server nichts aus dem Internet ab
+    var mails = document.getElementById('mails');
+    if(mails) mails.onclick = function(){
+      mails.disabled = true; mails.textContent = 'Wird eingelesen …';
+      var fertig = function(){ mails.disabled = false; mails.textContent = '✉ Mails einlesen'; };
+      fetch('/api/import/mails', {method:'POST', headers:{'Content-Type':'application/json','X-Scout-Token':APP.token}, body:'{}'})
+        .then(function(r){ return r.json().then(function(d){ if(!r.ok){ var e = new Error(d.fehler || r.status); e.deaktiviert = d.grund === 'deaktiviert'; throw e; } return d; }); })
+        .then(function(s){
+          fertig();
+          if(!s.dateien){
+            toast('Keine Mails (.eml) gefunden in ' + s.ordner + ' – Benachrichtigung des Suchagenten als .eml speichern (Thunderbird: Datei → Speichern unter) und in diesen Ordner legen.');
+            return;
+          }
+          var gelesen = s.dateien - s.unbekannt - s.fehlerhaft;
+          var text = mehrzahl(gelesen, 'Mail', 'Mails') + ' eingelesen: ' + s.neu + ' neu, ' + mehrzahl(s.preis, 'Preissenkung', 'Preissenkungen') + ', ' + s.bekannt + ' bekannt';
+          if(s.unbekannt) text += ' · ' + mehrzahl(s.unbekannt, 'Mail', 'Mails') + ' nicht erkannt (nach nicht_erkannt/)';
+          if(s.fehlerhaft) text += ' · ' + mehrzahl(s.fehlerhaft, 'Mail', 'Mails') + ' nicht lesbar (nach fehlerhaft/)';
+          if(s.uebrig) text += ' · ' + s.uebrig + ' weitere beim nächsten Klick';
+          if(s.unverarbeitet) text += ' · ' + mehrzahl(s.unverarbeitet, 'Mail liegt', 'Mails liegen') + ' seit über der Datenschutz-Frist unverarbeitet im Ordner';
+          if(s.fehler.length) text += ' – ' + s.fehler.slice(0, 2).join(' | ') + (s.fehler.length > 2 ? ' | … (alle in ausgabe/scout.log)' : '');
+          toast(text + ' – zum Aktualisieren der Liste die Seite neu laden (F5).', null, 20000);
+        })
+        .catch(function(e){ fertig(); toast(e.deaktiviert ? e.message : 'Einlesen fehlgeschlagen: ' + e.message, null, e.deaktiviert ? 15000 : 0, !!e.deaktiviert); });
     };
     if('Notification' in window && Notification.permission === 'default'){
       glocke.hidden = false;
@@ -893,5 +1296,6 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
   }
 })();
 </script>
+{% if app %}<script src="/static/suchprofile.js"></script>{% endif %}
 </body>
 </html>

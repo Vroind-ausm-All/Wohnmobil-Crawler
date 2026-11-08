@@ -20,14 +20,15 @@ import json
 from datetime import datetime
 
 from .auswertung import _sicht_als, bewerte_anzeige, fuer_rechner, kandidaten_arten
-from .rechner import STANDARD_MARKTMODELL, Rechner, _runde
+from .rechner import (STANDARD_AEHNLICHKEIT, STANDARD_MARKTMODELL, Rechner, _runde, abholung_einstellungen, bahn_entfernung, haendlerangebot,
+                      mit_firmensitz, privatangebot)
 
-VERSION = "E1"          # bei jeder Änderung an Formeln erhöhen – ältere Kalkulationen gelten dann als „andere Version“
+VERSION = "E6"          # bei jeder Änderung an Formeln erhöhen – ältere Kalkulationen gelten dann als „andere Version“ (E2–E6: P5-02 bis P5-06)
 SZENARIEN = {"vorsichtig": "unteres Ende der Marktspanne", "erwartet": "Schätzung des Marktniveaus",
              "guenstig": "oberes Ende der Marktspanne"}
 FAHRZEUG_FELDER = ("id", "suche", "art", "titel", "marke", "modell", "serie", "ez_jahr", "km", "preis", "kurzbeschreibung",
-                   "beschreibung", "getriebe", "gewerblich", "ausland", "entfernung_km")
-VERGLEICH_FELDER = ("id", "suche", "art", "titel", "marke", "serie", "ez_jahr", "km", "preis", "kurzbeschreibung",
+                   "beschreibung", "getriebe", "gewerblich", "ausland", "entfernung_km", "entfernung_bahn_km")
+VERGLEICH_FELDER = ("id", "suche", "art", "titel", "marke", "modell", "serie", "ez_jahr", "km", "preis", "kurzbeschreibung",
                     "beschreibung", "getriebe", "gewerblich", "zuletzt_gesehen")
 SICHERHEIT_PUNKTE = {"hoch": 5, "mittel": 15, "niedrig": 30, "manuell": 20, "keine": 60}
 
@@ -53,6 +54,16 @@ def _rechner_cfg(cfg: dict) -> dict:
     """Wirksame Rechner-Parameter inkl. eingebauter Standardwerte – sonst hinge das Nachrechnen an späteren Code-Standards."""
     r = dict(cfg["rechner"])
     r["marktmodell"] = {**STANDARD_MARKTMODELL, **(r.get("marktmodell") or {})}
+    r["vergleich_aehnlichkeit"] = {**STANDARD_AEHNLICHKEIT, **(r.get("vergleich_aehnlichkeit") or {})}
+    r.setdefault("abschlag_marke_unbekannt", 0.05)
+    r.setdefault("haendler_vergleich_min", 3)
+    r.setdefault("abschlag_haendler_angebot", 0.05)
+    r.setdefault("haendler_vk_deckel", True)
+    r.setdefault("maengelrisiko_max", 0.0)
+    r["kosten"] = {"standzeit_saison_zuschlag": {}, "gewaehrleistung_staffel": [], "kapitalzins_jahr": 0.0, "kapital_anteil_vk": 0.8,
+                   **r["kosten"]}
+    # Standardwerte und Entfernung Firmensitz → Bahnhof einfrieren (P5-06)
+    r["kosten"]["abholung"] = mit_firmensitz(abholung_einstellungen(r["kosten"].get("abholung")), (cfg.get("anschreiben") or {}).get("plz"))
     return r
 
 
@@ -63,7 +74,7 @@ def _sichten(fahrzeug: dict) -> list[dict]:
 
 def vergleich_auszug(rechner: Rechner, fahrzeug: dict, vergleich: list[dict]) -> list[dict]:
     """Nur die Vergleichsangebote, die der Rechner für dieses Fahrzeug überhaupt berücksichtigen kann (gleiche Art, EZ- und
-    km-Toleranz, Privatangebot mit Preis) – dieselben Filter wie ``Rechner.vergleiche``, damit das Ergebnis mit dem Auszug
+    km-Toleranz, Privat- oder Händlerangebot mit Preis) – dieselben Filter wie ``Rechner.vergleiche``, damit das Ergebnis mit dem Auszug
     exakt dem mit der ganzen Datenbank entspricht. Nur die Felder, die der Rechner liest."""
     if not fahrzeug.get("ez_jahr"):
         return []
@@ -72,7 +83,7 @@ def vergleich_auszug(rechner: Rechner, fahrzeug: dict, vergleich: list[dict]) ->
     arten = {rechner.art(s) for s in _sichten(fahrzeug)}
     aus = []
     for b in vergleich:
-        if not b.get("preis") or b["preis"] < 1000 or b.get("gewerblich") or not b.get("ez_jahr"):
+        if not b.get("preis") or b["preis"] < 1000 or not (privatangebot(b) or haendlerangebot(b)) or not b.get("ez_jahr"):
             continue
         if abs(b["ez_jahr"] - fahrzeug["ez_jahr"]) > jt or rechner.art(b) not in arten:
             continue
@@ -84,9 +95,15 @@ def vergleich_auszug(rechner: Rechner, fahrzeug: dict, vergleich: list[dict]) ->
 
 def eingabe(cfg: dict, fahrzeug: dict, vergleich: list[dict], *, betrag: int | None, stichtag: datetime, abholung: str) -> dict:
     """Alles, wovon das Ergebnis abhängt – kanonisch (so, wie es gespeichert wird). ``fahrzeug`` in Rechner-Sicht mit
-    ``entfernung_km``; ``stichtag`` lokale Zeit (wie die Zeitstempel der Vergleichsangebote); ``abholung`` nur Beschriftung."""
+    ``entfernung_km`` (Firmensitz bzw. Standort → Verkäufer) und – für die Bahn-Variante – ``entfernung_bahn_km``; fehlt dieser Schlüssel,
+    wird er aus der PLZ geschätzt (die PLZ selbst wird nicht gespeichert). ``stichtag`` lokale Zeit (wie die Zeitstempel der
+    Vergleichsangebote); ``abholung`` nur Beschriftung."""
     rc = _rechner_cfg(cfg)
     rechner = Rechner({"rechner": rc}, stichtag)
+    if "entfernung_bahn_km" not in fahrzeug:
+        fahrzeug = {**fahrzeug, "entfernung_bahn_km": bahn_entfernung(rc, fahrzeug.get("plz"))}
+    # nur auf 10 km gerundet speichern – zwei genaue Entfernungen von zwei bekannten Orten verrieten die PLZ des Verkäufers (QA P5-06 B2)
+    fahrzeug = {**fahrzeug, **{k: int(round(fahrzeug[k], -1)) for k in ("entfernung_km", "entfernung_bahn_km") if fahrzeug.get(k) is not None}}
     return _kanonisch({"version": VERSION, "stichtag": stichtag.isoformat(timespec="seconds"), "betrag": betrag,
                        "abholung": abholung, "rechner": rc, "kalkulation": einstellungen(cfg),
                        "fahrzeug": {k: fahrzeug.get(k) for k in FAHRZEUG_FELDER},
@@ -120,7 +137,8 @@ def rechne(e: dict) -> dict:
         niveaus = {"vorsichtig": b.spanne_von, "erwartet": None, "guenstig": b.spanne_bis}
     szenarien = {}
     for name, niveau in niveaus.items():
-        s = b if niveau is None else bewerte_anzeige(rechner, a, vergleich, marktwert_manuell=niveau)
+        s = b if niveau is None else bewerte_anzeige(rechner, a, vergleich, marktwert_manuell=niveau,     # Händlermarkt-Grenze je Szenario
+                                                     haendler_quantil={"vorsichtig": .25, "guenstig": .75}[name])
         z = {"marktniveau": s.marktwert_angebote, "haendler_vk": s.haendler_vk, "kosten": s.kosten, "ziel_marge": s.ziel_marge,
              "max_ek": _max_ek(rechner, s.haendler_vk, s.kosten, s.ziel_marge, p)}
         if betrag:
@@ -131,7 +149,9 @@ def rechne(e: dict) -> dict:
     ampel = None
     if betrag:
         ampel = "gruen" if betrag <= sicher else "gelb" if betrag <= ober else "rot"
-    return {"version": VERSION, "moeglich": True, "betrag": betrag, "szenarien": szenarien,
+    return {"version": VERSION, "moeglich": True, "betrag": betrag, "szenarien": szenarien, "abschlag_marke": b.abschlag_marke,
+            "standzeit_monate": b.standzeit_monate,
+            "kosten_kapital": sum(v for n, v in b.kosten_posten.items() if n.startswith("Kapitalbindung")), "abholung": b.abholung,
             "korridor": {"sicher_bis": sicher, "obergrenze": ober}, "ampel": ampel,
             "sicherheit": b.sicherheit, "spanne": [b.spanne_von, b.spanne_bis] if b.spanne_von else None,
             "risiko": _risiko(b, a, betrag, sicher, ober), "annahmen": _annahmen(e, b), "vergleich_basis": b.vergleich_basis}
@@ -162,13 +182,38 @@ def _eur(x: int) -> str:
     return f"{x:,} €".replace(",", ".")
 
 
+def abhol_text(ab: dict | None) -> str:
+    """Kurztext der Abholvarianten (P5-06) – grobe Annahmen, „ca.“."""
+    if not ab:
+        return ""
+    teile = []
+    for v in ab["varianten"]:
+        if v["art"] == "auto":
+            teile.append(f"Auto ca. {_eur(v['euro'])} ({stunden_text(v['stunden'])} Fahrerzeit)")
+        else:
+            teile.append(f"Bahn ab {v['ab']} ca. {_eur(v['euro'])} ({v['ticket_art']} ca. {_eur(v['ticket'])}, Anreise ca. "
+                         f"{stunden_text(v['reise_stunden'])}, Rückfahrt im Wohnmobil ca. {stunden_text(v['rueck_stunden'])})")
+    return (("; " if len(teile) == 1 else f"; gerechnet: {'Bahn' if ab['gewaehlt'] == 'bahn' else 'Auto'} – ") + " · ".join(teile)
+            + (f" ({ab['hinweis']})" if ab.get("hinweis") else ""))
+
+
+def stunden_text(h: float) -> str:
+    """Stunden als „3 Std. 15 Min.“ (auf ganze Minuten gerundet, QA P5-06 B5)."""
+    std, minuten = divmod(round(h * 60), 60)
+    return f"{std} Std." + (f" {minuten} Min." if minuten else "") if std else f"{minuten} Min."
+
+
+
 def _annahmen(e: dict, b) -> list[str]:
     r = e["rechner"]
     steuer = "§25a UStG (Differenzbesteuerung, 19/119 auf die Marge)" if r["differenzbesteuerung"] else "Regelbesteuerung (19 %)"
     return [f"Stichtag {e['stichtag']}, Rechenstand {VERSION}",
             f"Abholung: {e['abholung']}" + (f", {e['fahrzeug']['entfernung_km']} km" if e["fahrzeug"].get("entfernung_km") is not None
-                                            else ", Entfernung unbekannt (Transportpauschale)"),
-            f"Marktwert privat = Marktniveau − {r['abschlag_angebot_auf_privatwert']:.0%}; Händler-VK = privat + {r['aufschlag_haendler_vk']:.0%}",
+                                            else ", Entfernung unbekannt (Transportpauschale)") + abhol_text(b.abholung),
+            f"Marktwert privat = Marktniveau − {r['abschlag_angebot_auf_privatwert']:.0%}; Händler-VK = privat + {r['aufschlag_haendler_vk']:.0%}"
+            + (f", davon − {b.abschlag_marke:.0%} für unbekannte Marke" if b.abschlag_marke else "")
+            + (f"; höchstens Händlermarkt ({b.haendler_anzahl} Händlerangebote, Niveau {_eur(b.haendler_niveau)}) − "
+               f"{r['abschlag_haendler_angebot']:.0%} Verhandlung" if b.vk_gedeckelt else ""),
             "Kosten (erwartet): " + ", ".join(f"{n} {_eur(v)}" for n, v in b.kosten_posten.items()),
             f"Zielmarge {r['ziel_marge_prozent']:.0%} vom Händler-VK, mindestens {_eur(r['ziel_marge_min'])}",
             f"Provision {e['kalkulation']['provision_prozent']:.1%} vom Zuschlag (als Kosten, im Max-EK enthalten)",

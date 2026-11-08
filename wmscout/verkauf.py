@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from .bewertung.auswertung import bewerte_anzeige, vergleichsbasis
+from .bewertung.auswertung import bewerte_anzeige, vergleichsbasis_aus
 from .bewertung.rechner import Bewertung, Rechner
 from .datenbank import IMPORT_ARTEN, Datenbank
 from .normalisierung.fahrzeug import ergaenze_fahrzeug
@@ -41,7 +41,10 @@ def _jetzt() -> str:
 
 
 def _text(daten: dict, feld: str, laenge: int) -> str | None:
-    wert = str(daten.get(feld) or "").strip()
+    wert = daten.get(feld)
+    if isinstance(wert, bool) or not isinstance(wert, (str, int, float)):      # Listen/Objekte nicht als Text speichern (QA P7-03 B10)
+        return None
+    wert = str(wert).strip()
     return wert[:laenge] or None
 
 
@@ -126,7 +129,7 @@ def als_fahrzeug(anfrage: dict) -> dict:
 
 
 def vergleich_aus(db: Datenbank) -> list[dict]:
-    return vergleichsbasis([ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()])
+    return vergleichsbasis_aus(db)
 
 
 def bewerte(cfg: dict, anfrage: dict, vergleich: list[dict], rechner: Rechner | None = None) -> Bewertung:
@@ -185,6 +188,15 @@ class VerkaufSpeicher:
         if status:
             sql, p = sql + " WHERE v.status=?", (status,)
         return [dict(r) for r in self.con.execute(sql + " ORDER BY v.erstellt_am DESC, v.id DESC", p)]
+
+    def offene_kurz(self) -> list[dict]:
+        """Offene Anfragen für Meldungen und Dashboard (P7-02): nur Fahrzeugangaben, ohne Verkäuferdaten, ohne fristgelöschte/widerrufene
+        (deren Personendaten sind weg, ein Vorgang ist es nicht mehr) – über den Status-Index statt über die ganze Liste."""
+        offen = ",".join("?" * len(OFFEN))
+        return [dict(r) for r in self.con.execute(
+            "SELECT id, referenz, marke, modell, ez_jahr, km, preisvorstellung, status, erstellt_am, bearbeiter_id FROM verkaufsanfragen v "
+            f"WHERE status IN ({offen}) AND NOT EXISTS (SELECT 1 FROM anfrage_verlauf h WHERE h.anfrage_id = v.id "
+            "AND h.ereignis IN ('frist', 'widerruf')) ORDER BY erstellt_am DESC, id DESC", OFFEN)]
 
     def lade(self, anfrage_id: int) -> dict | None:
         r = self.con.execute(self._SPALTEN + " WHERE v.id=?", (anfrage_id,)).fetchone()
@@ -260,9 +272,10 @@ class VerkaufSpeicher:
             self._verlauf(anfrage_id, nutzer_id, "foto", None, name)
         return {"id": fid, "datei": name}
 
-    def widerruf(self, anfrage_id: int, nutzer_id: int | None) -> dict:
+    def widerruf(self, anfrage_id: int, nutzer_id: int | None, grund: str = "widerruf") -> dict:
         """Widerruf der Einwilligung (Datenrechte, G0): Verkäufer anonymisieren, Freitexte, Notiz und Fotos löschen, Freigabe für
-        Standorte zurücknehmen, Status „zurückgezogen“. Fahrzeugdaten ohne Personenbezug (Art, Marke, EZ, km, Preisvorstellung)
+        Standorte zurücknehmen, Status „zurückgezogen“. ``grund="frist"`` (F10): dieselbe Löschung nach Ablauf der Aufbewahrungsfrist,
+        der Status bleibt. Fahrzeugdaten ohne Personenbezug (Art, Marke, EZ, km, Preisvorstellung)
         bleiben für Statistik und nachrechenbare Kalkulationen. Besteht ein nicht stornierter Ankauf, wird NICHT gelöscht
         (gesetzliche Aufbewahrung – im Einzelfall klären). Laufende Auktionen bricht der Aufrufer vorher ab."""
         tabellen = {r[0] for r in self.con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -283,7 +296,8 @@ class VerkaufSpeicher:
                 self.con.execute("UPDATE verkaeufer SET name='(gelöscht)', email=NULL, telefon='(gelöscht)', plz=NULL, ort=NULL WHERE id=?",
                                  (a["verkaeufer_id"],))
             self.con.execute("UPDATE verkaufsanfragen SET beschreibung=NULL, notiz=NULL, freigegeben_am=NULL, freigegeben_von=NULL, "
-                             "status='zurueckgezogen', aktualisiert_am=? WHERE id=?", (_jetzt(), anfrage_id))
+                             "status=CASE WHEN ?='frist' THEN status ELSE 'zurueckgezogen' END, aktualisiert_am=? WHERE id=?",
+                             (grund, _jetzt(), anfrage_id))
             self.con.execute("UPDATE anfrage_verlauf SET alt=NULL, neu=NULL WHERE anfrage_id=? AND ereignis='notiz'", (anfrage_id,))
             dateien = [r[0] for r in self.con.execute("SELECT datei FROM anfrage_fotos WHERE anfrage_id=?", (anfrage_id,))]
             self.con.execute("DELETE FROM anfrage_fotos WHERE anfrage_id=?", (anfrage_id,))
@@ -305,7 +319,8 @@ class VerkaufSpeicher:
                                             self.con.execute("SELECT datei FROM fotos WHERE besichtigung_id=?", (b["id"],))]
                     self.con.execute("DELETE FROM fotos WHERE besichtigung_id=?", (b["id"],))
                     geschwaerzt += 1
-            self._verlauf(anfrage_id, nutzer_id, "widerruf", None, "personenbezogene Daten gelöscht")
+            self._verlauf(anfrage_id, nutzer_id, "frist" if grund == "frist" else "widerruf", None,
+                          "personenbezogene Daten nach Ablauf der Aufbewahrungsfrist gelöscht" if grund == "frist" else "personenbezogene Daten gelöscht")
         # Dateien erst nach erfolgreichem Commit entfernen (Besichtigungsfotos liegen im Fotoordner des Teams, eine Ebene höher)
         for pfad in [self.foto_ordner / str(int(anfrage_id)) / d for d in dateien] + \
                     [self.foto_ordner.parent / str(int(bid)) / d for bid, d in besichtigungs_fotos]:
