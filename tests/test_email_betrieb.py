@@ -5,6 +5,8 @@ Alle Mails sind NACHGEBILDET (tests/nachgebildet_mails.py); echte Mails sind die
 import os
 import threading
 import time
+from datetime import datetime
+from email.utils import format_datetime
 
 import pytest
 import yaml
@@ -156,9 +158,11 @@ def test_api_mails_eingeschaltet_rollen_und_grenzen(cfg, db, mails, tmp_path, mo
 
         fremd = tmp_path / "fremd"
         fremd.mkdir()
-        (fremd / "x.eml").write_bytes(nachgebildet_ka_mail())
-        (mails / "a.eml").write_bytes(nachgebildet_ka_mail())
-        (mails / "b.eml").write_bytes(nachgebildet_md_mail())
+        # aktuelles Mail-Datum: die Liste zeigt nur Inserate der letzten 21 Tage (Datenbank.aktive) – ein festes Datum veraltet
+        jetzt = format_datetime(datetime.now().astimezone())
+        (fremd / "x.eml").write_bytes(nachgebildet_ka_mail(datum=jetzt))
+        (mails / "a.eml").write_bytes(nachgebildet_ka_mail(datum=jetzt))
+        (mails / "b.eml").write_bytes(nachgebildet_md_mail(datum=jetzt))
         (mails / "c.eml").write_bytes(b"kaputt ohne kopf")
         assert lokal("POST", "/api/import/mails", {}, token=False)[0] == 403                     # ohne CSRF-Token
         suchlauf.stand["laeuft"] = True
