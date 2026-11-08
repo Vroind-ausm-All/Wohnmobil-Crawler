@@ -7,7 +7,7 @@ from datetime import date
 
 import pytest
 
-from tests.daten import BASIS, detail_html, such_html
+from tests.daten import BASIS, detail_html, such_html as _such_html
 from tests.test_cli import _scout
 from tests.test_handy import Client
 from wmscout.app import erstelle_server
@@ -22,6 +22,13 @@ from wmscout.eingang.seiten import _detail_kennung
 from wmscout.normalisierung.fahrzeug import art_schluessel, arten_im_text
 from wmscout.importer import Importer
 from wmscout.team import TeamSpeicher
+
+
+def such_html(ads):
+    # Diese Fälle prüfen Fahrzeugart/Importablauf bei Privatangeboten. Der Nachweis ist ausdrücklich
+    # in den synthetischen Karten enthalten; fehlende Anbieterbelege prüfen test_anbieter/P0 separat.
+    return _such_html(ads).replace('<div class="aditem-main--bottom">',
+                                  '<div class="aditem-main--bottom"><span>Privater Anbieter</span>')
 
 
 class KeinNetz:

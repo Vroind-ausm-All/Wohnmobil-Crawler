@@ -95,6 +95,8 @@ def inserat_anonymisieren(db: Datenbank, ausgabe_ordner: Path, anzeige_id: str, 
                     (json.dumps(details, ensure_ascii=False), ohne_namen(a["anschreiben_text"]), anzeige_id))
         if "verhandlung" in tabellen:                     # Antworten und Verhandlungsnotizen (P6-03) wie die Team-Notiz: Text leeren
             con.execute("UPDATE verhandlung SET text=NULL WHERE anzeige_id=?", (anzeige_id,))
+        if "feldbestaetigungen" in tabellen:              # Freitext-Orts-/Modellangaben können Personendaten enthalten
+            con.execute("DELETE FROM feldbestaetigungen WHERE anzeige_id=?", (anzeige_id,))
         if "kontakte" in tabellen and varianten:          # Texte im Kontaktverlauf (P3-06) wie das Anschreiben
             for k in con.execute("SELECT id, text FROM kontakte WHERE anzeige_id=? AND text IS NOT NULL", (anzeige_id,)).fetchall():
                 con.execute("UPDATE kontakte SET text=? WHERE id=?", (ohne_namen(k["text"]), k["id"]))
@@ -155,18 +157,25 @@ def inserate_faellig(db: Datenbank, monate: int, jetzt: datetime | None = None) 
     vh = db.con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='verhandlung'").fetchone()
     vh_zeit = ", COALESCE((SELECT MAX(v.zeitpunkt) FROM verhandlung v WHERE v.anzeige_id = anzeigen.id), '')" if vh else ""
     vh_text = "     OR id IN (SELECT anzeige_id FROM verhandlung WHERE text IS NOT NULL) " if vh else ""
+    # Bestätigte Angaben (v24): Textwerte und die beim Bestätigen aufbewahrten Originaltexte
+    # können Personendaten enthalten. Eine spätere Bestätigung ist erneute Aktivität.
+    fb = db.con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='feldbestaetigungen'").fetchone()
+    fb_zeit = (", COALESCE((SELECT strftime('%Y-%m-%dT%H:%M:%S', MAX(b.bestaetigt_am), 'localtime') "
+               "FROM feldbestaetigungen b WHERE b.anzeige_id = anzeigen.id), '')") if fb else ""
+    fb_text = (" OR id IN (SELECT anzeige_id FROM feldbestaetigungen WHERE feld IN ('marke','modell','ort') "
+               "AND (wert_json != 'null' OR extrahiert_json != 'null'))") if fb else ""
     return [r[0] for r in db.con.execute(
         "SELECT id FROM anzeigen WHERE COALESCE(status, 'neu') != 'gekauft' "
-        f"AND MAX(COALESCE(zuletzt_gesehen, ''), COALESCE(status_am, ''), COALESCE(kontaktiert_am, ''){vh_zeit}) < ? "
+        f"AND MAX(COALESCE(zuletzt_gesehen, ''), COALESCE(status_am, ''), COALESCE(kontaktiert_am, ''){vh_zeit}{fb_zeit}) < ? "
         "AND (details_json LIKE '%verkaeufer_name%' OR anschreiben_text IS NOT NULL OR notiz IS NOT NULL "
-        "     OR id IN (SELECT anzeige_id FROM kontakte WHERE text IS NOT NULL) " + vh_text +
+        "     OR id IN (SELECT anzeige_id FROM kontakte WHERE text IS NOT NULL) " + vh_text + fb_text +
         "     OR id IN (SELECT anzeige_id FROM besichtigungen WHERE anzeige_id IS NOT NULL)) "
         "AND id NOT IN (SELECT anzeige_id FROM besichtigungen WHERE anzeige_id IS NOT NULL AND status IN ('geplant', 'laeuft')) "
         # schon anonymisiert: nur wieder fällig, wenn danach neue Verhandlungstexte eingetragen wurden (QA P6-03 B2)
         # Anonymisieren leert Notiz und Verhandlungstexte; steht danach wieder etwas darin, ist es wieder fällig (P6-03b). Kontakt- und
         # Anschreibentexte bleiben nach dem Anonymisieren (ohne Namen) stehen und lösen deshalb nichts aus.
         "AND (COALESCE(details_json, '') NOT LIKE '%anonymisiert_am%' OR NULLIF(TRIM(notiz), '') IS NOT NULL"
-        + (" OR id IN (SELECT anzeige_id FROM verhandlung WHERE text IS NOT NULL)" if vh else "") + ")" + ankauf, (grenze,))]
+        + (" OR id IN (SELECT anzeige_id FROM verhandlung WHERE text IS NOT NULL)" if vh else "") + fb_text + ")" + ankauf, (grenze,))]
 
 
 def diagnose_nach_frist(ausgabe_ordner: Path, monate: int, jetzt: datetime | None = None) -> int:

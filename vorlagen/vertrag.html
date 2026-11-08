@@ -33,6 +33,7 @@
     <div><b>Verkäufer</b><div class="feld">{{ a.verkaeufer.name if a.verkaeufer else '' }}</div>
       <div class="feld">{{ a.verkaeufer.anschrift if a.verkaeufer else '' }}</div>
       <div class="feld">Tel. {{ a.verkaeufer.telefon if a.verkaeufer else '' }}</div>
+      <div class="feld">E-Mail {{ a.verkaeufer.email if a.verkaeufer else '' }}</div>
       <div class="feld">Ausweis-Nr.:</div></div>
     <div><b>Käufer</b><div class="feld">{{ firma.firma }}</div><div class="feld">{{ firma.ort }}</div>
       <div class="feld">vertreten durch {{ firma.ansprechpartner }}</div><div class="feld">Tel. {{ firma.telefon }}</div></div>

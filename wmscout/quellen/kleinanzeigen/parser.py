@@ -13,23 +13,24 @@ Detailseite: `#viewad-…`-Elemente; die Merkmalsliste kennt beide Formen (Label
 """
 from __future__ import annotations
 
-from ..basis import http_url
-
 import json
+import logging
 import re
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 
-from ...anbieter import ANZEIGE, OHNE_KENNZEICHEN
+from ...anbieter import ANZEIGE
 from ...normalisierung.fahrzeug import ist_basismarke, marke_aus_text, normalisiere_marke
 from ...normalisierung.person import profilname
 
 BASIS = "https://www.kleinanzeigen.de"
+log = logging.getLogger("scout")
 
 _PLZ_ORT = re.compile(r"^\d{5}\s+\S")
 _DATUM = re.compile(r"^(?:(?:Heute|Gestern),\s*\d{1,2}:\d{2}|\d{1,2}\.\d{1,2}\.\d{4})$")
-_PREISZEILE = re.compile(r"^(?:(?:\d{1,3}(?:\.\d{3})+|\d+)\s*€(?:\s*VB)?|VB)$")
+# Nur eine vollständige Preiszeile zählt, keine Beschreibung wie „für 2.000 € repariert“.
+_PREISZEILE = re.compile(r"(?:Preis\s*:\s*)?(?:\d{1,3}(?:[. ]\d{3})+|\d+)\s*€(?:\s*(?:VB|VHB|Festpreis))?|VB|VHB", re.I)
 _EZ_TAG = re.compile(r"^EZ\s*\d{1,2}/(?:19|20)\d{2}$")
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.I)
 _ANZEIGEN_ID = re.compile(r"\b(\d{6,})\b")
@@ -44,9 +45,12 @@ def _text(el) -> str:
 
 def preis_aus_text(text: str) -> tuple[int | None, bool]:
     """'24.900 € VB' -> (24900, True); 'VB' -> (None, True)."""
-    vb = "VB" in text
-    m = re.search(r"(\d{1,3}(?:\.\d{3})+|\d+)\s*€", text)
-    return (int(m.group(1).replace(".", "")) if m else None), vb
+    text = " ".join(text.split())
+    vb = bool(re.search(r"\b(?:VB|VHB)\b", text, re.I))
+    if not _PREISZEILE.fullmatch(text):
+        return None, vb
+    m = re.search(r"(?<!\d)(\d{1,3}(?:[. ]\d{3})+|\d+)\s*€", text)
+    return (int(re.sub(r"[. ]", "", m.group(1))) if m else None), vb
 
 
 def km_aus_text(text: str) -> int | None:
@@ -65,8 +69,57 @@ def ez_aus_text(text: str) -> int | None:
 
 
 def _http_url(url: str | None) -> str | None:
+    if not isinstance(url, str):
+        return None
     url = (url or "").strip()
-    return url if url.startswith("http") and "placeholder" not in url else None
+    return url if re.match(r"^https?://", url, re.I) and "placeholder" not in url.lower() else None
+
+
+def _anzeigen_url(href, ad_id) -> tuple[str | None, str | None]:
+    """Nur die eigene Anzeigenadresse; Trackingparameter und widersprüchliche Karten-IDs verwerfen."""
+    if not isinstance(href, str):
+        return None, None
+    try:
+        url = urlsplit(urljoin(BASIS, href.strip()))
+        if url.scheme not in ("http", "https") or url.hostname not in ("www.kleinanzeigen.de", "kleinanzeigen.de"):
+            return None, None
+        if url.username or url.password or not url.path.startswith("/s-anzeige/"):
+            return None, None
+        m = re.search(r"/(\d{6,})(?:-\d+-\d+)?/?$", url.path)
+        ident = m.group(1) if m else str(ad_id or "")
+        if not ident.isascii() or not ident.isdigit() or len(ident) < 6:
+            return None, None
+        return ident, urlunsplit(("https", "www.kleinanzeigen.de", url.path, "", ""))
+    except ValueError:
+        return None, None
+
+
+def _altpreis_oder_versteckt(el) -> bool:
+    if not getattr(el, "attrs", None):
+        return getattr(el, "name", None) in ("s", "del")
+    return (el.name in ("s", "del") or "line-through" in el.get("class", []) or el.has_attr("hidden")
+            or str(el.get("aria-hidden", "")).lower() == "true"
+            or bool(re.search(r"line-through|display\s*:\s*none|visibility\s*:\s*hidden", el.get("style", ""), re.I)))
+
+
+def _aktueller_preis_text(el) -> str:
+    """Altpreise und versteckte Container ausschließen, auch oberhalb des Preisfeldes."""
+    if el is None or any(_altpreis_oder_versteckt(k) for k in (el, *el.parents)):
+        return ""
+    kopie = BeautifulSoup(str(el), "html.parser")
+    for alt in list(kopie.find_all()):
+        if _altpreis_oder_versteckt(alt):
+            alt.decompose()
+    return _text(kopie)
+
+
+def _erster_preis(soup, *selektoren: str) -> tuple[int | None, bool]:
+    for selektor in selektoren:
+        for el in soup.select(selektor):
+            text = _aktueller_preis_text(el)
+            if _PREISZEILE.fullmatch(text):
+                return preis_aus_text(text)
+    return None, False
 
 
 def bild_url(el) -> str | None:
@@ -114,8 +167,8 @@ def _ld_eintrag(art, titel: str, nach_uuid: dict, nach_titel: dict) -> dict:
 
 def _preis_element(art):
     """Preis = Absatz, dessen ganzer Text ein Preis ist (ohne durchgestrichenen Altpreis)."""
-    kandidaten = [p for p in art.find_all("p") if "line-through" not in " ".join(p.get("class", []))
-                  and _PREISZEILE.match(_text(p))]
+    kandidaten = [p for p in art.find_all("p")
+                  if _PREISZEILE.fullmatch(_aktueller_preis_text(p))]
     return next((p for p in kandidaten if "text-title3" in " ".join(p.get("class", []))), None) or (
         kandidaten[0] if kandidaten else None)
 
@@ -127,11 +180,8 @@ def _parse_treffer_neu(art, ld: tuple[dict, dict]) -> dict | None:
     titel_el = (ueberschrift.select_one("a[href]") if ueberschrift else None) or ueberschrift or link
     href = art.get("data-href") or (link.get("href") if link else None) or (
         titel_el.get("data-url") if titel_el is not None else None)
-    ad_id = art.get("data-adid")
-    if not ad_id and href:
-        m = re.search(r"/(\d{6,})-\d+-\d+", href)
-        ad_id = m.group(1) if m else None
-    if not ad_id or not href:
+    ad_id, url = _anzeigen_url(href, art.get("data-adid"))
+    if not ad_id or not url:
         return None
 
     titel = _text(titel_el)
@@ -143,20 +193,21 @@ def _parse_treffer_neu(art, ld: tuple[dict, dict]) -> dict | None:
         beschr_el = next((p for p in art.select("p.text-onSurfaceSubdued") if not _PREISZEILE.match(_text(p))), None)
     beschreibung = _text(beschr_el) or " ".join(str(eintrag.get("description", "")).split())
 
-    preis, vb = preis_aus_text(_text(_preis_element(art)))
+    preis, vb = preis_aus_text(_aktueller_preis_text(_preis_element(art)))
     spans = art.find_all("span")
     tags = [_text(s) for s in spans if "rounded-xsmall" in " ".join(s.get("class", [])) or _EZ_TAG.match(_text(s))]
     texte = [_text(s) for s in spans]
     alles = f"{titel} {beschreibung} {' '.join(tags)}"
     # Gewerblich = PRO-Abzeichen bzw. Link auf das Händlerprofil; „TOP“ ist nur eine bezahlte Hervorhebung
     gewerblich = bool(art.select_one("a[href*='/pro/']")) or any(_text(el) == "PRO" for el in art.find_all(["div", "span", "a"]))
+    privat = any(_PRIVAT_KASTEN.fullmatch(_text(el)) for el in art.select("span, p"))
 
     return {
         "id": ad_id,
-        "url": http_url(urljoin(BASIS, href)),
+        "url": url,
         "titel": titel,
         "preis": preis,
-        "vb": vb,
+        "vb": vb if preis is not None or vb else None,
         "ort": next((t for t in texte if _PLZ_ORT.match(t)), None),
         "datum": next((t for t in texte if _DATUM.match(t)), ""),
         "kurzbeschreibung": beschreibung,
@@ -164,8 +215,8 @@ def _parse_treffer_neu(art, ld: tuple[dict, dict]) -> dict | None:
         "ez_jahr": ez_aus_text(alles),
         "marke": marke_aus_text(titel + " " + beschreibung),
         "bild": bild_url(art) or _http_url(eintrag.get("contentUrl")),
-        "gewerblich": gewerblich,
-        "anbieter_herkunft": ANZEIGE if gewerblich else OHNE_KENNZEICHEN,     # kein PRO-Kennzeichen ist kein Beleg für „privat“
+        "gewerblich": True if gewerblich else False if privat else None,
+        "anbieter_herkunft": ANZEIGE if gewerblich or privat else None,
         "ist_gesuch": any(t.lower() == "gesuch" for t in tags),
     }
 
@@ -176,27 +227,25 @@ def _parse_treffer_alt(art) -> dict | None:
     titel_el = art.select_one("h2 a, .text-module-begin a, a.ellipsis")
     if not href and titel_el:
         href = titel_el.get("href")
-    if not ad_id and href:
-        m = re.search(r"/(\d{6,})-\d+-\d+", href)
-        ad_id = m.group(1) if m else None
-    if not ad_id or not href:
+    ad_id, url = _anzeigen_url(href, ad_id)
+    if not ad_id or not url:
         return None
 
-    preis_el = art.select_one(".aditem-main--middle--price-shipping--price, .aditem-main--middle--price")
-    preis, vb = preis_aus_text(_text(preis_el))
+    preis, vb = _erster_preis(art, ".aditem-main--middle--price-shipping--price, .aditem-main--middle--price")
     tags = " ".join(_text(t) for t in art.select(".simpletag, .text-module-end, .aditem-main--middle--tags"))
     beschreibung = _text(art.select_one(".aditem-main--middle--description"))
     titel = _text(titel_el)
     alles = f"{titel} {beschreibung} {tags}"
     gewerblich = bool(art.select_one("a[href*='/pro/'], .badge-hint-pro-small-srp")) or "PRO" in _text(
         art.select_one(".aditem-main--bottom"))
+    privat = any(_PRIVAT_KASTEN.fullmatch(_text(el)) for el in art.select("span, p"))
 
     return {
         "id": ad_id,
-        "url": http_url(urljoin(BASIS, href)),
+        "url": url,
         "titel": titel,
         "preis": preis,
-        "vb": vb,
+        "vb": vb if preis is not None or vb else None,
         "ort": _text(art.select_one(".aditem-main--top--left")),
         "datum": _text(art.select_one(".aditem-main--top--right")),
         "kurzbeschreibung": beschreibung,
@@ -204,25 +253,65 @@ def _parse_treffer_alt(art) -> dict | None:
         "ez_jahr": ez_aus_text(alles),
         "marke": marke_aus_text(titel + " " + beschreibung),
         "bild": bild_url(art.select_one(".aditem-image, .imagebox")),
-        "gewerblich": gewerblich,
-        "anbieter_herkunft": ANZEIGE if gewerblich else OHNE_KENNZEICHEN,
+        "gewerblich": True if gewerblich else False if privat else None,
+        "anbieter_herkunft": ANZEIGE if gewerblich or privat else None,
         "ist_gesuch": "Gesuch" in _text(art),
     }
 
 
-def parse_suchseite(html: str) -> list[dict]:
+def parse_suchseite_mit_hinweisen(html: str) -> tuple[list[dict], list[str]]:
+    """Treffer in Seitenreihenfolge, dieselbe Anzeigen-ID höchstens einmal.
+
+    Gespeicherte Seiten enthalten mitunter dasselbe Inserat als hervorgehobene Karte und
+    erneut in der Ergebnisliste. Der vollständigere Datensatz gewinnt, ohne die erste
+    Position zu verlieren. Nicht erkannte Preise werden nie aus Fließtext geraten.
+    """
     soup = BeautifulSoup(html, "html.parser")
     ld = None
-    ergebnisse = []
-    for art in soup.select("article[data-adid], article.aditem"):
+    ergebnisse: dict[str, dict] = {}
+    ungueltig = 0
+    for art in soup.select("article[data-adid], article.aditem, article[data-href*='/s-anzeige/']"):
         if art.select_one(".aditem-main") or "aditem" in art.get("class", []):
             treffer = _parse_treffer_alt(art)
         else:
             ld = ld or _ld_bilder(soup)
             treffer = _parse_treffer_neu(art, ld)
-        if treffer:
-            ergebnisse.append(treffer)
-    return ergebnisse
+        if not treffer:
+            ungueltig += 1
+            continue
+        alt = ergebnisse.get(treffer["id"])
+        if alt is None:
+            ergebnisse[treffer["id"]] = treffer
+        else:
+            felder = ("titel", "preis", "ort", "km", "ez_jahr", "bild", "kurzbeschreibung")
+            haupt, andere = (treffer, alt) if sum(bool(treffer.get(f)) for f in felder) > \
+                sum(bool(alt.get(f)) for f in felder) else (alt, treffer)
+            # Fehlende Angaben ergänzen, aber widersprechende Angaben nicht blind überschreiben.
+            ergaenzt = {**haupt}
+            for feld in (*felder, "datum", "marke"):
+                if ergaenzt.get(feld) in (None, "") and andere.get(feld) not in (None, ""):
+                    ergaenzt[feld] = andere[feld]
+            # Ein belegtes PRO-/Händlerkennzeichen darf nicht durch eine zweite Karte ohne Badge verschwinden.
+            if alt.get("gewerblich") or treffer.get("gewerblich"):
+                ergaenzt.update(gewerblich=True, anbieter_herkunft=ANZEIGE)
+            elif alt.get("gewerblich") is False or treffer.get("gewerblich") is False:
+                ergaenzt.update(gewerblich=False, anbieter_herkunft=ANZEIGE)
+            if haupt.get("preis") is None and andere.get("preis") is not None:
+                ergaenzt["vb"] = andere.get("vb")
+            elif ergaenzt.get("vb") is None:
+                ergaenzt["vb"] = andere.get("vb")
+            ergaenzt["ist_gesuch"] = bool(alt.get("ist_gesuch") or treffer.get("ist_gesuch"))
+            ergebnisse[treffer["id"]] = ergaenzt
+    hinweise = []
+    if ungueltig:
+        hinweise.append(f"Kleinanzeigen: {ungueltig} Anzeigenkarten ohne gültige Anzeigen-ID/Adresse übersprungen")
+        log.warning(hinweise[0])
+    return list(ergebnisse.values()), hinweise
+
+
+def parse_suchseite(html: str) -> list[dict]:
+    """Kompatibler Parser für Quellen und bestehende Aufrufer; Importwege lesen zusätzlich die Hinweise."""
+    return parse_suchseite_mit_hinweisen(html)[0]
 
 
 # ---------- Detailseite ----------
@@ -298,7 +387,7 @@ def parse_detailseite(html: str) -> dict:
 
     beschreibung = _erster_text(soup, "#viewad-description-text", "[itemprop=description]")
     titel = _erster_text(soup, "#viewad-title", "h1")
-    preis, vb = preis_aus_text(_erster_text(soup, "#viewad-price", "[itemprop=price]"))
+    preis, vb = _erster_preis(soup, "#viewad-price", "[itemprop=price]:not(meta)")
     verkaeufer_box = _text(soup.select_one("#viewad-contact, .userprofile-vip, #viewad-profile-box"))
     id_treffer = _ANZEIGEN_ID.search(_text(soup.select_one("#viewad-ad-id-box")))
 
@@ -321,13 +410,14 @@ def parse_detailseite(html: str) -> dict:
     pro_link = any(not a.find_parent("article") for a in soup.select("a[href*='/pro/']"))
     gewerblich = "gewerblich" in verkaeufer_box.lower() or pro_link
     # „Privater Nutzer“ im Verkäuferkasten ist eine Angabe der Anzeige; ohne Kasten bleibt „privat“ nur eine Vermutung
-    herkunft = ANZEIGE if gewerblich or _PRIVAT_KASTEN.search(verkaeufer_box) else OHNE_KENNZEICHEN
+    privat = bool(_PRIVAT_KASTEN.search(verkaeufer_box))
+    herkunft = ANZEIGE if gewerblich or privat else None
 
     return {
         "anzeigen_id": id_treffer.group(1) if id_treffer else None,
         "titel": titel or None,
         "preis": preis,
-        "vb": vb,
+        "vb": vb if preis is not None or vb else None,
         "ort": ort_aus_lokalitaet(_erster_text(soup, "#viewad-locality", "[itemprop=addressLocality]")),
         "beschreibung": beschreibung,
         "km": km,
@@ -337,7 +427,7 @@ def parse_detailseite(html: str) -> dict:
         "leistung": detail("Leistung") or None,
         "getriebe": detail("Getriebe") or None,
         "verkaeufer_name": _verkaeufer_name(soup),
-        "gewerblich": gewerblich,
+        "gewerblich": True if gewerblich else False if privat else None,
         "anbieter_herkunft": herkunft,
         "details": details,
     }

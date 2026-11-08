@@ -1,0 +1,6 @@
+{
+  "name": "camprcrawlr-browser-tests",
+  "private": true,
+  "scripts": { "test": "node dateiimport-race.cjs && node haendler.cjs" },
+  "devDependencies": { "playwright": "1.62.1" }
+}

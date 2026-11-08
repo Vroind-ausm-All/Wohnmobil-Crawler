@@ -186,5 +186,6 @@
     if (auf) laden();
   };
   if (auswahl) auswahl.onchange = filterSetzen;
+  document.addEventListener('scout-profile-geaendert', laden);
   laden();
 })();

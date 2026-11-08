@@ -149,6 +149,11 @@ def top_ausschluss(a: dict, b) -> str | None:
         return "nicht sicher verfügbar"
     if a.get("ausland"):
         return "Ausland"
+    qualitaet = a.get("datenqualitaet") or {}
+    if qualitaet.get("widersprueche") or any(m.get("art") in ("widerspruch", "unplausibel") for m in qualitaet.get("markierungen") or []):
+        return "widersprüchliche oder unplausible Angaben"
+    if a.get("km") is None or qualitaet.get("stufe") == "schwach":
+        return "Daten unvollständig"
     if b.sicherheit not in ("hoch", "mittel", "manuell"):
         return f"Bewertung zu unsicher ({b.sicherheit})"
     if b.ampel != "gruen":

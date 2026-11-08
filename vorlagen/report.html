@@ -177,6 +177,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
 .zchip.grau{border-style:dashed;color:var(--tb-grau)}
 #toast.warn{background:var(--warn-bg);color:var(--warn-ink);font-weight:600}
 @media (max-width:760px){ .spalten{grid-template-columns:1fr} .spalten>div:last-child{order:-1} .brief{min-height:300px} }
+.hauptnav{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 20px}.hauptnav a[aria-current="page"]{outline:3px solid var(--gruen);outline-offset:2px}.hauptnav a{padding:10px 14px;background:var(--akzent);color:var(--akzent-ink);border-radius:8px;text-decoration:none}.sp-feld input,.sp-feld select{font:inherit;max-width:190px;padding:8px;border:1px solid var(--line);border-radius:6px;color:var(--ink);background:var(--card)}h1 small{font-size:14px;color:var(--mute)}section{scroll-margin-top:12px}#upload-vorschau{overflow:auto}#upload-ergebnis{white-space:pre-wrap;margin:12px 0}.csv-zuordnung{display:flex;flex-wrap:wrap;gap:8px}
 </style>
 {% if app %}<link rel="stylesheet" href="/static/textimport.css"><link rel="stylesheet" href="/static/dubletten.css">{% endif %}
 </head>
@@ -187,19 +188,14 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
 <div class="wrap">
   <header class="top">
     <div>
-      <h1>Wohnmobil-Scout</h1>
-      <p class="sub">Stand {{ stand }} · {{ anzahl }} aktive Privatanzeigen{% if fehler %} · <span class="warn">Letzter Lauf: {{ fehler }}</span>{% endif %}</p>
+      <h1>CampRCrawlR <small>Wohnmobil-Scout</small></h1>
+      <p class="sub">Stand {{ stand }} · {{ anzahl }} eingelesene Inserate{% if fehler %} · <span class="warn">Letzter Lauf: {{ fehler }}</span>{% endif %}</p>
     </div>
     {% if app %}
     <div class="suchlauf">
       <span id="suchstatus" class="hinweis" aria-live="polite"></span>
       <button id="glocke" class="btn" title="Browser-Hinweis bei neuen Treffern" hidden>🔔 Hinweise an</button>
-      <button id="einlesen" class="btn"{% if team and team.ich and team.ich.rolle != 'inhaber' %} hidden{% endif %} title="Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten (Strg+S) einlesen – ohne Internetabruf">⤓ Gespeicherte Seiten einlesen</button>
-      {% if mails_aktiv %}<button id="mails" class="btn"{% if team and team.ich and team.ich.rolle != 'inhaber' %} hidden{% endif %} title="Suchagent-Benachrichtigungen (.eml in import/email/) einlesen – ohne Internetabruf">✉ Mails einlesen</button>{% endif %}
-      <button id="suchen" class="btn"{% if team and team.ich and team.ich.rolle != 'inhaber' %} hidden{% endif %}>↻ Neue Anzeigen suchen</button>
-      {% if text_darf %}<button id="textimport-knopf" class="btn" aria-expanded="false" aria-controls="textimport" title="Eine einzelne Anzeige aus Link und kopiertem Anzeigentext einlesen – ohne Internetabruf">＋ Inserat einlesen (Link + Text)</button>{% endif %}
       <a class="btn" href="/anfragen" title="Fahrzeuge, die Verkäufer uns selbst anbieten">Verkaufsanfragen</a>
-      <a class="btn" href="/ankaeufe" title="Gekaufte Fahrzeuge: Vertrag, Übergabe, Kosten, Verkauf, Plan gegen Ist">Ankäufe</a>
       <a class="btn" href="/status" title="Quellen, Eingänge, letzte Suchläufe und Fehler">Status</a>
       <a class="btn" href="/kennzahlen" title="Eingang, Bewertung und Ankaufstrichter im Zeitraum">Kennzahlen</a>
       {% if not (team and team.ich and team.ich.rolle != 'inhaber') %}<a class="btn" href="/zugaenge" title="Team-Zugänge einladen, Händlerzugänge bei mobile.de und AutoScout24">Zugänge</a>{% endif %}
@@ -207,6 +203,70 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     {% endif %}
   </header>
 
+  {% if app %}
+  <nav class="hauptnav" aria-label="Hauptmenü">
+    <a href="#tag" aria-controls="tag">Mein Tag</a><a href="#suche" aria-controls="suche">Fahrzeuge suchen</a>
+    {% if text_darf %}<a href="#angebote-importieren" aria-controls="angebote-importieren">Angebote importieren</a>{% endif %}
+    <a href="/m#/heute">Termine &amp; Besichtigungen</a><a href="/ankaeufe">Verträge &amp; Ankäufe</a>
+  </nav>
+  <section class="kasten" id="suche" aria-labelledby="suche-titel">
+    <h2 id="suche-titel">Fahrzeuge suchen</h2>
+    <p class="meta">Wähle dein Wunschfahrzeug und den Umkreis. „Angebote finden“ durchsucht die bereits eingelesenen Inserate.</p>
+    <form id="schnellsuche" class="sp-form">
+      <label class="sp-feld">Fahrzeugart<select name="art"><option value="">Alle Fahrzeugarten</option>
+        <option>Teilintegrierter</option><option>Integrierter</option><option>Alkoven</option><option>Kastenwagen</option><option>Wohnwagen</option><option>Sonstige</option></select></label>
+      <label class="sp-feld">Marke<input name="marke" list="wohnmobil-marken" placeholder="Alle Marken"></label>
+      <datalist id="wohnmobil-marken">{% for marke in ['Hymer','Knaus','Bürstner','Dethleffs','Hobby','Adria','Pössl','Carthago','Weinsberg','Sunlight','Carado','VW','Ford','Mercedes-Benz'] %}<option value="{{ marke }}">{% endfor %}</datalist>
+      <label class="sp-feld">Modell<input name="modell" placeholder="z. B. Sky TI"></label>
+      <label class="sp-feld">PLZ<input name="plz" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="z. B. 74354"></label>
+      <label class="sp-feld">Radius km<input name="radius" type="number" min="1" max="1000" placeholder="z. B. 150"></label>
+      <label class="sp-feld">Preis von €<input name="preis_min" type="number" min="0"></label>
+      <label class="sp-feld">Preis bis €<input name="preis_max" type="number" min="0"></label>
+      <label class="sp-feld">EZ von<input name="ez_min" type="number" min="1960"></label>
+      <label class="sp-feld">EZ bis<input name="ez_max" type="number" min="1960"></label>
+      <label class="sp-feld">Kilometer bis<input name="km_max" type="number" min="0"></label>
+      <button type="submit" class="btn primaer">Angebote finden</button><button type="reset" class="btn">Zurücksetzen</button>
+      <label class="sp-feld">Profilname<input name="profilname" maxlength="80" placeholder="z. B. Reisemobile Süd"></label>
+      <button type="button" id="suche-speichern" class="btn">Suchprofil speichern</button>
+    </form>
+    <p id="suche-ergebnis" role="status"></p>
+    <div class="aktionen">      <button id="suchen" class="btn"{% if team and team.ich and team.ich.rolle != 'inhaber' %} hidden{% endif %}>↻ Neue Anzeigen suchen</button>
+</div>
+    <p id="quellen-kurz" class="meta" role="status">Datenquellen werden geprüft …</p>
+    <p id="import-stand" class="meta"></p>
+    <p class="meta">Neue Anzeigen werden nur aus eingerichteten, freigegebenen Quellen beschafft. Gespeicherte Suchprofile filtern den Bestand; sie ändern keine Suchaufträge bei den Plattformen.</p>
+  </section>
+  {% if text_darf %}
+  <section class="kasten" id="angebote-importieren" aria-labelledby="import-titel">
+    <h2 id="import-titel">Angebote importieren</h2>
+    <p>Gespeicherte Anzeigen auswählen, Angaben prüfen und in die Fahrzeugliste übernehmen.</p>
+    <label class="sp-feld">HTML, CSV oder EML auswählen<input id="angebot-dateien" type="file" accept=".html,.htm,.csv,.eml" multiple></label>
+    <p class="meta">Bis zu 5 MB je Datei. HTML: Kleinanzeigen und mobile.de. CSV: eigene Tabelle mit Anzeigenlink und Fahrzeugdaten. EML: unterstützte Suchbenachrichtigungen bei aktiviertem Mail-Eingang.</p>
+    <div id="upload-vorschau"></div><button id="upload-start" class="btn primaer" type="button" disabled>Dateien prüfen</button>
+    <button id="upload-ueberspringen" class="btn" type="button" hidden>Diese Datei überspringen</button>
+    <div id="upload-ergebnis" role="status" aria-live="polite"></div>
+    <a id="upload-liste" class="btn" href="/" hidden>Importierte Angebote anzeigen</a>
+          {% if text_darf %}<button id="textimport-knopf" class="btn" aria-expanded="false" aria-controls="textimport" title="Eine einzelne Anzeige aus Link und kopiertem Anzeigentext einlesen – ohne Internetabruf">＋ Inserat einlesen (Link + Text)</button>{% endif %}
+
+    <details><summary>Bereits im Importordner abgelegte Dateien</summary><div class="aktionen">      <button id="einlesen" class="btn"{% if team and team.ich and team.ich.rolle != 'inhaber' %} hidden{% endif %} title="Im Browser gespeicherte Kleinanzeigen- und mobile.de-Seiten (Strg+S) einlesen – ohne Internetabruf">⤓ Gespeicherte Seiten einlesen</button>
+      {% if mails_aktiv %}<button id="mails" class="btn"{% if team and team.ich and team.ich.rolle != 'inhaber' %} hidden{% endif %} title="Suchagent-Benachrichtigungen (.eml in import/email/) einlesen – ohne Internetabruf">✉ Mails einlesen</button>{% endif %}
+</div></details>
+  </section>
+  {% endif %}
+  <section class="kasten" id="tag" aria-labelledby="tag-titel">
+    <h2 id="tag-titel">Mein Händlertag</h2>
+    <div class="aktionen">
+      <button class="btn" type="button" data-tag-filter="neu">Neue Angebote</button>
+      <button class="btn" type="button" data-tag-filter="alle" data-tag-sort="chance">Beste Ankaufchancen</button>
+      <button class="btn" type="button" data-tag-filter="pruefen">Daten prüfen</button>
+      <button class="btn" type="button" data-tag-filter="anschreiben">Anschreiben vorbereiten</button>
+      <button class="btn" type="button" data-tag-filter="nachfassen">Kontakte nachfassen</button>
+      <a class="btn" href="/m#/heute">Termine koordinieren</a><a class="btn" href="/ankaeufe">Verträge vorbereiten</a>
+    </div>
+    <p class="meta">Im Fahrzeug: Angaben prüfen → Kontakt vorbereiten → Besichtigung planen. Bei der Besichtigung FIN, Kilometerstand und Verkäuferdaten erfassen; der Ankauf führt zum Vertragsentwurf.</p>
+    <div id="tages-termine" class="meta"></div>
+  </section>
+  {% endif %}
   <div class="banner" id="banner" hidden><span id="banner-text"></span><button class="btn" onclick="location.reload()">Liste aktualisieren</button></div>
 
   {% if text_darf %}
@@ -224,13 +284,13 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <div id="suchprofile-box"></div>
   </section>{% endif %}
 
-  <ol class="anleitung">
+  <details><summary>So bereitest du einen Verkäuferkontakt vor</summary><ol class="anleitung">
     <li><b>Wohnmobil anklicken</b> – faire Bewertung und fertiges Anschreiben ansehen (Text änderbar)</li>
     <li><b>✉ Anschreiben</b> – Text ist kopiert, die Anzeige öffnet sich{% if app %}, Status „Text kopiert“ wird gespeichert{% endif %}{% if team %}; ist das Fahrzeug von einem Kollegen belegt, wird nichts geöffnet{% endif %}</li>
     <li>In der Anzeige den Kontakt öffnen (Kleinanzeigen: <b>„Nachricht schreiben“</b> · mobile.de: <b>„E-Mail“/„Nachricht“</b>-Formular des Anbieters) → <kbd>Strg</kbd>+<kbd>V</kbd> (Mac <kbd>⌘</kbd>+<kbd>V</kbd>) → Senden</li>
     <li><b>gesendet ✓</b> klicken, sobald du die Nachricht abgeschickt hast – erst dann gilt der Verkäufer als kontaktiert</li>
     <li><b>Antwort bekommen?</b> Gegenangebot im Fahrzeugfenster eintragen → passende Antwort · keine Antwort → Filter <b>„Nachfassen“</b></li>
-  </ol>
+  </ol></details>
 
   <div class="kpis">
     <div class="kpi"><b>{{ zaehl.anschreiben }}</b><span>Anschreiben bereit</span></div>
@@ -301,10 +361,12 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
     <label class="verfbox" title="Inserate desselben Fahrzeugs (auf mehreren Plattformen oder doppelt eingestellt) nur einmal zeigen – die übrigen stehen im Fahrzeugfenster unter „Gleiches Fahrzeug“"><input type="checkbox" id="einmal" checked>gleiches Fahrzeug nur einmal</label>
     <select id="sort" aria-label="Sortierung">
       <option value="score">Sortierung: Deal-Score</option>
+      <option value="chance">Beste Ankaufchancen</option>
       <option value="verh">beste Chance (Preis ÷ Max-EK)</option>
       <option value="pot">Gewinnpotenzial</option>
       <option value="prio">Neuigkeiten zuerst (im Rahmen, neu, gesenkt)</option>
       <option value="neu">Neueste zuerst</option>
+      <option value="preis_ab">Preis absteigend</option>
       <option value="preis">Preis aufsteigend</option>
       <option value="entf">Entfernung</option>
       <option value="tage">Längste Standzeit</option>
@@ -314,10 +376,10 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
 
   <div class="raster" id="liste">
   {% for z in zeilen %}{% set a = z.a %}{% set b = z.b %}
-    <article class="karte {{ b.ampel }}" tabindex="0" data-id="{{ a.id }}" data-url="{{ a.url }}" data-quelle="{{ a.quelle or 'kleinanzeigen' }}" data-dub="{{ z.dubletten_ids | join(' ') }}" data-grang="{{ z.gruppe_rang or 0 }}" data-garbeit="{{ 1 if z.gruppe_arbeit else 0 }}" data-ampel="{{ b.ampel }}"
+    <article class="karte {{ b.ampel }}" tabindex="0" data-sortierung='{{ (z.sortierung or {}) | tojson | forceescape }}' data-pruefen="{{ 1 if a.datenqualitaet and a.datenqualitaet.markierungen else 0 }}" data-id="{{ a.id }}" data-url="{{ a.url }}" data-quelle="{{ a.quelle or 'kleinanzeigen' }}" data-dub="{{ z.dubletten_ids | join(' ') }}" data-grang="{{ z.gruppe_rang or 0 }}" data-garbeit="{{ 1 if z.gruppe_arbeit else 0 }}" data-ampel="{{ b.ampel }}"
          data-neu="{{ 1 if z.neu else 0 }}" data-prio="{{ z.neuigkeit.stufe if z.neuigkeit else 9 }}" data-bereit="{{ 1 if z.bereit else 0 }}" data-status="{{ a.status or 'neu' }}"
          data-verf="{{ a.verfuegbarkeit }}" data-ausblenden="{{ 1 if z.ausblenden else 0 }}"
-         data-verh="{{ b.verhaeltnis or 99 }}" data-pot="{{ b.potenzial or -999999 }}" data-preis="{{ a.preis or 0 }}"
+         data-verh="{{ b.verhaeltnis or 99 }}" data-pot="{{ b.potenzial or -999999 }}" data-preis="{{ a.preis if a.preis is not none else '' }}"
          data-score="{{ z.deal.score if z.deal and z.deal.score is not none else -1 }}" data-top="{{ 1 if z.deal and z.deal.priorisiert else 0 }}"
          data-zeit="{{ a.erstmals_gesehen }}" data-entf="{{ a.entfernung_km if a.entfernung_km is not none else 99999 }}"
          data-tage="{{ a.tage_online or 0 }}" data-nachfassen="{{ 1 if z.nachfassen else 0 }}" data-erst="{{ z.brief_betrag or 0 }}"
@@ -329,6 +391,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
         {% if a.bild %}<img src="{{ a.bild }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}
         <div class="tags">
           <span class="tag {{ b.ampel }}">{{ AMPEL[b.ampel] }}</span>
+          {% if a.anbieter %}<span class="tag anb {{ a.anbieter.typ }}">{{ a.anbieter.text }}</span>{% endif %}
           <span class="tag quelle" data-quelle-tag>{{ QUELLEN.get(a.quelle or 'kleinanzeigen', a.quelle) }}</span>
           {% if z.deal and z.deal.score is not none %}<span class="tag score{{ ' top' if z.deal.priorisiert }}" data-score-tag
             title="Deal-Score {{ z.deal.score }}/100 – {% for t in z.deal.bestandteile %}{{ t.name }} {{ t.punkte | round | int }}/{{ t.gewicht | round | int }}{{ ', ' if not loop.last }}{% endfor %}">Deal {{ z.deal.score }}</span>{% endif %}
@@ -351,6 +414,7 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
         <h2>{{ a.fahrzeug }}</h2>
         <p class="meta">EZ {{ a.ez_jahr or '?' }} · {{ (a.km | tsd ~ ' km') if a.km else 'km ?' }} · {{ a.ort or 'Ort ?' }}</p>
         <p class="meta">{% if a.entfernung_km is not none %}{{ a.entfernung_km | tsd }} km entfernt · {% endif %}{{ 'seit heute online' if not a.tage_online else ('seit 1 Tag online' if a.tage_online == 1 else 'seit ' ~ a.tage_online ~ ' Tagen online') }}</p>
+        {% if z.ankaufchance %}<p class="meta" data-chance>{{ z.ankaufchance.text }}</p>{% endif %}
         <p class="atitel" title="{{ a.titel }}">{{ a.titel }}</p>
         <div class="zahlen">
           <div><span>Wunschpreis</span><b>{{ a.preis | euro }}</b></div>
@@ -406,6 +470,14 @@ textarea{width:100%;font:14px/1.55 system-ui,sans-serif;padding:10px;border-radi
       </div>
       <button class="btn schliessen" data-schliessen aria-label="Schließen">×</button>
     </div>
+    {% if text_darf %}<div class="kasten" style="margin:12px">
+      <button class="btn" type="button" data-angaben-oeffnen="{{ a.id }}">Fahrzeugangaben prüfen und bestätigen</button>
+      <div data-angaben-box></div>
+      {% if z.ankaufchance %}<details><summary>Warum diese Ankaufchance?</summary>
+        <ul>{% for grund in z.ankaufchance.positiv %}<li>{{ grund }}</li>{% endfor %}
+        {% for grund in z.ankaufchance.negativ %}<li>{{ grund }}</li>{% endfor %}</ul>
+      </details>{% endif %}
+    </div>{% endif %}
     <div class="spalten">
       <div>
         {% if z.deal %}<div data-deal>{% if z.deal.score is not none %}<h3>Deal-Score {{ z.deal.score }}/100{% if z.deal.priorisiert %} · Top-Deal{% endif %}</h3>
@@ -1046,7 +1118,7 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
     karten.forEach(function(k){
       var s = k.dataset.status;
       var ok = filter === 'alle' || (filter === 'anschreiben' && ((k.dataset.bereit === '1' && s === 'neu') || s === 'vorbereitet'))
-            || (filter === 'nachfassen' && k.dataset.nachfassen === '1') || (filter === 'arbeit' && ARBEIT[s])
+            || (filter === 'pruefen' && k.dataset.pruefen === '1') || (filter === 'nachfassen' && k.dataset.nachfassen === '1') || (filter === 'arbeit' && ARBEIT[s])
             || (filter === 'neu' && k.dataset.neu === '1') || (filter === 'top' && k.dataset.top === '1') || (filter === 'neuigkeiten' && k.dataset.prio !== '9') || ((filter === 'gruen' || filter === 'gelb') && k.dataset.ampel === filter);
       if(q && q.split(/\s+/).some(function(w){ return k.dataset.text.indexOf(w) < 0; })) ok = false;
       if(nurVerf.checked && k.dataset.ausblenden === '1') ok = false;      // verkauft/offline ohne Ankaufsarbeit (P3-04)
@@ -1070,11 +1142,22 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
   function sortiere(){
     var s = document.getElementById('sort').value;
     karten.sort(function(a, b){
+      var modus = s === 'pot' ? 'potenzial' : s;
+      var ax = JSON.parse(a.dataset.sortierung || '{}')[modus], bx = JSON.parse(b.dataset.sortierung || '{}')[modus];
+      if(ax && bx){
+        for(var i=0; i<Math.max(ax.length,bx.length); i++){
+          if(ax[i] !== bx[i]) return ax[i] < bx[i] ? -1 : 1;
+        }
+        return 0;
+      }
       if(s === 'score') return (b.dataset.score - a.dataset.score) || (a.dataset.verh - b.dataset.verh);      // P5-07
       if(s === 'verh') return a.dataset.verh - b.dataset.verh;
       if(s === 'prio') return (a.dataset.prio - b.dataset.prio) || (a.dataset.verh - b.dataset.verh);     // P4-03
       if(s === 'pot') return b.dataset.pot - a.dataset.pot;
-      if(s === 'preis') return a.dataset.preis - b.dataset.preis;
+      if(s === 'preis' || s === 'preis_ab'){
+        if(a.dataset.preis === '' || b.dataset.preis === '') return (a.dataset.preis === '') - (b.dataset.preis === '');
+        return (s === 'preis' ? 1 : -1) * (a.dataset.preis - b.dataset.preis) || a.dataset.id.localeCompare(b.dataset.id);
+      }
       if(s === 'entf') return a.dataset.entf - b.dataset.entf;
       if(s === 'tage') return b.dataset.tage - a.dataset.tage;
       return a.dataset.zeit < b.dataset.zeit ? 1 : -1;
@@ -1086,6 +1169,12 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
       b.classList.add('an'); filter = b.dataset.f; zeige();
     };
   });
+  window.scoutListe = function(f,s){
+    filter = f || 'alle';
+    document.querySelectorAll('.bar button[data-f]').forEach(function(b){ b.classList.toggle('an', b.dataset.f === filter); });
+    if(s){ document.getElementById('sort').value = s; sortiere(); }
+    zeige();
+  };
   document.getElementById('q').oninput = zeige;
   // Zähler an den Filtern: mit „gleiches Fahrzeug nur einmal“ Fahrzeuge, sonst Inserate (P6-02b)
   var zaehler = function(){ document.querySelectorAll('.bar [data-zahl]').forEach(function(s){
@@ -1296,6 +1385,6 @@ var P25A = {{ 'true' if differenzbesteuerung else 'false' }};
   }
 })();
 </script>
-{% if app %}<script src="/static/suchprofile.js"></script>{% endif %}
+{% if app %}<script src="/static/suchprofile.js"></script><script src="/static/haendler.js"></script><script src="/static/dateiimport.js"></script><script src="/static/angaben.js"></script>{% endif %}
 </body>
 </html>

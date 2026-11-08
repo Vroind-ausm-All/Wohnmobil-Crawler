@@ -1,36 +1,60 @@
 # Wohnmobil-Scout
 
-Durchsucht Kleinanzeigen nach privat angebotenen Wohnmobilen, schätzt für jedes Fahrzeug einen fairen
-Marktwert, rechnet daraus den Händler-Einkaufspreis aus und schreibt ein Anschreiben vor, das zu
-Modell und Baujahr passt – mit einem vorbehaltlichen Angebot. In der Browser-App klickst du ein
-Wohnmobil an und schreibst es mit einem Klick an.
+**CampRCrawlR** unterstützt den Händleralltag vom Einlesen eines Angebots bis zum Vertragsentwurf:
+Fahrzeuge erkennen, Ankaufchancen bewerten, Kontakte vorbereiten, Termine planen und Besichtigungen dokumentieren.
+Manuell gespeicherte HTML-Seiten, CSV-Tabellen, Suchbenachrichtigungen und kopierte Anzeigentexte können direkt
+in der Browser-App eingelesen werden. Der Kleinanzeigen-Livecrawler bleibt gesperrt; eine automatische Suche
+benötigt eine tatsächlich freigegebene und konfigurierte Datenquelle.
+
+## Neuer Arbeitsablauf
+
+1. **Angebote importieren:** HTML, CSV oder EML auswählen. Bei CSV die Spalten zuordnen und die Vorschau prüfen;
+   danach importieren. Ergebnis: neu, aktualisiert, übersprungen und fehlerhaft. Muster: [vorlagen/angebote.csv](vorlagen/angebote.csv).
+2. **Fahrzeuge suchen:** Fahrzeugart, Marke, Modell, PLZ/Radius sowie Preis, EZ und Kilometer einstellen und
+   **Angebote finden** klicken. Das durchsucht eingelesene Daten. Ein Inhaber kann daraus ein Suchprofil speichern.
+   **Neue Anzeigen suchen** ruft ausschließlich eingerichtete, freigegebene Quellen ab; der Quellenstatus steht daneben.
+3. **Mein Händlertag:** neue Angebote, beste Ankaufchancen, zu prüfende Daten, Anschreiben, Nachfassen, Termine und Ankäufe.
+   Bestehende Filter und die Standard-Sortierung Deal-Score bleiben erhalten; „Beste Ankaufchancen“ ist ausdrücklich wählbar.
+   Unbekannte Zahlen stehen am Ende numerischer Sortierungen. Gründe und Unsicherheit stehen am Fahrzeug.
+4. **Angaben prüfen:** Im Fahrzeugdialog einzelne Werte bewusst bestätigen. Importoriginal und Bestätigung bleiben getrennt;
+   neue abweichende Importdaten erzeugen einen Konflikthinweis. Preisverläufe zeigen weiterhin tatsächlich importierte Preise.
+5. **Kontakt und Besichtigung:** Anschreiben vorbereiten, Kontakt nach dem eigenen Versand bestätigen, Termin in der
+   Handy-/Team-Ansicht planen, FIN, abgelesene Kilometer und Mängel erfassen.
+6. **Vertragsentwurf vorbereiten:** In der Besichtigung öffnen, Verkäufername, Anschrift, Telefon, E-Mail und vorgesehenen
+   Preis ergänzen, speichern und drucken. Der Entwurf kauft nichts und ersetzt keine Unterschriften. Diese Kontaktdaten
+   bleiben auf dem Server und werden nicht in den Offline-Speicher der Handy-App übertragen.
+
+Dateiupload: höchstens 5 MB pro Datei und 500 CSV-Zeilen; CSV mit Kopfzeile, UTF-8 oder Windows-1252,
+Semikolon/Komma/Tabulator. Es werden weder verlinkte Seiten abgerufen noch eingebettete Skripte ausgeführt.
+HTML wird für Kleinanzeigen/mobile.de gelesen, EML für die bestehenden Suchbenachrichtigungsformate bei aktiviertem
+Mail-Eingang. CSV und Link+Text verwenden die geprüften Anzeigenlinks von Kleinanzeigen/mobile.de.
+**AutoScout24-HTML/CSV, Live-Plattformzugänge und aktuelle reale Exportformate sind nicht live verifiziert und nicht freigeschaltet.**
+
+Installation und Update: [Kundeninstallation](docs/KUNDENINSTALLATION.md) ·
+[Update ohne Datenverlust](docs/UPDATE-CAMPRCRAWLR.md) · [Umfang und Abnahme](docs/CAMPRCRAWLR-ABNAHME.md).
 
 ## Einrichtung (einmalig, ca. 5 Minuten)
 
-1. **Python 3.13** installieren (python.org → Downloads → Windows → „Python 3.13.x“ →
-   „Windows installer (64-bit)“). Ältere Versionen werden nicht unterstützt. **Neuere Versionen wie 3.14/3.15 noch nicht**:
-   Für sie gibt es PyYAML nicht fertig für Windows, die Installation bricht dann mit
-   „Microsoft Visual C++ 14.0 or greater is required“ ab. 3.13 kann problemlos *zusätzlich* zu
-   einer anderen Version installiert sein. Python selbst muss nie geöffnet werden.
-2. Diesen Ordner entpacken (Rechtsklick auf die ZIP → „Alle extrahieren“).
-3. `config.yaml` mit dem Editor öffnen und anpassen:
+1. Diesen Ordner entpacken (Rechtsklick auf die ZIP → „Alle extrahieren“).
+2. Eigene Einstellungen in `config.local.yaml` hinterlegen (Vorlage und Abschnitte in `config.yaml`):
    - **anschreiben**: Firma, Name, Telefon, Ort.
-   - **suchen**: Suche im Browser auf kleinanzeigen.de zusammenklicken (Ort/Radius, Preis, Art,
-     *Anbieter: Privat*), URL kopieren und eintragen. Seitenzahlen ergänzt das Tool selbst.
    - **rechner**: deine echten Kosten und Zielmarge eintragen.
+   - Suchprofile für Art, Preis und Radius direkt in der App unter **Fahrzeuge suchen** speichern.
+     Automatische Quellen nur bei vorhandenem, zulässigem Zugang konfigurieren; Kleinanzeigen bleibt gesperrt.
 
    Tipp: Eigene Werte lieber in eine neue Datei `config.local.yaml` daneben schreiben (gleiche Abschnitte, nur die
    Abweichungen). Sie überlagert `config.yaml`, wird nie ins Repository übernommen und bleibt bei Updates erhalten.
-4. **Windows: Doppelklick auf `app.bat`.** Beim ersten Start richtet `installieren.bat` automatisch
-   eine eigene Python-Umgebung im Projektordner ein (`.venv`, mit Python 3.13) und installiert dort die
-   Zusatzpakete – nur als fertige Pakete, ohne Kompilieren. Globale Python-Einstellungen und andere
-   Projekte bleiben unberührt. Danach startet die App sofort. Fehlt Python 3.13, erklärt das Fenster,
-   was zu tun ist.
-   - Umgebung komplett neu aufbauen: `installieren.bat /neu` (oder den Ordner `.venv` löschen).
+3. **Windows: Doppelklick auf `kundenstart.bat`.** Es findet Python 3.13 oder installiert es bei Bedarf
+   über `winget` für diesen Benutzer. Danach richtet es die lokale `.venv` mit den gesperrten Paketen ein
+   und startet die App. Internet ist für die Erstinstallation nötig. Bestehende Python-Versionen werden behalten.
+   **Native Windows-/winget-Abnahme steht noch aus**, siehe [Prüfstand](docs/KUNDENINSTALLATION.md).
+   - Manueller Weg: Python **3.13.x** samt Launcher von python.org installieren und `app.bat` starten.
+     Diese Version ist im Projekt festgelegt; andere Python-Versionen sind nicht freigegeben.
+   - Nur einrichten: `kundenstart.bat -NurEinrichten`. Defekte `.venv` bei gestoppter App umbenennen und erneut einrichten.
    - Mac/Linux: `./start.sh` (richtet `.venv` über `installieren.sh` genauso automatisch ein).
 
-   Der Browser öffnet sich mit `http://127.0.0.1:8765`. Oben rechts auf **„Neue Anzeigen suchen“**
-   klicken – oder vorher einmal `python scout.py lauf` ausführen.
+   Der Browser öffnet sich mit `http://127.0.0.1:8765`. Im Hauptmenü **„Angebote importieren“** wählen,
+   Dateien einlesen und danach unter **„Fahrzeuge suchen“** filtern.
 
 ## Handy-App fürs Team
 
@@ -38,12 +62,12 @@ Unterwegs mit dem Handy anschreiben, Besichtigungen planen und zuweisen, beim Ve
 Fotos und live mitlaufendem Preisabzug, auch ohne Netz) und das Ankaufprotokoll unterschreiben lassen.
 Einrichtung (Nutzer anlegen, Tailscale, App auf den Startbildschirm): **[docs/HANDY-APP.md](docs/HANDY-APP.md)**.
 
-**Team-Übersicht (in Arbeit):** Sobald Nutzer angelegt sind, merkt sich der Scout, wer welches Fahrzeug bearbeitet.
+**Team-Übersicht:** Sobald Nutzer angelegt sind, merkt sich der Scout, wer welches Fahrzeug bearbeitet.
 „Ich übernehme“ reserviert ein Fahrzeug (Standard 2 Tage, `config.yaml → team → reservierung_tage`, 0 = nie);
 Anschreiben, Verhandlung oder Besichtigung übernehmen es automatisch. Ein Kollege bekommt dann „Reserviert von …“
 statt doppelt anzuschreiben. Nur der Inhaber kann eine fremde Reservierung aufheben oder zuweisen. Die CSV hat am
-Ende die Spalten „Bearbeiter“, „Übernommen am“, „Kontaktiert von“. Die Anzeige in Desktop- und Handy-App (Badges,
-Knöpfe, Filter) folgt mit Paket T2 – **bis dahin die Team-Funktion nicht im Alltag nutzen**. Status per Kommandozeile:
+Ende die Spalten „Bearbeiter“, „Übernommen am“, „Kontaktiert von“. Desktop- und Handy-App zeigen Zuständigkeiten,
+Reservierungen und die verfügbaren Aktionen. Status per Kommandozeile:
 `scout.py status <id> <status> --nutzer NAME`. Ohne `--nutzer` ist das ein Verwaltungsbefehl ohne Team-Regeln:
 es wird niemand als Bearbeiter eingetragen (eine bestehende Reservierung bleibt bis zu ihrem Ablauf).
 
@@ -147,7 +171,8 @@ Der Text (`vorlagen/anschreiben.txt`, frei änderbar) wird für jedes Fahrzeug p
 
 ## Automatisch laufen lassen
 
-Am einfachsten: die App offen lassen – sie sucht alle 3 Stunden selbst (`config.yaml` → `app`).
+Optional: `config.yaml` → `app` steuert das Intervall der automatischen Suche. Sie beschafft nur dann Daten, wenn
+eine konfigurierte Quelle freigegeben und eingeschaltet ist. Ohne diese Voraussetzung bitte die Importwege nutzen.
 
 **Windows** (Aufgabenplanung): `lauf.bat` als Aufgabe anlegen, z. B. täglich 7:00, 12:00, 18:00 Uhr.
 `lauf.bat` nutzt dieselbe `.venv` wie die App.
@@ -241,7 +266,8 @@ künftige Vorschläge. Beides fragt vorher mit den Folgen nach; nichts passiert 
 die Gruppe, den Fahrzeugstatus und den Verlauf; **„Aufheben“** (nur Inhaber) nimmt eine Entscheidung zurück (Reihenfolge: erst die
 spätere Zusammenführung). Halten verschiedene Kollegen Inserate einer Gruppe, erscheint eine Warnung. Auf dem Handy wird die Gruppe nur angezeigt.
 
-**Gespeicherte Seiten einlesen:** Öffne eine Suchergebnisseite oder eine einzelne Anzeige auf Kleinanzeigen
+**Gespeicherte Seiten einlesen:** Direkt in der App über **„Angebote importieren“** auswählen.
+Alternativ bleibt der bisherige Ordnerimport verfügbar: Öffne eine Suchergebnisseite oder eine einzelne Anzeige auf Kleinanzeigen
 ganz normal im Browser, drücke `Strg`+`S` und speichere sie als „Webseite, nur HTML“ in den Ordner `import`
 im Programmordner. Dann in der App auf **„⤓ Gespeicherte Seiten einlesen“** klicken (oder `python scout.py import`).
 Neue Fahrzeuge erscheinen sofort in der Liste; das Programm ruft dafür nichts selbst aus dem Internet ab.
@@ -454,3 +480,21 @@ Die Zeilen „Phase 1“ unten beziehen sich auf den früheren Phasenplan; die n
 | Nacharbeiten: Abholvarianten in der Handy-App, Kontaktlage je Fahrzeug, Filterzähler als Fahrzeuge, Preisverlauf nur für benötigte Inserate, Audit für Notizen und Verhandlung (P7-01) | umgesetzt | `test_nacharbeiten.py` |
 | Verkaufsanfragen im Dashboard: Meldung „Verkaufsanfrage“ (ohne Personendaten, Link zur Anfrage), Kachel „Verkaufsanfragen offen“, Anfragen-Trichter in den Kennzahlen (P7-02) | umgesetzt | `test_anfragen_dashboard.py` |
 | Kennzahlen-Ansicht `/kennzahlen` (7/30/90 Tage): Eingang je Quelle, Fahrzeuge, Privatangebote, Dubletten, Preisänderungen, Vollständigkeit, Importerfolg, Marktwertunsicherheit, priorisierte Angebote, Ankaufstrichter (Kontakt → Antwort → Besichtigung → Ankauf) – ohne Preise (P6-05) | umgesetzt | `test_kennzahlen.py`, Klicktest |
+
+## Browser-Regressionsprüfung (Entwicklung)
+
+Die Kunden-App benötigt weder Node noch Playwright. Nur für Entwicklung und CI:
+
+```sh
+.venv/bin/python -m pytest -q
+.venv/bin/python -m ruff check .
+npm ci --prefix tests/browser --ignore-scripts
+cd tests/browser
+npx playwright install chromium
+npm test
+```
+
+Der Browsertest startet selbst eine isolierte App mit temporärer SQLite-Datenbank. Er prüft CSV-Zuordnung,
+HTML-Upload, Preisänderung/Reimport, Radius-Suche, Profil, Sortierung, manuelle Bestätigung, Besichtigungsdaten,
+Vertragsentwurf und die mobile Ansicht. Vorinstalliertes Chromium kann über `SCOUT_CHROMIUM` gewählt werden;
+`SCOUT_TEST_PYTHON` überschreibt den Python-Pfad. Die Tests beschaffen keine echten Plattformdaten.

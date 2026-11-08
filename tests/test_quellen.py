@@ -81,7 +81,7 @@ def test_captcha_bricht_sauber_ab(cfg, db):
 
 def test_netzwerkfehler_bricht_sauber_ab(cfg, db):
     stat = Importer(cfg, db, abruf=AntwortAbruf(NetzwerkFehler("Netzwerkfehler: Zeitüberschreitung"))).lauf(cfg["suchen"])
-    assert stat["fehler"].startswith("Netzwerkfehler")
+    assert "Netzwerkfehler" in stat["fehler"] and "kleinanzeigen" in stat["fehler"]
 
 
 def test_geloeschtes_inserat(cfg, db, ads):

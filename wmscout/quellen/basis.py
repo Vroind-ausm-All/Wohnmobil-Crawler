@@ -133,6 +133,9 @@ class Quelle(ABC):
     freigegeben: ClassVar[bool]          # True nur bei API/Feed mit Vertrag bzw. ausdrücklicher Erlaubnis
     hinweis: ClassVar[str] = ""          # z. B. Hinweis auf Nutzungsbedingungen
     unterstuetzt_details: ClassVar[bool] = False
+    # Nur für Quellen mit garantierter Sortierung nach Neuaufnahme: bekannte Seiten können sonst
+    # geänderte Preise und neue Treffer auf Folgeseiten verdecken. Standard: alle gelieferten Seiten lesen.
+    stop_bei_bekannter_seite: ClassVar[bool] = False
 
     def __init__(self, cfg: dict, abruf: Abruf | None = None):
         self.cfg = cfg
