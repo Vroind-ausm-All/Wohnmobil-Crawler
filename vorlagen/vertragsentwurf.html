@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vertragsentwurf – {{ b.basis.fahrzeug }}</title>
+<style>
+body{font:15px/1.5 system-ui,sans-serif;color:#142b26;margin:0;background:#f2f5f4}
+main{max-width:850px;margin:24px auto;background:white;padding:28px;border:1px solid #d4dfda}
+h1{font-size:25px}h2{font-size:18px;border-bottom:1px solid #bccdc4;padding-bottom:5px}
+.hinweis{background:#fff3d6;padding:14px;border-left:4px solid #987325}.felder{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px}
+.feld{padding:8px 0;border-bottom:1px solid #cbd4cf}.feld b{display:block;font-size:12px}.fehlt{color:#866016}
+nav{display:flex;gap:16px;flex-wrap:wrap}button{font:inherit;padding:8px 15px;cursor:pointer}.linie{border-bottom:1px solid #999;min-height:38px}
+form{border:1px solid #ccd8d1;padding:16px;margin:20px 0}label{display:block}input{display:block;box-sizing:border-box;width:100%;font:inherit;padding:8px}
+@media(max-width:600px){main{margin:0;padding:16px}.felder{grid-template-columns:1fr}}
+@media print{body{background:white}main{border:0;margin:0;padding:0}nav,form{display:none}h2{break-after:avoid}.feld{break-inside:avoid}}
+</style></head><body><main>
+<nav><a href="/m#/besichtigung/{{ b.id }}">Zur Besichtigung</a><button type="button" onclick="window.print()">Drucken / als PDF speichern</button></nav>
+<h1>Vertragsentwurf: {{ b.basis.fahrzeug }}</h1>
+<p>Besichtigung Nr. {{ b.id }} · Stand {{ jetzt.strftime('%d.%m.%Y %H:%M') }}</p>
+<p class="hinweis"><strong>Unverbindlicher Entwurf – Muster ohne Rechtsgewähr.</strong>
+Die Daten stammen aus dem bisherigen Arbeitsstand. Fehlende Angaben sind gekennzeichnet. Ein Kauf, eine Unterschrift oder eine
+Verkäuferansprache wird durch das Öffnen oder Drucken nicht ausgelöst. Vor Verwendung Angaben prüfen und das Vertragsmuster juristisch abstimmen.</p>
+{% if bearbeitbar %}
+<form id="vertragsdaten" autocomplete="off">
+<h2>Vertragsdaten vorbereiten</h2>
+<p>Diese Angaben werden nur auf dem Server gespeichert und nicht im Offline-Speicher der Handy-App abgelegt.</p>
+<div class="felder">
+{% for feld, label, grenze in [('name','Verkäufer: Name',150),('anschrift','Verkäufer: Anschrift',500),('telefon','Telefon',80),('email','E-Mail',200)] %}
+<label>{{ label }}<input name="{{ feld }}" maxlength="{{ grenze }}" type="{{ 'email' if feld == 'email' else 'tel' if feld == 'telefon' else 'text' }}" value="{{ v.get(feld) or '' }}"></label>
+{% endfor %}
+<label>Vorgesehener Kaufpreis (€)<input name="preis" type="number" min="1" max="10000000" step="1" value="{{ preis if preis is not none else '' }}"></label>
+</div><p><button type="submit">Speichern und Entwurf aktualisieren</button></p><p id="vertragsfehler" role="alert"></p>
+</form>
+<script>
+(function(){'use strict';var form=document.getElementById('vertragsdaten');form.addEventListener('submit',async function(event){
+event.preventDefault();var fehler=document.getElementById('vertragsfehler'), button=form.querySelector('button');button.disabled=true;fehler.textContent='';
+try{var werte={};['name','anschrift','telefon','email'].forEach(function(f){werte[f]=form.elements[f].value;});
+werte.preis=form.elements.preis.value===''?null:Number(form.elements.preis.value);
+var response=await fetch('/api/besichtigung/{{ b.id }}/vertragsdaten',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Scout-Token':{{ token|tojson }}},body:JSON.stringify({werte:werte,version:{{ b.version }}})});
+var result=await response.json();if(!response.ok)throw new Error(result.fehler||'Speichern fehlgeschlagen');window.location.reload();
+}catch(error){fehler.textContent=error.message;}finally{button.disabled=false;}});})();
+</script>
+{% endif %}
+{% macro feld(label, wert) %}<div class="feld"><b>{{ label }}</b>{% if wert is not none and wert != '' %}{{ wert }}{% else %}<span class="fehlt">Noch zu erfassen</span>{% endif %}</div>{% endmacro %}
+<h2>1. Verkäufer und Käufer</h2>
+<div class="felder">
+{{ feld('Verkäufer: Vor- und Nachname', v.get('name')) }}{{ feld('Käufer', firma.firma) }}
+{{ feld('Verkäufer: vollständige Anschrift', v.get('anschrift')) }}{{ feld('Käufer: Ort', firma.ort) }}
+{{ feld('Verkäufer: Telefonnummer', v.get('telefon')) }}{{ feld('Käufer: Ansprechpartner', firma.ansprechpartner) }}
+{{ feld('Verkäufer: E-Mail', v.get('email')) }}{{ feld('Käufer: Telefonnummer', firma.telefon) }}
+</div>
+<h2>2. Fahrzeug</h2>
+<div class="felder">
+{{ feld('Fahrzeug', b.basis.fahrzeug) }}{{ feld('Fahrzeugart', b.basis.get('art')) }}
+{{ feld('FIN', f.get('fin')) }}{{ feld('Kennzeichen', f.get('kennzeichen')) }}
+{{ feld('Kilometerstand laut Besichtigung', d.get('km_abgelesen')) }}{{ feld('Erstzulassung', b.basis.get('ez_jahr')) }}
+{{ feld('HU bis', f.get('hu_bis')) }}{{ feld('Gasprüfung bis', f.get('gas_bis')) }}
+</div>
+<h2>3. Kaufpreis und Zahlung</h2>
+{{ feld('Vorgesehener Kaufpreis (noch zu vereinbaren)', preis|euro if preis is not none else none) }}
+<p>Zahlungsart, Fälligkeit und Eigentumsübergang: noch zu vereinbaren.</p><div class="linie"></div>
+<h2>4. Zustand und bekannte Mängel</h2>
+<p>Besichtigungsdaten und Bewertungen sind ein Arbeitsstand; sie sind noch keine gemeinsam bestätigte Zustandsvereinbarung.</p>
+{{ feld('Unfallschäden laut Verkäufer', v.get('unfall')) }}
+<p>Bekannte Mängel, Zusicherungen und Sachmängelhaftung vor Unterzeichnung ergänzen und prüfen:</p><div class="linie"></div><div class="linie"></div>
+<h2>5. Übergabe und Erklärungen</h2>
+<p>Eigentum und Rechte Dritter, Fahrzeugpapiere, Schlüssel, Übergabetermin und Abmeldung mit dem Verkäufer klären.</p>
+{{ feld('Anzahl Schlüssel', f.get('schluessel')) }}<div class="linie"></div>
+<h2>6. Weitere Vereinbarungen und Unterschriften</h2>
+<div class="linie"></div><div class="linie"></div>
+<p>Dieser Entwurf enthält keine Unterschriften. Die endgültige Fassung wird nach Prüfung gesondert vereinbart.</p>
+</main></body></html>

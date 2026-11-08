@@ -109,6 +109,10 @@ def pruefe_inserat(a: dict, jetzt: datetime) -> list[dict]:
     titel_marke, marke = normalisiere_marke(marke_aus_text(a.get("titel") or "")), normalisiere_marke(a.get("marke"))
     if titel_marke and marke and not ist_basismarke(titel_marke) and not ist_basismarke(marke) and titel_marke.lower() != marke.lower():
         erg.append(_m("marke_titel", WIDERSPRUCH, f"Titel nennt {titel_marke}, Angabe {marke}"))
+    for feld, h in (a.get("datenherkunft") or {}).items():
+        if h.get("konflikt"):
+            erg.append(_m(f"bestaetigung_{feld}", WIDERSPRUCH,
+                          f"{feld}: neuer Import weicht von der bestätigten Angabe ab – erneut prüfen"))
     return erg
 
 

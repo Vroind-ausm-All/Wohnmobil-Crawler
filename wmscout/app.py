@@ -97,10 +97,21 @@ class Suchlauf:
             neue = sum(1 for z in zeilen if z["neu"] and z["bereit"])
             gesenkt = len(gesenkt_seit(zeilen, self.letzter_start))        # deutliche Preissenkungen in diesem Lauf (P4-03)
             uebersprungen = "".join(f" · übersprungen: {u['quelle']} ({u['grund']})" for u in stat.get("uebersprungen", []))
+            quellen = {e.get("quelle", "kleinanzeigen") for e in self.cfg["suchen"]}
+            alle_uebersprungen = bool(quellen) and quellen <= {u["quelle"] for u in stat.get("uebersprungen", [])}
+            nur_abgeschaltet = alle_uebersprungen and all(u["grund"] in ("deaktiviert", "nicht freigegeben")
+                                                        for u in stat.get("uebersprungen", []))
+            meldung = ("Keine Angebote abgerufen: Alle Suchquellen sind deaktiviert oder nicht freigegeben. "
+                       "Das ist kein Parserfehler. Bitte Status /status prüfen; gespeicherte HTML-Seiten oder "
+                       "freigegebene Datenkanäle verwenden."
+                       if nur_abgeschaltet else
+                       "Keine Angebote abgerufen: Alle Suchquellen wurden in diesem Lauf übersprungen. "
+                       "Gründe und nächsten Versuch unter /status prüfen."
+                       if alle_uebersprungen else
+                       f"Fertig: {stat['neu']} neue Anzeigen, davon {neue} mit Anschreiben · {stat['preis']} Preissenkungen"
+                       f"{f', davon {gesenkt} deutlich' if gesenkt else ''}")
             self.stand.update(fehler=stat["fehler"], neue_treffer=neue, preissenkungen=gesenkt,
-                              nachfassen=sum(1 for z in zeilen if z["nachfassen"]), meldung=(
-                f"Fertig: {stat['neu']} neue Anzeigen, davon {neue} mit Anschreiben · {stat['preis']} Preissenkungen"
-                f"{f', davon {gesenkt} deutlich' if gesenkt else ''}{uebersprungen}"))
+                              nachfassen=sum(1 for z in zeilen if z["nachfassen"]), meldung=meldung + uebersprungen)
         except Exception as e:  # noqa: BLE001 – Fehler in der Oberfläche anzeigen statt Thread sterben lassen
             log.exception("Suchlauf fehlgeschlagen")
             self.stand.update(fehler=str(e), meldung="Suchlauf fehlgeschlagen")

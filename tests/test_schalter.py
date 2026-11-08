@@ -295,7 +295,22 @@ def test_app_suchlauf_meldet_uebersprungene_quelle_ohne_fehler(cfg, ads, monkeyp
     assert lauf.starte() is True
     lauf.thread.join(120)
     assert not lauf.stand["fehler"] and not lauf.stand["laeuft"] and abruf.abrufe == []
-    assert lauf.stand["meldung"] == "Fertig: 0 neue Anzeigen, davon 0 mit Anschreiben · 0 Preissenkungen · übersprungen: kleinanzeigen (nicht freigegeben)"
+    assert lauf.stand["meldung"].startswith("Keine Angebote abgerufen:")
+    assert "nicht freigegeben" in lauf.stand["meldung"] and "gespeicherte HTML-Seiten" in lauf.stand["meldung"]
+
+
+@pytest.mark.parametrize("grund", ["Intervall noch nicht abgelaufen", "Pause nach Sperre"])
+def test_app_suchlauf_meldet_pausierte_quellen_neutral(cfg, monkeypatch, grund):
+    from wmscout import app as app_modul
+    monkeypatch.setattr(Importer, "lauf", lambda self, suchen: {
+        "neu": 0, "preis": 0, "bekannt": 0, "details": 0, "fehler": None,
+        "uebersprungen": [{"quelle": "kleinanzeigen", "grund": grund}]})
+    lauf = app_modul.Suchlauf(cfg, cfg["ausgabe"]["datenbank"], BASIS)
+    lauf._lauf(ausloeser="auto")
+    assert not lauf.stand["fehler"]
+    meldung = lauf.stand["meldung"]
+    assert "Alle Suchquellen wurden in diesem Lauf übersprungen" in meldung and grund in meldung
+    assert "deaktiviert" not in meldung and "nicht freigegeben" not in meldung
 
 
 # ---------- Detailabruf: gesperrte Quellen blockieren das LIMIT nicht (F3) ----------

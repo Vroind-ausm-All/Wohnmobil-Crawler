@@ -423,6 +423,13 @@ class Datenbank:
         grenze = (datetime.now() - timedelta(days=tage)).isoformat(timespec="seconds")
         return self.con.execute("SELECT * FROM anzeigen WHERE zuletzt_gesehen >= ?", (grenze,)).fetchall()
 
+    def alle_anzeigen(self) -> list[sqlite3.Row]:
+        """Ankaufsliste einschließlich veralteter Inserate; Verfügbarkeit wird in der Auswertung markiert.
+
+        ``aktive`` bleibt für Aufrufer mit gewünschtem Zeitfenster unverändert.
+        """
+        return self.con.execute("SELECT * FROM anzeigen").fetchall()
+
     def erstmals_seit(self, grenze: str) -> list[sqlite3.Row]:
         """Alle Anzeigen, die ab ``grenze`` (ISO, lokal) zuerst eingingen – auch wenn sie inzwischen nicht mehr gesehen werden (P4-05)."""
         return self.con.execute("SELECT * FROM anzeigen WHERE erstmals_gesehen >= ?", (grenze,)).fetchall()

@@ -6,6 +6,47 @@ Wert „–“.
 
 ---
 
+## CampRCrawlR – Import bis Vertragsentwurf (08.11.2026) · Status: REVIEW
+
+- **Auftrag:** Benutzerfeedback `CampRCrawlR_.txt`, übernommener Codex-Auftrag, beigefügte Repo-ZIP und ausdrücklicher
+  Folgeauftrag, den nach dem Nutzungslimit verbliebenen Rest fertigzustellen. Alle sieben benannten Pakete autorisiert.
+- **Stand:** Ausgang `92bc20b`, eigener Zweig `claude/camprcrawlr-haendlerablauf`. ZIP mit Checkout verglichen;
+  Verbesserungen gezielt integriert. Bereits vorhandene Zeilenendungsänderungen in `app.bat`, `installieren.bat`,
+  `lauf.bat` erhalten und vom neuen Commit ausgeschlossen. Keine Kundenkonfiguration überschrieben.
+- **Arbeitsweise:** Drei Fachagenten mit geladenen Projektrollen für Parser/Quellen, Bewertung/Daten und Upload/API.
+  Getrennte Dateien im bestehenden Cloud-Checkout gemäß Onboarding-Vorgabe, keine zusätzlichen Worktrees.
+  Gegenseitige Reviews lieferten Preiscontainer-, Upload-Race- und Aufbewahrungsbefunde. Nach dem Kontingentabbruch
+  hat der Orchestrator die Integration, letzten Korrekturen und erneute Prüfung abgeschlossen;
+  ein vollständiges unabhängiges Schlussreview ist nicht behauptet.
+- **Implementiert:** Robuste manuelle Imports und Anbieterbelege, isolierte Quellenfehler, gemeinsame nachvollziehbare
+  Sortierung, Browser-Uploads mit CSV-Zuordnung, zentraler Suchknopf und Radius/Profile, Tagesübersicht,
+  Feldbestätigungen getrennt von Originalen, Konflikte/Rücknahme, serverseitige Vertragsvorbereitung vor Kaufabschluss.
+  Schema 24 ist ergänzend; vorgeschaltete Sicherung, Idempotenz, Altbestand und Wiederherstellung werden getestet.
+  Die bestehende Ausstattungserkennung und wirtschaftlichen Bewertungsformeln wurden weiterverwendet.
+- **Betrieb:** Neuer `kundenstart.bat`/`kundenstart.ps1` mit Python-3.13-Erkennung, optionaler offizieller winget-Installation,
+  lokaler `.venv`, `RemoteSigned` nur für den Prozess, keiner dauerhaften PATH-Änderung und `-NurEinrichten`.
+  README, ROADMAP, Kunden-/Update-Anleitung und detaillierte [Abnahme](CAMPRCRAWLR-ABNAHME.md) aktualisiert.
+- **Geänderte Dateien:** Schwerpunkt `wmscout/quellen/kleinanzeigen/`, `importer.py`, `eingang/`, `bewertung/`,
+  `feldbestaetigungen.py`, `migrationen.py`, `datenrechte.py`, `web/api.py`, `web/static/`, `vorlagen/`;
+  neue Regressionen `test_quellen_p0_robust.py`, `test_ankauf_sortierung.py`, `test_feldbestaetigungen.py`,
+  `test_datei_upload.py`, `test_haendler_ablauf.py`, `tests/browser/`; CI und Dokumentation.
+- **Tests:** Vollsuite, Ruff, gezielte Regression, HTTP-Gesamtablauf und echter Chromium;
+  abschließend **2.776 bestanden, 1 übersprungen** (alle vier Gruppen; ein Lasttest durch Wiederholung der betroffenen
+  Gruppe ohne Parallelbetrieb bestätigt), Ruff und Browser grün. Genaue Befehle und Ergebnisse in [TEST-REPORT.md](TEST-REPORT.md).
+  Der systemd-Laufzeitpfad ist hier nicht beschreibbar;
+  genau dieser Umgebungsausfall wird als Skip ausgewiesen. Kein Fehler wird pauschal ignoriert.
+- **Review-Ergebnis:** Die benannten Befunde sind behoben und lokal regressionsgeprüft. ROADMAP bleibt REVIEW,
+  weil Remote-CI, native Windows-/winget-Ausführung, aktuelle reale Plattformdateien und Kundenabnahme ausstehen.
+- **Grenzen:** Kleinanzeigen-Livecrawler bleibt gesperrt. Kein neuer AutoScout24-Import ohne belegtes Format;
+  keine Verkäufernachrichten, Kaufzusagen, Umgehungen oder externen Deployment-Aktionen.
+- **Cloud-Einrichtung:** Laufende Umgebung und Browserwerkzeuge funktionieren. Speicherung von `install_script`
+  und `start_skill` erneut mit `INVALID_ARGUMENT` abgelehnt; lokale Ersatzanweisungen unter
+  `/workspace/cloud-setup/wohnmobil/`. Keine erfolgreiche Veröffentlichung oder Wiederherstellung einer neuen Cloud-Aufgabe behauptet.
+- **Übergabe:** Nachvollziehbarer Arbeitszweig und Quellcode-ZIP ohne Kundendaten. Kein Push/PR und kein Merge in dieser Sitzung.
+- **Nächster sinnvoller Schritt:** Branch-CI ausführen und die dokumentierte praktische Abnahme mit Datenkopie auf dem Kundenrechner.
+
+---
+
 ## P7-04 – Serverbetrieb vorbereitet (02.11.2026) · Status: REVIEW
 
 - **Auftrag:** Betreiber 02.11.2026: „Stelle bitte alles soweit fertig“ (Phase 7) – vorbereiten, nichts ausführen (Regel 13).

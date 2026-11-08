@@ -12,3 +12,6 @@ mandanten/
 # Eigene Einstellungen des Betriebs (P1-09) überlagern config.yaml – nie ins Repository
 config.local.yaml
 *.local.yaml
+
+# Browser-Regressionswerkzeuge (separater, gesperrter npm-Entwicklungsbereich)
+tests/browser/node_modules/

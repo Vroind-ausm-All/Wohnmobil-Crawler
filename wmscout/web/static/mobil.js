@@ -296,7 +296,7 @@
     return profile().then(function () {
       if (S.profil && !S.profile.some(function (p) { return String(p.id) === String(S.profil); })) S.profil = "";
       return api("/api/fahrzeuge?filter=" + encodeURIComponent(filter) + "&q=" + encodeURIComponent(suche || "") + (wer !== "alle" ? "&wer=" + wer : "") +
-                 (S.profil ? "&profil=" + encodeURIComponent(S.profil) : "") + (S.quelle ? "&quelle=" + encodeURIComponent(S.quelle) : "") + "&einmal=" + (S.einmal === false ? "nein" : "ja"));
+                 (S.profil ? "&profil=" + encodeURIComponent(S.profil) : "") + (S.quelle ? "&quelle=" + encodeURIComponent(S.quelle) : "") + "&sort=" + encodeURIComponent(S.sort || "score") + "&einmal=" + (S.einmal === false ? "nein" : "ja"));
     }).then(function (l) {
       inhalt.innerHTML = "<h1>" + esc(LISTEN[filter] || "Fahrzeuge") + " (" + l.length + ")</h1>" +
         '<input type="search" id="suche" placeholder="Marke, Modell, Ort …" value="' + esc(suche || "") + '">' +
@@ -306,6 +306,7 @@
         (S.ich.team ? '<div class="reihe" role="group" aria-label="Wer">' + Object.keys(WER).map(function (w) {
           return '<button class="knopf klein' + (w === wer ? " primaer" : "") + '" data-aktion="wer" data-wer="' + w + '" aria-pressed="' + (w === wer) + '">' + WER[w] + "</button>";
         }).join("") + "</div>" : "") + profilAuswahl() + quelleAuswahl() + einmalAuswahl() +
+        '<label>Sortierung <select id="mobil-sort">' + [['score','Deal-Score'],['chance','Beste Ankaufchancen'],['preis','Preis aufsteigend'],['preis_ab','Preis absteigend'],['neu','Neueste Angebote'],['potenzial','Gewinnpotenzial']].map(function(x){return '<option value="'+x[0]+'"'+((S.sort||'score')===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('') + '</select></label>' +
         (l.length ? l.map(function (f) {
           return '<a class="karte" href="#/fahrzeug/' + esc(f.id) + '"><div class="zeile"><span class="titel">' + esc(f.fahrzeug) + "</span>" + dealTag(f) + gruppeTag(f) + teamBadge(f.team) + neuTag(f) + verfTag(f) + dqTag(f) +
             (f.profil_treffer === "unklar" ? '<span class="tag dq" data-profil-unklar="">Profil unklar</span>' : "") + ampelTag(f.ampel) + "</div>" +
@@ -316,6 +317,7 @@
             '<div class="zahlen"><div><span>Wunschpreis</span>' + eur(f.preis) + "</div><div><span>Erstangebot</span><b>" + eur(f.erstangebot) +
             "</b></div>" + maxEkZelle(f) + "</div></a>";
         }).join("") : '<p class="leise">Nichts gefunden.</p>');
+      document.getElementById('mobil-sort').onchange = function(){ S.sort = this.value; liste(filter, document.getElementById('suche').value); };
       var pw = document.getElementById("profil");
       if (pw) pw.onchange = function () { S.profil = pw.value; liste(filter, document.getElementById("suche").value); };
       var qw = document.getElementById("quelle");
@@ -548,6 +550,7 @@
       '<label>Grund<input data-anp="grund" value="' + esc(d.anpassung.grund) + '"></label></div>' +
 
       '<h2>Ergebnis</h2><div id="ergebnis"></div>' +
+      '<a class="knopf voll" href="/besichtigung/' + B.id + '/vertragsentwurf" target="_blank" rel="noopener">Vertragsentwurf vorbereiten</a>' +
       (fertig ? "" : '<a class="knopf primaer voll" style="margin-top:12px" href="#/besichtigung/' + B.id + '/abschluss">Besichtigung abschließen →</a>') +
       '<div class="leiste" id="leiste"></div>';
     zeichneFeuchte(); zeichneReifen(); zeichneMaengel(); zeigeFotos(); rechne();
@@ -714,6 +717,7 @@
         "<h2>Verkäufer</h2>" +
         '<label>Name<input id="a-v-name" autocomplete="off"></label><label>Anschrift<input id="a-v-anschrift" autocomplete="off"></label>' +
         '<label>Telefon<input id="a-v-tel" inputmode="tel" autocomplete="off"></label>' +
+        '<label>E-Mail<input id="a-v-mail" type="email" autocomplete="off"></label>' +
         "<h2>Erklärungen des Verkäufers</h2>" +
         '<label class="check"><input type="checkbox" id="a-eigentum"><span>Verkäufer ist Eigentümer, das Fahrzeug ist frei von Rechten Dritter (keine Finanzierung, kein Pfand).</span></label>' +
         '<label>Unfallschäden<select id="a-unfall"><option value="keine bekannt">keine bekannt</option><option value="ja">ja (siehe Bemerkung)</option></select></label>' +
@@ -747,7 +751,7 @@
     var daten = { entscheidung: ent };
     if (ent === "gekauft") {
       daten.endpreis = parseInt(wert("a-preis").replace(/\D/g, ""), 10) || 0;
-      daten.verkaeufer = { name: wert("a-v-name"), anschrift: wert("a-v-anschrift"), telefon: wert("a-v-tel"),
+      daten.verkaeufer = { name: wert("a-v-name"), anschrift: wert("a-v-anschrift"), telefon: wert("a-v-tel"), email: wert("a-v-mail"),
                            eigentum_frei: document.getElementById("a-eigentum").checked, unfall: wert("a-unfall") };
       daten.bemerkung = wert("a-bemerkung"); daten.begruendung_unvollstaendig = wert("a-begruendung");
       daten.unterschrift_verkaeufer = bild("u-verkaeufer"); daten.unterschrift_ankaeufer = bild("u-ankaeufer");

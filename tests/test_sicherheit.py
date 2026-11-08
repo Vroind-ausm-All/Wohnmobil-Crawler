@@ -168,9 +168,10 @@ def test_nur_http_links_aus_seiten():
     from wmscout.quellen.kleinanzeigen.parser import parse_suchseite
     assert http_url("javascript:alert(1)") is None and http_url(" https://x.de/a ") == "https://x.de/a" and http_url(None) is None
     a = baue_ads(1)[0]
+    assert parse_suchseite(such_html([a]))[0]["url"].startswith("https://www.kleinanzeigen.de/")
     html = such_html([a]).replace(f"/s-anzeige/{a['slug']}/{a['id']}-220-1234", "javascript:alert(document.domain)")
-    treffer = parse_suchseite(html)
-    assert treffer and all(not (t.get("url") or "").lower().startswith("javascript") for t in treffer)
+    # Ohne vertrauenswürdige Anzeigenadresse wird die Karte vollständig verworfen.
+    assert parse_suchseite(html) == []
 
 
 def _jpeg_mit_exif() -> bytes:

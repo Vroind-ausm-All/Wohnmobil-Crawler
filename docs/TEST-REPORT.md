@@ -4,6 +4,75 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## CampRCrawlR – Händlerablauf und Import (08.11.2026) · REVIEW
+
+Branch `claude/camprcrawlr-haendlerablauf`, Basis `92bc20b`. Python 3.13.5 auf Linux, Node 24,
+Playwright 1.62.1 aus `tests/browser/package-lock.json`, installierter Chromium. Alle neuen Angebote und
+Personenangaben in den Tests sind synthetisch; keine Plattformabfragen oder Nachrichten an Verkäufer.
+
+| Prüfung | Ergebnis |
+|---|---|
+| Vollsuite nach Zusammenführung vor Schlusskorrektur | `2 failed, 2769 passed, 1 skipped in 871.70s`; beide Befunde unten beschrieben und korrigiert |
+| `pytest -q tests/test_eingang.py tests/test_sicherheit.py tests/test_quellen_p0_robust.py tests/test_seitenimport.py tests/test_feldbestaetigungen.py tests/test_datenrechte.py` | `183 passed in 46.88s` |
+| `pytest -q tests/test_statusseite.py` nach Anpassung des zugehörigen Protokolltests | `24 passed in 8.59s` |
+| Vollständige Suite, vier getrennte Dateigruppen, `pytest -q` mit getrennten temporären Verzeichnissen und JUnit-Berichten | erster paralleler Lauf: 2.775 bestanden, ein Laufzeitfehler, ein Skip; betroffene Gruppe anschließend allein: **694 passed in 170.41s** |
+| Abschließender Abgleich der jeweils letzten Gruppenberichte mit der Testliste | **2.776 bestanden, 1 übersprungen, keine Fehler**; alle 2.777 Fälle aus 93 Dateien genau einmal im Endergebnis enthalten |
+| `.venv/bin/python -m ruff check .` und `git diff --check` | grün |
+| `.venv/bin/python -m pip check` | `No broken requirements found.` |
+| Wiederholte Linux-Einrichtung und zwei anschließende App-Starts mit isolierter Entwicklungskonfiguration | bestanden; beide Male Startseite HTTP 200 und `/api/fahrzeuge` gültiges JSON |
+| `npm ci --prefix tests/browser --ignore-scripts --cache /workspace/.cache/npm` | bestanden, zwei Pakete aus Lockdatei mit Prüfsummen installiert |
+| `npm test --prefix tests/browser` | Node-Regression für verspätete Vorschau/Fehler/Dateilesen, CSV-Dateiwechsel und vollständiger Chromium-Ablauf bestanden, keine JavaScript-Seitenfehler |
+| Desktop-/Mobilansicht im Chromium | visuell geprüft; synthetische Angebote, Screenshots außerhalb des Repositorys |
+| Quellenliste | nur Kleinanzeigen als Web-Pull-Adapter registriert, Code-Freigabe `nein`; Seiten/Text an, EML in Standardkonfiguration aus |
+| Windows-Kundenstart | Batch-/PowerShell-Anschluss und Optionen statisch geprüft; keine native Ausführung in diesem Linux-Container |
+| Remote-CI / echte Windows-Installation / Plattformzugänge / Kundenbestand | **nicht geprüft / nicht live verifiziert** |
+
+Die isolierten Browser-Server verwenden temporäre Datenbanken, keine Kundendaten; der Test beendet die von ihm gestartete App.
+Der HTTP-Gesamtablauf in `test_haendler_ablauf.py` prüft für HTML und CSV Import, Preisänderung, Reimport ohne Dublette,
+Suchprofil mit Radius, Bewertung, Kontaktentwurf ohne Versand, Termin/Kalender, Besichtigung, Vertragsvorbereitung ohne
+Kaufabschluss sowie den vorhandenen ausdrücklich bestätigten Testkauf mit Vertragsmuster.
+
+Die JavaScript-Sortierregression in `test_ankauf_sortierung.py` führt den tatsächlichen Desktop-Komparator mit Node aus
+und vergleicht ihn mit den Python-Schlüsseln. Fehlende Zahlen, Anbieterarten, Gleichstände, veraltete/widersprüchliche
+Daten und Preisänderungen sind abgedeckt. Der Chromium-Test ergänzt echte Interaktionen in Desktop und Mobilansicht.
+
+**Befunde und Korrekturen:**
+
+- Parser-Review: Ein durchgestrichener oder versteckter übergeordneter Preiscontainer konnte als Kaufpreis gelten.
+  Elternknoten werden nun geprüft, ungültige Kandidaten übersprungen; entsprechende Fixtures ergänzt.
+- Upload-Review: Eine verspätete CSV-Vorschau konnte nach Dateitausch eine alte Zuordnung anzeigen.
+  Bedienelemente während Anfragen gesperrt, Dateigeneration geprüft; `tests/browser/dateiwechsel.cjs` verzögert die
+  echte HTTP-Antwort und erzwingt einen Dateitausch zur Regression.
+- Aufbewahrungs-Review: Bestätigte Freitextfelder waren manuell anonymisierbar, aber noch nicht vollständig in der
+  Fristenauswahl. Bestätigungen und Original-Snapshots zählen nun mit, neue Bestätigung gilt als Aktivität;
+  vier zusätzliche Fälle inklusive erneut fälliger Anonymisierung und altem Schema.
+- Vollsuite: Ungültige Karten wurden vom strengeren Parser übersprungen und die gesamte Datei dadurch als unbekannt
+  verschoben. Der Seitenimport erhält jetzt Parserhinweise und lässt vollständig fehlerhafte Dateien liegen.
+  Gemischte Seiten importieren gültige Angebote und melden die ausgelassenen Karten. Der zugehörige Protokolltest
+  prüft ebenfalls die neue Fehlermeldung und das Liegenlassen der Datei. Der bereits laufende zweite serielle Durchlauf
+  wurde vor Abschluss gestoppt und durch die vollständige Prüfung in vier Dateigruppen auf dem korrigierten Stand ersetzt.
+- Vollsuite: Der alte Sicherheitstest erwartete trotz `javascript:`-Adresse einen Datensatz. Die strengere Prüfung
+  verwirft die ganze Karte. Der Test prüft jetzt ausdrücklich diese Ablehnung sowie eine gültige positive Kontrollkarte.
+- Umgebung: `npm ci` konnte zunächst nicht in den Standardcache unter `/home/agent` schreiben. Mit einem beschreibbaren
+  Cache unter `/workspace/.cache/npm` ist derselbe Lockdatei-Import erfolgreich; Hash-/TLS-Prüfungen blieben aktiv.
+- Parallele Vollsuite: `test_laufzeit_bei_50000_zeichen_unter_einer_sekunde[strasse]` dauerte unter der Last der vier
+  Prozesse 1,60 Sekunden. Die betroffene Gruppe wurde allein wiederholt: **694 bestanden**. Test und Ein-Sekunden-Grenze
+  blieben unverändert. Die anderen drei Gruppen sind vollständig grün (nur der beschriebene systemd-Skip).
+
+Endzählung der vier Gruppen: 693 bestanden/1 Skip, 694 bestanden (Einzelwiederholung), 695 bestanden und 694 bestanden.
+Die JUnit-Berichte wurden auf Fehlerfreiheit, Gruppengröße und insgesamt 2.777 eindeutige Testfälle abgeglichen.
+Die gleiche vollständige Suite lässt sich unverändert seriell mit `.venv/bin/python -m pytest -q` ausführen.
+
+**Übersprungen:** Nur der systemd-Syntaxaufruf, wenn das Werkzeug ausdrücklich den fehlenden Schreibzugriff auf
+`/run/systemd` meldet. Sonstige Syntaxfehler bleiben Testfehler. Unit- und Betriebsvorlagen werden weiterhin durch die
+übrigen Tests geprüft; ein realer systemd-Dienst wurde nicht gestartet.
+
+GitHub Actions ist um den Browserablauf sowie einen frischen und wiederholten Windows-Kundenstart mit
+`-NurEinrichten` ergänzt. Die lokale Prüfung ersetzt keinen tatsächlich ausgeführten Remote-CI-Lauf.
+Weitere praktische Abnahmen: [CAMPRCRAWLR-ABNAHME.md](CAMPRCRAWLR-ABNAHME.md).
+
+---
+
 ## P7-04 – Serverbetrieb vorbereitet (02.11.2026) · REVIEW
 
 | Prüfung | Ergebnis |

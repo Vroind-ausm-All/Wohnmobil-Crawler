@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 
 from tests.daten import BASIS, detail_html
 from tests.test_seitenimport import KeinNetz
-from wmscout.bewertung.anschreiben import HINWEIS_ART_UNBEKANNT, HINWEIS_ART_VORLAEUFIG, verkaeufer_name
+from wmscout.bewertung.anschreiben import HINWEIS_ANBIETER_UNBEKANNT, HINWEIS_ART_UNBEKANNT, HINWEIS_ART_VORLAEUFIG, verkaeufer_name
 from wmscout.bewertung.auswertung import bewerte_alle
 from wmscout.datenbank import IMPORT_SUCHE, Datenbank
 from wmscout.eingang import SuchseitenArt, erkenne_seite, fahrzeugart_der_suchseite, haupttabelle_ids
@@ -64,7 +64,7 @@ def test_suchseite_felder_im_einzelnen(such):
     assert pro_und_top["gewerblich"] is True and pro_und_top["ort"] == "71111 Beispielstadt"
 
     top = t["3900000002"]                                   # nur „TOP“ (bezahlte Hervorhebung) – kein Händlerhinweis
-    assert top["gewerblich"] is False
+    assert top["gewerblich"] is None
     assert (top["preis"], top["vb"]) == (34999, True)       # nicht der durchgestrichene Altpreis 37.500 €
     assert (top["ez_jahr"], top["km"], top["ort"]) == (2012, 98004, "72222 Musterdorf")
     assert top["marke"] == "Knaus"
@@ -73,13 +73,13 @@ def test_suchseite_felder_im_einzelnen(such):
     assert pro["gewerblich"] is True and pro["ez_jahr"] == 2021 and pro["marke"] == "Sunlight"
     assert pro["datum"] == "Heute, 21:16"
 
-    privat = t["3900000004"]
-    assert privat["gewerblich"] is False and privat["ez_jahr"] == 2026 and privat["preis"] == 58498
+    ohne_kennzeichen = t["3900000004"]
+    assert ohne_kennzeichen["gewerblich"] is None and ohne_kennzeichen["ez_jahr"] == 2026 and ohne_kennzeichen["preis"] == 58498
     assert t["3900000005"]["km"] == 4000
 
     ohne_link = t["3900000006"]                             # Titel ohne Link (span in der Überschrift)
     assert ohne_link["titel"].startswith("Eurom Klima Anlage") and ohne_link["preis"] == 200
-    assert ohne_link["ez_jahr"] is None and ohne_link["gewerblich"] is False
+    assert ohne_link["ez_jahr"] is None and ohne_link["gewerblich"] is None
     assert "3900000006" in ohne_link["url"]
 
 
@@ -303,7 +303,7 @@ def test_import_beider_seiten(cfg, db: Datenbank, ordner):
     for ad_id, z in zeilen.items():
         if ad_id != DETAIL_ID:
             assert z["suche"] == "Import Teilintegrierter (vorläufig)" and z["detail_geladen"] == 0 and z["bild"] == TEST_BILD
-    assert zeilen["3900000001"]["gewerblich"] == 1 and zeilen["3900000002"]["gewerblich"] == 0
+    assert zeilen["3900000001"]["gewerblich"] == 1 and zeilen["3900000002"]["gewerblich"] is None
     d = zeilen[DETAIL_ID]
     assert d["detail_geladen"] == 1 and d["suche"] == "Import Kastenwagen (bestätigt)"       # Art aus der Anzeigenseite selbst
     assert (d["preis"], d["km"], d["ez_jahr"], d["marke"], d["art"]) == (47300, 41200, 2021, "Sunlight", "Kastenwagen")
@@ -357,8 +357,9 @@ def test_andere_orte_gelten_wie_seite_ohne_filter_und_ohne_hinweis(cfg, db, ordn
     assert suche_von(db, "3900000023") == "Import Wohnwagen (vorläufig)"                # „Wohnwagen Beispiel 450“
     hinweise_je_id = {z["a"]["id"]: [h for h in z["hinweise"] if not h.startswith("Marke unbekannt")]      # Marke: P5-03, eigene Tests
                       for z in bewerte_alle(cfg, db, BASIS)}
-    assert hinweise_je_id == {"3900000021": [HINWEIS_ART_UNBEKANNT], "3900000022": [HINWEIS_ART_VORLAEUFIG],
-                              "3900000023": [HINWEIS_ART_VORLAEUFIG]}
+    assert hinweise_je_id == {"3900000021": [HINWEIS_ART_UNBEKANNT, HINWEIS_ANBIETER_UNBEKANNT],
+                              "3900000022": [HINWEIS_ART_VORLAEUFIG, HINWEIS_ANBIETER_UNBEKANNT],
+                              "3900000023": [HINWEIS_ART_VORLAEUFIG, HINWEIS_ANBIETER_UNBEKANNT]}
 
 
 def test_haupttabelle_bestaetigt_andere_orte_nicht(cfg, db, ordner, andere_orte, such):

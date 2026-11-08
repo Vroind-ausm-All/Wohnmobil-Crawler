@@ -56,7 +56,8 @@ class KleinanzeigenQuelle(Quelle):
             treffer = [Inserat(quelle=self.kennung, anzeigen_id=t.pop("id"), **t) for t in parse_suchseite(html)]
             if PRIVAT_FILTER in (auftrag.url or ""):       # Suche liefert nur Privatanbieter: Beleg für „privat“ (P3-05)
                 for t in treffer:
-                    if t.gewerblich is False:
+                    if t.gewerblich is None:
+                        t.gewerblich = False
                         t.anbieter_herkunft = SUCHFILTER
             verdacht = not treffer and nummer == 1 and len(html) > 20000   # volle Seite, aber nichts erkannt
             yield Suchseite(nummer, treffer, layout_verdacht=verdacht, rohdaten=html if verdacht else None)

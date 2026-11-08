@@ -327,3 +327,20 @@ Alle Kennzahlen stehen auf der Seite **`/kennzahlen`** (7/30/90 Tage, P6-05); Ei
 | F12 | Dürfen eng gekoppelte Pakete desselben Agenten (z. B. P1-02 + P1-03) in einem PR gebündelt werden? Wie schnell können Sie PRs prüfen und mergen? | Durchgangsplanung |
 | F13 | Sollen Deny-Regeln in `.claude/settings.json` den Prüfagenten technisch am Schreiben hindern (z. B. `git commit`/`git push`)? Das ändert Berechtigungen und bleibt Ihnen vorbehalten. | ADR-018 |
 | F14 | ~~Fahrzeugart **unbekannt**: Wohnwagen ohne Art-Wort werden wie Wohnmobile gerechnet.~~ **Entschieden 14.10.2026:** Ampel höchstens „gelb“, Brief ohne Betrag (umgesetzt in PR #4). Baureihen-Erkennung für Wohnwagen bleibt eigenes Paket. | ADR-021 |
+
+## CampRCrawlR – Benutzerauftrag vom 08.11.2026
+
+Separater Branch `claude/camprcrawlr-haendlerablauf`; alle sieben Pakete durch den konkreten Benutzerauftrag zur Bearbeitung freigegeben.
+Bestehende Phasen-/Backlogeinträge bleiben als Historie erhalten. Umfang, Belege und Restgrenzen: [CAMPRCRAWLR-ABNAHME.md](CAMPRCRAWLR-ABNAHME.md).
+
+| Paket | Umsetzung | Abnahme |
+|---|---|---|
+| 1 Parser und Import | HTML-Strukturen, echte Anbieterbelege, Preisfilter, Dubletten-Karten | REVIEW |
+| 2 Reihenfolge/Bewertung | gemeinsame Rangfolgen Python/Desktop/Mobil, fehlende Werte zuletzt, Erklärungen | REVIEW |
+| 3 Quellenablauf | Fehlerisolation, gezielter Suchseitenabbruch, Status und sichtbare alte Inserate | REVIEW |
+| 4 Dateiimport | HTML/CSV/EML-Upload, CSV-Zuordnung/Vorschau, Statistiken/Schutzprüfungen | REVIEW |
+| 5 Händleroberfläche | Hauptmenü, Radius-Suche per Knopf, Profil, Tagesablauf | REVIEW |
+| 6 Datenqualität | getrennte Bestätigungen/Originale mit Migration 24, Konflikthinweise | REVIEW |
+| 7 Betrieb/Abnahme | HTTP-Gesamtablauf, Chromium, Update-/Installationshinweise, CI erweitert | REVIEW |
+
+Windows-CI und echte Plattformdateien/Kundenabnahme sind vor Produktivfreigabe gesondert auszuführen.

@@ -62,6 +62,33 @@ jobs:
           .venv\Scripts\python.exe -m pip install --disable-pip-version-check --only-binary=:all: -r requirements-dev.txt
           .venv\Scripts\python.exe -m pytest
 
+  windows-kundenstart:
+    name: Windows-Kundenstart (frisch und wiederholt)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: PowerShell-Syntax prüfen
+        shell: powershell
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd 'kundenstart.ps1'), [ref]$tokens, [ref]$parseErrors)
+          if ($parseErrors.Count) { $parseErrors | Format-List; exit 1 }
+      - name: Kundenstart zweimal ohne Browser oder Systeminstaller
+        shell: cmd
+        run: |
+          call kundenstart.bat -NurEinrichten
+          if errorlevel 1 exit /b 1
+          if not exist .venv\Scripts\python.exe exit /b 1
+          call kundenstart.bat -NurEinrichten
+          if errorlevel 1 exit /b 1
+          .venv\Scripts\python.exe -m pip check
+          if errorlevel 1 exit /b 1
+          .venv\Scripts\python.exe scout.py --help
+
   unix-start:
     name: Linux-Start (installieren.sh)
     runs-on: ubuntu-latest
@@ -86,3 +113,24 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check pip-audit
           python -m pip_audit --strict -r requirements.txt
+
+  browser:
+    name: Händlerablauf im Chromium
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Python-Umgebung und Browserwerkzeuge
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --disable-pip-version-check --only-binary=:all: --require-hashes -r requirements-dev.txt
+          npm ci --prefix tests/browser --ignore-scripts
+          cd tests/browser
+          npx playwright install --with-deps chromium
+      - name: Echter Browserablauf mit isolierter Datenbank
+        run: npm test --prefix tests/browser

@@ -30,7 +30,7 @@ from ..verkauf import Eingabefehler, VerkaufSpeicher
 from ..haendler import STANDORT_STATUS, HaendlerSpeicher
 from ..auktion import STANDARD as MINDESTPREIS_STANDARD
 from ..auktion import AuktionSpeicher, AuktionsFehler
-from .. import aufbewahrung, bewertungsverlauf, datenrechte
+from .. import aufbewahrung, bewertungsverlauf, datenrechte, feldbestaetigungen
 from ..schalter import EingangDeaktiviert, eingang_pruefen, pruefe_eingaenge
 from ..audit import AuditSpeicher, einordnen
 from ..nutzung import nutzung
@@ -56,6 +56,7 @@ from .. import laufprotokoll as lp
 from .. import abdeckung
 from .. import kennzahlen
 from ..bewertung.deal_score import einstellungen as deal_einstellungen
+from ..bewertung.sortierung import MODI as SORTIER_MODI, schluessel as sortierschluessel
 from ..bewertung.gruppen import nur_einmal
 from .. import verhandlung
 from ..bewertung.meldungen import meldungen
@@ -75,6 +76,7 @@ from ..preisverlauf import inserat_zu_anzeigen_id, preisverlauf
 from ..eingang import TextEingang, ergebnis_der, import_ordner, relativ_zum_projekt
 from ..eingang.text import ANBIETER, MAX_PREIS, MAX_TEXT, MAX_URL, widerspricht_marke
 from ..eingang.email import mail_ordner
+from ..eingang.dateien import MAX_UPLOAD_JSON, entpacke, lese_datei
 from ..importer import Importer
 from ..team import BESICHTIGUNG_STATUS, EINLADUNG_TAGE, LEERLAUF_STUNDEN, ROLLEN, TeamSpeicher, ZugangVorhanden
 
@@ -282,6 +284,8 @@ def fahrzeug_kurz(z: dict, team: dict | None = None) -> dict:
             "datenqualitaet": a.get("datenqualitaet"),
             # Deal-Score (P5-07): 0–100 oder None (gesperrt, keine Bewertung); priorisiert = ab Schwelle, privat, verfügbar
             "deal_score": (z.get("deal") or {}).get("score"), "priorisiert": bool((z.get("deal") or {}).get("priorisiert")),
+            "sortierung": z.get("sortierung"), "ankaufchance": z.get("ankaufchance"),
+            "datenherkunft": a.get("datenherkunft"),
             # Risikofaktoren (P6-01): [{code, text, stufe hoch|mittel}] – hohe zuerst; Quelle als Anzeigename
             "risiken": z.get("risiken") or [], "quelle_text": QUELLE_TEXT.get(a.get("quelle") or "kleinanzeigen", a.get("quelle")),
             # Dublettengruppe und Preisverlauf (P6-02): andere Inserate desselben Fahrzeugs (Quelle, Preis, Status, bestätigt) und Preisstände
@@ -590,6 +594,11 @@ class Anfrage:
             return self.json(200, self.preisverlauf_antwort((self.query.get("anzeige") or [""])[0], (self.query.get("umfang") or ["inserat"])[0]))
         if p == "/api/fahrzeuge":
             return self.json(200, self.fahrzeuge())
+        if m := re.fullmatch(r"/api/fahrzeug/([\w-]+)/angaben", p):
+            try:
+                return self.json(200, {"felder": feldbestaetigungen.sicht(k.db, m.group(1))})
+            except LookupError as e:
+                raise Antwort(404, str(e)) from e
         if m := re.fullmatch(r"/api/fahrzeug/([\w-]+)", p):
             return self.json(200, self.fahrzeug(m.group(1)))
         if p == "/api/suchprofile":
@@ -627,6 +636,20 @@ class Anfrage:
             return self.senden(200, pfad.read_bytes(), mimetypes.guess_type(pfad.name)[0] or "image/jpeg")
         if m := re.fullmatch(r"/protokoll/(\d+)", p):
             return self.html(self.protokoll(self.besichtigung(m.group(1))))
+        if m := re.fullmatch(r"/besichtigung/(\d+)/vertragsentwurf", p):
+            b = self.besichtigung(m.group(1))
+            d = b["daten"] or {}
+            vertrag = d.get("vertragsdaten") if isinstance(d.get("vertragsdaten"), dict) else {}
+            verkaeufer = vertrag or (b["protokoll"] or {}).get("verkaeufer") or b["basis"].get("verkaeufer") or {}
+            if not isinstance(verkaeufer, dict):
+                verkaeufer = {}
+            fahrzeug = d.get("fahrzeug") if isinstance(d.get("fahrzeug"), dict) else {}
+            preis = vertrag.get("preis") or b.get("endpreis")
+            if isinstance(preis, bool) or not isinstance(preis, (int, float)) or not 0 < preis <= 10_000_000:
+                preis = None
+            return self.html(k.env.get_template("vertragsentwurf.html").render(
+                b=b, d=d, v=verkaeufer, f=fahrzeug, preis=preis, firma=k.cfg["anschreiben"], jetzt=datetime.now(), token=k.token,
+                bearbeitbar=b["status"] in ("geplant", "laeuft") and self.darf_besichtigung(b)))
         if p in ("/haendler", "/standorte"):
             if p == "/standorte":
                 self.nur_inhaber()
@@ -656,7 +679,11 @@ class Anfrage:
                 raise Antwort(404, str(fehler)) from fehler
             return self.json(200, {"ergebnis": erg, "eingabe_hash": kalk.eingabe_hash(e)[:12]})
         if p == "/api/status":                             # Statusseite (P4-04): Quellen, Eingänge, Läufe, Fehler – ohne Personendaten
-            return self.json(200, {**lp.uebersicht(k.db, k.cfg), "suchlauf": k.suchlauf.stand})
+            letzter = k.db.con.execute("SELECT COALESCE(ende, start) FROM suchlaeufe WHERE ergebnis=? "
+                                       "AND art IN ('seiten', 'mails', 'dateiupload', 'text') ORDER BY start DESC, id DESC LIMIT 1",
+                                       (lp.OK,)).fetchone()
+            return self.json(200, {**lp.uebersicht(k.db, k.cfg), "suchlauf": k.suchlauf.stand,
+                                   "letzter_erfolgreicher_import": letzter[0] if letzter else None})
         if p in ("/api/abdeckung", "/abdeckung"):           # Abdeckung und Suchlücken (P4-05): nur lesen, ohne Personendaten
             try:
                 tage = abdeckung.tage_aus((self.query.get("tage") or [""])[0], abdeckung.MAX_TAGE_APP)
@@ -1145,6 +1172,10 @@ class Anfrage:
         return {"ok": True, "id": fall_id}
 
     def fahrzeuge(self) -> list[dict]:
+        sortierung = (self.query.get("sort") or [None])[0]
+        sortierung = {"pot": "potenzial", "neueste": "neu"}.get(sortierung, sortierung)
+        if sortierung is not None and sortierung not in SORTIER_MODI:
+            raise Antwort(400, f"sort: {', '.join(SORTIER_MODI)}")
         f = (self.query.get("filter") or ["bereit"])[0]
         q = (self.query.get("q") or [""])[0].lower().split()
         wer = (self.query.get("wer") or ["alle"])[0]
@@ -1190,8 +1221,8 @@ class Anfrage:
             text = f"{z['a']['fahrzeug']} {z['a']['titel']} {z['a'].get('ort') or ''}".lower()
             if ok and all(w in text for w in q):
                 auswahl.append((z, t))
-        auswahl.sort(key=lambda zt: nach_deal_score(zt[0]))       # Deal-Score zuerst wie in der Desktop-Liste (P6-01)
-        if f == "neuigkeiten":                              # wichtigste zuerst: jetzt im Rahmen, neu und bereit, gesenkt, neu (P4-03)
+        auswahl.sort(key=lambda zt: sortierschluessel(zt[0], sortierung) if sortierung else nach_deal_score(zt[0]))
+        if f == "neuigkeiten" and sortierung is None:       # bisheriger API-Standard bleibt ohne explizite Sortierung
             auswahl.sort(key=lambda zt: zt[0]["neuigkeit"]["stufe"])
         if einmal == "ja":                                  # gleiches Fahrzeug nur einmal – unter den Treffern, Bearbeitetes bleibt (P6-02)
             gezeigt = nur_einmal([z for z, _ in auswahl])
@@ -1278,7 +1309,8 @@ class Anfrage:
 
     def besichtigung_voll(self, b: dict) -> dict:
         e = berechne(self.k.katalog(), b["daten"] or {}, b["basis"])
-        return {**self.besichtigung_kurz(b), "basis": b["basis"], "daten": b["daten"], "ergebnis": e,
+        daten = {k: v for k, v in b["daten"].items() if k != "vertragsdaten"} if b["daten"] else b["daten"]
+        return {**self.besichtigung_kurz(b), "basis": b["basis"], "daten": daten, "ergebnis": e,
                 "protokoll": {k_: v for k_, v in b["protokoll"].items() if k_ not in OHNE_GERAET} if b["protokoll"] else None,
                 "version": b["version"], "fotos": self.k.team.fotos(b["id"])}
 
@@ -1336,6 +1368,14 @@ class Anfrage:
             return self.json(200, getattr(self, f"bearbeitung_{m.group(2)}")(m.group(1), daten))
         if p == "/api/suchprofile" or re.fullmatch(r"/api/suchprofil/\d+(?:/loeschen|/auftrag)?", p):
             return self.json(200, self.suchprofil_aendern(p, daten))
+        if p == "/api/suche/vorschau":
+            if self.team_aktiv and self.nutzer.get("rolle") not in TEXT_IMPORT_ROLLEN:
+                raise Antwort(403, "Suche nur für Inhaber und Mitarbeiter", grund="recht")
+            try:
+                profil = sp.pruefe_profil(daten, datetime.now())
+            except sp.Eingabefehler as e:
+                raise Antwort(400, str(e)) from e
+            return self.json(200, {"treffer": self._profil_treffer(profil, k.zeilen())})
         if p == "/api/kalibrierung" or re.fullmatch(r"/api/kalibrierung/[0-9]{1,9}/loeschen", p):
             return self.json(200, self.kalibrierung_aendern(p, daten))
         if m := re.fullmatch(r"/api/kontakt/(\d+)/bestaetigen", p):
@@ -1382,6 +1422,10 @@ class Anfrage:
             return self.json(200, self.mails_einlesen())
         if p == "/api/import/text":
             return self.json(200, self.text_einlesen(daten))
+        if p == "/api/import/datei":
+            return self.json(200, self.datei_einlesen(daten))
+        if m := re.fullmatch(r"/api/fahrzeug/([\w-]+)/angaben", p):
+            return self.json(200, self.fahrzeug_angaben(m.group(1), daten))
         if m := re.fullmatch(r"/api/dubletten/(bestaetigen|ablehnen|aufheben)", p):
             return self.json(200, self.dublette_entscheiden(m.group(1), daten))
         if p == "/api/besichtigung":
@@ -1486,7 +1530,7 @@ class Anfrage:
             return self.json(200, {"ok": True})
         if m := re.fullmatch(r"/api/verkaufsanfrage/(\d+)/(status|notiz|uebernehmen|foto|freigabe)", p):
             return self.json(200, self.verkaufsanfrage_aendern(int(m.group(1)), m.group(2), daten))
-        if m := re.fullmatch(r"/api/besichtigung/(\d+)/(planen|speichern|foto|abschluss)", p):
+        if m := re.fullmatch(r"/api/besichtigung/(\d+)/(planen|speichern|foto|abschluss|vertragsdaten)", p):
             b = self.besichtigung(m.group(1), schreiben=True)
             return self.json(200, getattr(self, f"b_{m.group(2)}")(b, daten))
         raise Antwort(404, "nicht gefunden")
@@ -1712,12 +1756,98 @@ class Anfrage:
             bewertungsverlauf.merken(k.db, k.zeilen())
         return {**stat, "ordner": relativ_zum_projekt(ordner), "unverarbeitet": offen}
 
+    def fahrzeug_angaben(self, anzeige_id: str, daten: dict) -> dict:
+        k = self.k
+        if self.team_aktiv and self.nutzer.get("rolle") not in TEXT_IMPORT_ROLLEN:
+            raise Antwort(403, "Fahrzeugangaben dürfen nur Inhaber und Mitarbeiter bestätigen", grund="recht")
+        if ("werte" in daten) == ("zuruecksetzen" in daten):
+            raise Antwort(400, "Entweder Werte bestätigen oder ausgewählte Felder zurücksetzen")
+        self.audit_objekt = audit_anzeige(anzeige_id)
+        try:
+            # Dieselbe exklusive Schreibtransaktion prüft die Reservierung und speichert die Bestätigung.
+            with k.db.transaktion():
+                if k.db.status_von(anzeige_id) is None:
+                    raise LookupError("Anzeige nicht gefunden")
+                if self.team_aktiv:
+                    team = self.team_parameter(daten, anzeige_id)
+                    if self.team_sicht().fremder_halter(anzeige_id, team["dubletten"]) and not team["erzwingen"]:
+                        raise self.konflikt(anzeige_id, team["dubletten"])
+                if "werte" in daten:
+                    felder = feldbestaetigungen.bestaetigen(k.db, anzeige_id, daten["werte"], self.nutzer.get("id"))
+                else:
+                    felder = feldbestaetigungen.zuruecksetzen(k.db, anzeige_id, daten["zuruecksetzen"])
+        except ValueError as e:
+            raise Antwort(400, str(e)) from e
+        except LookupError as e:
+            raise Antwort(404, str(e)) from e
+        k.veraendert()
+        k.dubletten_verwerfen()
+        return {"ok": True, "felder": felder}
+
+    def datei_einlesen(self, daten: dict) -> dict:
+        """Geprüfte Dateien im Speicher lesen; der vorhandene Importer ist der einzige Schreibweg."""
+        k = self.k
+        if self.team_aktiv and self.nutzer.get("rolle") not in TEXT_IMPORT_ROLLEN:
+            raise Antwort(403, "Anzeigen einlesen dürfen nur Inhaber und Mitarbeiter", grund="recht")
+        if k.suchlauf.stand["laeuft"]:
+            raise Antwort(409, "Gerade läuft ein Suchlauf – bitte danach einlesen")
+        vorschau = daten.get("vorschau", False)
+        if not isinstance(vorschau, bool):
+            raise Antwort(400, "vorschau muss wahr oder falsch sein")
+        start = datetime.now().isoformat(timespec="seconds")
+        try:
+            name, roh, endung = entpacke(daten)
+            eingang_pruefen(k.cfg, "email" if endung == ".eml" else "text" if endung == ".csv" else "seiten")
+            datei = lese_datei(name, roh, endung, daten.get("zuordnung"))
+        except EingangDeaktiviert as e:
+            raise Antwort(409, str(e), grund="deaktiviert") from e
+        except ValueError as e:
+            raise Antwort(400, str(e)) from e
+        if vorschau:
+            return {**datei.vorschau(), "gespeichert": False}
+        if sum(len(lesung.inserate) for lesung in datei.lesungen) > 500:
+            raise Antwort(400, "Mehr als 500 Angebote in einer Datei – bitte in kleinere Dateien aufteilen")
+        stat = {"dateien": 1, "neu": 0, "aktualisiert": 0, "uebersprungen": datei.uebersprungen, "fehlerhaft": len(datei.fehler),
+                "preis": 0, "bekannt": 0, "details": 0, "ids": [], "fehler": datei.fehler[:30], "hinweise": []}
+        importer = Importer(k.cfg, k.db)
+        # Die Dateianfrage ist atomar; fremde Prozesse können keinen Suchlauf in diesen Schreibblock einschieben.
+        with k.db.transaktion():
+            for lesung in datei.lesungen:
+                vorher = {a.anzeigen_id: k.db.con.execute(
+                    "SELECT titel, preis, vb, km, ez_jahr, ort, marke, art, beschreibung, gewerblich FROM anzeigen WHERE id=?",
+                    (a.anzeigen_id,)).fetchone() for a in lesung.inserate}
+                teil = importer.importiere(lesung, datei.kanal)
+                for feld in ("neu", "preis", "bekannt", "details"):
+                    stat[feld] += teil.get(feld, 0)
+                for a in lesung.inserate:
+                    nachher = k.db.con.execute(
+                        "SELECT titel, preis, vb, km, ez_jahr, ort, marke, art, beschreibung, gewerblich FROM anzeigen WHERE id=?",
+                        (a.anzeigen_id,)).fetchone()
+                    if nachher is None:
+                        stat["uebersprungen"] += 1
+                        continue
+                    if vorher[a.anzeigen_id] is not None:
+                        stat["aktualisiert" if tuple(vorher[a.anzeigen_id]) != tuple(nachher) else "uebersprungen"] += 1
+                    stat["ids"].append(a.anzeigen_id)
+                stat["hinweise"].extend(h for h in lesung.hinweise if h not in stat["hinweise"])
+            lp.Laufprotokoll(k.db).eintrag("dateiupload", "manuell", start, lp.FEHLER if stat["fehlerhaft"] else lp.OK,
+                                          stat, f"{stat['fehlerhaft']} Einträge nicht lesbar" if stat["fehlerhaft"] else None)
+        k.veraendert()
+        k.dubletten_verwerfen()
+        if stat["ids"]:
+            datenrechte.frist_anwenden(k.db, k.cfg, k.basis, k.team.foto_ordner)
+            bewertungsverlauf.merken(k.db, k.zeilen())
+        stat["ids"] = list(dict.fromkeys(stat["ids"]))
+        stat["hinweise"] = stat["hinweise"][:30]
+        return {**stat, "gespeichert": bool(stat["ids"])}
+
     def text_einlesen(self, daten: dict) -> dict:
         """Eine Anzeige aus Adresse + eingefügtem Text (P2-05). Die Adresse wird nie abgerufen (ADR-010): sie liefert nur Plattform und
         Anzeigen-ID. Gelesen wird mit `TextEingang` (rein, höchstens etwa eine halbe Sekunde), gespeichert allein über `Importer.importiere`
         (Kanal „manuell“). Gespeichert wird nur ein sicher erkannter oder vom Nutzer eingetragener Preis (ADR-038); Angaben, die aus einem
         anderen Kanal stammen, bleiben bestehen."""
         k = self.k
+        start = datetime.now().isoformat(timespec="seconds")
         if self.team_aktiv and self.nutzer.get("rolle") not in TEXT_IMPORT_ROLLEN:
             raise Antwort(403, "Anzeigen einlesen dürfen nur Inhaber und Mitarbeiter", grund="recht")
         try:
@@ -1774,6 +1904,7 @@ class Anfrage:
                 hinweise.append(f"Bereits gespeicherte Angaben bleiben bestehen ({', '.join(anders)}); der Text ergänzte nur Fehlendes und den Preis")
         log.info("Anzeige %s (%s) per Adresse + Text eingelesen: %s, Preis %s (%s)", inserat.anzeigen_id, lesung.plattform, ergebnis,
                  lesung.preis_status, self.nutzer.get("name"))
+        lp.Laufprotokoll(k.db).eintrag("text", "manuell", start, lp.OK, {ergebnis: 1})
         return {"ergebnis": ergebnis, "gespeichert": True, "anzeige_id": inserat.anzeigen_id, "plattform": lesung.plattform,
                 "fahrzeug_url": f"/m#/fahrzeug/{quote(inserat.anzeigen_id)}", "hinweise": hinweise, "erkannt": erkannt,
                 "preis_status": lesung.preis_status, "preis_vorher": vorher, "preis_aenderung": aenderung}
@@ -1882,6 +2013,12 @@ class Anfrage:
         eingaben = daten.get("daten")
         if not isinstance(eingaben, dict):
             raise Antwort(400, "daten fehlen")
+        if "vertragsdaten" in eingaben:
+            raise Antwort(400, "Vertragsdaten bitte ausschließlich im Vertragsentwurf speichern")
+        # Mobile/offline Formulare kennen Vertragskontakte absichtlich nicht und dürfen sie nicht entfernen.
+        eingaben = dict(eingaben)
+        if "vertragsdaten" in (b["daten"] or {}):
+            eingaben["vertragsdaten"] = b["daten"]["vertragsdaten"]
         erwartet = daten.get("version")
         if erwartet is not None and (isinstance(erwartet, bool) or not isinstance(erwartet, int)):
             raise Antwort(400, "version muss eine Zahl sein")
@@ -1890,8 +2027,40 @@ class Anfrage:
         if version is None:                       # P1-07: inzwischen von jemand anderem gespeichert (oder abgeschlossen)
             aktuell = self.k.team.besichtigung(b["id"])
             raise Antwort(409, "Diese Besichtigung wurde inzwischen auf einem anderen Gerät gespeichert", grund="version",
-                          extra={"version": aktuell["version"], "daten": aktuell["daten"], "status": aktuell["status"]})
+                          extra={"version": aktuell["version"],
+                                 "daten": {k: v for k, v in (aktuell["daten"] or {}).items() if k != "vertragsdaten"},
+                                 "status": aktuell["status"]})
         return {"ergebnis": ergebnis, "version": version, "konflikt": False}
+
+    def b_vertragsdaten(self, b: dict, daten: dict) -> dict:
+        """Kontaktdaten bleiben auf dem Server; kein Kaufabschluss und keine Änderung des Besichtigungsstatus."""
+        werte = daten.get("werte")
+        if not isinstance(werte, dict) or set(werte) - {"name", "anschrift", "telefon", "email", "preis"}:
+            raise Antwort(400, "Vertragsdaten: Name, Anschrift, Telefon, E-Mail und Preis erwartet")
+        vertrag = {}
+        for feld, grenze in (("name", 150), ("anschrift", 500), ("telefon", 80), ("email", 200)):
+            wert = werte.get(feld, "")
+            if not isinstance(wert, str) or len(wert) > grenze or any(ord(c) < 32 for c in wert):
+                raise Antwort(400, f"{feld}: Text mit höchstens {grenze} Zeichen ohne Steuerzeichen erwartet")
+            vertrag[feld] = wert.strip()
+        if vertrag["email"] and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", vertrag["email"]):
+            raise Antwort(400, "E-Mail-Adresse bitte prüfen")
+        preis = werte.get("preis")
+        if preis is not None and (isinstance(preis, bool) or not isinstance(preis, int) or not 1 <= preis <= 10_000_000):
+            raise Antwort(400, "Preis als ganze Euro-Zahl angeben oder leer lassen")
+        vertrag["preis"] = preis
+        version = daten.get("version")
+        if isinstance(version, bool) or not isinstance(version, int):
+            raise Antwort(400, "version muss eine Zahl sein – Entwurf neu laden")
+        with self.k.db.transaktion():
+            b = self.besichtigung(str(b["id"]), schreiben=True)
+            if b["status"] not in ("geplant", "laeuft") or version != b["version"]:
+                raise Antwort(409, "Besichtigung wurde geändert oder abgeschlossen – Entwurf neu laden")
+            eingaben = {**(b["daten"] or {}), "vertragsdaten": vertrag}
+            self.k.db.con.execute("UPDATE besichtigungen SET daten_json=?, version=version+1, geaendert_am=? WHERE id=?",
+                                  (json.dumps(eingaben, ensure_ascii=False), datetime.now().isoformat(timespec="seconds"), b["id"]))
+        self.k.veraendert()
+        return {"ok": True, "version": version + 1}
 
     def b_foto(self, b: dict, daten: dict) -> dict:
         if daten.get("mangel_key") is not None and not isinstance(daten["mangel_key"], str):
@@ -2074,7 +2243,8 @@ def _bearbeite(a: Anfrage, handler, k: Kontext, methode: str):
                 raise Antwort(400, "ungültige Länge") from None
             if laenge < 0:
                 raise Antwort(400, "ungültige Länge")
-            if laenge > (MAX_FOTO if a.pfad.endswith(("/foto", "/dokument")) else MAX_JSON):
+            maximal = MAX_UPLOAD_JSON if a.pfad == "/api/import/datei" else MAX_FOTO if a.pfad.endswith(("/foto", "/dokument")) else MAX_JSON
+            if laenge > maximal:
                 raise Antwort(413, "Anfrage zu groß")
             roh = handler.rfile.read(laenge) if laenge else b""      # Übertragung ohne Sperre
             try:

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from ..domaene import STATUS, UNBEKANNT, fahrzeug_status, import_art
 from ..dubletten import Wirkung, lade_wirkung, wende_an
 from ..anbieter import einstufung
+from .. import feldbestaetigungen
 from ..normalisierung.qualitaet import pruefe_fahrzeug, pruefe_inserat
 from ..normalisierung.fahrzeug import arten_im_text, ergaenze_fahrzeug
 from ..normalisierung.geo import entfernung_km
@@ -25,6 +26,7 @@ from .anschreiben import Anschreiber, betrag_im_brief, euro, hinweise, sperrgrun
 from .neuigkeit import einstellungen as neuigkeit_einstellungen
 from .neuigkeit import neuigkeit
 from .rechner import Bewertung, Rechner, Vergleichsliste
+from .sortierung import ankaufchance, sortierdaten
 
 if TYPE_CHECKING:                      # nur für Typangaben – die Bewertung selbst braucht keine Datenbank (P1-08)
     from ..datenbank import Datenbank
@@ -155,7 +157,9 @@ def vergleichsbasis(alle: list[dict], duplikate: dict[str, list[dict]] | None = 
 
 def vergleichsbasis_aus(db: Datenbank) -> list[dict]:
     """``vergleichsbasis`` über alle Inserate mit Preis, mit den geltenden Dublettenentscheidungen (wie `bewerte_alle`)."""
-    alle = [ergaenze_fahrzeug(dict(r)) for r in db.alle_mit_preis()]
+    bestaetigungen = feldbestaetigungen.lade(db)
+    alle = [feldbestaetigungen.anwenden(dict(r), bestaetigungen.get(r["id"])) for r in db.alle_anzeigen()]
+    alle = [a for a in alle if a.get("preis") is not None]
     nach_id = {a["id"]: a for a in alle}
     return vergleichsbasis(alle, wende_an(finde_duplikate(alle), lade_wirkung(db), nach_id.get, lambda a: a["id"]))  # nur Inserate mit Preis
 
@@ -184,16 +188,19 @@ def nachfass_grund(a: dict, cfg: dict, jetzt: datetime, beantwortet: bool = Fals
 
 def bewerte_alle(cfg: dict, db: Datenbank, basis: Path, lauf_start: str | None = None, erstmals_seit: str | None = None) -> list[dict]:
     """Liest die Inserate und die geltenden Dublettenentscheidungen aus der Datenbank und bewertet sie (``bewerte_zeilen``).
-    ``erstmals_seit`` (ISO, lokal): statt der aktiven Inserate alle, die ab diesem Zeitpunkt zuerst eingingen (Abdeckung, P4-05)."""
+    Alte Inserate bleiben sichtbar und werden über ihre letzte Bestätigung als veraltet markiert.
+    ``erstmals_seit`` (ISO, lokal): nur die ab diesem Zeitpunkt zuerst eingegangenen Inserate (Abdeckung, P4-05)."""
     wirkung = lade_wirkung(db)
     mitglieder = {i for g in wirkung.gruppen for i in g}
     roh = db.verfuegbarkeit_zu()                       # Verfügbarkeit aus „inserate“, eine Abfrage für alle Zeilen (P3-04)
     arbeit = db.anzeigen_mit_arbeit()                  # Team-Arbeit, die nicht im Ankaufsstatus steht (Reservierung, Besichtigung, Ankauf)
+    bestaetigungen = feldbestaetigungen.lade(db)
 
     def zeile(r) -> dict:
-        return {**dict(r), **roh.get(r["id"], {}), "hat_arbeit": r["id"] in arbeit}
-    zu_bewerten = db.erstmals_seit(erstmals_seit) if erstmals_seit else db.aktive()
-    return bewerte_zeilen(cfg, basis, [zeile(r) for r in db.alle_mit_preis()], [zeile(r) for r in zu_bewerten], lauf_start,
+        return {**dict(r), **roh.get(r["id"], {}), "hat_arbeit": r["id"] in arbeit, "_bestaetigungen": bestaetigungen.get(r["id"])}
+    zu_bewerten = db.erstmals_seit(erstmals_seit) if erstmals_seit else db.alle_anzeigen()
+    mit_preis = [r for r in db.alle_anzeigen() if (bestaetigungen.get(r["id"], {}).get("preis") or {"wert": r["preis"]})["wert"] is not None]
+    return bewerte_zeilen(cfg, basis, [zeile(r) for r in mit_preis], [zeile(r) for r in zu_bewerten], lauf_start,
                           wirkung=wirkung, gruppenzeilen=[zeile(r) for r in db.anzeigen_zu(mitglieder)], preise=lambda ids: pv.verlaeufe(db, ids),
                           kontaktlage=verhandlung.lage(db))
 
@@ -217,7 +224,7 @@ def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[d
     neu_e = neuigkeit_einstellungen(cfg)
 
     def angereichert(r) -> dict:                      # Fahrzeugmerkmale + Verfügbarkeit (wirksam, „vermutlich offline“ beim Lesen abgeleitet)
-        a = ergaenze_verfuegbarkeit(ergaenze_fahrzeug(dict(r)), jetzt, tage)
+        a = ergaenze_verfuegbarkeit(feldbestaetigungen.anwenden(dict(r), r.get("_bestaetigungen")), jetzt, tage)
         a["anbieter"] = einstufung(a.get("gewerblich"), a.get("anbieter_herkunft"))     # Anbieterart mit Herkunft (P3-05)
         return a
     alle = [angereichert(r) for r in mit_preis]
@@ -313,4 +320,6 @@ def bewerte_zeilen(cfg: dict, basis: Path, mit_preis: list[dict], aktive: list[d
         z["gruppe"] = sorted((gruppen.mitglied(bekannt[i], i in bestaetigt.get(eigen, ()), pv.kurz((preise or {}).get(i)))
                               for i in z["dubletten_ids"] if i in bekannt), key=lambda m: (m["preis"] is None, m["preis"] or 0, m["id"]))
         z["fahrzeug_status"] = fahrzeug_status([z["a"].get("status"), *(m["status"] for m in z["gruppe"])])     # höchster Status (QA B5)
+        z["ankaufchance"] = ankaufchance(z)
+        z["sortierung"] = sortierdaten(z)
     return zeilen

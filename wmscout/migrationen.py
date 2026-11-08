@@ -21,7 +21,7 @@ from pathlib import Path
 
 from .sicherung import SicherungsFehler, oeffne_lesend, sichere
 
-AKTUELLE_VERSION = 23
+AKTUELLE_VERSION = 24
 
 
 class MigrationsFehler(RuntimeError):
@@ -620,13 +620,22 @@ def _schritt_23(con: sqlite3.Connection):
         raise MigrationsFehler(f"Zeilenzahlen haben sich bei Schritt 23 geändert: {vorher} -> {nachher}")
 
 
+def _schritt_24(con: sqlite3.Connection):
+    """Bestätigte Fahrzeugangaben neben unveränderten Importwerten; keine Umschreibung des Altbestands."""
+    con.execute("""CREATE TABLE IF NOT EXISTS feldbestaetigungen (
+        anzeige_id TEXT NOT NULL REFERENCES anzeigen(id) ON DELETE CASCADE,
+        feld TEXT NOT NULL CHECK (feld IN ('preis','ez_jahr','km','marke','modell','ort','art')),
+        wert_json TEXT NOT NULL, extrahiert_json TEXT NOT NULL, bestaetigt_am TEXT NOT NULL, nutzer_id INTEGER,
+        PRIMARY KEY (anzeige_id, feld))""")
+
+
 SCHRITTE: dict[int, Callable[[sqlite3.Connection], None]] = {2: _schritt_2, 3: _schritt_3, 4: _schritt_4, 5: _schritt_5,
                                                              6: _schritt_6, 7: _schritt_7, 8: _schritt_8, 9: _schritt_9,
                                                              10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
                                                              14: _schritt_14, 15: _schritt_15,
                                                              16: _schritt_16, 17: _schritt_17, 18: _schritt_18,
                                                              19: _schritt_19, 20: _schritt_20, 21: _schritt_21, 22: _schritt_22,
-                                                             23: _schritt_23}
+                                                             23: _schritt_23, 24: _schritt_24}
 
 _SCHEMA_VERSION = ("CREATE TABLE IF NOT EXISTS schema_version ("
                    "version INTEGER PRIMARY KEY, angewendet_am TEXT NOT NULL)")

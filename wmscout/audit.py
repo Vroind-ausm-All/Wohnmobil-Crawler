@@ -19,6 +19,8 @@ _LESEN = (
     (re.compile(r"/anfrage-fotos/(\d+)/.+"), "anfrage"),
     (re.compile(r"/api/besichtigung/(\d+)"), "besichtigung"),
     (re.compile(r"/protokoll/(\d+)"), "besichtigung"),
+    (re.compile(r"/besichtigung/(\d+)/vertragsentwurf"), "besichtigung"),
+    (re.compile(r"/api/fahrzeug/([\w-]+)/angaben"), "anzeige"),
     (re.compile(r"/api/fahrzeug/anfrage-(\d+)"), "anfrage"),
     (re.compile(r"/fotos/(\d+)/.+"), "besichtigung"),
     (re.compile(r"/api/ankauf/(\d+)"), "ankauf"),

@@ -63,7 +63,14 @@ def test_systemd_syntax():
     for name in UNITS:
         r = subprocess.run(["systemd-analyze", "verify", "--man=no", str(BETRIEB / "systemd" / name)], capture_output=True, text=True,
                            timeout=60)
-        meldungen = [z for z in (r.stderr + r.stdout).splitlines() if z.strip() and "is not executable" not in z]
+        # Manche unprivilegierten Container enthalten das Prüfprogramm, aber keinen
+        # nutzbaren systemd-Laufzeitpfad. Das ist eine fehlende Testfähigkeit, kein Syntaxurteil.
+        ausgabe = r.stderr + r.stdout
+        laufzeit_fehler = {"Failed to create directory '/run/systemd/': Read-only file system",
+                           "Failed to create directory '/run/systemd/': Permission denied"}
+        if ausgabe.strip() in laufzeit_fehler:
+            pytest.skip("systemd-Laufzeitpfad im Container nicht beschreibbar; Unit-Syntax hier nicht prüfbar")
+        meldungen = [z for z in ausgabe.splitlines() if z.strip() and "is not executable" not in z]
         assert not meldungen, (name, meldungen)
 
 

@@ -14,6 +14,7 @@ liest im Browser gespeicherte Seiten (Kleinanzeigen, mobile.de) aus dem Import-O
 from __future__ import annotations
 
 import logging
+import sqlite3
 import time
 from collections.abc import Collection
 from datetime import date, datetime, timedelta, timezone
@@ -125,6 +126,7 @@ class Importer:
     # ---------- Suche ----------
     def suche(self, auftrag: Suchauftrag) -> dict:
         stat = {"neu": 0, "preis": 0, "bekannt": 0}
+        self._suchstand = stat             # bereits gespeicherte Treffer zählen auch bei einem Fehler auf späterer Seite
         quelle = self.quelle(auftrag.quelle)
         for seite in quelle.suche(auftrag):
             log.info("  %s – Seite %d: %d Anzeigen", auftrag.name, seite.nummer, len(seite.inserate))
@@ -141,7 +143,7 @@ class Importer:
                 if ergebnis != "bekannt":
                     nur_bekannte = False
             # Sortierung "neueste zuerst": ganze Seite bekannt -> tiefer suchen lohnt nicht
-            if nur_bekannte and seite.nummer >= 2:
+            if quelle.stop_bei_bekannter_seite and nur_bekannte and seite.nummer >= 2:
                 break
         return stat
 
@@ -157,17 +159,21 @@ class Importer:
         log.warning(self.layout_warnung)
 
     # ---------- Details ----------
-    def details(self, kennungen: Collection[str] | None = None) -> int:
+    def details(self, kennungen: Collection[str] | None = None, limit: int | None = None) -> int:
         """Detailseiten nachladen. kennungen: nur Inserate dieser Quellen (der Suchlauf übergibt die laufenden Quellen);
         ohne Angabe gilt jede Quelle – eine nicht freigegebene wirft weiterhin QuellenFehler (`quelle`)."""
-        offen = self.db.ohne_details(self.cfg["crawler"]["detailseiten_pro_lauf"], kennungen)    # Filter in SQL: zählt nur Bearbeitetes
+        self._detailstand = self._detailversuche = 0
+        limit = self.cfg["crawler"]["detailseiten_pro_lauf"] if limit is None else limit
+        offen = self.db.ohne_details(limit, kennungen)    # Filter in SQL: zählt nur Bearbeitetes
         leer = 0
         for i, zeile in enumerate(offen, 1):
             kennung = zeile["quelle"] if "quelle" in zeile.keys() and zeile["quelle"] else STANDARD_QUELLE
             self._aktuelle_quelle = kennung
+            self._detailversuche += 1
             quelle = self.quelle(kennung)
             if not quelle.unterstuetzt_details:
                 self.db.speichere_details(zeile["id"], {})       # nichts nachzuladen – Platz freigeben
+                self._detailstand += 1
                 continue
             try:
                 inserat = quelle.details(zeile["url"])
@@ -182,8 +188,7 @@ class Importer:
                 self.db.speichere_details(zeile["id"], {})
             except (QuelleGesperrt, NetzwerkFehler):
                 raise
-            except QuellenFehler as e:
-                log.warning("Detailseite %s: %s", zeile["url"], e)
+            self._detailstand += 1
             if i % 10 == 0:
                 log.info("  Detailseiten: %d/%d", i, len(offen))
         return len(offen)
@@ -199,7 +204,7 @@ class Importer:
             protokoll.eintrag(art, self.ausloeser, start, lp.ABGEBROCHEN, {}, f"{type(e).__name__}: {e}")
             raise
         if stat.get("dateien"):
-            protokoll.eintrag(art, self.ausloeser, start, lp.FEHLER if stat.get("fehlerhaft") else lp.OK, stat,
+            protokoll.eintrag(art, self.ausloeser, start, lp.FEHLER if stat.get("fehlerhaft") or stat.get("unbekannt") else lp.OK, stat,
                               "; ".join(stat.get("fehler") or []) or None)
         return stat
 
@@ -489,38 +494,81 @@ class Importer:
         je_quelle: dict[str, dict] = {}
         ergebnis, unerwartet, zeitsperren = lp.OK, None, {}
 
+        ausgefallene_quellen: set[str] = set()
+
         def fehler_an_quelle(text: str, art: str):
             q = je_quelle.setdefault(self._aktuelle_quelle or "?", {"neu": 0, "preis": 0, "bekannt": 0})
             q.update(ergebnis=art, fehler=lp.kurz(text))
+
+        def quellenfehler(e: Exception, kennung: str):
+            nonlocal ergebnis
+            art = lp.GESPERRT if isinstance(e, QuelleGesperrt) else lp.FEHLER
+            # Parser-Ausnahmen können kopierte Kontaktdaten enthalten: nur Typ, keine Rohdaten protokollieren.
+            text = str(e) if isinstance(e, QuellenFehler) else f"Verarbeitung fehlgeschlagen ({type(e).__name__})."
+            text = lp.kurz(text) or "Unbekannter Quellenfehler"
+            log.error("Quelle %s: %s", kennung, text)
+            fehler_an_quelle(text, art)
+            gesamt["fehler"] = "; ".join(filter(None, (gesamt["fehler"], f"{kennung}: {text}")))
+            if ergebnis != lp.GESPERRT:
+                ergebnis = art
+            # Bei Zugriffssperren und Netzfehlern keine weiteren Versuche gegen dieselbe Quelle.
+            # Ein einzelner Parserfehler betrifft nur den Suchauftrag; weitere unabhängige Suchen dürfen laufen.
+            if isinstance(e, (QuelleGesperrt, NetzwerkFehler)):
+                ausgefallene_quellen.add(kennung)
         try:
             zeitsperren = self._zeitsperren()
             for eintrag in suchen:
-                auftrag = Suchauftrag.aus_config(eintrag)
-                laeuft, grund = self._darf_laufen(auftrag.quelle, zeitsperren)
-                if not laeuft:
-                    if all(u["quelle"] != auftrag.quelle for u in gesamt["uebersprungen"]):
-                        gesamt["uebersprungen"].append({"quelle": auftrag.quelle, "grund": grund})
-                        log.info("Quelle %s übersprungen: %s", auftrag.quelle, grund)
+                self._suchstand = {"neu": 0, "preis": 0, "bekannt": 0}
+                self._aktuelle_quelle = eintrag.get("quelle", "kleinanzeigen")
+                kennung = self._aktuelle_quelle
+                if kennung in ausgefallene_quellen:
                     continue
-                log.info("Suche: %s", auftrag.name)
-                self._aktuelle_quelle = auftrag.quelle
-                q = je_quelle.setdefault(auftrag.quelle, {"neu": 0, "preis": 0, "bekannt": 0})
-                for k, v in self.suche(auftrag).items():
-                    gesamt[k] += v
-                    q[k] += v
-            # nur Quellen, die laufen dürfen
-            gesamt["details"] = self.details({k for k in QUELLEN if self._darf_laufen(k, zeitsperren)[0]})
-            gesamt["fehler"] = self.layout_warnung
-        except QuelleGesperrt as e:
-            log.error(str(e))
-            gesamt["fehler"] = str(e)
-            ergebnis = lp.GESPERRT
-            fehler_an_quelle(str(e), lp.GESPERRT)
-        except QuellenFehler as e:
-            log.error("%s", e)
-            gesamt["fehler"] = str(e)
-            ergebnis = lp.FEHLER
-            fehler_an_quelle(str(e), lp.FEHLER)
+                q = None
+                try:
+                    auftrag = Suchauftrag.aus_config(eintrag)
+                    laeuft, grund = self._darf_laufen(kennung, zeitsperren)
+                    if not laeuft:
+                        if all(u["quelle"] != kennung for u in gesamt["uebersprungen"]):
+                            gesamt["uebersprungen"].append({"quelle": kennung, "grund": grund})
+                            log.info("Quelle %s übersprungen: %s", kennung, grund)
+                        continue
+                    log.info("Suche: %s", auftrag.name)
+                    q = je_quelle.setdefault(kennung, {"neu": 0, "preis": 0, "bekannt": 0})
+                    q.setdefault("start", datetime.now().isoformat(timespec="seconds"))
+                    self.suche(auftrag)
+                except sqlite3.Error:
+                    raise                         # Speicherfehler sind keine isolierbaren Quellenfehler
+                except Exception as e:
+                    quellenfehler(e, kennung)
+                    q = je_quelle[kennung]
+                finally:
+                    if q is not None:
+                        for k, v in self._suchstand.items():
+                            gesamt[k] += v
+                            q[k] += v
+            # Jede Quelle separat: ein kaputter Detailabruf darf die übrigen Quellen nicht blockieren.
+            budget = self.cfg["crawler"]["detailseiten_pro_lauf"]
+            for kennung in sorted(QUELLEN):
+                if budget <= 0:
+                    break
+                if kennung in ausgefallene_quellen or not self._darf_laufen(kennung, zeitsperren)[0]:
+                    continue
+                self._aktuelle_quelle = kennung
+                self._detailstand = self._detailversuche = 0
+                try:
+                    self.details({kennung}, limit=budget)
+                except sqlite3.Error:
+                    raise
+                except Exception as e:
+                    quellenfehler(e, kennung)
+                finally:
+                    gesamt["details"] += self._detailstand
+                    budget -= self._detailversuche
+                    if self._detailversuche:
+                        q = je_quelle.setdefault(kennung, {"neu": 0, "preis": 0, "bekannt": 0})
+                        q["details"] = q.get("details", 0) + self._detailstand
+            if self.layout_warnung:
+                gesamt["fehler"] = "; ".join(filter(None, (gesamt["fehler"], self.layout_warnung)))
         except BaseException as e:
             ergebnis, unerwartet = lp.ABGEBROCHEN, f"{type(e).__name__}: {e}"
             fehler_an_quelle(unerwartet, lp.ABGEBROCHEN)
@@ -530,6 +578,9 @@ class Importer:
                 if kennung in self._layout_quellen and q.get("ergebnis", lp.OK) == lp.OK:
                     q.update(ergebnis=lp.FEHLER, fehler=lp.kurz(self.layout_warnung))    # Quelle liefert vermutlich nichts mehr (QA B2)
                 q.setdefault("ergebnis", lp.OK)
+                q.update(verarbeitet=q["neu"] + q["preis"] + q["bekannt"], aktualisiert=q["preis"] + q["bekannt"],
+                         freigegeben=bool(getattr(QUELLEN.get(kennung), "freigegeben", False)),
+                         ende=datetime.now().isoformat(timespec="seconds"))
             if self.layout_warnung and ergebnis == lp.OK:
                 ergebnis = lp.FEHLER                            # Layout geändert: Lauf lief, aber die Quelle liefert vermutlich nichts mehr
             protokoll.beende(lauf_id, ergebnis, gesamt, je_quelle, gesamt["uebersprungen"], gesamt["fehler"] or unerwartet)

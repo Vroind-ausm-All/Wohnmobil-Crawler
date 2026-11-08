@@ -20,7 +20,7 @@ from bs4 import BeautifulSoup, SoupStrainer
 from ..normalisierung.fahrzeug import art_schluessel, arten_im_text
 from ..quellen.basis import Inserat
 from ..quellen.kleinanzeigen.adapter import anzeigen_id_aus_url
-from ..quellen.kleinanzeigen.parser import BASIS, name_in_details, parse_detailseite, parse_suchseite
+from ..quellen.kleinanzeigen.parser import BASIS, name_in_details, parse_detailseite, parse_suchseite, parse_suchseite_mit_hinweisen
 from ..quellen.mobilede import KENNUNG as MOBILEDE
 from ..quellen.mobilede import anzeigen_id_aus_url as mobilede_id_aus_url
 from ..quellen.mobilede import detail_url as mobilede_detail_url
@@ -266,7 +266,7 @@ def erkenne_seite(html: str) -> tuple[str, list[Inserat]]:
 
 def erkenne_seite_mit_hinweisen(html: str) -> tuple[str, list[Inserat], list[str]]:
     """Art der Seite, die erkannten Inserate (ohne Gesuche) und Hinweise für den Nutzer (z. B. übersprungene Treffer, fehlende
-    Anbieterkästen bei mobile.de; leer bei Kleinanzeigen).
+    Anbieterkästen bei mobile.de und ungültige Anzeigenkarten bei Kleinanzeigen).
 
     Art: 'suche', 'detail', 'unbekannt' oder 'detail_ohne_id' (Anzeigenseite, aber ohne ermittelbare Anzeigen-ID).
     Seiten von mobile.de (Kopf, siehe `ist_mobilede_seite`) liest `_erkenne_mobilede`; alles andere gilt als Kleinanzeigen."""
@@ -285,11 +285,16 @@ def erkenne_seite_mit_hinweisen(html: str) -> tuple[str, list[Inserat], list[str
         if ad_id and (inserat := _detail_inserat(ad_id, url, d)):
             return "detail", [inserat], []
         return "detail_ohne_id", [], []
-    treffer = [Inserat(quelle=QUELLE, anzeigen_id=t.pop("id"), **t) for t in parse_suchseite(html)]
+    roh, hinweise = parse_suchseite_mit_hinweisen(html)
+    treffer = [Inserat(quelle=QUELLE, anzeigen_id=t.pop("id"), **t) for t in roh]
     if treffer:
-        return "suche", [i for i in treffer if not i.ist_gesuch], []
+        return "suche", [i for i in treffer if not i.ist_gesuch], hinweise
     if ad_id and (inserat := _detail_inserat(ad_id, url, parse_detailseite(html))):
         return "detail", [inserat], []
+    if hinweise:
+        # Erkannte, aber beschädigte Karten sind kein unbekanntes Dateiformat. Der Ordnerimport
+        # lässt die Datei zur Korrektur liegen; im Upload erscheint ein verständlicher Fehler.
+        raise ValueError("Anzeigen-ID/Adresse passt nicht zur Plattform kleinanzeigen; " + "; ".join(hinweise))
     return "unbekannt", [], []
 
 

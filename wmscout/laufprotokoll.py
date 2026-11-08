@@ -19,7 +19,8 @@ from datetime import datetime, timedelta
 
 log = logging.getLogger("scout")
 
-ARTEN = {"suchlauf": "Suchlauf", "seiten": "Gespeicherte Seiten", "mails": "E-Mail-Suchagenten"}
+ARTEN = {"suchlauf": "Suchlauf", "seiten": "Gespeicherte Seiten", "mails": "E-Mail-Suchagenten",
+         "dateiupload": "Datei-Upload", "text": "Inseratlink und Text"}
 AUSLOESER = {"manuell": "von Hand (App)", "auto": "automatisch (App)", "cli": "Kommandozeile / geplante Aufgabe"}
 OK, FEHLER, GESPERRT, ABGEBROCHEN, LAEUFT = "ok", "fehler", "gesperrt", "abgebrochen", "laeuft"
 ERGEBNISSE = {OK: "ohne Fehler", FEHLER: "mit Fehler", GESPERRT: "Quelle blockt (403/429/Captcha)", ABGEBROCHEN: "abgebrochen",

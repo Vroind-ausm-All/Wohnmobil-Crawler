@@ -176,15 +176,15 @@ def test_kleinanzeigen_liste_pro_und_ohne_kennzeichen(ads):
     html = such_html(ads[:2]).replace('<div class="aditem-main--bottom">', '<div class="aditem-main--bottom"><span>PRO</span>', 1)
     t = {x["id"]: x for x in parse_suchseite(html)}
     assert (t[ads[0]["id"]]["gewerblich"], t[ads[0]["id"]]["anbieter_herkunft"]) == (True, A)
-    assert (t[ads[1]["id"]]["gewerblich"], t[ads[1]["id"]]["anbieter_herkunft"]) == (False, O)
+    assert (t[ads[1]["id"]]["gewerblich"], t[ads[1]["id"]]["anbieter_herkunft"]) == (None, None)
 
 
 @pytest.mark.parametrize("ersatz, erwartet", [
     (None, (False, A)),                                                                            # „Privater Nutzer“
     ('<div id="viewad-contact"><span class="userprofile-vip">Gewerblicher Nutzer</span></div>', (True, A)),
-    ('<div id="viewad-contact"></div>', (False, O)),                                             # Kasten ohne Angabe
-    ("", (False, O)),                                                                              # gar kein Kasten
-    ('<div id="viewad-contact"><span class="userprofile-vip">Privat-Camper-Center</span></div>', (False, O)),   # QA B4: Name ist kein Beleg
+    ('<div id="viewad-contact"></div>', (None, None)),                                            # Kasten ohne Angabe
+    ("", (None, None)),                                                                           # gar kein Kasten
+    ('<div id="viewad-contact"><span class="userprofile-vip">Privat-Camper-Center</span></div>', (None, None)),  # Name ist kein Beleg
     ('<div id="viewad-contact"><span>Privatanbieter</span></div>', (False, A)),
 ], ids=["privat", "gewerblich", "leer", "ohne_kasten", "name_mit_privat", "privatanbieter"])
 def test_kleinanzeigen_detailseite(ads, ersatz, erwartet):
@@ -207,7 +207,7 @@ def test_crawler_ohne_filter_dann_detailseite(cfg, db, ads):
     Importer(cfg, db, abruf=FakeAbruf(ads)).lauf(cfg["suchen"])
     zeilen = db.con.execute("SELECT detail_geladen, gewerblich, anbieter_herkunft FROM anzeigen").fetchall()
     assert zeilen and {(z[1], z[2]) for z in zeilen if z[0]} == {(0, A)}                         # Detailseite: „Privater Nutzer“
-    assert {(z[1], z[2]) for z in zeilen if not z[0]} <= {(0, O)}
+    assert {(z[1], z[2]) for z in zeilen if not z[0]} <= {(None, None)}
 
 
 def test_crawler_mit_privatfilter_belegt_privat(cfg, db, ads):

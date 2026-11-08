@@ -108,7 +108,10 @@ def test_suchlauf_wird_protokolliert(cfg, db, ads):
     (lf,) = _laeufe(db)
     assert (lf["art"], lf["ausloeser"], lf["ergebnis"]) == ("suchlauf", "manuell", "ok") and lf["ende"] >= lf["start"]
     assert (lf["neu"], lf["preis"], lf["bekannt"], lf["details"]) == (stat["neu"], stat["preis"], stat["bekannt"], stat["details"]) == (60, 0, 0, 60)
-    assert lf["je_quelle"] == {"kleinanzeigen": {"neu": 60, "preis": 0, "bekannt": 0, "ergebnis": "ok"}} and lf["fehler"] is None
+    q = lf["je_quelle"]["kleinanzeigen"]
+    assert {k: q[k] for k in ("neu", "preis", "bekannt", "ergebnis")} == {"neu": 60, "preis": 0, "bekannt": 0, "ergebnis": "ok"}
+    assert q["verarbeitet"] == 60 and q["aktualisiert"] == 0 and q["freigegeben"] is True and q["ende"] >= q["start"]
+    assert lf["fehler"] is None
 
 
 def test_sperre_wird_protokolliert_und_pausiert_nur_die_automatik(cfg, db, ads):
@@ -189,11 +192,11 @@ def test_intervall_je_quelle(cfg, db, ads):
     assert stat["uebersprungen"] == [] and stat["bekannt"] > 0                           # Intervall vorbei: Quelle läuft wieder
 
 
-def test_unerwarteter_fehler_wird_als_abgebrochen_protokolliert(cfg, db):
-    with pytest.raises(ZeroDivisionError):
-        Importer(cfg, db, abruf=AntwortAbruf(ZeroDivisionError("kaputt"))).lauf(cfg["suchen"])
+def test_unerwarteter_quellenfehler_wird_isoliert_protokolliert(cfg, db):
+    stat = Importer(cfg, db, abruf=AntwortAbruf(ZeroDivisionError("kaputt"))).lauf(cfg["suchen"])
     (lf,) = _laeufe(db)
-    assert lf["ergebnis"] == "abgebrochen" and lf["fehler"] == "ZeroDivisionError: kaputt"
+    assert lf["ergebnis"] == "fehler" and "ZeroDivisionError" in lf["fehler"] and "kaputt" not in lf["fehler"]
+    assert stat["neu"] == 0 and "ZeroDivisionError" in stat["fehler"]
 
 
 def test_protokoll_scheitert_nie_den_lauf(cfg, db, ads, caplog):
@@ -217,7 +220,8 @@ def test_seitenimport_wird_protokolliert(cfg, db, ads, tmp_path):
     (lf,) = _laeufe(db)
     assert (lf["art"], lf["ausloeser"], lf["ergebnis"], lf["dateien"], lf["neu"]) == ("seiten", "cli", "fehler", 2, 3) == (
         "seiten", "cli", "fehler", stat["dateien"], stat["neu"])
-    assert "passt nicht zur Plattform" in lf["fehler"]
+    assert "passt nicht zur Plattform kleinanzeigen" in lf["fehler"]
+    assert (ordner / "x.html").exists() and stat["fehlerhaft"] == 1
 
 
 def test_alte_eintraege_werden_aufgeraeumt(cfg, db):
