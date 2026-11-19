@@ -6,6 +6,8 @@ import re
 import shutil
 import subprocess
 
+from pathlib import Path
+
 import pytest
 import yaml
 
@@ -57,21 +59,31 @@ def test_systemd_dienste():
     assert timer["Timer"]["Persistent"] == ["true"] and timer["Install"]["WantedBy"] == ["timers.target"]
 
 
+def _unit_meldungen(pfad: Path) -> list[str]:
+    """Meldungen von ``systemd-analyze verify`` zu GENAU dieser Unit. Neuere systemd-Versionen warnen dabei auch über fremde
+    System-Units des Rechners (z. B. „CPUAccounting= has been removed“ in /usr/lib/systemd/system/…) – die zählen nicht."""
+    r = subprocess.run(["systemd-analyze", "verify", "--man=no", str(pfad)], capture_output=True, text=True, timeout=60)
+    # Manche unprivilegierten Container enthalten das Prüfprogramm, aber keinen
+    # nutzbaren systemd-Laufzeitpfad. Das ist eine fehlende Testfähigkeit, kein Syntaxurteil.
+    ausgabe = r.stderr + r.stdout
+    laufzeit_fehler = {"Failed to create directory '/run/systemd/': Read-only file system",
+                       "Failed to create directory '/run/systemd/': Permission denied"}
+    if ausgabe.strip() in laufzeit_fehler:
+        pytest.skip("systemd-Laufzeitpfad im Container nicht beschreibbar; Unit-Syntax hier nicht prüfbar")
+    return [z for z in ausgabe.splitlines() if pfad.name in z and "is not executable" not in z]
+
+
 @pytest.mark.skipif(not shutil.which("systemd-analyze"), reason="systemd-analyze nicht vorhanden")
-def test_systemd_syntax():
+def test_systemd_syntax(tmp_path):
     """Nur Syntax: die ausführbare Datei unter /opt existiert in der Testumgebung nicht – diese Meldung ist erwartet."""
     for name in UNITS:
-        r = subprocess.run(["systemd-analyze", "verify", "--man=no", str(BETRIEB / "systemd" / name)], capture_output=True, text=True,
-                           timeout=60)
-        # Manche unprivilegierten Container enthalten das Prüfprogramm, aber keinen
-        # nutzbaren systemd-Laufzeitpfad. Das ist eine fehlende Testfähigkeit, kein Syntaxurteil.
-        ausgabe = r.stderr + r.stdout
-        laufzeit_fehler = {"Failed to create directory '/run/systemd/': Read-only file system",
-                           "Failed to create directory '/run/systemd/': Permission denied"}
-        if ausgabe.strip() in laufzeit_fehler:
-            pytest.skip("systemd-Laufzeitpfad im Container nicht beschreibbar; Unit-Syntax hier nicht prüfbar")
-        meldungen = [z for z in ausgabe.splitlines() if z.strip() and "is not executable" not in z]
+        meldungen = _unit_meldungen(BETRIEB / "systemd" / name)
         assert not meldungen, (name, meldungen)
+    # Gegenprobe: ein echter Fehler in unserer Unit wird weiterhin erkannt (der Filter verschluckt nichts Eigenes)
+    kaputt = tmp_path / UNITS[0]
+    kaputt.write_text((BETRIEB / "systemd" / UNITS[0]).read_text(encoding="utf-8").replace("NoNewPrivileges=true", "GibtsNicht=1"),
+                      encoding="utf-8")
+    assert any("GibtsNicht" in z for z in _unit_meldungen(kaputt))
 
 
 def test_caddy_vorlage():
