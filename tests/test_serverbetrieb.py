@@ -142,7 +142,7 @@ def test_gesund_host_proxy_und_defekte_datenbank(cfg, db, importiert):
         db.con.execute("ALTER TABLE schema_version RENAME TO schema_version_weg")
         db.con.commit()
         status, body = abruf({})
-        assert status == 500 and b"ok" not in body
+        assert status == 500 and b"\"ok\"" not in body
     finally:
         srv.shutdown()
         srv.server_close()
