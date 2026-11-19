@@ -4,6 +4,17 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## P8 – Planung Phase 8 bis 8c (19.11.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q tests/test_projekt.py` (Dokumentstruktur, Agenten, Regeln) | 18 bestanden |
+| `ruff check .` | grün |
+
+**Nicht geprüft:** Vollsuite (kein Code geändert); Planung nicht von Architekt/QA geprüft.
+
+---
+
 ## CampRCrawlR – Händlerablauf und Import (08.11.2026) · REVIEW
 
 Branch `claude/camprcrawlr-haendlerablauf`, Basis `92bc20b`. Python 3.13.5 auf Linux, Node 24,
