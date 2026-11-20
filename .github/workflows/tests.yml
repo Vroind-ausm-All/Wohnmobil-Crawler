@@ -14,7 +14,7 @@ jobs:
     name: Tests (${{ matrix.os }}, Python 3.13)
     runs-on: ${{ matrix.os }}
     # statt der 6-Stunden-Grenze von GitHub: ein Hänger fällt nach spätestens 45 Minuten auf (Windows seit PR #61)
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       SCOUT_TEST_HAENGER_DATEI: ${{ github.workspace }}/test-haenger.txt
     strategy:
@@ -32,17 +32,24 @@ jobs:
       - name: Ruff
         run: python -m ruff check .
       - name: Pytest
-        run: python -m pytest
-      - name: Hänger-Bericht (nur bei Fehler)
-        if: failure()
+        # eigene Grenze für den Schritt: bricht er ab, laufen die Bericht-Schritte trotzdem (ein Job-Abbruch verschluckt alles)
+        timeout-minutes: 35
         shell: bash
         run: |
-          if [ -f test-haenger.txt ]; then grep -n -A60 "^Timeout" test-haenger.txt || tail -n 5 test-haenger.txt; fi
+          python -m pytest -v --durations=40 2>&1 | tee pytest-ausgabe.txt
+          exit ${PIPESTATUS[0]}
+      - name: Test-Bericht (Dauer, letzte Tests, Hänger)
+        if: always()
+        shell: bash
+        run: |
+          echo "=== Ende der Ausgabe"; tail -n 80 pytest-ausgabe.txt 2>/dev/null || true
+          echo "=== zuletzt gestartete Tests"; tail -n 5 test-haenger.txt 2>/dev/null || true
+          if [ -f test-haenger.txt ]; then grep -n -A60 "^Timeout" test-haenger.txt || true; fi
 
   windows-start:
     name: Windows-Start (installieren.bat)
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       SCOUT_TEST_HAENGER_DATEI: ${{ github.workspace }}/test-haenger.txt
     steps:
@@ -69,15 +76,19 @@ jobs:
           if errorlevel 1 exit /b 1
           .venv\Scripts\python.exe scout.py rechne --preis 42900 --ez 2017 --km 85000 --titel "Knaus Sky TI 650 MEG" --anschreiben
       - name: Tests in der .venv
-        shell: cmd
-        run: |
-          .venv\Scripts\python.exe -m pip install --disable-pip-version-check --only-binary=:all: -r requirements-dev.txt
-          .venv\Scripts\python.exe -m pytest
-      - name: Hänger-Bericht (nur bei Fehler)
-        if: failure()
+        timeout-minutes: 35
         shell: bash
         run: |
-          if [ -f test-haenger.txt ]; then grep -n -A60 "^Timeout" test-haenger.txt || tail -n 5 test-haenger.txt; fi
+          .venv/Scripts/python.exe -m pip install --disable-pip-version-check --only-binary=:all: -r requirements-dev.txt
+          .venv/Scripts/python.exe -m pytest -v --durations=40 2>&1 | tee pytest-ausgabe.txt
+          exit ${PIPESTATUS[0]}
+      - name: Test-Bericht (Dauer, letzte Tests, Hänger)
+        if: always()
+        shell: bash
+        run: |
+          echo "=== Ende der Ausgabe"; tail -n 80 pytest-ausgabe.txt 2>/dev/null || true
+          echo "=== zuletzt gestartete Tests"; tail -n 5 test-haenger.txt 2>/dev/null || true
+          if [ -f test-haenger.txt ]; then grep -n -A60 "^Timeout" test-haenger.txt || true; fi
 
   windows-kundenstart:
     name: Windows-Kundenstart (frisch und wiederholt)
