@@ -53,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        teil: [1, 2, 3, 4, 5, 6]
+        teil: [1, 2, 4, 5, 6]           # Teil 3 hing am 20.11. als einziger: einzeln in „tests-windows-teil3“
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -76,6 +76,49 @@ jobs:
           status=0
           timeout --kill-after=30s 15m python -m pytest -v --durations=20 -p no:cacheprovider "${dateien[@]}" || status=$?
           [ "$status" = 124 ] && echo "::error::Teil ${{ matrix.teil }} nach 15 Minuten abgebrochen (Hänger oder zu langsam)"
+          exit $status
+      - name: Hänger-Bericht
+        if: always()
+        shell: bash
+        run: |
+          echo "=== zuletzt gestartete Tests"; tail -n 5 test-haenger.txt 2>/dev/null || true
+          if [ -f test-haenger.txt ]; then grep -n -A60 "^Timeout" test-haenger.txt || true; fi
+
+  tests-windows-teil3:
+    # Diagnose: Teil 3 (diese 16 Dateien) brachte den Windows-Runner am 20.11. zum Stehen – je Datei ein Job grenzt die Stelle ein.
+    name: Tests (windows-latest, Teil 3, ${{ matrix.datei }})
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      SCOUT_TEST_HAENGER_DATEI: ${{ github.workspace }}/test-haenger.txt
+    strategy:
+      fail-fast: false
+      matrix:
+        datei: [test_anbieter, test_app, test_auswertung, test_datei_upload, test_dubletten_entscheiden, test_email_haertung,
+                test_haendler_ablauf, test_kleinanzeigen_echt, test_meldungen, test_normalisierung, test_projekt, test_risiko,
+                test_spannen, test_team_korrektur, test_text_import_r2, test_vorfilter]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Abhängigkeiten (gesperrt, nur fertige Pakete)
+        run: |
+          python -m pip install --disable-pip-version-check --only-binary=:all: -r requirements-dev.txt
+      - name: Pytest (${{ matrix.datei }})
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          dateien=(tests/${{ matrix.datei }}.py)
+          printf 'Dateien in diesem Teil:\n'; printf '  %s\n' "${dateien[@]}"
+          # Speicher und Platte jede Minute ins Protokoll – zeigt, ob der Runner vor dem Hänger erschöpft ist
+          speicher() { powershell -NoProfile -Command "[math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1024)"; }
+          ( while sleep 60; do echo "--- $(date +%T) frei: $(speicher) MB RAM, Platte: $(df -h . | tail -1)"; done ) &
+          trap 'kill $! 2>/dev/null || true' EXIT
+          # ohne tee: eine Pipe, die ein übrig gebliebener Kindprozess offen hält, kann den Schritt sonst endlos halten
+          status=0
+          timeout --kill-after=30s 8m python -m pytest -v --durations=20 -p no:cacheprovider "${dateien[@]}" || status=$?
+          [ "$status" = 124 ] && echo "::error::${{ matrix.datei }} nach 8 Minuten abgebrochen (Hänger oder zu langsam)"
           exit $status
       - name: Hänger-Bericht
         if: always()
