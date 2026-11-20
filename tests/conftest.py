@@ -86,6 +86,18 @@ def _speicher_waechter():
         threading.Thread(target=pruefe, name="speicher-waechter", daemon=True).start()
 
 
+_MAX_TEST_ID = 1000
+
+
+def pytest_collection_modifyitems(items):
+    """Test-IDs bleiben kurz. Eine 6,7 MB lange ID (Parameter als ID, test_datei_upload) legte die CI-Runner lahm: pytest -v schreibt
+    sie als eine Zeile ins Protokoll, und pytest setzt sie in die Umgebungsvariable PYTEST_CURRENT_TEST (unter Windows höchstens
+    32767 Zeichen). Lange Parameter brauchen deshalb ``ids=``."""
+    lang = [item.nodeid[:120] + "…" for item in items if len(item.nodeid) > _MAX_TEST_ID]
+    if lang:
+        raise pytest.UsageError(f"Test-ID länger als {_MAX_TEST_ID} Zeichen – bitte ids= setzen: " + "; ".join(lang))
+
+
 def pytest_configure(config):
     capman = config.pluginmanager.getplugin("capturemanager")
     if capman:
