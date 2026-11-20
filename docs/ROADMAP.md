@@ -278,10 +278,40 @@ Rechtstexte prüfen lassen, Push-Dienst) wird vorbereitet, nicht ausgeführt.
 | P7-01 | P2 | Nacharbeiten P5-06b, P6-01b, P6-02b, P6-03b, P6-05b | Orchestrator | DONE (PR #56 gemergt) |
 | P7-02 | P1 | Verkaufsanfragen im Dashboard: Meldungen, Ankaufstrichter, Hinweis in der Ankaufsliste | scout-ui-engineer | DONE (PR #57 gemergt) |
 | P7-03 | P1 | Öffentliches Ankaufsportal (B4): öffentlicher Modus nur mit `/verkaufen`, Spam-Schutz, Status-Link für den Verkäufer, Vorlagen Impressum/Datenschutz, Löschanfrage | source-integrations, qa-security-reviewer | DONE (PR #58 gemergt) |
-| P7-04 | P2 | Serverbetrieb vorbereitet: Anleitung, Vorlagen (Dienst, HTTPS-Proxy, Sicherung), Gesundheitsprüfung | windows-bootstrap | REVIEW (PR #59) |
-| P7-04b | P3 | Dienste auf dem Server nur nach stdout/journald protokollieren statt mehrerer Prozesse in dieselbe rotierende `scout.log` (QA P7-04 B10) | windows-bootstrap | REVIEW (`SCOUT_PROTOKOLL_NUR_KONSOLE=1` in den Units; Branch `claude/phase7-restpunkte`) |
-| P7-01b | P3 | Nach dem Anonymisieren neu angelegte Besichtigungen und Kontakttexte wieder fällig machen (Zeitpunkt nach `anonymisiert_am`; QA P7-01 B6) | scout-data-engineer | REVIEW (Branch `claude/phase7-restpunkte`) |
-| P7-05 | P2 | Abhängigkeit `soupsieve` 3.0.3 → 4.1.2 (CVE-2026-126190, pip-audit); nur dieses Paket in beiden Lock-Dateien | windows-bootstrap | REVIEW (Branch `claude/phase7-restpunkte`) |
+| P7-04 | P2 | Serverbetrieb vorbereitet: Anleitung, Vorlagen (Dienst, HTTPS-Proxy, Sicherung), Gesundheitsprüfung | windows-bootstrap | DONE (PR #59 gemergt) |
+| P7-04b | P3 | Dienste auf dem Server nur nach stdout/journald protokollieren statt mehrerer Prozesse in dieselbe rotierende `scout.log` (QA P7-04 B10) | windows-bootstrap | DONE (PR #63 gemergt; `SCOUT_PROTOKOLL_NUR_KONSOLE=1`) |
+| P7-01b | P3 | Nach dem Anonymisieren neu angelegte Besichtigungen und Kontakttexte wieder fällig machen (Zeitpunkt nach `anonymisiert_am`; QA P7-01 B6) | scout-data-engineer | DONE (PR #63 gemergt) |
+| P7-05 | P2 | Abhängigkeit `soupsieve` 3.0.3 → 4.1.2 (CVE-2026-126190, pip-audit); nur dieses Paket in beiden Lock-Dateien | windows-bootstrap | DONE (PR #63 gemergt) |
+
+
+## Phase 8 – vom Pilot zum SaaS (geplant bis 8c, nicht freigegeben)
+
+Auftrag des Betreibers am 19.11.2026: „Arbeite Phase 8 aus bis 8c“. **Nur Planung** – Umsetzung je Unterphase erst nach Freigabe
+(Regel 14). Details, Zielbild, Abnahmekriterien und Betreiber-Entscheidungen F15–F21: [PHASE8-SAAS.md](PHASE8-SAAS.md); Entscheidungen:
+ADR-070. Empfohlen vorab: Pilot mit 1–2 Kunden ohne neuen Code (Mandanten per Hand, `docs/SERVERBETRIEB.md`).
+
+| ID | Prio | Paket | Agent | Abhängig | Status |
+|---|---|---|---|---|---|
+| P8a-01 | P1 | Mail-Eingang je Mandant: IMAP-Abholung, Plus-Adresse mit geheimem Suffix, nur bekannte Absender, Quarantäne | source-integrations | F3, F16 | TODO |
+| P8a-02 | P1 | Einrichtungsseite „Eingang“: Adresse, Anleitung je Börse, letzte Mail, Lücken-Warnung, Adresse neu erzeugen | scout-ui-engineer | P8a-01 | TODO |
+| P8a-03 | P2 | mobile.de-Search-API im Pilot mit echtem Händlerzugang je Mandant | source-integrations | Pilotkunde, Bedingungen | BLOCKED (Regel 12) |
+| P8a-04 | P2 | Quellenstatus je Kunde (Eingang je Weg, 7/30 Tage, Lücken) | scout-data-engineer | P8a-01 | TODO |
+| P8b-01 | P1 | Konto-Mails: Versandmodul, Vorlagen, Warteschlange, SPF/DKIM-Anleitung | windows-bootstrap | F17 | TODO |
+| P8b-02 | P1 | `plattform.sqlite` + Mandanten zur Laufzeit (kein Neustart), Übernahme bestehender Mandanten per Migration | scout-data-engineer | – | TODO |
+| P8b-03 | P1 | Registrierung mit E-Mail-Bestätigung, Zustimmung (versioniert), Freigabe-Modus, Spamschutz | scout-ui-engineer, qa-security-reviewer | P8b-01/02, F16, F20 | TODO |
+| P8b-04 | P1 | Passwort vergessen per Mail (Hash, 1 h, einmalig, keine Kontoaufzählung) | scout-ui-engineer | P8b-01 | TODO |
+| P8b-05 | P1 | Einstellungen in der Oberfläche (Inhaber), Tabelle `einstellungen`, Schema v25 | scout-ui-engineer, scout-data-engineer | – | TODO |
+| P8b-06 | P2 | Einrichtungsassistent beim ersten Login | scout-ui-engineer | P8b-05, P8a-02 | TODO |
+| P8b-07 | P1 | Betreiber-Verwaltung `/betrieb` ohne Einblick in Fachdaten, Freischalten/Sperren | scout-ui-engineer, qa-security-reviewer | P8b-02 | TODO |
+| P8b-08 | P1 | Kündigung, Datenexport je Mandant, Auskunft nach Art. 15 | scout-data-engineer | P8b-02 | TODO |
+| P8c-01 | P2 | Tarife und Kontingente, Verbrauchsanzeige, weiche/harte Grenzen | acquisition-analyst | P8b-02, F19 | TODO |
+| P8c-02 | P1 | Status-Lebenszyklus Test → aktiv → überfällig → gesperrt → gekündigt → gelöscht | scout-data-engineer | P8b-02 | TODO |
+| P8c-03 | P1 | Zahlungsanbieter: gehostete Bezahlseite, Kundenportal, signierte Webhooks | source-integrations, qa-security-reviewer | F18 | BLOCKED (Regel 13) |
+| P8c-04 | P2 | Rechnungen über den Zahlungsanbieter | source-integrations | P8c-03 | BLOCKED |
+| P8c-05 | P1 | Rechtstexte der Plattform als Vorlagen (AGB, AV-Vertrag mit TOM, Unterauftragsverarbeiter, Datenschutz), versionierte Zustimmung | Orchestrator | F21 | TODO (Prüfung durch Anwalt) |
+| P8c-06 | P3 | Hinweise in der App: Schätzung, §25a keine Steuerberatung, Quellenverantwortung | scout-ui-engineer | – | TODO |
+
+Später (8d): 2FA, CSP ohne `unsafe-inline`, CSRF je Sitzung, Penetrationstest, Überwachung, Staging, gesteuerte Updates, P7-04b.
 
 ---
 

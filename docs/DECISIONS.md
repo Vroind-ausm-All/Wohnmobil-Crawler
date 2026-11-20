@@ -1583,3 +1583,30 @@ Format: Kontext · Entscheidung · Alternativen · Folgen. Status: **gilt**, **v
   einem zweiten Server mit Datenabgleich (doppelte Datenhaltung).
 * **Folgen / offen:** Die Vorlagen sind nur per `systemd-analyze verify` (Syntax) und Tests geprüft, nicht auf einem echten Server.
   Kopie der Sicherungen außer Haus, Ratenlimit im Proxy (Zusatzmodul) und das Abholen von Suchagenten-Mails richtet der Betreiber ein.
+
+## ADR-070 – Phase 8 „vom Pilot zum SaaS“: Plattform-Datenbank neben getrennten Mandanten, Datenzugang über Kundenwege · vorgeschlagen (19.11.2026)
+
+* **Kontext:** Der Betreiber will den Scout als SaaS anbieten. Fachlich ist das Werkzeug weit; es fehlen Selbstregistrierung,
+  Einstellungen ohne YAML, Bezahlung, Rechtstexte und ein erlaubter Datenzugang je Kunde. Planung: `docs/PHASE8-SAAS.md`.
+* **Entscheidung (vorgeschlagen, Umsetzung erst nach Freigabe):**
+  1. **Getrennte Fachdaten bleiben** (ADR-033): je Kunde eigene SQLite-Datei. Neu ist nur `daten/plattform.sqlite` für Kundenverzeichnis,
+     Status, Tarif, Zustimmungen und Zahlungsereignisse – ohne Inserate oder Verkäuferdaten. Mandanten werden zur Laufzeit aus ihr
+     erkannt (heute nur beim Start).
+  2. **Datenzugang nur über Wege des Kunden** (Regeln 11/12): eigene Suchagenten-Mails an eine persönliche Plus-Adresse eines
+     Plattform-Postfachs (IMAP-Abholung, geheimes Suffix je Mandant) und eigene Händlerzugänge (mobile.de-API nach Freigabe). Der
+     Betreiber ruft keine Börsen ab.
+  3. **Kein eigener Zahlungsverkehr:** gehostete Bezahlseite, Kundenportal und Rechnungen beim Zahlungsanbieter; bei uns nur Status
+     aus signierten Webhooks. Keine Kartendaten, keine eigene Rechnungsnummernvergabe.
+  4. **Betreiber sieht keine Fachdaten:** `/betrieb` zeigt Status, Tarif, Nutzungszahlen und Speicherbedarf, nie Inserate oder
+     Verkäuferdaten; nur über 127.0.0.1/Tailscale.
+  5. **Einstellungen des Kunden in seiner Datenbank** (Tabelle `einstellungen`), mit denselben Prüfungen wie `config.yaml`; die Datei
+     bleibt Grundwert und Rückfall.
+  6. **Reihenfolge:** 8a (Datenzugang) vor 8b (Self-Service) vor 8c (Bezahlung/Recht); 2FA und Penetrationstest (8d) vor dem ersten
+     zahlenden Fremdkunden.
+* **Alternativen:** eine gemeinsame Datenbank mit Mandanten-Spalte (eine vergessene Bedingung zeigt fremde Daten); Postgres/Microservices
+  (für die erwartete Kundenzahl unnötig, widerspricht „einfache, stabile Lösungen“); Eingangs-Webhook eines Mail-Dienstes (Zusatzdienst,
+  Kosten); eigene Rechnungsstellung (Buchhaltungs- und Aufbewahrungspflichten); nur Installation beim Kunden (`KUNDENINSTALLATION.md`,
+  bleibt als zweiter Weg).
+* **Folgen / offen:** Ein Prozess mit einem Thread-Pool für alle Mandanten – Grenze vor 8d messen. Wildcard-Zertifikat braucht einen
+  DNS-Anbieter mit API. Entscheidungen F3, F15–F21 des Betreibers.
+

@@ -4,7 +4,27 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
-## P7-01b, P7-04b, P7-05 – Phase-7-Restpunkte (19.11.2026) · REVIEW
+## P7-01b-N – Nachkorrektur Fristen nach Anonymisierung (20.11.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| `test_restpunkte.py` (10, davon 3 neu: Kürzung mit Länge > 0 und Neu-Einlesen, ersetzter Text wird geleert, vor dem Anonymisieren angelegte Besichtigung) | bestanden |
+| Gegenprobe: die 3 neuen Tests gegen den alten Code | scheitern (3) |
+| Alle Tests mit Bezug zu Fristen, Anonymisierung und Neu-Einlesen (`speichere_details`) | 524 bestanden |
+| `ruff check .` | grün |
+
+**Nicht geprüft:** Vollsuite auf diesem Stand, Windows (die Windows-CI hängt seit PR #61, Diagnose auf `claude/windows-ci-haenger`).
+
+## P8 – Planung Phase 8 bis 8c (19.11.2026) · DONE (PR #62 gemergt)
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q tests/test_projekt.py` (Dokumentstruktur, Agenten, Regeln) | 18 bestanden |
+| `ruff check .` | grün |
+
+**Nicht geprüft:** Vollsuite (kein Code geändert); Planung nicht von Architekt/QA geprüft.
+
+## P7-01b, P7-04b, P7-05 – Phase-7-Restpunkte (19.11.2026) · DONE (PR #63 gemergt)
 
 | Prüfung | Ergebnis |
 |---|---|

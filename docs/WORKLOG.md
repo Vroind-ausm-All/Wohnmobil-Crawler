@@ -6,7 +6,33 @@ Wert „–“.
 
 ---
 
-## P7-01b, P7-04b, P7-05 – Phase-7-Restpunkte (19.11.2026) · Status: REVIEW
+## P7-01b-N – Nachkorrektur Fristen nach Anonymisierung (20.11.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 20.11.2026: „Kannst du die offenen Punkte bitte noch klären vom letzten PR“ (PR #63: QA-Korrekturen nicht nachgeprüft).
+- **Anlass:** QA-Nachprüfung der in PR #63 gemergten Korrekturen: B2 bestätigt behoben, B1 nur teilweise – drei neue Befunde.
+- **Geänderte Dateien:** `wmscout/datenrechte.py`, `wmscout/datenbank.py` (`_ohne_personendaten`), `tests/test_restpunkte.py`.
+- **Korrekturen:**
+  - **N1 (hoch):** Neu-Einlesen der Details verwarf den gespeicherten Stand des Anschreibentexts → beim nächsten Anonymisieren blieben
+    Name und Telefonnummer dauerhaft stehen. Jetzt bleiben `anonymisiert_anschreiben_laenge`/`_hash` beim Neu-Einlesen erhalten.
+  - **N2 (mittel):** Ersetzter (statt ergänzter) Anschreibentext: Prüfsumme des bereinigten Stands; passt der Anfang nicht mehr, wird der
+    Text beim erneuten Anonymisieren geleert statt gekürzt.
+  - **N3 (mittel):** Besichtigung vor dem Anonymisieren angelegt, danach abgeschlossen: maßgeblich ist jetzt die letzte Änderung.
+- **Tests:** siehe TEST-REPORT; die drei neuen Tests scheitern am alten Code.
+- **Review-Ergebnis:** Korrektur der QA-Nachprüfung; nicht erneut von der QA geprüft.
+
+## P8 – Planung Phase 8 „vom Pilot zum SaaS“ bis 8c (19.11.2026) · Status: DONE (PR #62 gemergt)
+
+- **Auftrag:** Betreiber 19.11.2026: „Arbeite Phase 8 aus bis 8c“ (nach der Frage, was für ein SaaS-fertiges Werkzeug fehlt).
+- **Verantwortlicher Agent:** Orchestrator (Planung im Stil von `scout-architect`).
+- **Vorab:** Integrationszweig per Fast-Forward auf `main` (226dbdc) gebracht – er lag 16 Commits zurück (PR #60, #61 gingen nach `main`).
+- **Geänderte Dateien:** `docs/PHASE8-SAAS.md` (neu), `docs/ROADMAP.md` (Phase 8, P7-04 DONE), `docs/DECISIONS.md` (ADR-070), dieser Eintrag.
+- **Ergebnis:** 18 Arbeitspakete (8a: 4, 8b: 8, 8c: 6) mit Abnahmekriterien, Abhängigkeiten und Betreiber-Entscheidungen F15–F21;
+  P8a-03 und P8c-03/04 BLOCKED bis Freigabe bzw. Anbieterwahl. Kein Code geändert.
+- **Tests:** `pytest tests/test_projekt.py` (Dokumentstruktur), `ruff check .` – siehe TEST-REPORT.
+- **Review-Ergebnis:** nicht von Architekt/QA geprüft (reine Planung).
+- **Nächster sinnvoller Schritt:** Entscheidungen F15, F3, F16 treffen; Pilot mit 1–2 Kunden; dann Freigabe für 8a.
+
+## P7-01b, P7-04b, P7-05 – Phase-7-Restpunkte (19.11.2026) · Status: DONE (PR #63 gemergt)
 
 - **Auftrag:** Betreiber 19.11.2026: „Überprüfe die Tests und stelle den Rest von der Phase komplett ab“ → Rückfrage: Phase 7 fertigstellen.
 - **Verantwortlicher Agent:** Orchestrator (im Stil von `scout-data-engineer` / `windows-bootstrap`); QA `qa-security-reviewer`.
