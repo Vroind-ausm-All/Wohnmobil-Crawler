@@ -13,6 +13,10 @@ jobs:
   tests:
     name: Tests (${{ matrix.os }}, Python 3.13)
     runs-on: ${{ matrix.os }}
+    # statt der 6-Stunden-Grenze von GitHub: ein Hänger fällt nach spätestens 45 Minuten auf (Windows seit PR #61)
+    timeout-minutes: 45
+    env:
+      SCOUT_TEST_HAENGER_DATEI: ${{ github.workspace }}/test-haenger.txt
     strategy:
       fail-fast: false
       matrix:
@@ -29,10 +33,18 @@ jobs:
         run: python -m ruff check .
       - name: Pytest
         run: python -m pytest
+      - name: Hänger-Bericht (nur bei Fehler)
+        if: failure()
+        shell: bash
+        run: |
+          if [ -f test-haenger.txt ]; then grep -n -A60 "^Timeout" test-haenger.txt || tail -n 5 test-haenger.txt; fi
 
   windows-start:
     name: Windows-Start (installieren.bat)
     runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      SCOUT_TEST_HAENGER_DATEI: ${{ github.workspace }}/test-haenger.txt
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -61,6 +73,11 @@ jobs:
         run: |
           .venv\Scripts\python.exe -m pip install --disable-pip-version-check --only-binary=:all: -r requirements-dev.txt
           .venv\Scripts\python.exe -m pytest
+      - name: Hänger-Bericht (nur bei Fehler)
+        if: failure()
+        shell: bash
+        run: |
+          if [ -f test-haenger.txt ]; then grep -n -A60 "^Timeout" test-haenger.txt || tail -n 5 test-haenger.txt; fi
 
   windows-kundenstart:
     name: Windows-Kundenstart (frisch und wiederholt)
