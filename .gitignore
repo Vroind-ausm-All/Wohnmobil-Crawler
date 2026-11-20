@@ -15,3 +15,5 @@ config.local.yaml
 
 # Browser-Regressionswerkzeuge (separater, gesperrter npm-Entwicklungsbereich)
 tests/browser/node_modules/
+test-haenger.txt
+pytest-ausgabe.txt

@@ -105,7 +105,8 @@ def test_dateinamen_und_formate_abgelehnt(name):
         entpacke(upload(name))
 
 
-@pytest.mark.parametrize("inhalt", ["%%", "", base64.b64encode(b"abc\x00").decode(), "a" * 6_666_672])
+@pytest.mark.parametrize("inhalt", ["%%", "", base64.b64encode(b"abc\x00").decode(), "a" * 6_666_672],
+                         ids=["kein_base64", "leer", "nullbyte", "zu_gross"])        # ohne ids wäre die Test-ID 6,7 MB lang
 def test_ungueltige_uebertragung_und_groesse(inhalt):
     with pytest.raises(ValueError):
         entpacke({"name": "x.csv", "inhalt": inhalt})

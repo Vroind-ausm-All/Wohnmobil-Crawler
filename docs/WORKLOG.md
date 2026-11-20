@@ -6,6 +6,21 @@ Wert „–“.
 
 ---
 
+## CI-W1 – Windows-Testsuite hing seit PR #61 (20.11.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 20.11.2026: Arbeit aus der vorigen Sitzung fortsetzen (Windows-Diagnose aus PR #65).
+- **Befund:** Seit PR #61 blieb der Windows-Pytest-Job in jedem Lauf stehen, bis GitHub ihn abbrach – ohne Protokoll (404). Weder der
+  Hänger-Wächter (faulthandler) noch Zeitgrenzen am Schritt oder `timeout` im Schritt griffen: Der Runner selbst stand.
+- **Eingrenzung:** Windows-Suite in 6 Teilläufen (5 grün in 2–4 Minuten), dann der hängende Teil je Datei ein Job: nur
+  `tests/test_datei_upload.py` blieb stehen. Lokal und ohne Netz nach außen lief alles grün (Spitze 260 MB Speicher).
+- **Ursache:** `test_ungueltige_uebertragung_und_groesse` hatte `"a" * 6_666_672` als Parameter ohne `ids=` – die Test-ID war 6,7 MB
+  lang. pytest schreibt sie in `PYTEST_CURRENT_TEST` (unter Windows höchstens 32767 Zeichen) und mit `-v` als eine Protokollzeile; mit
+  `-v` blieb so auch der Linux-Runner stehen. Wie genau der Windows-Runner daran erstickt, ist nicht weiter untersucht.
+- **Geänderte Dateien:** `tests/test_datei_upload.py` (`ids=`), `tests/conftest.py` (Sperre gegen Test-IDs über 1000 Zeichen,
+  Hänger- und Speicher-Wächter aus der Diagnose), `.github/workflows/tests.yml` (Stand des Integrationszweigs plus
+  `timeout-minutes: 45` für Tests und Windows-Start), `.gitignore`.
+- **Review-Ergebnis:** nicht von der QA geprüft.
+
 ## P7-01b-N – Nachkorrektur Fristen nach Anonymisierung (20.11.2026) · Status: REVIEW
 
 - **Auftrag:** Betreiber 20.11.2026: „Kannst du die offenen Punkte bitte noch klären vom letzten PR“ (PR #63: QA-Korrekturen nicht nachgeprüft).
