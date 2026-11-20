@@ -14,6 +14,8 @@ Type=simple
 User=scout
 Group=scout
 WorkingDirectory=/opt/wohnmobil-scout
+# nur ins Systemprotokoll (journalctl), keine gemeinsame ausgabe/scout.log mehrerer Prozesse (P7-04b)
+Environment=SCOUT_PROTOKOLL_NUR_KONSOLE=1
 EnvironmentFile=/etc/wohnmobil-scout/umgebung
 ExecStart=/opt/wohnmobil-scout/.venv/bin/python scout.py portal
 Restart=on-failure

@@ -153,11 +153,11 @@ umsetzbar (siehe Abschnitt 6) – bis dahin gilt nur die Login-Bremse der App; d
 - `GET /gesund` (nur GET, nicht HEAD) liefert `{"ok": true}` ohne Anmeldung und ohne Daten (prüft die Datenbank): Team-App
   `curl -fsS http://127.0.0.1:8765/gesund`, Portal `curl -fsS https://verkaufen.example.de/gesund`. Für einen externen
   Verfügbarkeitsdienst nur die Portal-Adresse verwenden. Über den Proxy antwortet die Team-App erst, wenn Nutzer angelegt sind.
-- Protokolle: `journalctl -u wohnmobil-scout-app -u wohnmobil-scout-portal`, `ausgabe/scout.log` (rotiert), `/var/log/caddy/`.
+- Protokolle: `journalctl -u wohnmobil-scout-app -u wohnmobil-scout-portal -u wohnmobil-scout-sicherung`, `/var/log/caddy/`. Die Dienste
+  schreiben nur ins Systemprotokoll (`SCOUT_PROTOKOLL_NUR_KONSOLE=1` in den Units, P7-04b); `ausgabe/scout.log` gibt es nur beim Start von Hand.
+  Aufbewahrung: journald (z. B. `SystemMaxUse=` und `MaxRetentionSec=` in `/etc/systemd/journald.conf`).
 - Wöchentlich: `sudo -u scout .venv/bin/python scout.py audit --tage 7`, `… scout.py datenschutz` (fällige Löschungen, nur Bericht),
   `systemctl list-timers`.
-- App, Portal und Sicherung schreiben in dieselbe `ausgabe/scout.log`; beim Rotieren können Zeilen in der falschen Datei landen.
-  Vollständig ist das Systemprotokoll (`journalctl`).
 
 ## 10. Updates
 
