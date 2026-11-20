@@ -6,6 +6,7 @@ Verzeichnis der Daten und Fristen: docs/DATENRECHTE.md.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from datetime import date, datetime, time, timedelta
@@ -61,6 +62,11 @@ def _loeschen(pfade) -> int:
     return n
 
 
+def _text_hash(text: str) -> str:
+    """Prüfsumme des Anschreibentexts beim Anonymisieren – erkennt beim nächsten Mal, ob der Text nur ergänzt oder ersetzt wurde."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def inserat_anonymisieren(db: Datenbank, ausgabe_ordner: Path, anzeige_id: str, foto_ordner: Path | None = None) -> dict:
     """Personendaten eines Inserats entfernen – im Umfang wie der Widerruf einer Verkaufsanfrage: Profilname des Verkäufers
     (``details_json``), Name im gespeicherten Anschreibentext und in den Texten des Kontaktverlaufs, Team-Notiz, in Besichtigungen
@@ -88,6 +94,7 @@ def inserat_anonymisieren(db: Datenbank, ausgabe_ordner: Path, anzeige_id: str, 
         # nicht mehr erkennt (der Name ist schon entfernt) – deshalb wird es entfernt statt nur nach Namen durchsucht (QA B1)
         vorher = details.get("anonymisiert_am")
         vorher_laenge = details.get("anonymisiert_anschreiben_laenge")
+        vorher_hash = details.get("anonymisiert_anschreiben_hash")
         details["anonymisiert_am"] = datetime.now().isoformat(timespec="seconds")
         varianten = {name, anrede_name(name) or name} if name else set()
 
@@ -96,10 +103,15 @@ def inserat_anonymisieren(db: Datenbank, ausgabe_ordner: Path, anzeige_id: str, 
                 text = text.replace(variante, ERSATZ) if text else text
             return text
         anschreiben = a["anschreiben_text"]
-        if vorher and isinstance(vorher_laenge, int) and anschreiben and len(anschreiben) > vorher_laenge:
-            anschreiben = anschreiben[:vorher_laenge].rstrip() or None    # später angehängte Nachfass-Texte entfernen
+        if vorher and isinstance(vorher_laenge, int) and anschreiben:
+            anfang = anschreiben[:vorher_laenge]
+            if vorher_hash is not None and _text_hash(anfang) != vorher_hash:
+                anschreiben = None              # Text wurde ersetzt, nicht nur ergänzt: nichts davon ist mehr bereinigt (QA N2)
+            else:
+                anschreiben = anfang.rstrip() or None   # später angehängte Nachfass-Texte entfernen
         anschreiben = ohne_namen(anschreiben)
         details["anonymisiert_anschreiben_laenge"] = len(anschreiben or "")
+        details["anonymisiert_anschreiben_hash"] = _text_hash(anschreiben or "")
         con.execute("UPDATE anzeigen SET details_json=?, anschreiben_text=?, notiz=NULL WHERE id=?",
                     (json.dumps(details, ensure_ascii=False), anschreiben, anzeige_id))
         if "verhandlung" in tabellen:                     # Antworten und Verhandlungsnotizen (P6-03) wie die Team-Notiz: Text leeren
@@ -182,8 +194,10 @@ def inserate_faellig(db: Datenbank, monate: int, jetzt: datetime | None = None) 
     # Auch das Neue muss älter als die Frist sein – sonst würde eine heute abgeschlossene Besichtigung samt Protokoll und Fotos
     # sofort bereinigt, womöglich vor dem Ankauf (QA B2). Streng „danach“ (``>``): was in derselben Sekunde wie das Anonymisieren
     # entstand, ist schon bereinigt und darf das Inserat nicht dauerhaft fällig halten (QA B3 bewusst so).
-    danach = (f" OR EXISTS (SELECT 1 FROM besichtigungen b WHERE b.anzeige_id = anzeigen.id AND b.erstellt_am > {anon_am} "
-              "AND COALESCE(b.geaendert_am, b.erstellt_am) < ?)"
+    # Besichtigung: maßgeblich ist die letzte Änderung – auch eine vor dem Anonymisieren angelegte, danach mit Protokoll abgeschlossene
+    # Besichtigung enthält neue Personendaten (QA-Nachprüfung N3); das Anonymisieren selbst setzt geaendert_am nicht
+    danach = (f" OR EXISTS (SELECT 1 FROM besichtigungen b WHERE b.anzeige_id = anzeigen.id "
+              f"AND COALESCE(b.geaendert_am, b.erstellt_am) > {anon_am} AND COALESCE(b.geaendert_am, b.erstellt_am) < ?)"
               f" OR EXISTS (SELECT 1 FROM kontakte k WHERE k.anzeige_id = anzeigen.id AND k.text IS NOT NULL "
               f"AND MAX(COALESCE(k.vorbereitet_am, ''), COALESCE(k.bestaetigt_am, '')) > {anon_am} "
               "AND MAX(COALESCE(k.vorbereitet_am, ''), COALESCE(k.bestaetigt_am, '')) < ?)")

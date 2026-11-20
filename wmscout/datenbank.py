@@ -369,7 +369,10 @@ class Datenbank:
             return details
         if not isinstance(alt, dict) or "anonymisiert_am" not in alt:
             return details
-        return {**{k: v for k, v in details.items() if k != "verkaeufer_name"}, "anonymisiert_am": alt["anonymisiert_am"]}
+        # auch den Stand des Anschreibentexts beim Anonymisieren behalten – sonst bliebe beim nächsten Anonymisieren alles danach
+        # Angehängte stehen (QA-Nachprüfung N1)
+        behalten = {k: alt[k] for k in ("anonymisiert_am", "anonymisiert_anschreiben_laenge", "anonymisiert_anschreiben_hash") if k in alt}
+        return {**{k: v for k, v in details.items() if k != "verkaeufer_name"}, **behalten}
 
     def _preis_aus_details(self, ad_id: str, preis: int):
         """Nennt die Detailseite einen anderen Preis als gespeichert (Netzabruf nach dem Suchlauf), gehört die Änderung wie bei jedem
