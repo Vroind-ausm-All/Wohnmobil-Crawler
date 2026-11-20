@@ -10,6 +10,8 @@ Type=simple
 User=scout
 Group=scout
 WorkingDirectory=/opt/wohnmobil-scout
+# nur ins Systemprotokoll (journalctl), keine gemeinsame ausgabe/scout.log mehrerer Prozesse (P7-04b)
+Environment=SCOUT_PROTOKOLL_NUR_KONSOLE=1
 # Geheimnisse (SMTP-Passwort, WhatsApp-Token …) nur hier, nie im Repository: Datei mit Rechten 600 (betrieb/umgebung.beispiel)
 EnvironmentFile=-/etc/wohnmobil-scout/umgebung
 ExecStart=/opt/wohnmobil-scout/.venv/bin/python scout.py app --kein-browser

@@ -2281,9 +2281,9 @@ def _bearbeite(a: Anfrage, handler, k: Kontext, methode: str):
     except sqlite3.OperationalError as e:
         if not ist_gesperrt(e):
             log.exception("Fehler bei %s %s", methode, handler.path)
-            return a.json(500, {"fehler": "Interner Fehler – Details in ausgabe/scout.log"})
+            return a.json(500, {"fehler": "Interner Fehler – Details im Protokoll"})
         log.warning("Datenbank belegt bei %s %s: %s", methode, handler.path, e)
         a.json(503, {"fehler": "Datenbank kurz belegt – bitte erneut versuchen", "grund": "belegt"}, {"Retry-After": "2"})
     except Exception:  # noqa: BLE001 – Server soll bei einem Fehler weiterlaufen
         log.exception("Fehler bei %s %s", methode, handler.path)
-        a.json(500, {"fehler": "Interner Fehler – Details in ausgabe/scout.log"})
+        a.json(500, {"fehler": "Interner Fehler – Details im Protokoll"})

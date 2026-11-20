@@ -13,7 +13,20 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 **Nicht geprüft:** Vollsuite (kein Code geändert); Planung nicht von Architekt/QA geprüft.
 
----
+## P7-01b, P7-04b, P7-05 – Phase-7-Restpunkte (19.11.2026) · DONE (PR #63 gemergt)
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q` (Linux, Python 3.13, nach der Korrekturrunde) | 2783 bestanden, 1 fehlgeschlagen: `test_serverbetrieb.py::test_gesund_host_proxy_und_defekte_datenbank` – prüfte `b"ok" not in body`, die neue Meldung „Details im Prot**ok**oll“ enthält „ok“; Prüfung auf `b'"ok"'` präzisiert, danach `test_serverbetrieb.py` 7 bestanden; Vollsuite danach nicht erneut |
+| `ruff check .` | grün |
+| Neu `test_restpunkte.py` (7): Besichtigung bzw. Kontakttext nach Anonymisierung erst nach Frist fällig, danach tatsächlich bereinigt (Inhalt geprüft), kein Dauer-„fällig“; vor Anonymisierung vorbereitet/danach bestätigt; kaputtes JSON; Protokoll nur Konsole; Units setzen die Variable; soupsieve ≥ 4 | bestanden |
+| Gegenprobe: P7-01b-Tests gegen den alten Code | scheitern (2), mit neuem Code bestanden |
+| Alle Tests mit Bezug zu Fristen/Anonymisierung (8 Dateien) | 188 bestanden |
+| `systemd-analyze verify` der geänderten Units | keine Meldungen zu den eigenen Units |
+| `pip-audit -r requirements.txt` (lokal) | keine bekannten Schwachstellen |
+| QA-Review (eine Runde; 87 + 365 Parser/Import-Tests mit soupsieve 4 bestanden) | Ablehnung; B1, B2, B4, B5 behoben, B3 bewusst nicht |
+
+**Nicht geprüft:** CI (läuft nach dem Push), Windows, echter Server/journald; Korrekturen nicht erneut von der QA geprüft.
 
 ## CampRCrawlR – Händlerablauf und Import (08.11.2026) · REVIEW
 

@@ -279,8 +279,9 @@ Rechtstexte prüfen lassen, Push-Dienst) wird vorbereitet, nicht ausgeführt.
 | P7-02 | P1 | Verkaufsanfragen im Dashboard: Meldungen, Ankaufstrichter, Hinweis in der Ankaufsliste | scout-ui-engineer | DONE (PR #57 gemergt) |
 | P7-03 | P1 | Öffentliches Ankaufsportal (B4): öffentlicher Modus nur mit `/verkaufen`, Spam-Schutz, Status-Link für den Verkäufer, Vorlagen Impressum/Datenschutz, Löschanfrage | source-integrations, qa-security-reviewer | DONE (PR #58 gemergt) |
 | P7-04 | P2 | Serverbetrieb vorbereitet: Anleitung, Vorlagen (Dienst, HTTPS-Proxy, Sicherung), Gesundheitsprüfung | windows-bootstrap | DONE (PR #59 gemergt) |
-| P7-04b | P3 | Dienste auf dem Server nur nach stdout/journald protokollieren statt mehrerer Prozesse in dieselbe rotierende `scout.log` (QA P7-04 B10) | windows-bootstrap | TODO |
-| P7-01b | P3 | Nach dem Anonymisieren neu angelegte Besichtigungen und Kontakttexte wieder fällig machen (Zeitpunkt nach `anonymisiert_am`; QA P7-01 B6) | scout-data-engineer | TODO |
+| P7-04b | P3 | Dienste auf dem Server nur nach stdout/journald protokollieren statt mehrerer Prozesse in dieselbe rotierende `scout.log` (QA P7-04 B10) | windows-bootstrap | DONE (PR #63 gemergt; `SCOUT_PROTOKOLL_NUR_KONSOLE=1`) |
+| P7-01b | P3 | Nach dem Anonymisieren neu angelegte Besichtigungen und Kontakttexte wieder fällig machen (Zeitpunkt nach `anonymisiert_am`; QA P7-01 B6) | scout-data-engineer | DONE (PR #63 gemergt) |
+| P7-05 | P2 | Abhängigkeit `soupsieve` 3.0.3 → 4.1.2 (CVE-2026-126190, pip-audit); nur dieses Paket in beiden Lock-Dateien | windows-bootstrap | DONE (PR #63 gemergt) |
 
 
 ## Phase 8 – vom Pilot zum SaaS (geplant bis 8c, nicht freigegeben)

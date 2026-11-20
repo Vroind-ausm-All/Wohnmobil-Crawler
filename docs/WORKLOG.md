@@ -18,7 +18,24 @@ Wert „–“.
 - **Review-Ergebnis:** nicht von Architekt/QA geprüft (reine Planung).
 - **Nächster sinnvoller Schritt:** Entscheidungen F15, F3, F16 treffen; Pilot mit 1–2 Kunden; dann Freigabe für 8a.
 
----
+## P7-01b, P7-04b, P7-05 – Phase-7-Restpunkte (19.11.2026) · Status: DONE (PR #63 gemergt)
+
+- **Auftrag:** Betreiber 19.11.2026: „Überprüfe die Tests und stelle den Rest von der Phase komplett ab“ → Rückfrage: Phase 7 fertigstellen.
+- **Verantwortlicher Agent:** Orchestrator (im Stil von `scout-data-engineer` / `windows-bootstrap`); QA `qa-security-reviewer`.
+- **Geänderte Dateien:** `wmscout/datenrechte.py`, `scout.py` (`protokoll_handler`), `wmscout/web/api.py` (Fehlermeldung), `betrieb/systemd/*.service`,
+  `requirements.txt`, `requirements-dev.txt`; Tests `test_restpunkte.py` (neu), `test_serverbetrieb.py` (genauere Prüfung); Doku ROADMAP,
+  DATENRECHTE, SERVERBETRIEB.
+- **Implementierte Funktionen:**
+  - **P7-01b:** Nach dem Anonymisieren angelegte Besichtigungen und eingetragene Kontakttexte machen ein Inserat wieder fällig – erst
+    wenn auch sie älter als die Frist sind. Erneutes Anonymisieren leert die seither eingetragenen Kontakttexte und kürzt den
+    Anschreibentext auf den Stand der letzten Anonymisierung (dort hängt Nachfassen an).
+  - **P7-04b:** `SCOUT_PROTOKOLL_NUR_KONSOLE=1` (in allen Units gesetzt) → Dienste schreiben nur ins Systemprotokoll, keine gemeinsame `scout.log`.
+  - **P7-05:** `soupsieve` 3.0.3 → 4.1.2 (CVE-2026-126190), nur dieses Paket in beiden Lock-Dateien (`uv pip compile --upgrade-package`).
+- **Review-Ergebnis:** QA **Ablehnung** (B1 hoch: erneutes Anonymisieren entfernte neue Kontakttexte nicht; B2 hoch: neue Auslöser ohne
+  Frist → heute abgeschlossene Besichtigung sofort bereinigt). Korrekturrunde: B1, B2, B4, B5 behoben; B3 (`>=`) ausprobiert und bewusst
+  verworfen – im selben Moment Entstandenes ist schon bereinigt und hätte das Inserat dauerhaft fällig gehalten (bestehender Reimport-Test).
+  Korrekturen nicht erneut von der QA geprüft.
+- **Nächster sinnvoller Schritt:** PR prüfen; danach ist Phase 7 abgeschlossen.
 
 ## CampRCrawlR – Import bis Vertragsentwurf (08.11.2026) · Status: REVIEW
 

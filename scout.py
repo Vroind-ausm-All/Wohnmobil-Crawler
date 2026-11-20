@@ -107,13 +107,24 @@ def lade_config(pfad: str) -> dict:
     return cfg
 
 
+PROTOKOLL_NUR_KONSOLE = "SCOUT_PROTOKOLL_NUR_KONSOLE"
+
+
+def protokoll_handler(cfg: dict) -> list[logging.Handler]:
+    """Konsole immer; die rotierende ``ausgabe/scout.log`` (höchstens 6 × 5 MB, G0) nur ohne ``SCOUT_PROTOKOLL_NUR_KONSOLE=1``.
+    Auf dem Server setzen die systemd-Dienste die Variable: App, Portal und Sicherung schreiben dann nur ins Systemprotokoll
+    (journald) statt gemeinsam in eine Datei, deren Rotation Zeilen mehrerer Prozesse vermischt (P7-04b)."""
+    handler: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+    if os.environ.get(PROTOKOLL_NUR_KONSOLE, "").strip() != "1":
+        ordner = BASIS / cfg["ausgabe"]["ordner"]
+        ordner.mkdir(parents=True, exist_ok=True)
+        handler.append(logging.handlers.RotatingFileHandler(ordner / "scout.log", maxBytes=5_000_000, backupCount=5, encoding="utf-8"))
+    return handler
+
+
 def logging_einrichten(cfg: dict):
-    ordner = BASIS / cfg["ausgabe"]["ordner"]
-    ordner.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S",
-        handlers=[logging.StreamHandler(sys.stdout),        # Protokoll rotiert: höchstens 6 × 5 MB (G0)
-                  logging.handlers.RotatingFileHandler(ordner / "scout.log", maxBytes=5_000_000, backupCount=5, encoding="utf-8")])
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S",
+                        handlers=protokoll_handler(cfg))
     if LOKAL_ABSCHNITTE:
         logging.getLogger("scout").info("config.local.yaml überlagert: %s", ", ".join(LOKAL_ABSCHNITTE))
 
