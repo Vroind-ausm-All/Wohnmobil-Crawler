@@ -6,6 +6,20 @@ Wert „–“.
 
 ---
 
+## P7-01b-N – Nachkorrektur Fristen nach Anonymisierung (20.11.2026) · Status: REVIEW
+
+- **Auftrag:** Betreiber 20.11.2026: „Kannst du die offenen Punkte bitte noch klären vom letzten PR“ (PR #63: QA-Korrekturen nicht nachgeprüft).
+- **Anlass:** QA-Nachprüfung der in PR #63 gemergten Korrekturen: B2 bestätigt behoben, B1 nur teilweise – drei neue Befunde.
+- **Geänderte Dateien:** `wmscout/datenrechte.py`, `wmscout/datenbank.py` (`_ohne_personendaten`), `tests/test_restpunkte.py`.
+- **Korrekturen:**
+  - **N1 (hoch):** Neu-Einlesen der Details verwarf den gespeicherten Stand des Anschreibentexts → beim nächsten Anonymisieren blieben
+    Name und Telefonnummer dauerhaft stehen. Jetzt bleiben `anonymisiert_anschreiben_laenge`/`_hash` beim Neu-Einlesen erhalten.
+  - **N2 (mittel):** Ersetzter (statt ergänzter) Anschreibentext: Prüfsumme des bereinigten Stands; passt der Anfang nicht mehr, wird der
+    Text beim erneuten Anonymisieren geleert statt gekürzt.
+  - **N3 (mittel):** Besichtigung vor dem Anonymisieren angelegt, danach abgeschlossen: maßgeblich ist jetzt die letzte Änderung.
+- **Tests:** siehe TEST-REPORT; die drei neuen Tests scheitern am alten Code.
+- **Review-Ergebnis:** Korrektur der QA-Nachprüfung; nicht erneut von der QA geprüft.
+
 ## P7-01b, P7-04b, P7-05 – Phase-7-Restpunkte (19.11.2026) · Status: REVIEW
 
 - **Auftrag:** Betreiber 19.11.2026: „Überprüfe die Tests und stelle den Rest von der Phase komplett ab“ → Rückfrage: Phase 7 fertigstellen.
