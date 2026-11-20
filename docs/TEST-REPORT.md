@@ -4,6 +4,21 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 ---
 
+## CI-W1 – Windows-Testsuite (20.11.2026) · REVIEW
+
+| Prüfung | Ergebnis |
+|---|---|
+| CI-Lauf 303 (Commit dd15c88): Tests windows-latest, Vollsuite | grün, 16:46 min (erster vollständiger Windows-Lauf seit PR #61) |
+| CI-Lauf 303: Windows-Start, Tests in der `.venv` | grün, 22:32 min |
+| CI-Lauf 303: Tests ubuntu-latest, Browserablauf, Kundenstart, Linux-Start, pip-audit | grün |
+| Diagnose-Lauf 302: je Datei aus Teil 3 ein Windows-Job | 15 grün, `test_datei_upload.py` hängt |
+| Sperre gegen lange Test-IDs: Gegenprobe mit altem `test_datei_upload.py` | Sammlung bricht mit Meldung ab |
+| Speicher-Wächter: Probe mit absichtlich speicherfressendem Test (Grenze 500 MB) | Abbruch mit Testname und Stacktrace |
+| lokal Linux: `pytest -q` | 2787 bestanden |
+| `ruff check .` | grün |
+
+**Nicht geprüft:** Windows auf einem echten Kundenrechner; der genaue Mechanismus, mit dem die lange ID den Windows-Runner anhält.
+
 ## P7-01b-N – Nachkorrektur Fristen nach Anonymisierung (20.11.2026) · REVIEW
 
 | Prüfung | Ergebnis |
