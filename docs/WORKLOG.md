@@ -20,7 +20,19 @@ Wert „–“.
 - **Tests:** siehe TEST-REPORT; die drei neuen Tests scheitern am alten Code.
 - **Review-Ergebnis:** Korrektur der QA-Nachprüfung; nicht erneut von der QA geprüft.
 
-## P7-01b, P7-04b, P7-05 – Phase-7-Restpunkte (19.11.2026) · Status: REVIEW
+## P8 – Planung Phase 8 „vom Pilot zum SaaS“ bis 8c (19.11.2026) · Status: DONE (PR #62 gemergt)
+
+- **Auftrag:** Betreiber 19.11.2026: „Arbeite Phase 8 aus bis 8c“ (nach der Frage, was für ein SaaS-fertiges Werkzeug fehlt).
+- **Verantwortlicher Agent:** Orchestrator (Planung im Stil von `scout-architect`).
+- **Vorab:** Integrationszweig per Fast-Forward auf `main` (226dbdc) gebracht – er lag 16 Commits zurück (PR #60, #61 gingen nach `main`).
+- **Geänderte Dateien:** `docs/PHASE8-SAAS.md` (neu), `docs/ROADMAP.md` (Phase 8, P7-04 DONE), `docs/DECISIONS.md` (ADR-070), dieser Eintrag.
+- **Ergebnis:** 18 Arbeitspakete (8a: 4, 8b: 8, 8c: 6) mit Abnahmekriterien, Abhängigkeiten und Betreiber-Entscheidungen F15–F21;
+  P8a-03 und P8c-03/04 BLOCKED bis Freigabe bzw. Anbieterwahl. Kein Code geändert.
+- **Tests:** `pytest tests/test_projekt.py` (Dokumentstruktur), `ruff check .` – siehe TEST-REPORT.
+- **Review-Ergebnis:** nicht von Architekt/QA geprüft (reine Planung).
+- **Nächster sinnvoller Schritt:** Entscheidungen F15, F3, F16 treffen; Pilot mit 1–2 Kunden; dann Freigabe für 8a.
+
+## P7-01b, P7-04b, P7-05 – Phase-7-Restpunkte (19.11.2026) · Status: DONE (PR #63 gemergt)
 
 - **Auftrag:** Betreiber 19.11.2026: „Überprüfe die Tests und stelle den Rest von der Phase komplett ab“ → Rückfrage: Phase 7 fertigstellen.
 - **Verantwortlicher Agent:** Orchestrator (im Stil von `scout-data-engineer` / `windows-bootstrap`); QA `qa-security-reviewer`.

@@ -15,7 +15,16 @@ Nur tatsächlich ausgeführte Prüfungen. Nicht Ausgeführtes steht unter „nic
 
 **Nicht geprüft:** Vollsuite auf diesem Stand, Windows (die Windows-CI hängt seit PR #61, Diagnose auf `claude/windows-ci-haenger`).
 
-## P7-01b, P7-04b, P7-05 – Phase-7-Restpunkte (19.11.2026) · REVIEW
+## P8 – Planung Phase 8 bis 8c (19.11.2026) · DONE (PR #62 gemergt)
+
+| Prüfung | Ergebnis |
+|---|---|
+| `pytest -q tests/test_projekt.py` (Dokumentstruktur, Agenten, Regeln) | 18 bestanden |
+| `ruff check .` | grün |
+
+**Nicht geprüft:** Vollsuite (kein Code geändert); Planung nicht von Architekt/QA geprüft.
+
+## P7-01b, P7-04b, P7-05 – Phase-7-Restpunkte (19.11.2026) · DONE (PR #63 gemergt)
 
 | Prüfung | Ergebnis |
 |---|---|
